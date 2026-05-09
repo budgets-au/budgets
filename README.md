@@ -8,6 +8,12 @@ Built for AUD, single-household, LAN-accessible from desktop and
 mobile. Data lives in a single SQLCipher-encrypted SQLite file — no
 external services, nothing leaves the box.
 
+## Screenshots
+
+| Transactions (dark) | Scheduled (light) |
+|---|---|
+| ![Transactions list with running balance, category badges, and the linked-counterpart panel](screenshots/transactions-dark.png) | ![Scheduled-transactions editor with the next-occurrence list and matched-occurrences chart](screenshots/scheduled-light.png) |
+
 ## Stack
 
 - **Next.js 16** (App Router, server components, route handlers)

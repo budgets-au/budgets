@@ -1,0 +1,404 @@
+import { db } from "@/db";
+import { transactions, transferSuggestions, categories } from "@/db/schema";
+import { sql, eq, and, isNull, inArray, or } from "drizzle-orm";
+
+/**
+ * Scoring constants. Auto-pair fires when a candidate scores AUTO_THRESHOLD or
+ * higher; below that the candidate is recorded in `transfer_suggestions` for
+ * the user to confirm or dismiss.
+ *
+ * The strong signals (account name, last4, shared reference token) each push
+ * a candidate over the threshold by themselves; pure inverse-amount + close-
+ * date alone does not.
+ */
+export const MAX_DATE_GAP_DAYS = 3;
+export const AUTO_THRESHOLD = 5;
+const SUGGEST_THRESHOLD = 1;
+
+export type CandidateRow = {
+  a_id: string;
+  b_id: string;
+  a_payee: string | null;
+  b_payee: string | null;
+  a_account_name: string;
+  b_account_name: string;
+  a_account_last4: string | null;
+  b_account_last4: string | null;
+  a_account_type: string;
+  b_account_type: string;
+  a_is_transfer_cat: boolean;
+  b_is_transfer_cat: boolean;
+  a_is_payment_cat: boolean;
+  b_is_payment_cat: boolean;
+  a_category_id: string | null;
+  b_category_id: string | null;
+  date_gap: number;
+};
+
+function tokensFromPayee(p: string | null): Set<string> {
+  if (!p) return new Set();
+  const upper = p.toUpperCase();
+  const matches = upper.match(/[A-Z0-9]{6,}/g) ?? [];
+  return new Set(matches);
+}
+
+function payeeMentions(payee: string | null, needle: string | null): boolean {
+  if (!payee || !needle) return false;
+  return payee.toUpperCase().includes(needle.toUpperCase());
+}
+
+/**
+ * Lenient account-name match: bank statements truncate friendly names ("TFR
+ * Caravan Loa"), so we also accept any significant (≥5-char) word from the
+ * account name appearing in the payee. "Bills" → ["BILLS"]; "Caravan Loan" →
+ * ["CARAVAN"]. Single-word accounts shorter than 5 chars fall back to the
+ * full-name `payeeMentions` check.
+ */
+function payeeMentionsAccount(payee: string | null, accountName: string): boolean {
+  if (!payee) return false;
+  if (payeeMentions(payee, accountName)) return true;
+  const upper = payee.toUpperCase();
+  const words = accountName.toUpperCase().split(/\s+/).filter((w) => w.length >= 5);
+  return words.some((w) => upper.includes(w));
+}
+
+// Exported for tests. The scoring rules are hand-tuned and a regression
+// here silently mis-pairs money movements between accounts.
+export function scoreCandidate(c: CandidateRow): number {
+  let score = 0;
+
+  if (c.date_gap === 0) score += 1;
+  else if (c.date_gap === 2) score -= 1;
+  else if (c.date_gap === 3) score -= 2;
+
+  if (
+    payeeMentionsAccount(c.a_payee, c.b_account_name) ||
+    payeeMentionsAccount(c.b_payee, c.a_account_name)
+  ) {
+    score += 5;
+  }
+
+  if (
+    payeeMentions(c.a_payee, c.b_account_last4) ||
+    payeeMentions(c.b_payee, c.a_account_last4)
+  ) {
+    score += 5;
+  }
+
+  const aTokens = tokensFromPayee(c.a_payee);
+  const bTokens = tokensFromPayee(c.b_payee);
+  for (const t of aTokens) {
+    if (bTokens.has(t)) {
+      score += 3;
+      break;
+    }
+  }
+
+  // "Both halves already in a linked-class category" — covers both true
+  // transfers (is_transfer) and loan/credit payments (is_payment). They're
+  // semantically the same signal for matching: the user has told us these are
+  // cross-account flows.
+  const aLinked = c.a_is_transfer_cat || c.a_is_payment_cat;
+  const bLinked = c.b_is_transfer_cat || c.b_is_payment_cat;
+  if (aLinked && bLinked) score += 2;
+
+  // Exactly one side lives on a loan/credit account: those accounts only
+  // receive money via cross-account transfers (interest, fees etc. don't have
+  // an inverse counterpart on a liquid account), so an inverse-amount
+  // same-day candidate is essentially definitive — even when the bank's
+  // payee text on the source side names the wrong destination account.
+  const aIsLoan = isLoanLike(c.a_account_type) !== null;
+  const bIsLoan = isLoanLike(c.b_account_type) !== null;
+  if (aIsLoan !== bIsLoan) score += 3;
+
+  return score;
+}
+
+function isLoanLike(accountType: string): "loan" | "credit" | null {
+  if (accountType === "loan") return "loan";
+  if (accountType === "credit") return "credit";
+  return null;
+}
+
+export interface PairResult {
+  paired: number;
+  suggested: number;
+}
+
+interface PairOpts {
+  /** Inclusive ISO date (YYYY-MM-DD). If omitted, scan whole table. */
+  since?: string;
+  /** Inclusive ISO date (YYYY-MM-DD). If omitted, scan whole table. */
+  until?: string;
+}
+
+/**
+ * Find candidate transfer pairs in the given window and either auto-link them
+ * or stash them as suggestions. Idempotent — only considers rows where
+ * `transfer_pair_id IS NULL`, and only inserts suggestion rows that don't
+ * already exist.
+ */
+export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairResult> {
+  // The caller is expected to have already padded the window by
+  // MAX_DATE_GAP_DAYS on both sides, so we can apply the same bounds to both
+  // halves of the candidate pair. The ABS(date) proximity check handles the
+  // intra-pair gap; we don't need extra padding inside the SQL.
+  const sinceClause = opts.since
+    ? sql`AND t1.date >= ${opts.since} AND t2.date >= ${opts.since}`
+    : sql``;
+  const untilClause = opts.until
+    ? sql`AND t1.date <= ${opts.until} AND t2.date <= ${opts.until}`
+    : sql``;
+
+  // Pull every candidate pair (both halves still unpaired, inverse amount,
+  // different account, ≤ MAX_DATE_GAP_DAYS apart). Amounts are stored as
+  // TEXT in SQLite, so cast to REAL for the inverse-amount comparison.
+  // Dates are TEXT (YYYY-MM-DD) — julianday() converts them to a numeric
+  // day count for the proximity check. Booleans come back as 0/1; we
+  // coerce to JS booleans below.
+  const rawRows = (await db.all(sql`
+    SELECT
+      t1.id                      AS a_id,
+      t2.id                      AS b_id,
+      t1.payee                   AS a_payee,
+      t2.payee                   AS b_payee,
+      a1.name                    AS a_account_name,
+      a2.name                    AS b_account_name,
+      a1.account_number_last4    AS a_account_last4,
+      a2.account_number_last4    AS b_account_last4,
+      a1.type                    AS a_account_type,
+      a2.type                    AS b_account_type,
+      COALESCE(c1.is_transfer, 0) AS a_is_transfer_cat,
+      COALESCE(c2.is_transfer, 0) AS b_is_transfer_cat,
+      COALESCE(c1.is_payment, 0)  AS a_is_payment_cat,
+      COALESCE(c2.is_payment, 0)  AS b_is_payment_cat,
+      t1.category_id             AS a_category_id,
+      t2.category_id             AS b_category_id,
+      ABS(julianday(t1.date) - julianday(t2.date)) AS date_gap
+    FROM transactions t1
+    JOIN transactions t2
+      ON t2.id > t1.id
+     AND t2.account_id <> t1.account_id
+     AND CAST(t2.amount AS REAL) = -CAST(t1.amount AS REAL)
+     AND ABS(julianday(t2.date) - julianday(t1.date)) <= ${MAX_DATE_GAP_DAYS}
+     AND t2.transfer_pair_id IS NULL
+    JOIN accounts a1 ON a1.id = t1.account_id
+    JOIN accounts a2 ON a2.id = t2.account_id
+    LEFT JOIN categories c1 ON c1.id = t1.category_id
+    LEFT JOIN categories c2 ON c2.id = t2.category_id
+    WHERE t1.transfer_pair_id IS NULL
+    ${sinceClause}
+    ${untilClause}
+  `)) as unknown as Array<{
+    a_id: string;
+    b_id: string;
+    a_payee: string | null;
+    b_payee: string | null;
+    a_account_name: string;
+    b_account_name: string;
+    a_account_last4: string | null;
+    b_account_last4: string | null;
+    a_account_type: string;
+    b_account_type: string;
+    a_is_transfer_cat: number;
+    b_is_transfer_cat: number;
+    a_is_payment_cat: number;
+    b_is_payment_cat: number;
+    a_category_id: string | null;
+    b_category_id: string | null;
+    date_gap: number;
+  }>;
+  const rows: CandidateRow[] = rawRows.map((r) => ({
+    ...r,
+    a_is_transfer_cat: r.a_is_transfer_cat === 1,
+    b_is_transfer_cat: r.b_is_transfer_cat === 1,
+    a_is_payment_cat: r.a_is_payment_cat === 1,
+    b_is_payment_cat: r.b_is_payment_cat === 1,
+  }));
+
+  // Resolve the system "Loan Payment" / "Credit Payment" categories once so
+  // we can auto-assign them when a paired counterpart lives on a loan/credit
+  // account and the source side is currently uncategorised.
+  const paymentCats = await db
+    .select({ id: categories.id, name: categories.name })
+    .from(categories)
+    .where(and(eq(categories.isPayment, true), isNull(categories.parentId)));
+  const loanPaymentCatId = paymentCats.find((c) => c.name === "Loan Payment")?.id ?? null;
+  const creditPaymentCatId = paymentCats.find((c) => c.name === "Credit Payment")?.id ?? null;
+  const candidateById = new Map<string, CandidateRow>();
+  for (const r of rows) {
+    candidateById.set(`${r.a_id}|${r.b_id}`, r);
+  }
+
+  // Score every candidate. Group by each transaction id so we can pick the
+  // best counterpart per side and detect ambiguity.
+  type Scored = { aId: string; bId: string; score: number; gap: number };
+  const scored: Scored[] = rows.map((r) => ({
+    aId: r.a_id,
+    bId: r.b_id,
+    score: scoreCandidate(r),
+    gap: Number(r.date_gap),
+  }));
+
+  const byTxn = new Map<string, Scored[]>();
+  for (const s of scored) {
+    (byTxn.get(s.aId) ?? byTxn.set(s.aId, []).get(s.aId)!).push(s);
+    (byTxn.get(s.bId) ?? byTxn.set(s.bId, []).get(s.bId)!).push(s);
+  }
+
+  function bestFor(id: string): Scored | null {
+    const list = byTxn.get(id);
+    if (!list || list.length === 0) return null;
+    const sorted = [...list].sort((x, y) => y.score - x.score || x.gap - y.gap);
+    const top = sorted[0];
+    // Ambiguity: another candidate ties on score AND gap → don't auto-pair.
+    if (sorted.length > 1) {
+      const second = sorted[1];
+      if (second.score === top.score && second.gap === top.gap) return null;
+    }
+    return top;
+  }
+
+  let paired = 0;
+  let suggested = 0;
+  const taken = new Set<string>();
+  const suggestionPairs: Scored[] = [];
+
+  for (const cand of [...scored].sort((x, y) => y.score - x.score || x.gap - y.gap)) {
+    if (cand.score < AUTO_THRESHOLD) {
+      if (cand.score >= SUGGEST_THRESHOLD) suggestionPairs.push(cand);
+      continue;
+    }
+    if (taken.has(cand.aId) || taken.has(cand.bId)) continue;
+    if (bestFor(cand.aId)?.bId !== cand.bId) continue;
+    if (bestFor(cand.bId)?.aId !== cand.aId) continue;
+
+    // Look up account types and current categoryIds from the row we already
+    // hydrated, so we can auto-assign a payment category when the pair
+    // straddles a liquid → loan/credit boundary.
+    const row = candidateById.get(`${cand.aId}|${cand.bId}`);
+    const aLoanType = row ? isLoanLike(row.a_account_type) : null;
+    const bLoanType = row ? isLoanLike(row.b_account_type) : null;
+    let aPatchCategoryId: string | undefined;
+    let bPatchCategoryId: string | undefined;
+    // Only one side should be a loan/credit account. Apply the corresponding
+    // payment category to the *non-loan* side when it's currently uncategorised.
+    if (row) {
+      if (bLoanType && !aLoanType && row.a_category_id === null) {
+        const targetId = bLoanType === "loan" ? loanPaymentCatId : creditPaymentCatId;
+        if (targetId) aPatchCategoryId = targetId;
+      }
+      if (aLoanType && !bLoanType && row.b_category_id === null) {
+        const targetId = aLoanType === "loan" ? loanPaymentCatId : creditPaymentCatId;
+        if (targetId) bPatchCategoryId = targetId;
+      }
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(transactions)
+        .set({
+          transferPairId: cand.bId,
+          isTransfer: true,
+          ...(aPatchCategoryId ? { categoryId: aPatchCategoryId } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(transactions.id, cand.aId));
+      await tx
+        .update(transactions)
+        .set({
+          transferPairId: cand.aId,
+          isTransfer: true,
+          ...(bPatchCategoryId ? { categoryId: bPatchCategoryId } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(transactions.id, cand.bId));
+      await tx.run(sql`
+        DELETE FROM transfer_suggestions
+        WHERE transaction_id IN (${cand.aId}, ${cand.bId})
+           OR candidate_id   IN (${cand.aId}, ${cand.bId})
+      `);
+    });
+    taken.add(cand.aId);
+    taken.add(cand.bId);
+    paired++;
+  }
+
+  // Suggestions: insert one row per candidate pair (transaction_id < candidate_id),
+  // skip pairs whose halves are now paired.
+  for (const s of suggestionPairs) {
+    if (taken.has(s.aId) || taken.has(s.bId)) continue;
+    const result = await db
+      .insert(transferSuggestions)
+      .values({ transactionId: s.aId, candidateId: s.bId, score: s.score })
+      .onConflictDoNothing({
+        target: [transferSuggestions.transactionId, transferSuggestions.candidateId],
+      })
+      .returning({ id: transferSuggestions.id });
+    if (result.length > 0) suggested++;
+  }
+
+  return { paired, suggested };
+}
+
+/**
+ * Manually link two transactions as a transfer pair. Sets `transfer_pair_id`
+ * symmetrically and clears any suggestions referencing either side.
+ */
+export async function manualPair(aId: string, bId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    // Clear any pre-existing pairs first so we don't orphan a third row.
+    const existing = await tx
+      .select({ id: transactions.id, pairId: transactions.transferPairId })
+      .from(transactions)
+      .where(inArray(transactions.id, [aId, bId]));
+    const pairsToClear = existing
+      .map((r) => r.pairId)
+      .filter((p): p is string => !!p && p !== aId && p !== bId);
+    for (const pid of pairsToClear) {
+      await tx
+        .update(transactions)
+        .set({ transferPairId: null, updatedAt: new Date() })
+        .where(eq(transactions.id, pid));
+    }
+    await tx
+      .update(transactions)
+      .set({ transferPairId: bId, isTransfer: true, updatedAt: new Date() })
+      .where(eq(transactions.id, aId));
+    await tx
+      .update(transactions)
+      .set({ transferPairId: aId, isTransfer: true, updatedAt: new Date() })
+      .where(eq(transactions.id, bId));
+    await tx
+      .delete(transferSuggestions)
+      .where(
+        or(
+          inArray(transferSuggestions.transactionId, [aId, bId]),
+          inArray(transferSuggestions.candidateId, [aId, bId]),
+        ),
+      );
+  });
+}
+
+/**
+ * Break the pair on this transaction (and its counterpart), leaving both
+ * rows un-linked. `is_transfer` stays as-is — the user marked it that way.
+ */
+export async function manualUnpair(id: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ pairId: transactions.transferPairId })
+      .from(transactions)
+      .where(eq(transactions.id, id));
+    if (!row?.pairId) return;
+    const pairId = row.pairId;
+    await tx
+      .update(transactions)
+      .set({ transferPairId: null, updatedAt: new Date() })
+      .where(eq(transactions.id, id));
+    await tx
+      .update(transactions)
+      .set({ transferPairId: null, updatedAt: new Date() })
+      .where(eq(transactions.id, pairId));
+  });
+}

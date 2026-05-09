@@ -1,0 +1,57 @@
+# Build context exclusions for `docker build`. Anything not listed
+# here gets uploaded to the docker daemon, so keep this list tight —
+# a stray `node_modules/` or `.next/` adds GB of churn for nothing.
+
+# Local dependencies + build output — `npm ci` + `npm run build` run
+# fresh inside the deps + builder stages.
+node_modules
+.next
+out
+
+# Repo metadata
+.git
+.gitignore
+.github
+.gitattributes
+
+# Local agent / IDE state
+.claude
+.vscode
+.idea
+
+# Live + backup data — never inside an image.
+data
+backups
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.bak
+
+# Test + bench artefacts
+*.test.ts
+*.test.tsx
+*.bench.ts
+vitest.config.ts
+coverage
+.vitest
+
+# Build/type cache
+tsconfig.tsbuildinfo
+.eslintcache
+
+# Secrets / per-environment config
+.env
+.env.*
+!.env.example
+
+# Misc
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+
+# Docs the runtime image doesn't need
+README.md
+AGENTS.md
+CLAUDE.md

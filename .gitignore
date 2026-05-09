@@ -1,0 +1,53 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# database snapshots — too large, contain PII; the README + git tag pair is
+# the source of truth for which snapshot pairs with which commit
+backups/*.dump
+backups/*.sql
+
+# SQLite live data — the file is too big to track and contains PII; the
+# host should keep its own copy mounted at SQLITE_PATH (./data in dev,
+# /data inside the container).
+/data/
+
+.claude/

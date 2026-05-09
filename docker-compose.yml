@@ -1,0 +1,54 @@
+# Single-host deploy of the published budgets image. For "spin it up
+# on one box and run" scenarios (a personal NAS, a dev probe of the
+# image, emergency single-host fallback). A real cluster will have
+# its own manifest.
+#
+# Usage:
+#   export BUDGETS_IMAGE=… # e.g. docker.io/<your-username>/budgets:latest
+#                          # or pin to a sha tag for reproducible deploys
+#   export AUTH_SECRET=…   # NextAuth session secret, REQUIRED
+#   export SQLITE_KEY=…    # optional — set to auto-unlock; omit for
+#                          #   web-unlock on first start (`/unlock`)
+#   docker compose up -d   # or `podman compose up -d`
+#
+# BUDGETS_IMAGE is required: the compose file refuses to start without
+# it so a fresh checkout can never accidentally pull from someone
+# else's registry. Pin to a sha tag in production; `:latest` is fine
+# for casual home use.
+#
+# Image-level concerns (CMD, HEALTHCHECK, NODE_ENV, default
+# SQLITE_PATH, port, user) live in the Dockerfile, not here. This
+# file only covers per-deployment shape: which tag, where to bind
+# the port, where the data volume lives, and the operator-supplied
+# secrets.
+
+services:
+  app:
+    image: ${BUDGETS_IMAGE:?BUDGETS_IMAGE is required — e.g. docker.io/<your-username>/budgets:latest}
+    container_name: budgets
+    restart: unless-stopped
+    ports:
+      - "${BUDGETS_PORT:-3000}:3000"
+    environment:
+      # NextAuth session secret. Required — without it login fails.
+      # NextAuth v5 reads NEXTAUTH_SECRET as an alias automatically;
+      # no need to set both.
+      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required}
+      # Public URL the app serves on. The cluster usually fronts
+      # this with a reverse proxy / TLS terminator; for a single-
+      # host deploy with no proxy, point it at the host's address.
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      # SQLCipher passphrase. Optional — leave unset for first-run /
+      # rotation workflows where the operator visits /unlock and
+      # supplies the key via the web form (the app boots locked and
+      # the proxy redirects every request to /unlock until then).
+      # On a fresh start with no DB file present, the first /unlock
+      # POST creates the .db file keyed with the supplied passphrase
+      # and applies migrations.
+      SQLITE_KEY: ${SQLITE_KEY:-}
+
+    volumes:
+      - budget_data:/data
+
+volumes:
+  budget_data:

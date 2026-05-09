@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1778225564304,
+      "tag": "0000_narrow_black_panther",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1778670000000,
+      "tag": "0001_app_settings_backup_schedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1778680000000,
+      "tag": "0002_transactions_account_date_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1778731200000,
+      "tag": "0003_users_username",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1778731200001,
+      "tag": "0004_sample_data_columns",
+      "breakpoints": true
+    }
+  ]
+}

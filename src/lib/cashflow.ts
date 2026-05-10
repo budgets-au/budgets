@@ -248,3 +248,59 @@ export function computeCashflow({
 
   return { daily, perAccount };
 }
+
+// ─── Day summary helper ───────────────────────────────────────────────────────
+// Compresses a `DailyBalance` (or a synthetic version of one) into the three
+// signals the calendar's day-cell renders as coloured dots. Pure function so
+// both the cell and the unit tests can call it without setting up React.
+//
+// `hasIn`/`hasOut` reflect actual transactions only — projected/scheduled
+// occurrences feed `hasPlanned`. A scheduled occurrence that has already
+// been matched to a real transaction is *not* counted as planned (the dot
+// follows the money to the day the real txn posted, matching the existing
+// behaviour in the calendar's match logic).
+
+export interface DaySummaryInput {
+  /** Actual transactions for the day (post-projection filter). */
+  events: { amount: number; isProjected: boolean }[];
+  /** All scheduled occurrences for the day. The caller is responsible for
+   * culling already-matched scheds before passing them in if it wants
+   * dot-on-real-day semantics; the helper just reports presence. */
+  scheduledEvents: { amount: number }[];
+}
+
+export interface DaySummary {
+  hasIn: boolean;
+  hasOut: boolean;
+  hasPlanned: boolean;
+  /** Signed sum of real (non-projected) transactions for the day. */
+  net: number;
+}
+
+export function summarizeDay(d: DaySummaryInput | undefined): DaySummary {
+  if (!d) return { hasIn: false, hasOut: false, hasPlanned: false, net: 0 };
+  let hasIn = false;
+  let hasOut = false;
+  let net = 0;
+  for (const e of d.events) {
+    if (e.isProjected) continue;
+    if (e.amount > 0) hasIn = true;
+    else if (e.amount < 0) hasOut = true;
+    net += e.amount;
+  }
+  const hasPlanned = d.scheduledEvents.length > 0;
+  // Round to cents so floating-point dust doesn't surface in summary text.
+  return { hasIn, hasOut, hasPlanned, net: Math.round(net * 100) / 100 };
+}
+
+/** Sum the realised (non-projected) net across a list of daily balances —
+ * used by the calendar's per-week footer. */
+export function weekNet(days: { events: { amount: number; isProjected: boolean }[] }[]): number {
+  let n = 0;
+  for (const d of days) {
+    for (const e of d.events) {
+      if (!e.isProjected) n += e.amount;
+    }
+  }
+  return Math.round(n * 100) / 100;
+}

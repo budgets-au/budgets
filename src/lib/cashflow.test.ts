@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { parseISO } from "date-fns";
-import { computeCashflow } from "./cashflow";
+import { computeCashflow, summarizeDay, weekNet } from "./cashflow";
 import type { Account, Transaction, ScheduledTransaction } from "@/db/schema";
 
 // Pin "now" so the past/future logic in computeCashflow is deterministic.
@@ -210,5 +210,115 @@ describe("computeCashflow — back-compute correctness", () => {
     expect(result.perAccount[0].id).toBe("aa-1");
     // bb-1 txn should not affect aa-1's balance.
     expect(result.daily[0].balance).toBe(10000);
+  });
+});
+
+describe("summarizeDay", () => {
+  it("returns false-everything when given undefined", () => {
+    expect(summarizeDay(undefined)).toEqual({
+      hasIn: false,
+      hasOut: false,
+      hasPlanned: false,
+      net: 0,
+    });
+  });
+
+  it("returns false-everything for an empty day", () => {
+    expect(
+      summarizeDay({ events: [], scheduledEvents: [] }),
+    ).toEqual({ hasIn: false, hasOut: false, hasPlanned: false, net: 0 });
+  });
+
+  it("flags hasIn when any real positive amount lands", () => {
+    const out = summarizeDay({
+      events: [{ amount: 3500, isProjected: false }],
+      scheduledEvents: [],
+    });
+    expect(out.hasIn).toBe(true);
+    expect(out.hasOut).toBe(false);
+    expect(out.hasPlanned).toBe(false);
+    expect(out.net).toBe(3500);
+  });
+
+  it("flags hasOut when any real negative amount lands", () => {
+    const out = summarizeDay({
+      events: [{ amount: -78.4, isProjected: false }],
+      scheduledEvents: [],
+    });
+    expect(out).toEqual({ hasIn: false, hasOut: true, hasPlanned: false, net: -78.4 });
+  });
+
+  it("flags all three when the day has income, expense and a planned occurrence", () => {
+    const out = summarizeDay({
+      events: [
+        { amount: 3500, isProjected: false },
+        { amount: -120, isProjected: false },
+      ],
+      scheduledEvents: [{ amount: -500 }],
+    });
+    expect(out.hasIn).toBe(true);
+    expect(out.hasOut).toBe(true);
+    expect(out.hasPlanned).toBe(true);
+    expect(out.net).toBe(3380);
+  });
+
+  it("ignores projected events when deciding hasIn / hasOut / net", () => {
+    // Projected entries (real-list isProjected=true) only contribute via
+    // scheduledEvents — the cell colour should reflect real money only.
+    const out = summarizeDay({
+      events: [
+        { amount: 100, isProjected: true },
+        { amount: -50, isProjected: true },
+      ],
+      scheduledEvents: [{ amount: -200 }],
+    });
+    expect(out.hasIn).toBe(false);
+    expect(out.hasOut).toBe(false);
+    expect(out.hasPlanned).toBe(true);
+    expect(out.net).toBe(0);
+  });
+
+  it("rounds net to cents (no float dust)", () => {
+    const out = summarizeDay({
+      events: [
+        { amount: 0.1, isProjected: false },
+        { amount: 0.2, isProjected: false },
+      ],
+      scheduledEvents: [],
+    });
+    expect(out.net).toBe(0.3);
+  });
+
+  it("zero-amount events don't flip hasIn or hasOut", () => {
+    const out = summarizeDay({
+      events: [{ amount: 0, isProjected: false }],
+      scheduledEvents: [],
+    });
+    expect(out.hasIn).toBe(false);
+    expect(out.hasOut).toBe(false);
+  });
+});
+
+describe("weekNet", () => {
+  it("sums realised events across days, ignoring projected", () => {
+    expect(
+      weekNet([
+        { events: [{ amount: 3500, isProjected: false }] },
+        { events: [{ amount: -2200, isProjected: false }] },
+        { events: [{ amount: -84.4, isProjected: false }, { amount: 100, isProjected: true }] },
+      ]),
+    ).toBe(1215.6);
+  });
+
+  it("returns 0 for an empty week", () => {
+    expect(weekNet([])).toBe(0);
+  });
+
+  it("rounds to cents", () => {
+    expect(
+      weekNet([
+        { events: [{ amount: 0.1, isProjected: false }, { amount: 0.2, isProjected: false }] },
+      ]),
+    ).toBe(0.3);
   });
 });

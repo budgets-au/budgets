@@ -32,11 +32,18 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatAUD, formatDateShort, amountClass, cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import type { DailyBalance, AccountSeries } from "@/lib/cashflow";
+import { summarizeDay, weekNet } from "@/lib/cashflow";
 import { colourForFrequency } from "@/lib/schedule-colours";
 import { ScheduledMatchPill } from "@/components/transactions/scheduled-match-pill";
+import {
+  TransactionRow,
+  type TransactionRowData,
+} from "@/components/transactions/transaction-row";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 
 interface CashflowApi {
   daily: DailyBalance[];
@@ -63,6 +70,10 @@ export function CashflowCalendar({
 }) {
   // The account filter now lives in the global sidebar; we just consume it.
   const { ids: accountIds } = useAccountFilter();
+  // Linked-counterpart detail toggle in the day-detail panel — reuses the
+  // same display pref the main /transactions list reads so flipping the
+  // toggle in Settings → General affects both views consistently.
+  const { prefs: displayPrefs } = useDisplayPrefs();
   const [month, setMonth] = useState(new Date());
   // Day detail panel selection. Defaults to today; click a calendar cell to
   // change it. Stored as ISO date string so equality comparison is trivial.
@@ -440,6 +451,57 @@ export function CashflowCalendar({
     : spanDays <= 92 ? 13
     : Math.max(1, Math.floor(chartData.length / 7));
 
+  // Domain for the Y-axis. Without an explicit domain Recharts computes
+  // its own ticks against the per-account `a_*` series only and the
+  // tickFormatter was hard-coded to `$Nk` — when balances sit under $1k
+  // it rendered all ticks as `$0k`. Compute the real min/max across
+  // every account column, pad to a "nice" round step, then format the
+  // tick with a scale-aware suffix.
+  const yDomain = useMemo<[number, number]>(() => {
+    if (chartData.length === 0 || perAccount.length === 0) return [0, 0];
+    let min = Infinity;
+    let max = -Infinity;
+    for (const row of chartData) {
+      for (const a of perAccount) {
+        const v = row[`a_${a.id}`];
+        if (typeof v === "number") {
+          if (v < min) min = v;
+          if (v > max) max = v;
+        }
+      }
+    }
+    if (!isFinite(min) || !isFinite(max)) return [0, 0];
+    if (min === max) {
+      // Single-value series — pad a token range around it so the line
+      // isn't flat-on-axis.
+      const pad = Math.max(10, Math.abs(min) * 0.1);
+      return [min - pad, max + pad];
+    }
+    // Round outward to a "nice" step so the tick labels land on
+    // human-readable numbers ($1k, $13k, $20k, $1.2m, …) regardless
+    // of the underlying scale.
+    const span = max - min;
+    const niceStep = Math.pow(10, Math.floor(Math.log10(span / 5)));
+    const niceMin = Math.floor(min / niceStep) * niceStep;
+    const niceMax = Math.ceil(max / niceStep) * niceStep;
+    return [niceMin, niceMax];
+  }, [chartData, perAccount]);
+
+  // Format a single Y-axis tick with the smallest unit that keeps
+  // the label crisp. `$1.2k` / `$13k` / `$1.2m` etc.
+  function formatYTick(v: number): string {
+    const abs = Math.abs(v);
+    if (abs >= 1_000_000) {
+      const m = v / 1_000_000;
+      return `$${Math.abs(m) >= 10 ? m.toFixed(0) : m.toFixed(1)}m`;
+    }
+    if (abs >= 1_000) {
+      const k = v / 1_000;
+      return `$${Math.abs(k) >= 10 ? k.toFixed(0) : k.toFixed(1)}k`;
+    }
+    return `$${Math.round(v)}`;
+  }
+
   // Calendar-selection highlight — when the user picks a day in the grid,
   // surface it on the chart so the two views stay in sync. Resolves to
   // undefined (no highlight rendered) when the selected day isn't in the
@@ -535,7 +597,7 @@ export function CashflowCalendar({
           aria-valuemax={lastIdx}
           aria-valuenow={brushIndices.start}
           onPointerDown={(e) => startDrag("min", e)}
-          className="absolute top-0 bottom-0 w-2 -translate-x-1/2 cursor-ew-resize z-20 rounded-sm shadow ring-1 ring-white/40"
+          className="absolute top-0 bottom-0 w-1.5 -translate-x-1/2 cursor-ew-resize z-20 rounded-sm shadow ring-1 ring-white/70 dark:ring-white/30 border border-white/40 dark:border-black/40"
           style={{
             left: `clamp(4px, ${minHandlePct}%, calc(100% - 4px))`,
             backgroundColor: "#4f46e5",
@@ -550,7 +612,7 @@ export function CashflowCalendar({
           aria-valuemax={lastIdx}
           aria-valuenow={brushIndices.end}
           onPointerDown={(e) => startDrag("max", e)}
-          className="absolute top-0 bottom-0 w-2 -translate-x-1/2 cursor-ew-resize z-20 rounded-sm shadow ring-1 ring-white/40"
+          className="absolute top-0 bottom-0 w-1.5 -translate-x-1/2 cursor-ew-resize z-20 rounded-sm shadow ring-1 ring-white/70 dark:ring-white/30 border border-white/40 dark:border-black/40"
           style={{
             left: `clamp(4px, ${maxHandlePct}%, calc(100% - 4px))`,
             backgroundColor: "#4f46e5",
@@ -612,11 +674,11 @@ export function CashflowCalendar({
           </CardHeader>
           <CardContent>
             {chartLoading ? (
-              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
+              <div className="h-44 flex items-center justify-center text-muted-foreground text-sm">
                 Loading…
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={176}>
                 <ComposedChart
                   data={chartData}
                   margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
@@ -659,8 +721,9 @@ export function CashflowCalendar({
                     tick={{ fontSize: 10 }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                    width={40}
+                    tickFormatter={formatYTick}
+                    domain={yDomain[0] !== yDomain[1] ? yDomain : ["auto", "auto"]}
+                    width={44}
                   />
                   <Tooltip
                     formatter={(value, name) => {
@@ -673,16 +736,27 @@ export function CashflowCalendar({
                     labelStyle={{ fontSize: 11 }}
                     contentStyle={{ fontSize: 12 }}
                   />
-                  {projectionStartLabel && (
-                    <ReferenceLine
-                      x={projectionStartLabel}
-                      stroke="var(--muted-foreground)"
-                      strokeWidth={1}
-                      strokeDasharray="4 4"
-                      ifOverflow="hidden"
-                      label={{ value: "Projected", position: "insideTopRight", fontSize: 10, fill: "var(--muted-foreground)" }}
-                    />
-                  )}
+                  {/* When the "Projected" divider and the "Selected" line
+                      land on the same column, their labels stack and read
+                      as one garbled string ("SelProjected"). Detect the
+                      collision and either offset the labels vertically OR
+                      render a single combined annotation. */}
+                  {projectionStartLabel &&
+                    projectionStartLabel !== selectedLabel && (
+                      <ReferenceLine
+                        x={projectionStartLabel}
+                        stroke="var(--muted-foreground)"
+                        strokeWidth={1}
+                        strokeDasharray="4 4"
+                        ifOverflow="hidden"
+                        label={{
+                          value: "Projected",
+                          position: "insideTopRight",
+                          fontSize: 10,
+                          fill: "var(--muted-foreground)",
+                        }}
+                      />
+                    )}
                   {/* Calendar-selection highlight — soft indigo band behind
                       the column for visibility, plus a sharper indigo line
                       on top for the precise day marker. ReferenceArea with
@@ -704,7 +778,15 @@ export function CashflowCalendar({
                       stroke="#4f46e5"
                       strokeWidth={1.5}
                       ifOverflow="hidden"
-                      label={{ value: "Selected", position: "insideTop", fontSize: 10, fill: "#4f46e5" }}
+                      label={{
+                        value:
+                          projectionStartLabel === selectedLabel
+                            ? "Selected · Projected"
+                            : "Selected",
+                        position: "insideTop",
+                        fontSize: 10,
+                        fill: "#4f46e5",
+                      }}
                     />
                   )}
                   <ReferenceLine y={0} stroke="var(--border)" strokeWidth={1} />
@@ -749,6 +831,56 @@ export function CashflowCalendar({
       {/* ── Row 2: month view (calendar + day detail) or week view ──────── */}
       <div className="flex flex-col gap-2 flex-1 min-h-0">
         <div className="shrink-0 flex items-center justify-end gap-1">
+          <Popover>
+            <PopoverTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Calendar legend"
+                  className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-input text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                />
+              }
+            >
+              <Info className="h-3.5 w-3.5" />
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3 text-xs space-y-2">
+              <p className="font-semibold text-sm">Legend</p>
+              <div className="space-y-1.5">
+                <span className="flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 rounded border border-blue-400 bg-blue-50 dark:bg-blue-950/30" />
+                  Today
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="inline-block w-3 h-3 rounded border border-dashed border-border" />
+                  Projected day
+                </span>
+              </div>
+              <div className="pt-1 border-t space-y-1.5">
+                <p className="text-muted-foreground">Day-cell dots</p>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: "var(--cashflow-in)" }}
+                  />
+                  Income on the day
+                </span>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: "var(--cashflow-out)" }}
+                  />
+                  Expense on the day
+                </span>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: "var(--cashflow-planned)" }}
+                  />
+                  Scheduled / planned
+                </span>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button
             variant={viewMode === "month" ? "default" : "outline"}
             size="sm"
@@ -835,7 +967,12 @@ export function CashflowCalendar({
               </div>
             </CardHeader>
             <CardContent className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col">
-              <div className="grid grid-cols-7 mb-1 shrink-0">
+              <div
+                className="mb-1 shrink-0 grid gap-1"
+                style={{
+                  gridTemplateColumns: "repeat(7, minmax(0, 1fr)) minmax(0, 0.85fr)",
+                }}
+              >
                 {DAYS.map((d) => (
                   <div
                     key={d}
@@ -844,108 +981,165 @@ export function CashflowCalendar({
                     {d}
                   </div>
                 ))}
+                <div
+                  className="text-center text-xs text-muted-foreground/70 font-medium py-1"
+                  title="Net for the week (realised transactions only)"
+                >
+                  Net
+                </div>
               </div>
 
               <div
-                className="flex-1 min-h-0 grid grid-cols-7 gap-1"
-                style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))` }}
+                className="flex-1 min-h-0 grid gap-1"
+                style={{
+                  gridTemplateColumns: "repeat(7, minmax(0, 1fr)) minmax(0, 0.85fr)",
+                  gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))`,
+                }}
               >
-                {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-                  <div key={`empty-${i}`} />
-                ))}
-
-                {monthDays.map((day) => {
-                  const dateStr = toISO(day);
-                  const data = byDate.get(dateStr);
-                  const today = isToday(day);
-                  const selected = dateStr === selectedDate;
-
-                  const actualEvents = data?.events.filter((e) => !e.isProjected) ?? [];
-                  const actualNet = actualEvents.reduce((s, e) => s + e.amount, 0);
-                  const scheduledEvts = data?.scheduledEvents ?? [];
-                  // Net of scheduled events that *don't* have a real-txn match
-                  // anywhere in the loaded month — i.e. the genuinely-pending bit.
-                  const unclaimedScheduledNet = scheduledEvts.reduce(
-                    (acc, e, i) =>
-                      claimedSched.has(`${dateStr}#${i}`) ? acc : acc + e.amount,
-                    0,
-                  );
-                  // Dot follows the money: shown on the day with an unclaimed
-                  // scheduled occurrence (still pending) OR the day a real txn
-                  // posted that fulfilled a drifted scheduled (claimed by it).
-                  const unclaimedScheduledHere = scheduledEvts.some(
-                    (_, i) => !claimedSched.has(`${dateStr}#${i}`),
-                  );
-                  const claimedRealHere = actualEvents.some(
-                    (_, i) => claimedReal.has(`${dateStr}#${i}`),
-                  );
-                  const hasScheduled = unclaimedScheduledHere || claimedRealHere;
-
-                  return (
-                    <button
-                      key={dateStr}
-                      type="button"
-                      onClick={() => setSelectedDate(dateStr)}
-                      className={cn(
-                        "min-h-0 rounded-lg p-1.5 text-left flex flex-col items-start justify-between overflow-hidden",
-                        "border transition-colors text-[10px]",
-                        selected
-                          ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500"
-                          : today
-                            ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100/60 dark:hover:bg-blue-950/50"
-                            : data?.hasProjected
-                              ? "border-dashed border-border hover:bg-muted"
-                              : "border-border hover:bg-muted",
-                      )}
-                    >
-                      <div className="flex items-start justify-between w-full">
-                        <span
+                {(() => {
+                  // Build a flat list of cells (leading-empty + day buttons +
+                  // trailing-empty padding to the full grid). Slice into weeks
+                  // of 7, then emit each week's cells followed by the realised
+                  // net for the week — same `weekNet` helper the unit tests
+                  // exercise so display and tests can't drift apart.
+                  type Cell =
+                    | { kind: "empty"; key: string }
+                    | { kind: "day"; day: Date; dateStr: string };
+                  const flat: Cell[] = [];
+                  for (let i = 0; i < firstDayOfWeek; i++) {
+                    flat.push({ kind: "empty", key: `lead-${i}` });
+                  }
+                  for (const d of monthDays) {
+                    flat.push({ kind: "day", day: d, dateStr: toISO(d) });
+                  }
+                  // Pad trailing so the final week-row has 7 cells before its
+                  // Net cell — keeps the grid alignment clean even when the
+                  // month ends mid-week.
+                  while (flat.length % 7 !== 0) {
+                    flat.push({ kind: "empty", key: `trail-${flat.length}` });
+                  }
+                  const out: React.ReactNode[] = [];
+                  for (let w = 0; w < flat.length / 7; w++) {
+                    const weekCells = flat.slice(w * 7, w * 7 + 7);
+                    const weekDailies = weekCells
+                      .filter((c): c is Extract<Cell, { kind: "day" }> => c.kind === "day")
+                      .map(
+                        (c) =>
+                          byDate.get(c.dateStr) ?? {
+                            events: [] as { amount: number; isProjected: boolean }[],
+                          },
+                      );
+                    const net = weekNet(weekDailies);
+                    for (const c of weekCells) {
+                      if (c.kind === "empty") {
+                        out.push(<div key={c.key} />);
+                        continue;
+                      }
+                      const dateStr = c.dateStr;
+                      const day = c.day;
+                      const data = byDate.get(dateStr);
+                      const today = isToday(day);
+                      const selected = dateStr === selectedDate;
+                      // Drop already-matched scheduled occurrences so the
+                      // planned dot only fires for genuinely-pending events.
+                      const unmatchedScheduled =
+                        (data?.scheduledEvents ?? []).filter(
+                          (_, i) => !claimedSched.has(`${dateStr}#${i}`),
+                        );
+                      // A real transaction that fulfilled a scheduled
+                      // occurrence still shows the planned dot — the dot
+                      // follows the money to the day it actually posted.
+                      const claimedRealHere = (data?.events ?? []).some(
+                        (e, i) =>
+                          !e.isProjected && claimedReal.has(`${dateStr}#${i}`),
+                      );
+                      const summary = summarizeDay(
+                        data && {
+                          events: data.events,
+                          scheduledEvents: unmatchedScheduled,
+                        },
+                      );
+                      const hasPlanned = summary.hasPlanned || claimedRealHere;
+                      out.push(
+                        <button
+                          key={dateStr}
+                          type="button"
+                          onClick={() => setSelectedDate(dateStr)}
                           className={cn(
-                            "font-medium leading-none",
-                            today ? "text-blue-600" : "text-foreground",
+                            "min-h-0 rounded-lg p-1.5 text-left flex flex-col overflow-hidden",
+                            "border transition-colors text-[10px]",
+                            selected
+                              ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500"
+                              : today
+                                ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100/60 dark:hover:bg-blue-950/50"
+                                : data?.hasProjected
+                                  ? "border-dashed border-border hover:bg-muted"
+                                  : "border-border hover:bg-muted",
                           )}
                         >
-                          {format(day, "d")}
-                        </span>
-                        {hasScheduled && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 mt-0.5 shrink-0" />
+                          <span
+                            className={cn(
+                              "font-medium leading-none",
+                              today ? "text-blue-600" : "text-foreground",
+                            )}
+                          >
+                            {format(day, "d")}
+                          </span>
+                          {(summary.hasIn || summary.hasOut || hasPlanned) && (
+                            <div
+                              className="mt-auto flex items-center justify-center gap-1.5 pt-1"
+                              aria-label={[
+                                summary.hasIn && "income",
+                                summary.hasOut && "expense",
+                                hasPlanned && "planned",
+                              ]
+                                .filter(Boolean)
+                                .join(", ")}
+                            >
+                              {summary.hasIn && (
+                                <span
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{ backgroundColor: "var(--cashflow-in)" }}
+                                />
+                              )}
+                              {summary.hasOut && (
+                                <span
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{ backgroundColor: "var(--cashflow-out)" }}
+                                />
+                              )}
+                              {hasPlanned && (
+                                <span
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{ backgroundColor: "var(--cashflow-planned)" }}
+                                />
+                              )}
+                            </div>
+                          )}
+                        </button>,
+                      );
+                    }
+                    out.push(
+                      <div
+                        key={`net-${w}`}
+                        className="flex items-center justify-center text-[10px] tabular-nums font-medium text-muted-foreground/80"
+                        title="Net for the week (realised transactions only)"
+                      >
+                        {net !== 0 && (
+                          <span className={amountClass(net)}>
+                            {net > 0 ? "+" : ""}
+                            {formatAUD(net).replace("A$", "$")}
+                          </span>
                         )}
-                      </div>
-                      {actualNet !== 0 && (
-                        <span
-                          className={cn(
-                            "text-[9px] leading-none font-semibold mt-auto",
-                            actualNet > 0 ? "text-emerald-600" : "text-red-500",
-                          )}
-                        >
-                          {actualNet > 0 ? "+" : ""}
-                          {formatAUD(actualNet).replace("A$", "$")}
-                        </span>
-                      )}
-                      {actualNet === 0 && unclaimedScheduledNet !== 0 && (
-                        <span className="text-[9px] leading-none font-medium mt-auto text-indigo-500">
-                          {unclaimedScheduledNet > 0 ? "+" : ""}
-                          {formatAUD(unclaimedScheduledNet).replace("A$", "$")}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                      </div>,
+                    );
+                  }
+                  return out;
+                })()}
               </div>
             </CardContent>
           </Card>
 
-          <div className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-3 rounded border border-blue-400 bg-blue-50 dark:bg-blue-950/30" /> Today
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-3 rounded border border-dashed border-border" /> Projected day
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 inline-block" /> Scheduled events
-            </span>
-          </div>
         </div>
 
         {/* Day detail panel — brush sits above so its drag/zoom controls
@@ -956,10 +1150,11 @@ export function CashflowCalendar({
             dateStr={selectedDate}
             byDate={byDate}
             accounts={accounts}
-            claimedReal={claimedReal}
+            accountIds={accountIds}
             claimedSched={claimedSched}
             realToSched={realToSched}
             scheduledById={scheduledById}
+            showLinkedDetails={displayPrefs.transactionsShowLinkedPanel}
           />
         </div>
         </div>
@@ -1185,111 +1380,130 @@ function DayDetailPanel({
   dateStr,
   byDate,
   accounts,
-  claimedReal,
+  accountIds,
   claimedSched,
   realToSched,
   scheduledById,
+  showLinkedDetails,
 }: {
   dateStr: string;
   byDate: Map<string, DailyBalance>;
   accounts: { id: string; name: string; color: string }[];
-  claimedReal: Set<string>;
+  accountIds: string[];
   claimedSched: Set<string>;
   realToSched: Map<string, { scheduledId: string; scheduledDate: string }>;
   scheduledById: Map<string, { frequency: string; interval: number; payee: string | null }>;
+  showLinkedDetails: boolean;
 }) {
+  // Day's *projected* events from the cashflow API — these don't have notes
+  // / category names / pair-account metadata, so the panel stays on the
+  // cashflow shape for the "still pending" rows.
   const data = byDate.get(dateStr);
-  const actualEvents = data?.events.filter((e) => !e.isProjected) ?? [];
   const scheduledEvts = data?.scheduledEvents ?? [];
   const accountById = new Map(accounts.map((a) => [a.id, a]));
 
-  // Project the precomputed global claim outcome onto THIS day's lists.
-  const matchedRealIdx = new Set<number>();
-  actualEvents.forEach((_, i) => {
-    if (claimedReal.has(`${dateStr}#${i}`)) matchedRealIdx.add(i);
+  // Day's *actual* transactions — fetched fresh from /api/transactions so
+  // we get the full row shape (notes, categoryName, isReconciled, transfer
+  // pair metadata) that the cashflow projection deliberately doesn't
+  // include. Scoped to the same account filter the calendar is using so
+  // the panel never surfaces rows the grid wouldn't.
+  const txQuery = new URLSearchParams({
+    from: dateStr,
+    to: dateStr,
+    limit: "500",
   });
+  if (accountIds.length) txQuery.set("accountIds", accountIds.join(","));
+  const { data: txnResp } = useSWR<TransactionRowData[]>(
+    `/api/transactions?${txQuery}`,
+    fetcher,
+    { keepPreviousData: true },
+  );
+  const realTxns: TransactionRowData[] = useMemo(
+    () => txnResp ?? [],
+    [txnResp],
+  );
+
+  // Drop scheduled occurrences that have already been matched to a real
+  // transaction — the dot has moved with the money, the row would too.
   const matchedScheduledIdx = new Set<number>();
   scheduledEvts.forEach((_, i) => {
     if (claimedSched.has(`${dateStr}#${i}`)) matchedScheduledIdx.add(i);
   });
+  const unmatchedScheduled = scheduledEvts.filter(
+    (_, i) => !matchedScheduledIdx.has(i),
+  );
 
-  function renderRow(
-    e: { accountId?: string; payee: string; description: string; amount: number },
-    key: number,
-    opts?: { muted?: boolean; scheduled?: boolean; rowIdx?: number },
-  ) {
-    const acct = e.accountId ? accountById.get(e.accountId) : undefined;
-    let pillProps: {
-      scheduledId: string;
-      frequency: string;
-      interval: number;
-      realDate: string;
-      scheduledDate: string;
-      schedulePayee?: string | null;
-    } | null = null;
-    let stripeColour: string | undefined;
-    if (opts?.scheduled && opts?.rowIdx !== undefined) {
-      const match = realToSched.get(`${dateStr}#${opts.rowIdx}`);
-      const sched = match ? scheduledById.get(match.scheduledId) : undefined;
-      if (match && sched) {
-        stripeColour = colourForFrequency(sched.frequency);
-        pillProps = {
-          scheduledId: match.scheduledId,
-          frequency: sched.frequency,
-          interval: sched.interval,
-          realDate: dateStr,
-          scheduledDate: match.scheduledDate,
-          schedulePayee: sched.payee,
-        };
-      }
-    }
-    return (
-      <li
-        key={key}
-        className="flex justify-between items-center py-2 px-2 -mx-2 gap-3 rounded"
-        style={stripeColour ? { boxShadow: `inset 3px 0 0 ${stripeColour}` } : undefined}
-      >
-        <div className="min-w-0 flex items-center gap-2 flex-wrap">
-          {acct && (
-            <span
-              className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap shrink-0"
-              style={{ backgroundColor: acct.color }}
-            >
-              {acct.name}
-            </span>
-          )}
-          <span className={`truncate ${opts?.muted ? "text-muted-foreground" : ""}`}>
-            {e.payee || e.description || "—"}
-          </span>
-          {pillProps && <ScheduledMatchPill {...pillProps} />}
-        </div>
-        <span className={`shrink-0 font-medium tabular-nums ${amountClass(e.amount)}`}>
-          {formatAUD(e.amount)}
-        </span>
-      </li>
-    );
-  }
-
-  const unmatchedScheduled = scheduledEvts.filter((_, i) => !matchedScheduledIdx.has(i));
+  // Summary line for the panel header — uses the same in/out/planned
+  // signals as the calendar grid so the two views stay in lock-step.
+  const summary = summarizeDay(
+    data && { events: data.events, scheduledEvents: unmatchedScheduled },
+  );
+  const headerDate = format(parseISO(dateStr), "EEEE, d MMMM");
 
   return (
     <Card className="flex flex-col min-h-0 max-h-full overflow-hidden">
+      <CardHeader className="py-2 px-3 border-b shrink-0">
+        <div className="flex items-baseline justify-between gap-2 flex-wrap">
+          <p className="text-sm font-semibold">{headerDate}</p>
+          {realTxns.length + unmatchedScheduled.length > 0 && (
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {realTxns.length} txn{realTxns.length === 1 ? "" : "s"}
+              {" · "}
+              <span className={amountClass(summary.net)}>
+                {summary.net > 0 ? "+" : ""}
+                {formatAUD(summary.net)}
+              </span>
+              {unmatchedScheduled.length > 0 && (
+                <>
+                  {" · "}
+                  <span className="text-indigo-500">
+                    {unmatchedScheduled.length} planned
+                  </span>
+                </>
+              )}
+            </p>
+          )}
+        </div>
+      </CardHeader>
       <CardContent className="pt-3 space-y-4 flex-1 min-h-0 overflow-y-auto">
-        {actualEvents.length === 0 && scheduledEvts.length === 0 && (
+        {realTxns.length === 0 && unmatchedScheduled.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-6">
             No transactions on this day.
           </p>
         )}
 
-        {actualEvents.length > 0 && (
+        {realTxns.length > 0 && (
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
               Transactions
             </p>
             <ul className="divide-y text-sm">
-              {actualEvents.map((e, i) =>
-                renderRow(e, i, { scheduled: matchedRealIdx.has(i), rowIdx: i }),
-              )}
+              {realTxns.map((t, i) => {
+                const match = realToSched.get(`${dateStr}#${i}`);
+                const sched = match ? scheduledById.get(match.scheduledId) : undefined;
+                const stripeColour =
+                  match && sched ? colourForFrequency(sched.frequency) : undefined;
+                const pill =
+                  match && sched ? (
+                    <ScheduledMatchPill
+                      scheduledId={match.scheduledId}
+                      frequency={sched.frequency}
+                      interval={sched.interval}
+                      realDate={dateStr}
+                      scheduledDate={match.scheduledDate}
+                      schedulePayee={sched.payee}
+                    />
+                  ) : null;
+                return (
+                  <TransactionRow
+                    key={t.id}
+                    t={t}
+                    showLinkedDetails={showLinkedDetails}
+                    stripeColour={stripeColour}
+                    trailingSlot={pill}
+                  />
+                );
+              })}
             </ul>
           </div>
         )}
@@ -1300,7 +1514,37 @@ function DayDetailPanel({
               Scheduled
             </p>
             <ul className="divide-y text-sm">
-              {unmatchedScheduled.map((e, i) => renderRow(e, i, { muted: true }))}
+              {unmatchedScheduled.map((e, i) => {
+                const acct = e.accountId ? accountById.get(e.accountId) : undefined;
+                return (
+                  <li
+                    key={i}
+                    className="flex justify-between items-start py-2 px-2 -mx-2 gap-3 rounded"
+                  >
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      {acct && (
+                        <span
+                          className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap shrink-0"
+                          style={{ backgroundColor: acct.color }}
+                        >
+                          {acct.name}
+                        </span>
+                      )}
+                      <div className="text-sm font-medium leading-tight text-muted-foreground">
+                        {e.payee || e.description || "—"}
+                      </div>
+                    </div>
+                    <span
+                      className={cn(
+                        "shrink-0 font-medium tabular-nums",
+                        amountClass(e.amount),
+                      )}
+                    >
+                      {formatAUD(e.amount)}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}

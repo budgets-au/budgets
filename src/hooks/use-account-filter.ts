@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 
@@ -62,8 +62,19 @@ export function useAccountFilter() {
   // Persist whenever the URL ids change. Only the user's explicit
   // selection is stored — never the expanded "all visible" form, since
   // that would freeze the choice if accounts are added/archived later.
+  //
+  // SKIP the very first run on mount: the URL starts empty until the
+  // restore effect above pushes the saved selection back in, so writing
+  // `[]` here would clobber localStorage before restore can read it
+  // (the previous bug: the global selector wasn't persisting across
+  // sessions). Once mounted, every real change persists.
+  const firstPersist = useRef(true);
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (firstPersist.current) {
+      firstPersist.current = false;
+      return;
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(urlIds));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlIds.join(",")]);

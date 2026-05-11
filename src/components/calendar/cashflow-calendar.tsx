@@ -1002,11 +1002,12 @@ export function CashflowCalendar({
           className="shrink-0"
           style={{
             display: "grid",
-            // Cap the calendar at ~380px so the aspect-square cells
-            // stay compact (~50px each, ~270px total calendar height)
-            // and the chart on the right gets more breathing room.
+            // Cap the calendar at ~285px (75 % of the previous 380px
+            // cap). Cells settle around 38px so the row of three
+            // bottom dots stays inside the cell's padding. Chart on
+            // the right widens to match the new column ratio.
             // Below lg, stack into one column.
-            gridTemplateColumns: isLgUp ? "minmax(0, 380px) 1fr" : "1fr",
+            gridTemplateColumns: isLgUp ? "minmax(0, 285px) 1fr" : "1fr",
             gridTemplateRows: "auto",
             minWidth: 0,
             gap: "12px",
@@ -1158,7 +1159,7 @@ export function CashflowCalendar({
                       </span>
                       {(summary.hasIn || summary.hasOut || hasPlanned) && (
                         <div
-                          className="mt-auto flex items-center justify-center gap-1.5 pt-1"
+                          className="mt-auto flex items-center justify-center gap-1 pt-1"
                           aria-label={[
                             summary.hasIn && "income",
                             summary.hasOut && "expense",
@@ -1169,19 +1170,19 @@ export function CashflowCalendar({
                         >
                           {summary.hasIn && (
                             <span
-                              className="h-1.5 w-1.5 rounded-full"
+                              className="h-1 w-1 rounded-full"
                               style={{ backgroundColor: "var(--cashflow-in)" }}
                             />
                           )}
                           {summary.hasOut && (
                             <span
-                              className="h-1.5 w-1.5 rounded-full"
+                              className="h-1 w-1 rounded-full"
                               style={{ backgroundColor: "var(--cashflow-out)" }}
                             />
                           )}
                           {hasPlanned && (
                             <span
-                              className="h-1.5 w-1.5 rounded-full"
+                              className="h-1 w-1 rounded-full"
                               style={{ backgroundColor: "var(--cashflow-planned)" }}
                             />
                           )}

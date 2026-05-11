@@ -915,7 +915,17 @@ export function CashflowCalendar({
         >
         {/* Calendar */}
         <div className="flex flex-col gap-2 min-h-0 min-w-0">
-          <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <Card
+            className="flex flex-col overflow-hidden"
+            // The parent grid row is `1fr` so the row stretches to fill its
+            // flex container. Default `align-self` on a grid item is
+            // `stretch`, which would stretch THIS Card to the full row
+            // height even though the day grid inside is square-sized and
+            // doesn't need it. Pin the Card to the top of its row instead;
+            // the leftover row height becomes page background, not a
+            // framed void inside the Card.
+            style={{ alignSelf: "start" }}
+          >
             {/* Month nav lives inside the Card header so the calendar Card's
                 top edge aligns with the day-detail Card on the right. */}
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 border-b space-y-0 shrink-0">
@@ -965,7 +975,7 @@ export function CashflowCalendar({
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col">
+            <CardContent className="p-2 sm:p-3 flex flex-col">
               <div className="grid grid-cols-7 mb-1 shrink-0">
                 {DAYS.map((d) => (
                   <div

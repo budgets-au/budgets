@@ -36,7 +36,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { formatAUD, formatDateShort, amountClass, cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import type { DailyBalance, AccountSeries } from "@/lib/cashflow";
-import { summarizeDay, weekNet } from "@/lib/cashflow";
+import { summarizeDay } from "@/lib/cashflow";
 import { colourForFrequency } from "@/lib/schedule-colours";
 import { ScheduledMatchPill } from "@/components/transactions/scheduled-match-pill";
 import {
@@ -967,12 +967,7 @@ export function CashflowCalendar({
               </div>
             </CardHeader>
             <CardContent className="p-2 sm:p-3 flex-1 min-h-0 flex flex-col">
-              <div
-                className="mb-1 shrink-0 grid gap-1"
-                style={{
-                  gridTemplateColumns: "repeat(7, minmax(0, 1fr)) minmax(0, 0.85fr)",
-                }}
-              >
+              <div className="grid grid-cols-7 mb-1 shrink-0">
                 {DAYS.map((d) => (
                   <div
                     key={d}
@@ -981,161 +976,99 @@ export function CashflowCalendar({
                     {d}
                   </div>
                 ))}
-                <div
-                  className="text-center text-xs text-muted-foreground/70 font-medium py-1"
-                  title="Net for the week (realised transactions only)"
-                >
-                  Net
-                </div>
               </div>
 
               <div
-                className="flex-1 min-h-0 grid gap-1"
-                style={{
-                  gridTemplateColumns: "repeat(7, minmax(0, 1fr)) minmax(0, 0.85fr)",
-                  gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))`,
-                }}
+                className="flex-1 min-h-0 grid grid-cols-7 gap-1"
+                style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))` }}
               >
-                {(() => {
-                  // Build a flat list of cells (leading-empty + day buttons +
-                  // trailing-empty padding to the full grid). Slice into weeks
-                  // of 7, then emit each week's cells followed by the realised
-                  // net for the week — same `weekNet` helper the unit tests
-                  // exercise so display and tests can't drift apart.
-                  type Cell =
-                    | { kind: "empty"; key: string }
-                    | { kind: "day"; day: Date; dateStr: string };
-                  const flat: Cell[] = [];
-                  for (let i = 0; i < firstDayOfWeek; i++) {
-                    flat.push({ kind: "empty", key: `lead-${i}` });
-                  }
-                  for (const d of monthDays) {
-                    flat.push({ kind: "day", day: d, dateStr: toISO(d) });
-                  }
-                  // Pad trailing so the final week-row has 7 cells before its
-                  // Net cell — keeps the grid alignment clean even when the
-                  // month ends mid-week.
-                  while (flat.length % 7 !== 0) {
-                    flat.push({ kind: "empty", key: `trail-${flat.length}` });
-                  }
-                  const out: React.ReactNode[] = [];
-                  for (let w = 0; w < flat.length / 7; w++) {
-                    const weekCells = flat.slice(w * 7, w * 7 + 7);
-                    const weekDailies = weekCells
-                      .filter((c): c is Extract<Cell, { kind: "day" }> => c.kind === "day")
-                      .map(
-                        (c) =>
-                          byDate.get(c.dateStr) ?? {
-                            events: [] as { amount: number; isProjected: boolean }[],
-                          },
-                      );
-                    const net = weekNet(weekDailies);
-                    for (const c of weekCells) {
-                      if (c.kind === "empty") {
-                        out.push(<div key={c.key} />);
-                        continue;
-                      }
-                      const dateStr = c.dateStr;
-                      const day = c.day;
-                      const data = byDate.get(dateStr);
-                      const today = isToday(day);
-                      const selected = dateStr === selectedDate;
-                      // Drop already-matched scheduled occurrences so the
-                      // planned dot only fires for genuinely-pending events.
-                      const unmatchedScheduled =
-                        (data?.scheduledEvents ?? []).filter(
-                          (_, i) => !claimedSched.has(`${dateStr}#${i}`),
-                        );
-                      // A real transaction that fulfilled a scheduled
-                      // occurrence still shows the planned dot — the dot
-                      // follows the money to the day it actually posted.
-                      const claimedRealHere = (data?.events ?? []).some(
-                        (e, i) =>
-                          !e.isProjected && claimedReal.has(`${dateStr}#${i}`),
-                      );
-                      const summary = summarizeDay(
-                        data && {
-                          events: data.events,
-                          scheduledEvents: unmatchedScheduled,
-                        },
-                      );
-                      const hasPlanned = summary.hasPlanned || claimedRealHere;
-                      out.push(
-                        <button
-                          key={dateStr}
-                          type="button"
-                          onClick={() => setSelectedDate(dateStr)}
-                          className={cn(
-                            "min-h-0 rounded-lg p-1.5 text-left flex flex-col overflow-hidden",
-                            "border transition-colors text-[10px]",
-                            selected
-                              ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500"
-                              : today
-                                ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100/60 dark:hover:bg-blue-950/50"
-                                : data?.hasProjected
-                                  ? "border-dashed border-border hover:bg-muted"
-                                  : "border-border hover:bg-muted",
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              "font-medium leading-none",
-                              today ? "text-blue-600" : "text-foreground",
-                            )}
-                          >
-                            {format(day, "d")}
-                          </span>
-                          {(summary.hasIn || summary.hasOut || hasPlanned) && (
-                            <div
-                              className="mt-auto flex items-center justify-center gap-1.5 pt-1"
-                              aria-label={[
-                                summary.hasIn && "income",
-                                summary.hasOut && "expense",
-                                hasPlanned && "planned",
-                              ]
-                                .filter(Boolean)
-                                .join(", ")}
-                            >
-                              {summary.hasIn && (
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full"
-                                  style={{ backgroundColor: "var(--cashflow-in)" }}
-                                />
-                              )}
-                              {summary.hasOut && (
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full"
-                                  style={{ backgroundColor: "var(--cashflow-out)" }}
-                                />
-                              )}
-                              {hasPlanned && (
-                                <span
-                                  className="h-1.5 w-1.5 rounded-full"
-                                  style={{ backgroundColor: "var(--cashflow-planned)" }}
-                                />
-                              )}
-                            </div>
-                          )}
-                        </button>,
-                      );
-                    }
-                    out.push(
-                      <div
-                        key={`net-${w}`}
-                        className="flex items-center justify-center text-[10px] tabular-nums font-medium text-muted-foreground/80"
-                        title="Net for the week (realised transactions only)"
-                      >
-                        {net !== 0 && (
-                          <span className={amountClass(net)}>
-                            {net > 0 ? "+" : ""}
-                            {formatAUD(net).replace("A$", "$")}
-                          </span>
-                        )}
-                      </div>,
+                {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                  <div key={`empty-${i}`} />
+                ))}
+                {monthDays.map((day) => {
+                  const dateStr = toISO(day);
+                  const data = byDate.get(dateStr);
+                  const today = isToday(day);
+                  const selected = dateStr === selectedDate;
+                  // Drop already-matched scheduled occurrences so the
+                  // planned dot only fires for genuinely-pending events.
+                  const unmatchedScheduled =
+                    (data?.scheduledEvents ?? []).filter(
+                      (_, i) => !claimedSched.has(`${dateStr}#${i}`),
                     );
-                  }
-                  return out;
-                })()}
+                  // A real transaction that fulfilled a scheduled
+                  // occurrence still shows the planned dot — the dot
+                  // follows the money to the day it actually posted.
+                  const claimedRealHere = (data?.events ?? []).some(
+                    (e, i) =>
+                      !e.isProjected && claimedReal.has(`${dateStr}#${i}`),
+                  );
+                  const summary = summarizeDay(
+                    data && {
+                      events: data.events,
+                      scheduledEvents: unmatchedScheduled,
+                    },
+                  );
+                  const hasPlanned = summary.hasPlanned || claimedRealHere;
+                  return (
+                    <button
+                      key={dateStr}
+                      type="button"
+                      onClick={() => setSelectedDate(dateStr)}
+                      className={cn(
+                        "min-h-0 rounded-lg p-1.5 text-left flex flex-col overflow-hidden",
+                        "border transition-colors text-[10px]",
+                        selected
+                          ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500"
+                          : today
+                            ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100/60 dark:hover:bg-blue-950/50"
+                            : data?.hasProjected
+                              ? "border-dashed border-border hover:bg-muted"
+                              : "border-border hover:bg-muted",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "font-medium leading-none",
+                          today ? "text-blue-600" : "text-foreground",
+                        )}
+                      >
+                        {format(day, "d")}
+                      </span>
+                      {(summary.hasIn || summary.hasOut || hasPlanned) && (
+                        <div
+                          className="mt-auto flex items-center justify-center gap-1.5 pt-1"
+                          aria-label={[
+                            summary.hasIn && "income",
+                            summary.hasOut && "expense",
+                            hasPlanned && "planned",
+                          ]
+                            .filter(Boolean)
+                            .join(", ")}
+                        >
+                          {summary.hasIn && (
+                            <span
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{ backgroundColor: "var(--cashflow-in)" }}
+                            />
+                          )}
+                          {summary.hasOut && (
+                            <span
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{ backgroundColor: "var(--cashflow-out)" }}
+                            />
+                          )}
+                          {hasPlanned && (
+                            <span
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{ backgroundColor: "var(--cashflow-planned)" }}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

@@ -932,7 +932,11 @@ export function CashflowCalendar({
           className="shrink-0"
           style={{
             display: "grid",
-            gridTemplateColumns: isLgUp ? "4fr 9fr" : "1fr",
+            // Cap the calendar at ~440px so the aspect-square cells
+            // stay compact (~60px each, ~300px total calendar height)
+            // regardless of how wide the viewport gets. The chart
+            // takes whatever's left. Below lg, stack into one column.
+            gridTemplateColumns: isLgUp ? "minmax(0, 440px) 1fr" : "1fr",
             gridTemplateRows: "auto",
             minWidth: 0,
             gap: "12px",
@@ -1397,7 +1401,7 @@ function DayDetailPanel({
     limit: "500",
   });
   if (accountIds.length) txQuery.set("accountIds", accountIds.join(","));
-  const { data: txnResp } = useSWR<TransactionRowData[]>(
+  const { data: txnResp, mutate: mutateTxns } = useSWR<TransactionRowData[]>(
     `/api/transactions?${txQuery}`,
     fetcher,
     { keepPreviousData: true },
@@ -1406,6 +1410,18 @@ function DayDetailPanel({
     () => txnResp ?? [],
     [txnResp],
   );
+
+  // Categories list — driven by the same SWR key the main /transactions
+  // view uses, so the inline CategoryPicker inside TransactionRow has
+  // the full hierarchy to pick from (and the cache is shared).
+  const { data: categories = [] } = useSWR<
+    { id: string; name: string; parentId: string | null }[]
+  >("/api/categories", fetcher);
+
+  // Per-row expansion state — same single-row-at-a-time pattern the
+  // main list uses, isolated to this panel so opening a day's row
+  // doesn't affect /transactions.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Drop scheduled occurrences that have already been matched to a real
   // transaction — the dot has moved with the money, the row would too.
@@ -1461,34 +1477,54 @@ function DayDetailPanel({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
               Transactions
             </p>
-            <ul className="divide-y text-sm">
-              {realTxns.map((t, i) => {
-                const match = realToSched.get(`${dateStr}#${i}`);
-                const sched = match ? scheduledById.get(match.scheduledId) : undefined;
-                const stripeColour =
-                  match && sched ? colourForFrequency(sched.frequency) : undefined;
-                const pill =
-                  match && sched ? (
-                    <ScheduledMatchPill
-                      scheduledId={match.scheduledId}
-                      frequency={sched.frequency}
-                      interval={sched.interval}
-                      realDate={dateStr}
-                      scheduledDate={match.scheduledDate}
-                      schedulePayee={sched.payee}
+            {/* Render the same TransactionRow component the main
+                /transactions list uses, just without the date /
+                checkbox / balance / linked-panel columns (all
+                irrelevant in a single-day, non-bulk panel). Wrapped
+                in a minimal `<table>` because TransactionRow emits
+                `<tr>`/`<td>` and HTML refuses to render those
+                outside a table. */}
+            <table className="w-full text-sm">
+              <tbody className="divide-y">
+                {realTxns.map((t, i) => {
+                  const matchRef = realToSched.get(`${dateStr}#${i}`);
+                  const sched = matchRef
+                    ? scheduledById.get(matchRef.scheduledId)
+                    : undefined;
+                  const match =
+                    matchRef && sched
+                      ? {
+                          id: matchRef.scheduledId,
+                          frequency: sched.frequency,
+                          interval: sched.interval,
+                          occurrenceDate: matchRef.scheduledDate,
+                          payee: sched.payee,
+                        }
+                      : null;
+                  return (
+                    <TransactionRow
+                      key={t.id}
+                      t={t}
+                      accounts={accounts}
+                      categories={categories}
+                      showLinkedPanel={false}
+                      showLinkedDetails={false}
+                      showDate={false}
+                      showCheckbox={false}
+                      showBalance={false}
+                      isExpanded={expandedId === t.id}
+                      onToggleExpand={() =>
+                        setExpandedId((cur) =>
+                          cur === t.id ? null : t.id,
+                        )
+                      }
+                      match={match}
+                      onChange={() => mutateTxns()}
                     />
-                  ) : null;
-                return (
-                  <TransactionRow
-                    key={t.id}
-                    t={t}
-                    showLinkedDetails={showLinkedDetails}
-                    stripeColour={stripeColour}
-                    trailingSlot={pill}
-                  />
-                );
-              })}
-            </ul>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 

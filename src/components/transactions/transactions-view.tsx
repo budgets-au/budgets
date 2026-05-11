@@ -1,38 +1,25 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useRef, useMemo, useState } from "react";
 import useSWR from "swr";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Switch } from "@/components/ui/switch";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
-import Link from "next/link";
-import { format, parseISO } from "date-fns";
-import {
-  ArrowLeftRight, Unlink, X, StickyNote, Lock, Trash2, Search,
-  // Icons used by `iconForType` to visually summarise the bank's
-  // transaction-type field. Imported individually so tree-shaking can
-  // drop unused glyphs.
-  Receipt, Percent, TrendingUp, ShoppingCart, Banknote, FileCheck, Wallet,
-  HandCoins, ArrowDownToLine, ArrowUpFromLine, Repeat, Pause, HelpCircle,
-  CreditCard,
-} from "lucide-react";
+import { parseISO } from "date-fns";
+import { X, Trash2 } from "lucide-react";
 import { expandRecurrence } from "@/lib/recurrence";
 import type { ScheduledTransaction } from "@/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
-import { formatAUD, formatDate, amountClass, diffDaysISO, cn } from "@/lib/utils";
-import { colourForFrequency } from "@/lib/schedule-colours";
+import { formatAUD, amountClass, diffDaysISO, cn } from "@/lib/utils";
 import { buildCategoryMeta } from "@/lib/category-path";
 import type { Category } from "@/db/schema";
-import { CategoryPicker } from "@/components/transactions/category-picker";
-import { ScheduleButton } from "@/components/transactions/schedule-button";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
 import { TransferSuggestionsPanel } from "@/components/transactions/transfer-suggestions-panel";
 import { MissedScheduledPanel } from "@/components/transactions/missed-scheduled-panel";
-import { NotesCell } from "@/components/transactions/notes-cell";
-import { ScheduledMatchPill } from "@/components/transactions/scheduled-match-pill";
+import { TransactionRow } from "@/components/transactions/transaction-row";
 import { toast } from "sonner";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
@@ -107,107 +94,9 @@ interface ScheduledRow {
   isActive: boolean;
 }
 
-/** Map the bank's transaction type (OFX TRNTYPE / QIF L / CSV Categories)
- * to a lucide icon + tooltip label + muted tone class. Match is case-
- * insensitive and prefix-y so variants like "DIRECTDEP" / "DIRECT
- * DEPOSIT" / "Deposit" all hit the same bucket. Falls back to a generic
- * "?" icon for unknown values so the column never shows a raw string.
- *
- * Tones use the {colour}-500/70 opacity pattern so the icons stay
- * subtle — visible enough to scan without competing with the row's
- * actual content. Inflows green, outflows rose, transfers amber,
- * recurring cyan, fees red-rose, etc. */
-function iconForType(rawType: string | null | undefined): {
-  Icon: typeof Receipt;
-  label: string;
-  tone: string;
-} | null {
-  if (!rawType) return null;
-  const t = rawType.trim().toUpperCase();
-  if (!t) return null;
-  // Inflow / income tones — emerald.
-  const incoming = "text-emerald-500/70";
-  // Outflow / spending tones — rose.
-  const outgoing = "text-rose-500/70";
-  // Order matters — FEE has to come before any FEE-prefix substrings.
-  if (t === "FEE" || t === "SRVCHG" || t === "MISSED PAYMENT FEE") {
-    return { Icon: Receipt, label: rawType, tone: "text-red-500/70" };
-  }
-  if (t === "INT" || t.startsWith("INTEREST")) {
-    return { Icon: Percent, label: rawType, tone: "text-blue-500/70" };
-  }
-  if (t === "DIV" || t.startsWith("DIVIDEND")) {
-    return { Icon: TrendingUp, label: rawType, tone: incoming };
-  }
-  if (t === "POS" || t.startsWith("POINT OF SALE") || t === "EFTPOS") {
-    return { Icon: ShoppingCart, label: rawType, tone: "text-violet-500/70" };
-  }
-  if (t === "ATM") {
-    return { Icon: CreditCard, label: rawType, tone: "text-slate-500/70" };
-  }
-  if (t === "CHECK" || t === "CHEQUE") {
-    return { Icon: FileCheck, label: rawType, tone: "text-indigo-500/70" };
-  }
-  if (t === "CASH" || t === "DEP" || t.startsWith("DEPOSIT")) {
-    return { Icon: Banknote, label: rawType, tone: incoming };
-  }
-  if (t === "DIRECTDEP" || t === "DIRECT DEP") {
-    return { Icon: ArrowDownToLine, label: rawType, tone: incoming };
-  }
-  if (t === "DIRECTDEBIT" || t === "DIRECT DEBIT") {
-    return { Icon: ArrowUpFromLine, label: rawType, tone: outgoing };
-  }
-  if (t === "REPEATPMT" || t.startsWith("REPEAT")) {
-    return { Icon: Repeat, label: rawType, tone: "text-cyan-500/70" };
-  }
-  if (
-    t === "XFER" ||
-    t === "TRANSFER" ||
-    t.startsWith("TFR") ||
-    t.startsWith("TRANSFER")
-  ) {
-    return { Icon: ArrowLeftRight, label: rawType, tone: "text-amber-500/70" };
-  }
-  if (t === "PAYMENT" || t.startsWith("LOAN PAYMENT") || t.startsWith("AUTOMATIC PAYMENT")) {
-    return { Icon: HandCoins, label: rawType, tone: outgoing };
-  }
-  if (t === "CREDIT") {
-    return { Icon: ArrowDownToLine, label: rawType, tone: incoming };
-  }
-  if (t === "DEBIT") {
-    return { Icon: ArrowUpFromLine, label: rawType, tone: outgoing };
-  }
-  if (t === "HOLD") {
-    return { Icon: Pause, label: rawType, tone: "text-amber-500/70" };
-  }
-  if (t === "OTHER") {
-    return { Icon: HelpCircle, label: rawType, tone: "text-slate-500/70" };
-  }
-  // Unknown / freeform — render a Wallet so the column has something
-  // visual rather than nothing, with the raw text as the tooltip.
-  return { Icon: Wallet, label: rawType, tone: "text-slate-500/70" };
-}
 
 const MATCH_TOLERANCE_DAYS = 3;
 
-function ExpandedField({
-  label,
-  wide,
-  children,
-}: {
-  label: string;
-  wide?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={wide ? "sm:col-span-2 lg:col-span-3" : ""}>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-        {label}
-      </p>
-      <div className="text-foreground/90">{children}</div>
-    </div>
-  );
-}
 
 function shiftISO(dateISO: string, days: number): string {
   const d = new Date(`${dateISO}T00:00:00Z`);
@@ -842,388 +731,40 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                 <tbody className="divide-y">
                   {txns.map((t) => {
                     const match = findMatch(t);
-                    const linked = !!t.transferPairId;
-                    const isOutgoing = parseFloat(t.amount) < 0;
-                    const isScheduledMatch = !!match;
-                    const isSelected = selectedIds.has(t.id);
-                    const stripeColour = isScheduledMatch ? colourForFrequency(match!.frequency) : undefined;
                     return (
-                      <Fragment key={t.id}>
-                      <tr
-                        onClick={(e) => {
-                          // Only treat clicks on inert cells as the expand
-                          // trigger — anything inside an actual control
-                          // (input, button, link, ARIA widget) keeps its
-                          // own behaviour. closest() walks up from the
-                          // click target so nested icons inside a button
-                          // are caught too.
-                          const el = e.target as HTMLElement;
-                          if (
-                            el.closest(
-                              'a, button, input, label, select, textarea, ' +
-                                '[role="button"], [role="combobox"], ' +
-                                '[role="option"], [role="textbox"], ' +
-                                '[data-no-expand]',
-                            )
-                          ) {
-                            return;
-                          }
-                          setExpandedId((cur) => (cur === t.id ? null : t.id));
-                        }}
-                        className={`group cursor-pointer hover:bg-muted ${isSelected ? "bg-indigo-500/30 dark:bg-indigo-500/40" : ""}`}
-                      >
-                        <td
-                          className="px-2 py-2 text-center"
-                          style={stripeColour ? { boxShadow: `inset 3px 0 0 ${stripeColour}` } : undefined}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            aria-label={`Select transaction ${t.payee || t.date}`}
-                            checked={isSelected}
-                            onChange={() => toggleRow(t.id)}
-                            className="cursor-pointer accent-indigo-600"
-                          />
-                        </td>
-                        <td
-                          className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap"
-                          title={format(parseISO(t.date), "EEEE, d MMMM yyyy")}
-                        >
-                          <span className="inline-flex items-center gap-1.5">
-                            {t.isReconciled && (
-                              <Lock
-                                className="h-3 w-3 text-emerald-600 shrink-0"
-                                aria-label="Reconciled"
-                              />
-                            )}
-                            {formatDate(t.date)}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          {t.accountName && (
-                            <span
-                              className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap"
-                              style={{ backgroundColor: t.accountColor ?? "#94a3b8" }}
-                            >
-                              {t.accountName}
-                            </span>
-                          )}
-                        </td>
-                        <td
-                          className="px-3 py-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <CategoryPicker
-                            transactionId={t.id}
-                            categoryId={t.categoryId ?? null}
-                            categoryName={t.categoryName ?? null}
-                            categories={categories}
-                          />
-                        </td>
-                        <td className="px-2 py-2 align-middle">
-                          {(() => {
-                            // Linked-transfer rows always show the
-                            // transfer arrow in this column regardless of
-                            // the bank's TRNTYPE — the link relationship
-                            // is more relevant info than DEBIT/CREDIT.
-                            if (linked) {
-                              return (
-                                <span
-                                  className="inline-flex items-center justify-center text-amber-500/70"
-                                  title="Linked transfer"
-                                  aria-label="Linked transfer"
-                                >
-                                  <ArrowLeftRight className="h-3.5 w-3.5" />
-                                </span>
-                              );
-                            }
-                            const meta = iconForType(t.type);
-                            if (!meta) return null;
-                            const { Icon, label, tone } = meta;
-                            return (
-                              <span
-                                className={cn("inline-flex items-center justify-center", tone)}
-                                title={label}
-                                aria-label={`Type: ${label}`}
-                              >
-                                <Icon className="h-3.5 w-3.5" />
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-3 py-2 w-full max-w-0">
-                          <div className="flex items-center justify-between gap-2 min-w-0">
-                            <span className="font-medium flex items-center gap-1.5 min-w-0">
-                              {/* Desktop only — on mobile the full payee is
-                                  rendered on its own full-width row below
-                                  (via the lg:hidden <tr> after this one).
-                                  Truncating in-cell on mobile leaves the
-                                  payee unreadable in a ~160px column. */}
-                              <span className="hidden lg:inline truncate min-w-0">{t.payee || t.description || "—"}</span>
-                              {!showNotes && t.notes?.trim() && (
-                                <span
-                                  className="inline-flex shrink-0 cursor-help"
-                                  title={t.notes}
-                                  aria-label={`Note: ${t.notes}`}
-                                >
-                                  <StickyNote className="h-3 w-3 text-amber-500" />
-                                </span>
-                              )}
-                              {isScheduledMatch ? (
-                                <ScheduledMatchPill
-                                  scheduledId={match!.id}
-                                  frequency={match!.frequency}
-                                  interval={match!.interval}
-                                  realDate={t.date}
-                                  scheduledDate={match!.occurrenceDate}
-                                  schedulePayee={match!.payee}
-                                />
-                              ) : (
-                                <ScheduleButton
-                                  transaction={{
-                                    payee: t.payee,
-                                    amount: t.amount,
-                                    categoryId: t.categoryId ?? null,
-                                    accountId: t.accountId,
-                                    date: t.date,
-                                    transferPairId: t.transferPairId,
-                                    pairAccountId: t.pairAccountId,
-                                  }}
-                                  accounts={accounts}
-                                  categoriesProp={categories as Category[]}
-                                />
-                              )}
-                            </span>
-                            {t.payee?.trim() && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const url = `https://www.google.com/search?q=${encodeURIComponent(t.payee!)}`;
-                                  // Popup browser window — falls back to a
-                                  // new tab if the browser ignores the
-                                  // `popup` feature flag. Sized to leave
-                                  // room beside the app on a typical
-                                  // laptop screen.
-                                  const w = Math.min(900, window.screen.availWidth - 100);
-                                  const h = Math.min(720, window.screen.availHeight - 80);
-                                  const left = Math.max(0, (window.screen.availWidth - w) / 2);
-                                  const top = Math.max(0, (window.screen.availHeight - h) / 2);
-                                  window.open(
-                                    url,
-                                    "payee-search",
-                                    `popup=yes,width=${w},height=${h},left=${left},top=${top}`,
-                                  );
-                                }}
-                                className="shrink-0 p-1 -my-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                                title={`Search Google for "${t.payee}"`}
-                                aria-label="Search Google for this payee"
-                              >
-                                <Search className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                          {showNotes && (
-                            <div className="mt-0.5 text-xs text-muted-foreground">
-                              <NotesCell
-                                transactionId={t.id}
-                                notes={t.notes}
-                                onSaved={() => mutateTxns()}
-                              />
-                            </div>
-                          )}
-                          {linked && (
-                            <span className="block lg:hidden text-[10px] text-muted-foreground mt-0.5 truncate">
-                              ↔ {t.pairAccountName} · <span className={amountClass(t.pairAmount ?? "0")}>{formatAUD(t.pairAmount ?? "0")}</span>
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right whitespace-nowrap">
-                          <span className={`font-semibold ${amountClass(t.amount)}`}>
-                            {formatAUD(t.amount)}
-                          </span>
-                        </td>
-                        {hasBalance && (
-                          <td className={`px-3 py-2 text-right whitespace-nowrap tabular-nums ${t.balance != null ? amountClass(t.balance) : "text-muted-foreground"}`}>
-                            {t.balance != null ? formatAUD(t.balance) : "—"}
-                            {(() => {
-                              // Cross-check: when the bank emitted a
-                              // post-tx balance for this row, compare it
-                              // to our computed running balance. Any
-                              // discrepancy means a missing/extra row in
-                              // our DB or a wrong amount somewhere —
-                              // flag it inline so it can be investigated.
-                              if (t.bankBalance == null || t.balance == null) return null;
-                              const bank = parseFloat(t.bankBalance);
-                              const computed = parseFloat(t.balance);
-                              if (!Number.isFinite(bank) || !Number.isFinite(computed)) return null;
-                              const delta = +(bank - computed).toFixed(2);
-                              if (Math.abs(delta) < 0.01) return null;
-                              return (
-                                <span
-                                  className="ml-1.5 text-red-600 font-semibold"
-                                  title={`Bank says ${formatAUD(bank)} (Δ ${formatAUD(delta)})`}
-                                  aria-label={`Bank balance mismatch — bank says ${formatAUD(bank)}`}
-                                >
-                                  ✗
-                                </span>
-                              );
-                            })()}
-                          </td>
-                        )}
-                        {/* Direction gutter + counterpart cells, hidden when
-                            filtering to "No transfers" or when the linked
-                            panel is turned off in Settings. */}
-                        {showLinkedPanel && (
-                        <>
-                        <td className="hidden lg:table-cell border-l-2 border-border bg-muted/30 p-0 align-middle text-center">
-                          {linked && (
-                            <span
-                              className={`inline-block text-xl leading-none font-bold ${isOutgoing ? "text-red-500" : "text-emerald-600"}`}
-                              title={isOutgoing ? "Outgoing" : "Incoming"}
-                              aria-label={isOutgoing ? "Outgoing" : "Incoming"}
-                            >
-                              {isOutgoing ? "→" : "←"}
-                            </span>
-                          )}
-                        </td>
-                        <td className="hidden lg:table-cell px-3 py-2 whitespace-nowrap">
-                          {linked && t.pairAccountName ? (
-                            <Link
-                              href={`/transactions?accountId=${t.pairAccountId}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] hover:opacity-80 transition-opacity"
-                              style={{ backgroundColor: t.pairAccountColor ?? "#94a3b8" }}
-                            >
-                              {t.pairAccountName}
-                            </Link>
-                          ) : (
-                            <span className="text-muted-foreground/40 text-xs">—</span>
-                          )}
-                        </td>
-                        {showLinkedDetails && (
-                          <>
-                            <td className="hidden lg:table-cell px-3 py-2 max-w-[220px]">
-                              {linked ? (
-                                <div className="flex items-center gap-1">
-                                  <span className="truncate text-xs text-muted-foreground">{t.pairPayee || "—"}</span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleUnpair(t.id);
-                                    }}
-                                    className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                                    title="Unlink transfer"
-                                  >
-                                    <Unlink className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              ) : null}
-                            </td>
-                            <td className="hidden lg:table-cell px-3 py-2 text-right whitespace-nowrap">
-                              {linked && t.pairAmount ? (
-                                <span className={`font-semibold ${amountClass(t.pairAmount)}`}>
-                                  {formatAUD(t.pairAmount)}
-                                </span>
-                              ) : null}
-                            </td>
-                          </>
-                        )}
-                        </>
-                        )}
-                      </tr>
-                      {/* Mobile-only second row: the payee in full, spanning
-                          every column. The tbody's `divide-y` would normally
-                          add a top border between this and the main row;
-                          `!border-t-0` overrides that so the payee reads as
-                          part of the main row visually, and the next
-                          transaction's own top divider serves as the
-                          separator. Hidden on lg+ where the desktop layout's
-                          inline payee handles it. */}
-                      <tr className="lg:hidden !border-t-0 group cursor-pointer hover:bg-muted"
-                          onClick={() => setExpandedId((cur) => (cur === t.id ? null : t.id))}>
-                        <td colSpan={100} className="px-3 pb-2 pt-0 text-sm font-medium break-words">
-                          {t.payee || t.description || "—"}
-                        </td>
-                      </tr>
-                      {expandedId === t.id && (
-                        <tr className="bg-muted/40">
-                          {/* colSpan=100 spans every visible column without
-                              having to track which optional ones are on. */}
-                          <td
-                            colSpan={100}
-                            className="px-6 py-3 border-b"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-xs">
-                              <ExpandedField label="Notes" wide>
-                                <NotesCell
-                                  transactionId={t.id}
-                                  notes={t.notes}
-                                  onSaved={() => mutateTxns()}
-                                />
-                              </ExpandedField>
-                              {t.description && (
-                                <ExpandedField label="Description" wide>
-                                  <span>{t.description}</span>
-                                </ExpandedField>
-                              )}
-                              <ExpandedField label="Reconciled">
-                                {t.isReconciled ? "Yes" : "No"}
-                              </ExpandedField>
-                              <ExpandedField label="Bank type">
-                                {t.type ?? "—"}
-                              </ExpandedField>
-                              <ExpandedField label="Bank balance">
-                                {t.bankBalance != null
-                                  ? formatAUD(t.bankBalance)
-                                  : "—"}
-                              </ExpandedField>
-                              <ExpandedField label="Posted">
-                                {t.postedAt
-                                  ? new Date(t.postedAt).toLocaleString()
-                                  : "—"}
-                              </ExpandedField>
-                              <ExpandedField label="Posted seq">
-                                {t.postedSeq ?? "—"}
-                              </ExpandedField>
-                              <ExpandedField label="Imported">
-                                {new Date(t.createdAt).toLocaleString()}
-                              </ExpandedField>
-                              <ExpandedField label="Import format">
-                                {t.importFormat
-                                  ? t.importFormat.toUpperCase()
-                                  : "Manual"}
-                              </ExpandedField>
-                              <ExpandedField label="Updated">
-                                {new Date(t.updatedAt).toLocaleString()}
-                              </ExpandedField>
-                              <ExpandedField label="Bank ID (FITID)">
-                                <code className="text-[11px] break-all">
-                                  {t.rawFitid ?? "—"}
-                                </code>
-                              </ExpandedField>
-                              <ExpandedField label="Import hash">
-                                <code className="text-[11px] break-all">
-                                  {t.importHash ?? "—"}
-                                </code>
-                              </ExpandedField>
-                              <ExpandedField label="Normalised payee">
-                                <code className="text-[11px] break-all">
-                                  {t.normalizedPayee ?? "—"}
-                                </code>
-                              </ExpandedField>
-                              <ExpandedField label="Transaction ID">
-                                <code className="text-[11px] break-all">
-                                  {t.id}
-                                </code>
-                              </ExpandedField>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                      </Fragment>
+                      <TransactionRow
+                        key={t.id}
+                        t={t}
+                        accounts={accounts}
+                        categories={categories}
+                        showNotes={showNotes}
+                        showLinkedPanel={showLinkedPanel}
+                        showLinkedDetails={showLinkedDetails}
+                        showBalance={hasBalance}
+                        showDate
+                        showCheckbox
+                        isSelected={selectedIds.has(t.id)}
+                        onToggleSelect={() => toggleRow(t.id)}
+                        isExpanded={expandedId === t.id}
+                        onToggleExpand={() =>
+                          setExpandedId((cur) =>
+                            cur === t.id ? null : t.id,
+                          )
+                        }
+                        match={
+                          match
+                            ? {
+                                id: match.id,
+                                frequency: match.frequency,
+                                interval: match.interval,
+                                occurrenceDate: match.occurrenceDate,
+                                payee: match.payee,
+                              }
+                            : null
+                        }
+                        onUnpair={handleUnpair}
+                        onChange={() => mutateTxns()}
+                      />
                     );
                   })}
                 </tbody>

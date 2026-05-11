@@ -1,126 +1,668 @@
 "use client";
 
-import { ArrowLeftRight, Lock, StickyNote } from "lucide-react";
-import type { ReactNode } from "react";
-import { amountClass, cn, formatAUD } from "@/lib/utils";
+import { Fragment, type ReactNode } from "react";
+import Link from "next/link";
+import { format, parseISO } from "date-fns";
+import {
+  ArrowDownToLine,
+  ArrowLeftRight,
+  ArrowUpFromLine,
+  Banknote,
+  CreditCard,
+  FileCheck,
+  HandCoins,
+  HelpCircle,
+  Lock,
+  Pause,
+  Percent,
+  Receipt,
+  Repeat,
+  Search,
+  ShoppingCart,
+  StickyNote,
+  TrendingUp,
+  Unlink,
+  Wallet,
+} from "lucide-react";
+import { amountClass, cn, formatAUD, formatDate } from "@/lib/utils";
+import { colourForFrequency } from "@/lib/schedule-colours";
+import { CategoryPicker } from "./category-picker";
+import { NotesCell } from "./notes-cell";
+import { ScheduleButton } from "./schedule-button";
+import { ScheduledMatchPill } from "./scheduled-match-pill";
 
-/** A transaction row tuned for panel/list-shaped contexts (calendar
- * day-detail, drawers, sidebars) — NOT the table-shaped row used by
- * the main /transactions view. Single horizontal line to match the
- * visual rhythm of the main list (account chip · category · payee
- * · linked · amount), even though it isn't a `<tr>`.
- *
- * Notes — when present — render as a hover-tooltip icon next to the
- * payee, the same affordance the main list uses in compact mode. If
- * an inline notes line is needed, wrap a sibling element below the
- * row at the call site. */
-
+/** Shape of a row coming out of /api/transactions (the GET handler).
+ * The fields cover everything the main list, the day-detail panel,
+ * and the row-expansion metadata panel need. */
 export interface TransactionRowData {
   id: string;
+  date: string;
   amount: string;
   payee: string | null;
   description: string | null;
   notes: string | null;
-  isReconciled: boolean;
-  isTransfer: boolean;
-  transferPairId: string | null;
   accountId: string;
-  accountName: string;
-  accountColor: string;
+  accountName: string | null;
+  accountColor: string | null;
   categoryId: string | null;
   categoryName: string | null;
-  pairAccountName?: string | null;
-  pairAccountColor?: string | null;
-  pairAmount?: string | null;
-  pairPayee?: string | null;
+  transferPairId: string | null;
+  pairAccountId: string | null;
+  pairAccountName: string | null;
+  pairAccountColor: string | null;
+  pairAmount: string | null;
+  pairDate: string | null;
+  pairPayee: string | null;
+  balance: string | null;
+  bankBalance: string | null;
+  isReconciled: boolean;
+  type: string | null;
+  isTransfer: boolean;
+  normalizedPayee: string | null;
+  postedAt: string | null;
+  postedSeq: number | null;
+  createdAt: string;
+  updatedAt: string;
+  importLogId: string | null;
+  importHash: string | null;
+  rawFitid: string | null;
+  importFormat: string | null;
+}
+
+/** Scheduled-match metadata produced by the main list's match-loop —
+ * passed in so the row can render the inline pill that links to the
+ * originating recurring occurrence. */
+export interface RowScheduledMatch {
+  id: string;
+  frequency: string;
+  interval: number;
+  occurrenceDate: string;
+  payee: string | null;
+}
+
+interface CategoryLite {
+  id: string;
+  name: string;
+  parentId: string | null;
+}
+
+interface AccountLite {
+  id: string;
+  name: string;
+  color: string;
+}
+
+/** Render an `<Icon>`-shaped representation of the bank-supplied
+ * transaction type field (OFX TRNTYPE, QIF L, CSV Categories). Pulled
+ * out as a top-level helper so it stays tree-shake-friendly. */
+export function iconForType(rawType: string | null | undefined): {
+  Icon: typeof Receipt;
+  label: string;
+  tone: string;
+} | null {
+  if (!rawType) return null;
+  const t = rawType.trim().toUpperCase();
+  if (!t) return null;
+  const incoming = "text-emerald-500/70";
+  const outgoing = "text-rose-500/70";
+  if (t === "FEE" || t === "SRVCHG" || t === "MISSED PAYMENT FEE") {
+    return { Icon: Receipt, label: rawType, tone: "text-red-500/70" };
+  }
+  if (t === "INT" || t.startsWith("INTEREST")) {
+    return { Icon: Percent, label: rawType, tone: "text-blue-500/70" };
+  }
+  if (t === "DIV" || t.startsWith("DIVIDEND")) {
+    return { Icon: TrendingUp, label: rawType, tone: incoming };
+  }
+  if (t === "POS" || t.startsWith("POINT OF SALE") || t === "EFTPOS") {
+    return { Icon: ShoppingCart, label: rawType, tone: "text-violet-500/70" };
+  }
+  if (t === "ATM") {
+    return { Icon: CreditCard, label: rawType, tone: "text-slate-500/70" };
+  }
+  if (t === "CHECK" || t === "CHEQUE") {
+    return { Icon: FileCheck, label: rawType, tone: "text-indigo-500/70" };
+  }
+  if (t === "CASH" || t === "DEP" || t.startsWith("DEPOSIT")) {
+    return { Icon: Banknote, label: rawType, tone: incoming };
+  }
+  if (t === "DIRECTDEP" || t === "DIRECT DEP") {
+    return { Icon: ArrowDownToLine, label: rawType, tone: incoming };
+  }
+  if (t === "DIRECTDEBIT" || t === "DIRECT DEBIT") {
+    return { Icon: ArrowUpFromLine, label: rawType, tone: outgoing };
+  }
+  if (t === "REPEATPMT" || t.startsWith("REPEAT")) {
+    return { Icon: Repeat, label: rawType, tone: "text-cyan-500/70" };
+  }
+  if (
+    t === "XFER" ||
+    t === "TRANSFER" ||
+    t.startsWith("TFR") ||
+    t.startsWith("TRANSFER")
+  ) {
+    return { Icon: ArrowLeftRight, label: rawType, tone: "text-amber-500/70" };
+  }
+  if (
+    t === "PAYMENT" ||
+    t.startsWith("LOAN PAYMENT") ||
+    t.startsWith("AUTOMATIC PAYMENT")
+  ) {
+    return { Icon: HandCoins, label: rawType, tone: outgoing };
+  }
+  if (t === "CREDIT") {
+    return { Icon: ArrowDownToLine, label: rawType, tone: incoming };
+  }
+  if (t === "DEBIT") {
+    return { Icon: ArrowUpFromLine, label: rawType, tone: outgoing };
+  }
+  if (t === "HOLD") {
+    return { Icon: Pause, label: rawType, tone: "text-amber-500/70" };
+  }
+  if (t === "OTHER") {
+    return { Icon: HelpCircle, label: rawType, tone: "text-slate-500/70" };
+  }
+  return { Icon: Wallet, label: rawType, tone: "text-slate-500/70" };
+}
+
+function ExpandedField({
+  label,
+  wide,
+  children,
+}: {
+  label: string;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={wide ? "sm:col-span-2 lg:col-span-3" : ""}>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
+        {label}
+      </p>
+      <div className="text-foreground/90">{children}</div>
+    </div>
+  );
+}
+
+export interface TransactionRowProps {
+  t: TransactionRowData;
+  accounts: AccountLite[];
+  categories: CategoryLite[];
+
+  /** Show notes inline as a second line under the payee (otherwise
+   * notes render as a hover icon next to the payee). */
+  showNotes?: boolean;
+  /** Show the linked-counterpart cells (direction gutter, pair
+   * account, optionally pair payee / pair amount). Only the main
+   * transactions list passes true — panel-style consumers leave it
+   * off. */
+  showLinkedPanel?: boolean;
+  /** When the linked panel is shown, also include the pair payee and
+   * pair amount cells. */
+  showLinkedDetails?: boolean;
+  /** Render the running-balance column. */
+  showBalance?: boolean;
+  /** Render the date column. Off in single-day contexts where every
+   * row shares the same date. */
+  showDate?: boolean;
+  /** Render the leading checkbox column. Off in panel contexts where
+   * bulk operations aren't offered. */
+  showCheckbox?: boolean;
+
+  /** Row-level state (parents own the source of truth). */
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
+
+  /** Scheduled-match metadata, when this transaction is the realised
+   * counterpart of a recurring occurrence. */
+  match?: RowScheduledMatch | null;
+
+  /** Unlink callback — invoked from the linked-details cell. */
+  onUnpair?: (txnId: string) => void;
+
+  /** Refresh callback fired after inline edits (CategoryPicker,
+   * NotesCell). */
+  onChange?: () => void;
 }
 
 export function TransactionRow({
   t,
-  showLinkedDetails = true,
-  stripeColour,
-  trailingSlot,
-}: {
-  t: TransactionRowData;
-  /** Drives whether the linked-counterpart cell (transfer arrow + pair
-   * chip + pair amount) is rendered. Defaults to true; pass the
-   * `transactionsShowLinkedPanel` user pref through to honour the
-   * Settings → Display toggle. */
-  showLinkedDetails?: boolean;
-  /** Optional left-edge accent stripe (e.g. a scheduled-match frequency
-   * colour) drawn via inset box-shadow so it doesn't shift layout. */
-  stripeColour?: string;
-  /** Inline content rendered next to the payee — typically the
-   * ScheduledMatchPill for matched recurring occurrences. */
-  trailingSlot?: ReactNode;
-}) {
+  accounts,
+  categories,
+  showNotes = false,
+  showLinkedPanel = false,
+  showLinkedDetails = false,
+  showBalance = false,
+  showDate = true,
+  showCheckbox = false,
+  isSelected = false,
+  onToggleSelect,
+  isExpanded = false,
+  onToggleExpand,
+  match = null,
+  onUnpair,
+  onChange,
+}: TransactionRowProps) {
   const linked = !!t.transferPairId;
+  const isOutgoing = parseFloat(t.amount) < 0;
+  const isScheduledMatch = !!match;
+  const stripeColour = isScheduledMatch
+    ? colourForFrequency(match.frequency)
+    : undefined;
+  const refresh = onChange ?? (() => {});
   return (
-    <li
-      className="flex items-center gap-3 py-2 px-2 -mx-2 rounded text-sm"
-      style={
-        stripeColour ? { boxShadow: `inset 3px 0 0 ${stripeColour}` } : undefined
-      }
-    >
-      <span
-        className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap shrink-0"
-        style={{ backgroundColor: t.accountColor }}
-      >
-        {t.accountName}
-      </span>
-      {t.categoryName && (
-        <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-          {t.categoryName}
-        </span>
-      )}
-      {t.isReconciled && (
-        <Lock
-          className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0"
-          aria-label="Reconciled"
-        />
-      )}
-      <span className="flex-1 min-w-0 flex items-center gap-1.5">
-        <span className="truncate font-medium">
-          {t.payee || t.description || "—"}
-        </span>
-        {t.notes?.trim() && (
-          <span
-            className="inline-flex shrink-0 cursor-help"
-            title={t.notes}
-            aria-label={`Note: ${t.notes}`}
-          >
-            <StickyNote className="h-3 w-3 text-amber-500" />
-          </span>
+    <Fragment>
+      <tr
+        onClick={(e) => {
+          // Only treat clicks on inert cells as the expand trigger —
+          // anything inside an actual control (input, button, link,
+          // ARIA widget) keeps its own behaviour.
+          const el = e.target as HTMLElement;
+          if (
+            el.closest(
+              'a, button, input, label, select, textarea, ' +
+                '[role="button"], [role="combobox"], ' +
+                '[role="option"], [role="textbox"], ' +
+                '[data-no-expand]',
+            )
+          ) {
+            return;
+          }
+          onToggleExpand?.();
+        }}
+        className={cn(
+          "group cursor-pointer hover:bg-muted",
+          isSelected && "bg-indigo-500/30 dark:bg-indigo-500/40",
         )}
-        {trailingSlot}
-      </span>
-      {linked && showLinkedDetails && t.pairAccountName && (
-        <span className="hidden md:flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-          <ArrowLeftRight
-            className="h-3 w-3 text-amber-500/70"
-            aria-hidden
-          />
-          <span
-            className="inline-block px-1 py-0.5 rounded text-white text-[9px] whitespace-nowrap"
-            style={{ backgroundColor: t.pairAccountColor ?? "#94a3b8" }}
+      >
+        {showCheckbox && (
+          <td
+            className="px-2 py-2 text-center"
+            style={
+              stripeColour
+                ? { boxShadow: `inset 3px 0 0 ${stripeColour}` }
+                : undefined
+            }
+            onClick={(e) => e.stopPropagation()}
           >
-            {t.pairAccountName}
-          </span>
-          {t.pairAmount && (
-            <span className={cn("tabular-nums", amountClass(t.pairAmount))}>
-              {formatAUD(t.pairAmount)}
+            <input
+              type="checkbox"
+              aria-label={`Select transaction ${t.payee || t.date}`}
+              checked={isSelected}
+              onChange={() => onToggleSelect?.()}
+              className="cursor-pointer accent-indigo-600"
+            />
+          </td>
+        )}
+        {showDate && (
+          <td
+            className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap"
+            style={
+              !showCheckbox && stripeColour
+                ? { boxShadow: `inset 3px 0 0 ${stripeColour}` }
+                : undefined
+            }
+            title={format(parseISO(t.date), "EEEE, d MMMM yyyy")}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              {t.isReconciled && (
+                <Lock
+                  className="h-3 w-3 text-emerald-600 shrink-0"
+                  aria-label="Reconciled"
+                />
+              )}
+              {formatDate(t.date)}
+            </span>
+          </td>
+        )}
+        <td
+          className="px-3 py-2"
+          style={
+            !showCheckbox && !showDate && stripeColour
+              ? { boxShadow: `inset 3px 0 0 ${stripeColour}` }
+              : undefined
+          }
+        >
+          {t.accountName && (
+            <span
+              className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap"
+              style={{ backgroundColor: t.accountColor ?? "#94a3b8" }}
+            >
+              {t.accountName}
             </span>
           )}
-        </span>
-      )}
-      <span
-        className={cn(
-          "shrink-0 font-semibold tabular-nums",
-          amountClass(t.amount),
+        </td>
+        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+          <CategoryPicker
+            transactionId={t.id}
+            categoryId={t.categoryId ?? null}
+            categoryName={t.categoryName ?? null}
+            categories={categories}
+          />
+        </td>
+        <td className="px-2 py-2 align-middle">
+          {(() => {
+            // Linked-transfer rows always show the transfer arrow in
+            // this column regardless of the bank's TRNTYPE — the link
+            // relationship is more relevant info than DEBIT/CREDIT.
+            if (linked) {
+              return (
+                <span
+                  className="inline-flex items-center justify-center text-amber-500/70"
+                  title="Linked transfer"
+                  aria-label="Linked transfer"
+                >
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                </span>
+              );
+            }
+            const meta = iconForType(t.type);
+            if (!meta) return null;
+            const { Icon, label, tone } = meta;
+            return (
+              <span
+                className={cn(
+                  "inline-flex items-center justify-center",
+                  tone,
+                )}
+                title={label}
+                aria-label={`Type: ${label}`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </span>
+            );
+          })()}
+        </td>
+        <td className="px-3 py-2 w-full max-w-0">
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <span className="font-medium flex items-center gap-1.5 min-w-0">
+              {/* Desktop only — on mobile the full payee is rendered
+                  on its own full-width row below (via the
+                  lg:hidden <tr> after this one). Truncating in-cell
+                  on mobile leaves the payee unreadable in a narrow
+                  column. */}
+              <span className="hidden lg:inline truncate min-w-0">
+                {t.payee || t.description || "—"}
+              </span>
+              {!showNotes && t.notes?.trim() && (
+                <span
+                  className="inline-flex shrink-0 cursor-help"
+                  title={t.notes}
+                  aria-label={`Note: ${t.notes}`}
+                >
+                  <StickyNote className="h-3 w-3 text-amber-500" />
+                </span>
+              )}
+              {isScheduledMatch ? (
+                <ScheduledMatchPill
+                  scheduledId={match.id}
+                  frequency={match.frequency}
+                  interval={match.interval}
+                  realDate={t.date}
+                  scheduledDate={match.occurrenceDate}
+                  schedulePayee={match.payee}
+                />
+              ) : (
+                <ScheduleButton
+                  transaction={{
+                    payee: t.payee,
+                    amount: t.amount,
+                    categoryId: t.categoryId ?? null,
+                    accountId: t.accountId,
+                    date: t.date,
+                    transferPairId: t.transferPairId,
+                    pairAccountId: t.pairAccountId,
+                  }}
+                  accounts={accounts}
+                  categoriesProp={
+                    categories as unknown as Parameters<
+                      typeof ScheduleButton
+                    >[0]["categoriesProp"]
+                  }
+                />
+              )}
+            </span>
+            {t.payee?.trim() && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const url = `https://www.google.com/search?q=${encodeURIComponent(t.payee!)}`;
+                  const w = Math.min(900, window.screen.availWidth - 100);
+                  const h = Math.min(720, window.screen.availHeight - 80);
+                  const left = Math.max(
+                    0,
+                    (window.screen.availWidth - w) / 2,
+                  );
+                  const top = Math.max(
+                    0,
+                    (window.screen.availHeight - h) / 2,
+                  );
+                  window.open(
+                    url,
+                    "payee-search",
+                    `popup=yes,width=${w},height=${h},left=${left},top=${top}`,
+                  );
+                }}
+                className="shrink-0 p-1 -my-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                title={`Search Google for "${t.payee}"`}
+                aria-label="Search Google for this payee"
+              >
+                <Search className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {showNotes && (
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              <NotesCell
+                transactionId={t.id}
+                notes={t.notes}
+                onSaved={refresh}
+              />
+            </div>
+          )}
+          {linked && (
+            <span className="block lg:hidden text-[10px] text-muted-foreground mt-0.5 truncate">
+              ↔ {t.pairAccountName} ·{" "}
+              <span className={amountClass(t.pairAmount ?? "0")}>
+                {formatAUD(t.pairAmount ?? "0")}
+              </span>
+            </span>
+          )}
+        </td>
+        <td className="px-3 py-2 text-right whitespace-nowrap">
+          <span className={cn("font-semibold", amountClass(t.amount))}>
+            {formatAUD(t.amount)}
+          </span>
+        </td>
+        {showBalance && (
+          <td
+            className={cn(
+              "px-3 py-2 text-right whitespace-nowrap tabular-nums",
+              t.balance != null
+                ? amountClass(t.balance)
+                : "text-muted-foreground",
+            )}
+          >
+            {t.balance != null ? formatAUD(t.balance) : "—"}
+            {(() => {
+              if (t.bankBalance == null || t.balance == null) return null;
+              const bank = parseFloat(t.bankBalance);
+              const computed = parseFloat(t.balance);
+              if (!Number.isFinite(bank) || !Number.isFinite(computed)) {
+                return null;
+              }
+              const delta = +(bank - computed).toFixed(2);
+              if (Math.abs(delta) < 0.01) return null;
+              return (
+                <span
+                  className="ml-1.5 text-red-600 font-semibold"
+                  title={`Bank says ${formatAUD(bank)} (Δ ${formatAUD(delta)})`}
+                  aria-label={`Bank balance mismatch — bank says ${formatAUD(bank)}`}
+                >
+                  ✗
+                </span>
+              );
+            })()}
+          </td>
         )}
+        {showLinkedPanel && (
+          <>
+            <td className="hidden lg:table-cell border-l-2 border-border bg-muted/30 p-0 align-middle text-center">
+              {linked && (
+                <span
+                  className={cn(
+                    "inline-block text-xl leading-none font-bold",
+                    isOutgoing ? "text-red-500" : "text-emerald-600",
+                  )}
+                  title={isOutgoing ? "Outgoing" : "Incoming"}
+                  aria-label={isOutgoing ? "Outgoing" : "Incoming"}
+                >
+                  {isOutgoing ? "→" : "←"}
+                </span>
+              )}
+            </td>
+            <td className="hidden lg:table-cell px-3 py-2 whitespace-nowrap">
+              {linked && t.pairAccountName ? (
+                <Link
+                  href={`/transactions?accountId=${t.pairAccountId}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] hover:opacity-80 transition-opacity"
+                  style={{
+                    backgroundColor: t.pairAccountColor ?? "#94a3b8",
+                  }}
+                >
+                  {t.pairAccountName}
+                </Link>
+              ) : (
+                <span className="text-muted-foreground/40 text-xs">—</span>
+              )}
+            </td>
+            {showLinkedDetails && (
+              <>
+                <td className="hidden lg:table-cell px-3 py-2 max-w-[220px]">
+                  {linked ? (
+                    <div className="flex items-center gap-1">
+                      <span className="truncate text-xs text-muted-foreground">
+                        {t.pairPayee || "—"}
+                      </span>
+                      {onUnpair && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUnpair(t.id);
+                          }}
+                          className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                          title="Unlink transfer"
+                        >
+                          <Unlink className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                </td>
+                <td className="hidden lg:table-cell px-3 py-2 text-right whitespace-nowrap">
+                  {linked && t.pairAmount ? (
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        amountClass(t.pairAmount),
+                      )}
+                    >
+                      {formatAUD(t.pairAmount)}
+                    </span>
+                  ) : null}
+                </td>
+              </>
+            )}
+          </>
+        )}
+      </tr>
+      {/* Mobile-only second row: the payee in full, spanning every
+          column. The tbody's `divide-y` would normally add a top
+          border between this and the main row; `!border-t-0`
+          overrides that so the payee reads as part of the main row
+          visually. */}
+      <tr
+        className="lg:hidden !border-t-0 group cursor-pointer hover:bg-muted"
+        onClick={() => onToggleExpand?.()}
       >
-        {formatAUD(t.amount)}
-      </span>
-    </li>
+        <td
+          colSpan={100}
+          className="px-3 pb-2 pt-0 text-sm font-medium break-words"
+        >
+          {t.payee || t.description || "—"}
+        </td>
+      </tr>
+      {isExpanded && (
+        <tr className="bg-muted/40">
+          <td
+            colSpan={100}
+            className="px-6 py-3 border-b"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-xs">
+              <ExpandedField label="Notes" wide>
+                <NotesCell
+                  transactionId={t.id}
+                  notes={t.notes}
+                  onSaved={refresh}
+                />
+              </ExpandedField>
+              {t.description && (
+                <ExpandedField label="Description" wide>
+                  <span>{t.description}</span>
+                </ExpandedField>
+              )}
+              <ExpandedField label="Reconciled">
+                {t.isReconciled ? "Yes" : "No"}
+              </ExpandedField>
+              <ExpandedField label="Bank type">{t.type ?? "—"}</ExpandedField>
+              <ExpandedField label="Bank balance">
+                {t.bankBalance != null ? formatAUD(t.bankBalance) : "—"}
+              </ExpandedField>
+              <ExpandedField label="Posted">
+                {t.postedAt
+                  ? new Date(t.postedAt).toLocaleString()
+                  : "—"}
+              </ExpandedField>
+              <ExpandedField label="Posted seq">
+                {t.postedSeq ?? "—"}
+              </ExpandedField>
+              <ExpandedField label="Imported">
+                {new Date(t.createdAt).toLocaleString()}
+              </ExpandedField>
+              <ExpandedField label="Import format">
+                {t.importFormat ? t.importFormat.toUpperCase() : "Manual"}
+              </ExpandedField>
+              <ExpandedField label="Updated">
+                {new Date(t.updatedAt).toLocaleString()}
+              </ExpandedField>
+              <ExpandedField label="Bank ID (FITID)">
+                <code className="text-[11px] break-all">
+                  {t.rawFitid ?? "—"}
+                </code>
+              </ExpandedField>
+              <ExpandedField label="Import hash">
+                <code className="text-[11px] break-all">
+                  {t.importHash ?? "—"}
+                </code>
+              </ExpandedField>
+              <ExpandedField label="Normalised payee">
+                <code className="text-[11px] break-all">
+                  {t.normalizedPayee ?? "—"}
+                </code>
+              </ExpandedField>
+              <ExpandedField label="Transaction ID">
+                <code className="text-[11px] break-all">{t.id}</code>
+              </ExpandedField>
+            </div>
+          </td>
+        </tr>
+      )}
+    </Fragment>
   );
 }

@@ -734,10 +734,17 @@ export function ImportView() {
   );
 }
 
-/** True for exact matches whose DB row already has every field the
- * parsed row could backfill — committing writes nothing for them. Used
- * to hide them from the row list AND to compute the real "rows that
- * will change" count for the commit button. */
+/** True for exact matches whose DB row already has every USER-VISIBLE
+ * field the parsed row could backfill — committing may still patch
+ * `postedSeq` silently but we don't surface those rows for review.
+ *
+ * Why postedSeq is excluded: it's an OFX intra-day ordering tiebreaker
+ * we never render in the comparison view or the transactions list, so
+ * a row whose only "diff" is postedSeq looks visually identical to the
+ * user. Older commit paths didn't persist it; flagging every legacy
+ * OFX re-import as "needs update" with nothing visibly different is
+ * just noise. The commit endpoint still does the backfill when the
+ * user clicks Commit — they just don't have to review 40 phantom rows. */
 function isExactNoOp(r: TestResultRow): boolean {
   if (r.matchType !== "exact") return false;
   const typeBackfill =
@@ -746,14 +753,7 @@ function isExactNoOp(r: TestResultRow): boolean {
     r.runningBalance != null && (r.existingBalance ?? null) === null;
   const categoryBackfill =
     r.categoryId != null && (r.existingCategoryName ?? null) === null;
-  const postedSeqBackfill =
-    r.postedSeq != null && (r.existingPostedSeq ?? null) === null;
-  return (
-    !typeBackfill &&
-    !balanceBackfill &&
-    !categoryBackfill &&
-    !postedSeqBackfill
-  );
+  return !typeBackfill && !balanceBackfill && !categoryBackfill;
 }
 
 /** Bottom-of-page action panel that commits the current parse result to

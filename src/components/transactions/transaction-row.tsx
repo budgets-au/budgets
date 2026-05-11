@@ -3,6 +3,7 @@
 import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   ArrowDownToLine,
   ArrowLeftRight,
@@ -665,4 +666,211 @@ export function TransactionRow({
       )}
     </Fragment>
   );
+}
+
+// ─── Sortable table header ────────────────────────────────────────────────────
+// Used by both the main /transactions list and the calendar's day-detail
+// panel. Same column layout as <TransactionRow>; the prop flags below
+// drive which headers actually render so the two views stay coordinated
+// without duplicating the cells.
+
+export type TransactionSortCol =
+  | "date"
+  | "account"
+  | "category"
+  | "payee"
+  | "value";
+
+export interface TransactionSortState {
+  by: TransactionSortCol;
+  order: "asc" | "desc";
+}
+
+export interface TransactionsTableHeaderProps {
+  showCheckbox?: boolean;
+  showDate?: boolean;
+  showBalance?: boolean;
+  showLinkedPanel?: boolean;
+  showLinkedDetails?: boolean;
+
+  /** Current sort state. When omitted, headers render as plain labels
+   * (no click handlers, no chevron). */
+  sort?: TransactionSortState | null;
+  onSort?: (col: TransactionSortCol) => void;
+
+  /** Select-all checkbox state, only used when showCheckbox=true. */
+  allSelected?: boolean;
+  someSelected?: boolean;
+  onToggleAll?: () => void;
+
+  /** Optional direction filter that sits inside the linked-panel header
+   * column on the main list. The day-detail panel never enables the
+   * linked panel and so doesn't pass this. */
+  directionFilter?: ReactNode;
+}
+
+export function TransactionsTableHeader({
+  showCheckbox = false,
+  showDate = true,
+  showBalance = false,
+  showLinkedPanel = false,
+  showLinkedDetails = false,
+  sort = null,
+  onSort,
+  allSelected = false,
+  someSelected = false,
+  onToggleAll,
+  directionFilter,
+}: TransactionsTableHeaderProps) {
+  function ariaSort(col: TransactionSortCol): "ascending" | "descending" | "none" {
+    if (!sort || sort.by !== col) return "none";
+    return sort.order === "asc" ? "ascending" : "descending";
+  }
+  function indicator(col: TransactionSortCol) {
+    if (!sort || sort.by !== col) return null;
+    return sort.order === "asc" ? (
+      <ChevronUp className="h-3 w-3 ml-0.5" aria-hidden />
+    ) : (
+      <ChevronDown className="h-3 w-3 ml-0.5" aria-hidden />
+    );
+  }
+  function sortable(label: string, col: TransactionSortCol) {
+    if (!onSort) return <span className="flex items-center">{label}</span>;
+    return (
+      <button
+        type="button"
+        onClick={() => onSort(col)}
+        className="hover:text-foreground transition-colors flex items-center"
+      >
+        {label}
+        {indicator(col)}
+      </button>
+    );
+  }
+  return (
+    <thead>
+      <tr className="border-b bg-muted/50 text-xs text-muted-foreground font-medium">
+        {showCheckbox && (
+          <th className="px-2 py-2 w-[32px]">
+            <input
+              type="checkbox"
+              aria-label="Select all visible transactions"
+              checked={allSelected}
+              ref={(el) => {
+                // Indeterminate state can only be set via the DOM, not
+                // a React prop. When some-but-not-all visible rows are
+                // selected, surface the partial state on the box.
+                if (el) el.indeterminate = !allSelected && someSelected;
+              }}
+              onChange={() => onToggleAll?.()}
+              className="cursor-pointer accent-indigo-600"
+            />
+          </th>
+        )}
+        {showDate && (
+          <th
+            aria-sort={ariaSort("date")}
+            className="text-left px-3 py-2 whitespace-nowrap w-[100px]"
+          >
+            {sortable("Date", "date")}
+          </th>
+        )}
+        <th
+          aria-sort={ariaSort("account")}
+          className="text-left px-3 py-2 whitespace-nowrap w-[120px]"
+        >
+          {sortable("Account", "account")}
+        </th>
+        <th
+          aria-sort={ariaSort("category")}
+          className="text-left px-3 py-2 w-[160px]"
+        >
+          {sortable("Category", "category")}
+        </th>
+        <th
+          className="px-2 py-2 w-[28px]"
+          title="Bank-supplied transaction type (OFX TRNTYPE / QIF L / CSV Categories)"
+        >
+          <span className="sr-only">Type</span>
+        </th>
+        <th
+          aria-sort={ariaSort("payee")}
+          className="text-left px-3 py-2 w-full max-w-0"
+        >
+          {sortable("Payee", "payee")}
+        </th>
+        <th
+          aria-sort={ariaSort("value")}
+          className="text-right px-3 py-2 whitespace-nowrap"
+        >
+          {onSort ? (
+            <button
+              type="button"
+              onClick={() => onSort("value")}
+              className="hover:text-foreground transition-colors flex items-center ml-auto"
+            >
+              Value{indicator("value")}
+            </button>
+          ) : (
+            <span>Value</span>
+          )}
+        </th>
+        {showBalance && (
+          <th className="text-right px-3 py-2 whitespace-nowrap">Balance</th>
+        )}
+        {showLinkedPanel && (
+          <>
+            <th className="hidden lg:table-cell border-l-2 border-border bg-muted/30 p-1 align-middle">
+              {directionFilter}
+            </th>
+            <th className="hidden lg:table-cell text-left px-3 py-2 whitespace-nowrap w-[140px]">
+              Linked account
+            </th>
+            {showLinkedDetails && (
+              <>
+                <th className="hidden lg:table-cell text-left px-3 py-2 max-w-[220px]">
+                  Linked payee
+                </th>
+                <th className="hidden lg:table-cell text-right px-3 py-2 whitespace-nowrap">
+                  Linked value
+                </th>
+              </>
+            )}
+          </>
+        )}
+      </tr>
+    </thead>
+  );
+}
+
+/** Client-side comparator for TransactionRowData against a sort
+ * state. Mirrors the server-side sort in /api/transactions so the
+ * day-detail panel's local sort reads the same way as the main list's
+ * server-paginated sort. */
+export function compareTransactions(
+  a: TransactionRowData,
+  b: TransactionRowData,
+  sort: TransactionSortState,
+): number {
+  let cmp = 0;
+  switch (sort.by) {
+    case "date":
+      cmp = a.date.localeCompare(b.date);
+      break;
+    case "account":
+      cmp = (a.accountName ?? "").localeCompare(b.accountName ?? "");
+      break;
+    case "category":
+      cmp = (a.categoryName ?? "").localeCompare(b.categoryName ?? "");
+      break;
+    case "payee":
+      cmp = (a.payee ?? a.description ?? "").localeCompare(
+        b.payee ?? b.description ?? "",
+      );
+      break;
+    case "value":
+      cmp = parseFloat(a.amount) - parseFloat(b.amount);
+      break;
+  }
+  return sort.order === "asc" ? cmp : -cmp;
 }

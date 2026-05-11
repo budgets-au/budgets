@@ -41,7 +41,10 @@ import { colourForFrequency } from "@/lib/schedule-colours";
 import { ScheduledMatchPill } from "@/components/transactions/scheduled-match-pill";
 import {
   TransactionRow,
+  TransactionsTableHeader,
+  compareTransactions,
   type TransactionRowData,
+  type TransactionSortState,
 } from "@/components/transactions/transaction-row";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 
@@ -521,6 +524,11 @@ export function CashflowCalendar({
   const tomorrowISO = toISO(addDays(new Date(), 1));
   const projectionStartLabel =
     chartData.find((r) => r.rawDate === tomorrowISO)?.date as string | undefined;
+  // Last visible chart label — used as the x2 endpoint for the
+  // projection-area diagonal stripe overlay below.
+  const lastChartLabel = chartData.length > 0
+    ? (chartData[chartData.length - 1].date as string)
+    : undefined;
 
   // Overview / zoom controller. The whole dataset (earliest txn →
   // today + 3 months) is painted full-width as a coloured running total.
@@ -720,6 +728,40 @@ export function CashflowCalendar({
                     selectChartDay(iso);
                   }}
                 >
+                  {/* Diagonal-hash pattern for the projected-area
+                      overlay. SVG <defs> renders inside the chart's
+                      SVG. Stripe colour follows the theme's
+                      muted-foreground at low alpha so it reads as
+                      "this region is a projection" without competing
+                      with the data lines. */}
+                  <defs>
+                    <pattern
+                      id="projected-stripes"
+                      patternUnits="userSpaceOnUse"
+                      width="8"
+                      height="8"
+                      patternTransform="rotate(45)"
+                    >
+                      <line
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="8"
+                        stroke="var(--muted-foreground)"
+                        strokeWidth="1"
+                        strokeOpacity="0.18"
+                      />
+                    </pattern>
+                  </defs>
+                  {projectionStartLabel && lastChartLabel && (
+                    <ReferenceArea
+                      x1={projectionStartLabel}
+                      x2={lastChartLabel}
+                      fill="url(#projected-stripes)"
+                      stroke="none"
+                      ifOverflow="hidden"
+                    />
+                  )}
                   <CartesianGrid stroke="var(--border)" strokeWidth={1} />
                   <XAxis
                     dataKey="date"
@@ -1422,6 +1464,22 @@ function DayDetailPanel({
   // main list uses, isolated to this panel so opening a day's row
   // doesn't affect /transactions.
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Client-side sort state for the panel's rows. The day is small
+  // enough that re-sorting on click is cheap, so no server round-trip.
+  const [sort, setSort] = useState<TransactionSortState>({
+    by: "value",
+    order: "desc",
+  });
+  const sortedTxns = useMemo(() => {
+    return [...realTxns].sort((a, b) => compareTransactions(a, b, sort));
+  }, [realTxns, sort]);
+  function handleSort(col: TransactionSortState["by"]) {
+    setSort((cur) =>
+      cur.by === col
+        ? { by: col, order: cur.order === "asc" ? "desc" : "asc" }
+        : { by: col, order: "asc" },
+    );
+  }
 
   // Drop scheduled occurrences that have already been matched to a real
   // transaction — the dot has moved with the money, the row would too.
@@ -1433,38 +1491,9 @@ function DayDetailPanel({
     (_, i) => !matchedScheduledIdx.has(i),
   );
 
-  // Summary line for the panel header — uses the same in/out/planned
-  // signals as the calendar grid so the two views stay in lock-step.
-  const summary = summarizeDay(
-    data && { events: data.events, scheduledEvents: unmatchedScheduled },
-  );
-  const headerDate = format(parseISO(dateStr), "EEEE, d MMMM");
 
   return (
     <Card className="flex flex-col min-h-0 max-h-full overflow-hidden">
-      <CardHeader className="py-2 px-3 border-b shrink-0">
-        <div className="flex items-baseline justify-between gap-2 flex-wrap">
-          <p className="text-sm font-semibold">{headerDate}</p>
-          {realTxns.length + unmatchedScheduled.length > 0 && (
-            <p className="text-xs text-muted-foreground tabular-nums">
-              {realTxns.length} txn{realTxns.length === 1 ? "" : "s"}
-              {" · "}
-              <span className={amountClass(summary.net)}>
-                {summary.net > 0 ? "+" : ""}
-                {formatAUD(summary.net)}
-              </span>
-              {unmatchedScheduled.length > 0 && (
-                <>
-                  {" · "}
-                  <span className="text-indigo-500">
-                    {unmatchedScheduled.length} planned
-                  </span>
-                </>
-              )}
-            </p>
-          )}
-        </div>
-      </CardHeader>
       <CardContent className="pt-3 space-y-4 flex-1 min-h-0 overflow-y-auto">
         {realTxns.length === 0 && unmatchedScheduled.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-6">
@@ -1474,19 +1503,25 @@ function DayDetailPanel({
 
         {realTxns.length > 0 && (
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              Transactions
-            </p>
             {/* Render the same TransactionRow component the main
                 /transactions list uses, just without the date /
                 checkbox / balance / linked-panel columns (all
-                irrelevant in a single-day, non-bulk panel). Wrapped
-                in a minimal `<table>` because TransactionRow emits
-                `<tr>`/`<td>` and HTML refuses to render those
-                outside a table. */}
+                irrelevant in a single-day, non-bulk panel). The same
+                sortable header from the main list, with local sort
+                state — clicking a column re-sorts the day's rows in
+                place. */}
             <table className="w-full text-sm">
+              <TransactionsTableHeader
+                showDate={false}
+                showCheckbox={false}
+                showBalance={false}
+                showLinkedPanel={false}
+                sort={sort}
+                onSort={handleSort}
+              />
               <tbody className="divide-y">
-                {realTxns.map((t, i) => {
+                {sortedTxns.map((t) => {
+                  const i = realTxns.findIndex((r) => r.id === t.id);
                   const matchRef = realToSched.get(`${dateStr}#${i}`);
                   const sched = matchRef
                     ? scheduledById.get(matchRef.scheduledId)

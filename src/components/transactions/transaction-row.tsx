@@ -874,3 +874,145 @@ export function compareTransactions(
   }
   return sort.order === "asc" ? cmp : -cmp;
 }
+
+// ─── Scheduled-event row ──────────────────────────────────────────────────────
+// Forecast occurrences from /api/cashflow are projection-shaped (no
+// notes, no real categoryId, no transferPair); rendering them through
+// the full <TransactionRow> would either light up inert inline-edit
+// affordances or need a `readOnly` mode that complicates every cell.
+// Instead this thin sibling emits a `<tr>` with the same column
+// structure as TransactionRow so both row types share the
+// TransactionsTableHeader and live in one table — visually distinct
+// via a soft indigo tint so the operator can tell forecast rows from
+// realised ones at a glance.
+
+export interface ScheduledRowEvent {
+  /** Stable key for React's `key` prop. */
+  id: string;
+  /** Optional bound account; rendered as the same chip the real rows
+   * use. */
+  accountId?: string;
+  payee: string;
+  description: string;
+  amount: number;
+}
+
+export function ScheduledTransactionRow({
+  event,
+  accounts,
+  showDate = false,
+  date,
+  showCheckbox = false,
+  showBalance = false,
+  showLinkedPanel = false,
+  showLinkedDetails = false,
+}: {
+  event: ScheduledRowEvent;
+  accounts: AccountLite[];
+  showDate?: boolean;
+  /** When showDate is on, the date string to render (forecast date). */
+  date?: string;
+  showCheckbox?: boolean;
+  showBalance?: boolean;
+  showLinkedPanel?: boolean;
+  showLinkedDetails?: boolean;
+}) {
+  const acct = event.accountId
+    ? accounts.find((a) => a.id === event.accountId)
+    : undefined;
+  return (
+    <tr className="bg-indigo-500/[0.06] hover:bg-indigo-500/10">
+      {showCheckbox && <td className="px-2 py-2 w-[32px]" />}
+      {showDate && (
+        <td
+          className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap"
+          title={
+            date
+              ? format(parseISO(date), "EEEE, d MMMM yyyy")
+              : undefined
+          }
+        >
+          {date ? formatDate(date) : "—"}
+        </td>
+      )}
+      <td className="px-3 py-2">
+        {acct && (
+          <span
+            className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap"
+            style={{ backgroundColor: acct.color }}
+          >
+            {acct.name}
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-2 text-xs text-indigo-500 italic whitespace-nowrap">
+        Scheduled
+      </td>
+      <td
+        className="px-2 py-2 align-middle text-amber-500/70"
+        title="Scheduled occurrence"
+      >
+        <Repeat className="h-3.5 w-3.5" aria-label="Scheduled" />
+      </td>
+      <td className="px-3 py-2 w-full max-w-0">
+        <span className="text-muted-foreground truncate inline-block max-w-full">
+          {event.payee || event.description || "—"}
+        </span>
+      </td>
+      <td className="px-3 py-2 text-right whitespace-nowrap">
+        <span className={cn("font-semibold", amountClass(event.amount))}>
+          {formatAUD(event.amount)}
+        </span>
+      </td>
+      {showBalance && <td className="px-3 py-2 text-right" />}
+      {showLinkedPanel && (
+        <>
+          <td className="hidden lg:table-cell" />
+          <td className="hidden lg:table-cell" />
+          {showLinkedDetails && (
+            <>
+              <td className="hidden lg:table-cell" />
+              <td className="hidden lg:table-cell" />
+            </>
+          )}
+        </>
+      )}
+    </tr>
+  );
+}
+
+/** Comparator for ScheduledRowEvent against the same sort state the
+ * real rows use. Missing fields (no date, no category) fall back to
+ * payee/amount so the sort still produces a stable ordering. */
+export function compareScheduled(
+  a: ScheduledRowEvent,
+  b: ScheduledRowEvent,
+  sort: TransactionSortState,
+): number {
+  let cmp = 0;
+  switch (sort.by) {
+    case "date":
+      // Scheduled events all share the day's date in the panel
+      // context, so the sub-order falls through to payee.
+      cmp = (a.payee ?? "").localeCompare(b.payee ?? "");
+      break;
+    case "account":
+      // No accountName lookup here — caller can pre-sort if it
+      // needs the chip's name. Fallback to accountId.
+      cmp = (a.accountId ?? "").localeCompare(b.accountId ?? "");
+      break;
+    case "category":
+      // No real category on a forecast; keep stable via payee.
+      cmp = (a.payee ?? "").localeCompare(b.payee ?? "");
+      break;
+    case "payee":
+      cmp = (a.payee ?? a.description ?? "").localeCompare(
+        b.payee ?? b.description ?? "",
+      );
+      break;
+    case "value":
+      cmp = a.amount - b.amount;
+      break;
+  }
+  return sort.order === "asc" ? cmp : -cmp;
+}

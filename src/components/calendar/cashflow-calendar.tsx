@@ -40,9 +40,12 @@ import { summarizeDay } from "@/lib/cashflow";
 import { colourForFrequency } from "@/lib/schedule-colours";
 import { ScheduledMatchPill } from "@/components/transactions/scheduled-match-pill";
 import {
+  ScheduledTransactionRow,
   TransactionRow,
   TransactionsTableHeader,
+  compareScheduled,
   compareTransactions,
+  type ScheduledRowEvent,
   type TransactionRowData,
   type TransactionSortState,
 } from "@/components/transactions/transaction-row";
@@ -754,13 +757,31 @@ export function CashflowCalendar({
                     </pattern>
                   </defs>
                   {projectionStartLabel && lastChartLabel && (
-                    <ReferenceArea
-                      x1={projectionStartLabel}
-                      x2={lastChartLabel}
-                      fill="url(#projected-stripes)"
-                      stroke="none"
-                      ifOverflow="hidden"
-                    />
+                    <>
+                      {/* Solid soft tint over the projected region —
+                          knocks down the chart's perceived brightness
+                          there so "real is here, pretend is there" is
+                          obvious from the colour change alone. */}
+                      <ReferenceArea
+                        x1={projectionStartLabel}
+                        x2={lastChartLabel}
+                        fill="var(--muted-foreground)"
+                        fillOpacity={0.12}
+                        stroke="none"
+                        ifOverflow="hidden"
+                      />
+                      {/* Diagonal stripes on top — reinforces the
+                          shift with a secondary cue for colour-blind
+                          users and on theme variants where the
+                          tint shift is subtle. */}
+                      <ReferenceArea
+                        x1={projectionStartLabel}
+                        x2={lastChartLabel}
+                        fill="url(#projected-stripes)"
+                        stroke="none"
+                        ifOverflow="hidden"
+                      />
+                    </>
                   )}
                   <CartesianGrid stroke="var(--border)" strokeWidth={1} />
                   <XAxis
@@ -1473,6 +1494,28 @@ function DayDetailPanel({
   const sortedTxns = useMemo(() => {
     return [...realTxns].sort((a, b) => compareTransactions(a, b, sort));
   }, [realTxns, sort]);
+  // Scheduled events mapped to the row-component-shaped object the
+  // shared `<ScheduledTransactionRow>` consumes, then sorted with the
+  // same sort state the real rows use so the combined list reads as
+  // one ordered table.
+  const scheduledRowEvents = useMemo<ScheduledRowEvent[]>(() => {
+    return scheduledEvts
+      .map((e, i) => ({ e, i }))
+      .filter(({ i }) => !claimedSched.has(`${dateStr}#${i}`))
+      .map(({ e, i }) => ({
+        id: e.id ?? `sched-${dateStr}-${i}`,
+        accountId: e.accountId,
+        payee: e.payee,
+        description: e.description,
+        amount: e.amount,
+      }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduledEvts, claimedSched, dateStr]);
+  const sortedScheduled = useMemo(() => {
+    return [...scheduledRowEvents].sort((a, b) =>
+      compareScheduled(a, b, sort),
+    );
+  }, [scheduledRowEvents, sort]);
   function handleSort(col: TransactionSortState["by"]) {
     setSort((cur) =>
       cur.by === col
@@ -1501,15 +1544,15 @@ function DayDetailPanel({
           </p>
         )}
 
-        {realTxns.length > 0 && (
+        {(realTxns.length > 0 || unmatchedScheduled.length > 0) && (
           <div>
-            {/* Render the same TransactionRow component the main
-                /transactions list uses, just without the date /
-                checkbox / balance / linked-panel columns (all
-                irrelevant in a single-day, non-bulk panel). The same
-                sortable header from the main list, with local sort
-                state — clicking a column re-sorts the day's rows in
-                place. */}
+            {/* Single table for real + scheduled rows so they share
+                the sortable TransactionsTableHeader. Real rows use
+                <TransactionRow> with the inline-edit features the
+                main /transactions list provides; scheduled
+                (forecast) rows render through <ScheduledTransactionRow>
+                — same column structure, soft indigo tint, no inline
+                edits since they're projections, not DB rows. */}
             <table className="w-full text-sm">
               <TransactionsTableHeader
                 showDate={false}
@@ -1558,49 +1601,19 @@ function DayDetailPanel({
                     />
                   );
                 })}
+                {sortedScheduled.map((e, i) => (
+                  <ScheduledTransactionRow
+                    key={`sched-${i}`}
+                    event={e}
+                    accounts={accounts}
+                    showDate={false}
+                    showCheckbox={false}
+                    showBalance={false}
+                    showLinkedPanel={false}
+                  />
+                ))}
               </tbody>
             </table>
-          </div>
-        )}
-
-        {unmatchedScheduled.length > 0 && (
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-500 mb-1">
-              Scheduled
-            </p>
-            <ul className="divide-y text-sm">
-              {unmatchedScheduled.map((e, i) => {
-                const acct = e.accountId ? accountById.get(e.accountId) : undefined;
-                return (
-                  <li
-                    key={i}
-                    className="flex justify-between items-start py-2 px-2 -mx-2 gap-3 rounded"
-                  >
-                    <div className="min-w-0 flex-1 space-y-0.5">
-                      {acct && (
-                        <span
-                          className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap shrink-0"
-                          style={{ backgroundColor: acct.color }}
-                        >
-                          {acct.name}
-                        </span>
-                      )}
-                      <div className="text-sm font-medium leading-tight text-muted-foreground">
-                        {e.payee || e.description || "—"}
-                      </div>
-                    </div>
-                    <span
-                      className={cn(
-                        "shrink-0 font-medium tabular-nums",
-                        amountClass(e.amount),
-                      )}
-                    >
-                      {formatAUD(e.amount)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
           </div>
         )}
       </CardContent>

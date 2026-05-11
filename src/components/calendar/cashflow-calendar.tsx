@@ -171,9 +171,15 @@ export function CashflowCalendar({
   // Overview/brush dataset: spans the entire transactions corpus (from=auto
   // resolves to MIN(date) on the server) through 3 months past today, with
   // accountIds applied so the running total reflects the active filter.
-  const overviewTo = useMemo(() => toISO(endOfMonth(addMonths(new Date(), 3))), []);
+  // Brush window: a fixed 12-month span centred-ish on today (9 months
+  // back, 3 months forward). Bounded rather than "auto"=since-first-txn
+  // so the brush always shows the same horizontal density and the
+  // operator can scrub through their immediate history without
+  // navigating through years of older data.
+  const overviewFrom = useMemo(() => toISO(subMonths(new Date(), 9)), []);
+  const overviewTo = useMemo(() => toISO(addMonths(new Date(), 3)), []);
   const { data: overviewApi } = useSWR<CashflowApi>(
-    cashflowUrl("auto", overviewTo, accountIds),
+    cashflowUrl(overviewFrom, overviewTo, accountIds),
     fetcher,
     { keepPreviousData: true },
   );
@@ -622,62 +628,68 @@ export function CashflowCalendar({
       </div>
     ) : null;
 
-  return (
-    <div className="h-full flex flex-col gap-3">
-      {/* ── Row 1: chart (account selector now lives in the global sidebar) ── */}
-      <div className="shrink-0 flex gap-3 items-stretch">
-        <Card className="flex-1">
-          <CardHeader className="pb-2">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">Account Balances</p>
-                <p className="text-xs text-muted-foreground">
-                  One line per account · past = computed · future = projected
-                </p>
-              </div>
-              {/* Quick-range presets centre the visible window on today
-                  with the stated total span. The brush below the chart can
-                  fine-tune or pan from here. */}
-              <div
-                role="radiogroup"
-                aria-label="Chart window size"
-                className="flex rounded-md border overflow-hidden text-xs shrink-0"
-              >
-                {[
-                  { label: "1 month", halfDays: 15 },
-                  { label: "3 months", halfDays: 45 },
-                  { label: "6 months", halfDays: 90 },
-                  { label: "12 months", halfDays: 180 },
-                ].map((opt) => {
-                  const active = isPresetActive(opt.halfDays);
-                  return (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => setWindowHalfDays(opt.halfDays)}
-                      className={cn(
-                        "px-2.5 py-1 transition-colors",
-                        active
-                          ? "bg-indigo-600 text-white font-medium"
-                          : "bg-background text-muted-foreground hover:bg-muted",
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
+  // The chart Card is used by both month and week modes. Extracted as a JSX
+  // value so both branches can drop it into their layout without duplicating
+  // its content. The brush is embedded inside the CardContent (bottom-right,
+  // half width) so its drag controls live next to the chart it steers.
+  // The chart's title, subtitle and preset chips all live at the
+  // bottom-left now, next to the brush — so the top of the card is all
+  // chart and the controls are clustered with the brush they steer.
+  const chartHeaderBlock = (
+    <div className="flex-1 min-w-0 space-y-1.5">
+      <div>
+        <p className="text-sm font-medium leading-tight">Account Balances</p>
+        <p className="text-xs text-muted-foreground leading-tight">
+          One line per account · past = computed · future = projected
+        </p>
+      </div>
+      {/* Quick-range presets centre the visible window on today with
+          the stated total span. The brush to the right can fine-tune
+          or pan from here. */}
+      <div
+        role="radiogroup"
+        aria-label="Chart window size"
+        className="inline-flex rounded-md border overflow-hidden text-xs shrink-0"
+      >
+        {[
+          { label: "1 month", halfDays: 15 },
+          { label: "3 months", halfDays: 45 },
+          { label: "6 months", halfDays: 90 },
+          { label: "12 months", halfDays: 180 },
+        ].map((opt) => {
+          const active = isPresetActive(opt.halfDays);
+          return (
+            <button
+              key={opt.label}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => setWindowHalfDays(opt.halfDays)}
+              className={cn(
+                "px-2.5 py-1 transition-colors",
+                active
+                  ? "bg-indigo-600 text-white font-medium"
+                  : "bg-background text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const chartCard = (
+    <Card className="flex flex-col overflow-hidden h-full">
+      <CardContent className="flex-1 flex flex-col min-h-0 gap-3 p-4">
+        <div className="flex-1 min-h-0 min-w-0">
+          {chartLoading ? (
+            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+              Loading…
             </div>
-          </CardHeader>
-          <CardContent>
-            {chartLoading ? (
-              <div className="h-44 flex items-center justify-center text-muted-foreground text-sm">
-                Loading…
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={176}>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                   data={chartData}
                   margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
@@ -821,15 +833,26 @@ export function CashflowCalendar({
                   ))}
                 </ComposedChart>
               </ResponsiveContainer>
-            )}
+          )}
+        </div>
+        {/* Bottom row: title + subtitle + range chips on the left,
+            bordered brush chart on the right. Both panels share the
+            footer so the brush's drag controls live next to the
+            labels they affect. */}
+        <div className="shrink-0 flex gap-3 items-end">
+          {chartHeaderBlock}
+          <div className="w-1/2 min-w-0 rounded-md border bg-card overflow-hidden">
+            {overviewBrush}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Row 2: month view (calendar + day detail) or week view ──────── */}
-      <div className="flex flex-col gap-2 flex-1 min-h-0">
-        <div className="shrink-0 flex items-center justify-end gap-1">
+  return (
+    <div className="h-full flex flex-col gap-3">
+      {/* Toolbar — legend + view toggle */}
+      <div className="shrink-0 flex items-center justify-end gap-1">
           <Popover>
             <PopoverTrigger
               render={
@@ -898,34 +921,25 @@ export function CashflowCalendar({
           </Button>
         </div>
         {viewMode === "month" ? (
-        // Inline-style the grid because Safari has dropped the named
-        // CSS class's `grid-template-columns` more than once. Inline
-        // style is the only delivery channel that has survived
-        // consistently. lg+ uses calendar 4 / day-detail 9; below lg
-        // we stack into a single column.
+        <>
+        {/* Top row: calendar on the left, chart with embedded brush on
+            the right. Safari has dropped Tailwind's arbitrary
+            grid-cols multiple times, so the column template is set
+            inline. Row is `auto` so the calendar's natural compact
+            height drives the row and the chart Card stretches to
+            match — both panels end up exactly the same height. */}
         <div
-          className="gap-3 flex-1 min-h-0"
+          className="shrink-0"
           style={{
             display: "grid",
             gridTemplateColumns: isLgUp ? "4fr 9fr" : "1fr",
-            gridTemplateRows: "1fr",
-            minHeight: 0,
+            gridTemplateRows: "auto",
             minWidth: 0,
+            gap: "12px",
           }}
         >
-        {/* Calendar */}
-        <div className="flex flex-col gap-2 min-h-0 min-w-0">
-          <Card
-            className="flex flex-col overflow-hidden"
-            // The parent grid row is `1fr` so the row stretches to fill its
-            // flex container. Default `align-self` on a grid item is
-            // `stretch`, which would stretch THIS Card to the full row
-            // height even though the day grid inside is square-sized and
-            // doesn't need it. Pin the Card to the top of its row instead;
-            // the leftover row height becomes page background, not a
-            // framed void inside the Card.
-            style={{ alignSelf: "start" }}
-          >
+          {/* CALENDAR */}
+          <Card className="flex flex-col overflow-hidden">
             {/* Month nav lives inside the Card header so the calendar Card's
                 top edge aligns with the day-detail Card on the right. */}
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 border-b space-y-0 shrink-0">
@@ -987,7 +1001,17 @@ export function CashflowCalendar({
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-1">
+              {/* alignContent:"start" pins the implicit grid rows to the
+                  top with no inter-row stretching, even if the surrounding
+                  Card ends up taller than the grid (the parent grid row
+                  height is `max(calendar, chart)` and the chart Card's
+                  h-full can make the row grow). Without it, the auto-rows
+                  distribute the leftover height as extra row gap, which
+                  looks like vast vertical gaps between week rows. */}
+              <div
+                className="grid grid-cols-7 gap-1"
+                style={{ alignContent: "start", gridAutoRows: "min-content" }}
+              >
                 {Array.from({ length: firstDayOfWeek }).map((_, i) => (
                   // Force the empty leading cells to be square too so the
                   // row's height is unambiguously the column width. Without
@@ -1096,12 +1120,16 @@ export function CashflowCalendar({
             </CardContent>
           </Card>
 
+          {/* Chart with embedded brush, same row as the calendar so heights
+              track (parent grid row is auto = max of children, calendar
+              drives because its intrinsic height is the larger one once
+              the cells are aspect-square). */}
+          {chartCard}
         </div>
 
-        {/* Day detail panel — brush sits above so its drag/zoom controls
-            line up with the transaction list it filters into. */}
-        <div className="flex flex-col gap-2 min-h-0 min-w-0">
-          {overviewBrush}
+        {/* Day detail panel — full width, fills the remaining vertical
+            space below the calendar/chart row. */}
+        <div className="flex-1 min-h-0 min-w-0">
           <DayDetailPanel
             dateStr={selectedDate}
             byDate={byDate}
@@ -1113,10 +1141,11 @@ export function CashflowCalendar({
             showLinkedDetails={displayPrefs.transactionsShowLinkedPanel}
           />
         </div>
-        </div>
+        </>
         ) : (
-          <div className="flex-1 min-h-0 flex flex-col gap-2">
-            {overviewBrush}
+          <>
+            {/* Chart with embedded brush */}
+            <div className="shrink-0 h-72">{chartCard}</div>
             <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between py-2 px-3 border-b space-y-0 shrink-0">
               <Button
@@ -1261,9 +1290,8 @@ export function CashflowCalendar({
               </div>
             </CardContent>
             </Card>
-          </div>
+          </>
         )}
-      </div>
     </div>
   );
 }

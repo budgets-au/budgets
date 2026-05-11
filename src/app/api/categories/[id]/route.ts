@@ -10,8 +10,7 @@ const updateSchema = z.object({
   name: z.string().min(1).optional(),
   color: z.string().optional(),
   parentId: z.string().uuid().optional().nullable(),
-  isTransfer: z.boolean().optional(),
-  isPayment: z.boolean().optional(),
+  transferKind: z.enum(["none", "internal", "external"]).optional(),
   sortOrder: z.number().int().min(0).optional(),
 });
 

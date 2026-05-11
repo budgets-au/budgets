@@ -15,6 +15,8 @@ export const MAX_DATE_GAP_DAYS = 3;
 export const AUTO_THRESHOLD = 5;
 const SUGGEST_THRESHOLD = 1;
 
+export type TransferKind = "none" | "internal" | "external";
+
 export type CandidateRow = {
   a_id: string;
   b_id: string;
@@ -26,10 +28,8 @@ export type CandidateRow = {
   b_account_last4: string | null;
   a_account_type: string;
   b_account_type: string;
-  a_is_transfer_cat: boolean;
-  b_is_transfer_cat: boolean;
-  a_is_payment_cat: boolean;
-  b_is_payment_cat: boolean;
+  a_transfer_kind: TransferKind;
+  b_transfer_kind: TransferKind;
   a_category_id: string | null;
   b_category_id: string | null;
   date_gap: number;
@@ -94,12 +94,12 @@ export function scoreCandidate(c: CandidateRow): number {
     }
   }
 
-  // "Both halves already in a linked-class category" — covers both true
-  // transfers (is_transfer) and loan/credit payments (is_payment). They're
-  // semantically the same signal for matching: the user has told us these are
-  // cross-account flows.
-  const aLinked = c.a_is_transfer_cat || c.a_is_payment_cat;
-  const bLinked = c.b_is_transfer_cat || c.b_is_payment_cat;
+  // "Both halves already in a linked-class category" — any non-'none' kind
+  // (internal moves OR external loan/credit payments) signals the user has
+  // told us these are cross-account flows. The two kinds split on reporting
+  // semantics, not pairing semantics.
+  const aLinked = c.a_transfer_kind !== "none";
+  const bLinked = c.b_transfer_kind !== "none";
   if (aLinked && bLinked) score += 2;
 
   // Exactly one side lives on a loan/credit account: those accounts only
@@ -168,10 +168,8 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
       a2.account_number_last4    AS b_account_last4,
       a1.type                    AS a_account_type,
       a2.type                    AS b_account_type,
-      COALESCE(c1.is_transfer, 0) AS a_is_transfer_cat,
-      COALESCE(c2.is_transfer, 0) AS b_is_transfer_cat,
-      COALESCE(c1.is_payment, 0)  AS a_is_payment_cat,
-      COALESCE(c2.is_payment, 0)  AS b_is_payment_cat,
+      COALESCE(c1.transfer_kind, 'none') AS a_transfer_kind,
+      COALESCE(c2.transfer_kind, 'none') AS b_transfer_kind,
       t1.category_id             AS a_category_id,
       t2.category_id             AS b_category_id,
       ABS(julianday(t1.date) - julianday(t2.date)) AS date_gap
@@ -200,29 +198,29 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
     b_account_last4: string | null;
     a_account_type: string;
     b_account_type: string;
-    a_is_transfer_cat: number;
-    b_is_transfer_cat: number;
-    a_is_payment_cat: number;
-    b_is_payment_cat: number;
+    a_transfer_kind: string;
+    b_transfer_kind: string;
     a_category_id: string | null;
     b_category_id: string | null;
     date_gap: number;
   }>;
+  const asKind = (v: string): TransferKind =>
+    v === "internal" || v === "external" ? v : "none";
   const rows: CandidateRow[] = rawRows.map((r) => ({
     ...r,
-    a_is_transfer_cat: r.a_is_transfer_cat === 1,
-    b_is_transfer_cat: r.b_is_transfer_cat === 1,
-    a_is_payment_cat: r.a_is_payment_cat === 1,
-    b_is_payment_cat: r.b_is_payment_cat === 1,
+    a_transfer_kind: asKind(r.a_transfer_kind),
+    b_transfer_kind: asKind(r.b_transfer_kind),
   }));
 
   // Resolve the system "Loan Payment" / "Credit Payment" categories once so
   // we can auto-assign them when a paired counterpart lives on a loan/credit
-  // account and the source side is currently uncategorised.
+  // account and the source side is currently uncategorised. These ship as
+  // top-level `transferKind = 'external'` categories (migrated from the
+  // legacy isPayment flag in drizzle/0005_transfer_kind.sql).
   const paymentCats = await db
     .select({ id: categories.id, name: categories.name })
     .from(categories)
-    .where(and(eq(categories.isPayment, true), isNull(categories.parentId)));
+    .where(and(eq(categories.transferKind, "external"), isNull(categories.parentId)));
   const loanPaymentCatId = paymentCats.find((c) => c.name === "Loan Payment")?.id ?? null;
   const creditPaymentCatId = paymentCats.find((c) => c.name === "Credit Payment")?.id ?? null;
   const candidateById = new Map<string, CandidateRow>();

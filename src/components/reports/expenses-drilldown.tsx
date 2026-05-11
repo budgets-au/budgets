@@ -32,7 +32,7 @@ interface CategoryDef {
   type: string;
   color: string;
   parentId: string | null;
-  isTransfer?: boolean;
+  transferKind?: "none" | "internal" | "external";
 }
 
 interface TxnRow {
@@ -108,7 +108,7 @@ export function ExpensesDrilldown({
       name: string;
       color: string;
       parentId: string | null;
-      isTransfer: boolean;
+      transferKind: "none" | "internal" | "external";
       isExpense: boolean;
       ownTotal: number;
       ownCount: number;
@@ -125,7 +125,7 @@ export function ExpensesDrilldown({
           name: c.name,
           color: c.color,
           parentId: c.parentId,
-          isTransfer: !!c.isTransfer,
+          transferKind: c.transferKind ?? "none",
           isExpense: c.type === "expense",
           ownTotal: 0,
           ownCount: 0,

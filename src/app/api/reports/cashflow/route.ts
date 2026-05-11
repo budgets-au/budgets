@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { scheduledTransactions } from "@/db/schema";
+import { scheduledTransactions, categories } from "@/db/schema";
 import { sql, and, eq, ne, isNotNull, gte, lte, inArray, or, isNull } from "drizzle-orm";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from "date-fns";
 import { expandRecurrence } from "@/lib/recurrence";
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
     LEFT JOIN categories p ON p.id = c.parent_id
     LEFT JOIN categories gp ON gp.id = p.parent_id
     WHERE t.date >= ${from} AND t.date <= ${to}
-      ${hideTransfers ? sql`AND c.is_transfer = 0` : sql``}
+      ${hideTransfers ? sql`AND c.transfer_kind != 'internal'` : sql``}
       ${accountFilterT}
     GROUP BY c.id, c.name, c.type, p.id, p.name, gp.id, gp.name, substr(t.date, 1, 7)
     ORDER BY c.type DESC, c.name, month
@@ -171,6 +171,12 @@ export async function GET(request: Request) {
   // following columns. Skip amountMin / lineageId / createdAt / updatedAt
   // since cashflow doesn't use them — keeps the per-schedule payload
   // tight when a user has hundreds of recurring rows.
+  // Transfer-type schedules used to be excluded outright. With the new
+  // `categories.transferKind` enum we instead let any schedule with a
+  // categoryId through, then skip the ones whose category is `internal`
+  // (asset-to-asset moves the user doesn't want polluting the rollup).
+  // `external` transfers (mortgage/loan payments) project just like a
+  // normal expense.
   const allActiveSchedules = await db
     .select({
       id: scheduledTransactions.id,
@@ -187,13 +193,14 @@ export async function GET(request: Request) {
       startDate: scheduledTransactions.startDate,
       endDate: scheduledTransactions.endDate,
       dayOfMonth: scheduledTransactions.dayOfMonth,
+      categoryTransferKind: categories.transferKind,
     })
     .from(scheduledTransactions)
+    .leftJoin(categories, eq(scheduledTransactions.categoryId, categories.id))
     .where(
       and(
         eq(scheduledTransactions.isActive, true),
         isNotNull(scheduledTransactions.categoryId),
-        ne(scheduledTransactions.type, "transfer"),
         ne(scheduledTransactions.frequency, "once"),
         or(isNull(scheduledTransactions.endDate), gte(scheduledTransactions.endDate, from)),
         lte(scheduledTransactions.startDate, to),
@@ -226,6 +233,9 @@ export async function GET(request: Request) {
   const toDate = parseISO(to);
   for (const s of scheduledRowsFull) {
     if (!s.categoryId) continue;
+    // Inner transfers are net-zero by definition — don't roll their
+    // projected amounts into any category's expense/income aggregate.
+    if (s.categoryTransferKind === "internal") continue;
     const factor = (FREQ_MONTHLY[s.frequency] ?? 1) / (s.interval || 1);
     scheduledByCategory.set(
       s.categoryId,
@@ -309,7 +319,7 @@ export async function GET(request: Request) {
       LEFT JOIN categories p ON p.id = c.parent_id
       LEFT JOIN categories gp ON gp.id = p.parent_id
       WHERE c.id IN (${orphanIdList})
-        ${hideTransfers ? sql`AND c.is_transfer = 0` : sql``}
+        ${hideTransfers ? sql`AND c.transfer_kind != 'internal'` : sql``}
     `);
     for (const row of orphanMeta as unknown as Array<{ category_id: string; category_name: string; category_type: string; parent_id: string | null; parent_name: string | null; grandparent_id: string | null; grandparent_name: string | null }>) {
       categoryMap.set(row.category_id, {

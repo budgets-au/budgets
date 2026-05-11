@@ -10,6 +10,7 @@ const createSchema = z.object({
   type: z.enum(["income", "expense"]),
   color: z.string().default("#94a3b8"),
   parentId: z.string().uuid().optional().nullable(),
+  transferKind: z.enum(["none", "internal", "external"]).optional(),
 });
 
 export async function GET(request: Request) {

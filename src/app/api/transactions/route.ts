@@ -120,14 +120,14 @@ export async function GET(request: Request) {
   if (direction === "out") conditions.push(sql`CAST(${transactions.amount} AS REAL) < 0`);
   else if (direction === "in") conditions.push(sql`CAST(${transactions.amount} AS REAL) > 0`);
 
-  // hideTransfers=true excludes rows whose category is flagged is_transfer
-  // (i.e. internal book-keeping moves between accounts). Mirrors the same
-  // toggle in /api/reports so the drilldown's transactions panel agrees
-  // with the breakdown above it.
+  // hideTransfers=true excludes rows whose category is flagged as an inner
+  // transfer (asset-to-asset moves). External payments are kept — they're
+  // real expenses. Mirrors the same toggle in /api/reports so the drilldown's
+  // transactions panel agrees with the breakdown above it.
   if (searchParams.get("hideTransfers") === "true") {
     conditions.push(
       sql`(${transactions.categoryId} IS NULL OR EXISTS (
-        SELECT 1 FROM categories c WHERE c.id = ${transactions.categoryId} AND c.is_transfer = false
+        SELECT 1 FROM categories c WHERE c.id = ${transactions.categoryId} AND c.transfer_kind != 'internal'
       ))`,
     );
   }

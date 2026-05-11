@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     const monthConditions = [...conditions];
     if (hideTransfers) monthConditions.push(
       sql`(${transactions.categoryId} IS NULL OR EXISTS (
-        SELECT 1 FROM categories c WHERE c.id = ${transactions.categoryId} AND c.is_transfer = false
+        SELECT 1 FROM categories c WHERE c.id = ${transactions.categoryId} AND c.transfer_kind != 'internal'
       ))`
     );
 
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
 
   // Group by category
   if (hideTransfers) conditions.push(
-    sql`(${transactions.categoryId} IS NULL OR ${categories.isTransfer} = false)`
+    sql`(${transactions.categoryId} IS NULL OR ${categories.transferKind} != 'internal')`
   );
 
   // Net total in the category's direction. The CASE mirrors

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { appSettings, categories, transactions } from "@/db/schema";
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import type { TaxConfig } from "@/db/schema";
 import { calculateTaxReport, type TaxReport } from "@/lib/tax/calc";
 import { currentFyEndYear, fyDateRange } from "@/lib/tax/fy";
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
   const txnConditions = [
     gte(transactions.date, fyRange.from),
     lte(transactions.date, fyRange.to),
-    eq(categories.isTransfer, false),
+    ne(categories.transferKind, "internal"),
     eq(categories.type, "expense"),
   ];
   if (accountIds.length > 0) {

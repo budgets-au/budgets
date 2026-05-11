@@ -18,7 +18,7 @@ export default async function CategoriesPage() {
       .from(transactions)
       .where(
         sql`${transactions.categoryId} IS NOT NULL AND EXISTS (
-          SELECT 1 FROM categories c WHERE c.id = ${transactions.categoryId} AND c.is_transfer = false
+          SELECT 1 FROM categories c WHERE c.id = ${transactions.categoryId} AND c.transfer_kind != 'internal'
         )`,
       )
       .groupBy(transactions.categoryId),
@@ -30,7 +30,7 @@ export default async function CategoriesPage() {
       .from(transactions)
       .where(
         sql`${transactions.categoryId} IS NOT NULL AND EXISTS (
-          SELECT 1 FROM categories c WHERE c.id = ${transactions.categoryId} AND c.is_transfer = false
+          SELECT 1 FROM categories c WHERE c.id = ${transactions.categoryId} AND c.transfer_kind != 'internal'
         )`,
       )
       .groupBy(transactions.categoryId),

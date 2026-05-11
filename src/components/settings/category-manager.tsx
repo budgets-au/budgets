@@ -260,22 +260,14 @@ export function CategoryManager({
     toast.success(`Renamed to "${updated.name}"`);
   }
 
-  async function handleToggleTransfer(id: string, isTransfer: boolean) {
+  async function handleSetTransferKind(
+    id: string,
+    transferKind: "none" | "internal" | "external",
+  ) {
     const res = await fetch(`/api/categories/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isTransfer }),
-    });
-    if (!res.ok) { toast.error("Failed to update category"); return; }
-    const updated: Category = await res.json();
-    setCats((prev) => prev.map((c) => (c.id === id ? updated : c)));
-  }
-
-  async function handleTogglePayment(id: string, isPayment: boolean) {
-    const res = await fetch(`/api/categories/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isPayment }),
+      body: JSON.stringify({ transferKind }),
     });
     if (!res.ok) { toast.error("Failed to update category"); return; }
     const updated: Category = await res.json();
@@ -451,34 +443,43 @@ export function CategoryManager({
             {displayAmount > 0 ? formatAUD(displayAmount).replace("A$", "$") : "—"}
           </span>
 
-          {/* Col 5: ↕ transfer + $ payment toggles. Always visible so the
-              user can see at a glance which categories are flagged. Inactive
-              state uses a subdued muted background; active gets the colour. */}
+          {/* Col 5: transfer-kind cycle button. Click cycles
+              none → internal → external → none. Mutual exclusion is
+              automatic; one glyph per row makes the state legible at a glance. */}
           <div className="flex items-center justify-end gap-1">
-            <button
-              onClick={(e) => { e.stopPropagation(); handleToggleTransfer(cat.id, !cat.isTransfer); }}
-              title={cat.isTransfer ? "Transfer category — excluded from cashflow (click to unmark)" : "Mark as transfer category"}
-              className={cn(
-                "shrink-0 text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
-                cat.isTransfer
+            {(() => {
+              const next: Record<"none" | "internal" | "external", "none" | "internal" | "external"> = {
+                none: "internal",
+                internal: "external",
+                external: "none",
+              };
+              const kind = cat.transferKind;
+              const glyph = kind === "internal" ? "⇅" : kind === "external" ? "$" : "—";
+              const title =
+                kind === "internal"
+                  ? "Inner transfer — money between your accounts; excluded from cashflow. Click to make this an External payment."
+                  : kind === "external"
+                    ? "External payment — to an untracked debt; counted as an expense. Click to clear."
+                    : "Regular category — click to mark as Inner transfer (between your accounts).";
+              const styles =
+                kind === "internal"
                   ? "bg-amber-500/15 text-amber-600"
-                  : "bg-muted/50 text-muted-foreground/40 hover:bg-amber-500/15 hover:text-amber-600",
-              )}
-            >
-              ↕
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); handleTogglePayment(cat.id, !cat.isPayment); }}
-              title={cat.isPayment ? "Payment category — linked to a counterpart, but visible in cashflow (click to unmark)" : "Mark as payment category (loan/credit payments)"}
-              className={cn(
-                "shrink-0 text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
-                cat.isPayment
-                  ? "bg-sky-500/15 text-sky-600"
-                  : "bg-muted/50 text-muted-foreground/40 hover:bg-sky-500/15 hover:text-sky-600",
-              )}
-            >
-              $
-            </button>
+                  : kind === "external"
+                    ? "bg-sky-500/15 text-sky-600"
+                    : "bg-muted/50 text-muted-foreground/40 hover:bg-amber-500/15 hover:text-amber-600";
+              return (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleSetTransferKind(cat.id, next[kind]); }}
+                  title={title}
+                  className={cn(
+                    "shrink-0 text-[10px] px-1.5 py-0.5 rounded-full transition-colors min-w-[20px]",
+                    styles,
+                  )}
+                >
+                  {glyph}
+                </button>
+              );
+            })()}
           </div>
 
           {/* Col 6: Work-use % input. Income rows render an empty placeholder
@@ -720,12 +721,12 @@ export function CategoryManager({
               <span>— |sum of amounts| over the subtree (refunds reduce)</span>
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600">↕</span>
-              <span>Transfer category — excluded from cashflow / reports</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600">⇅</span>
+              <span>Inner transfer — money moves between your own accounts; excluded from cashflow</span>
             </li>
             <li className="flex items-center gap-2">
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-600">$</span>
-              <span>Payment category — loan/credit repayment, kept in cashflow</span>
+              <span>External payment — to an untracked debt (e.g. external loan / CC); counted as expense</span>
             </li>
             <li className="flex items-center gap-2">
               <span className="text-[10px] tabular-nums border border-border/50 rounded px-1">25</span>

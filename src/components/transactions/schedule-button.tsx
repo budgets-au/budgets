@@ -65,12 +65,14 @@ export function ScheduleButton({ transaction, accounts, categoriesProp, schedule
   const categories = categoriesProp ?? fetchedCategories;
 
   // A row is "transfer-like" when it's already linked to a counterpart, OR
-  // its category is flagged as a transfer / loan-or-credit payment. Default
-  // the form to type=transfer in that case so the destination account can be
-  // pre-filled (from the existing pair) and the category picker is hidden.
+  // its category has any non-'none' transferKind (inner move OR external
+  // loan/credit payment). Default the form to type=transfer in that case
+  // so the destination account can be pre-filled (from the existing pair)
+  // and the category picker is hidden.
   const sourceCategory = categories.find((c) => c.id === transaction.categoryId);
   const looksLikeTransfer =
-    !!transaction.transferPairId || !!sourceCategory?.isTransfer || !!sourceCategory?.isPayment;
+    !!transaction.transferPairId ||
+    (!!sourceCategory && sourceCategory.transferKind !== "none");
 
   const [type, setType] = useState<"income" | "expense" | "transfer">(
     looksLikeTransfer ? "transfer" : isExpense ? "expense" : "income"

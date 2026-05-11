@@ -123,12 +123,18 @@ export const categories = sqliteTable(
       onDelete: "cascade",
     }),
     isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
-    isTransfer: integer("is_transfer", { mode: "boolean" })
+    // Transfer semantics (single enum replacing the legacy is_transfer +
+    // is_payment booleans — see drizzle/0005_transfer_kind.sql):
+    //   'none'     — regular income/expense category.
+    //   'internal' — pure asset-to-asset move (Checking → Savings); excluded
+    //                from cashflow & report rollups, balance-only.
+    //   'external' — payment to an UNTRACKED debt (external CC / loan);
+    //                counted as an expense in cashflow.
+    transferKind: text("transfer_kind", {
+      enum: ["none", "internal", "external"],
+    })
       .notNull()
-      .default(false),
-    isPayment: integer("is_payment", { mode: "boolean" })
-      .notNull()
-      .default(false),
+      .default("none"),
     // Manual ordering within a (type, parent_id) sibling group. Lower =
     // earlier. Backfilled from alphabetical order in the historical
     // Postgres migration 0029.

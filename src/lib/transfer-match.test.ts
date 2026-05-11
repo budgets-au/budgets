@@ -13,10 +13,8 @@ function candidate(over: Partial<CandidateRow> = {}): CandidateRow {
     b_account_last4: null,
     a_account_type: "checking",
     b_account_type: "checking",
-    a_is_transfer_cat: false,
-    b_is_transfer_cat: false,
-    a_is_payment_cat: false,
-    b_is_payment_cat: false,
+    a_transfer_kind: "none",
+    b_transfer_kind: "none",
     a_category_id: null,
     b_category_id: null,
     date_gap: 0,
@@ -103,28 +101,28 @@ describe("scoreCandidate — shared reference token", () => {
 });
 
 describe("scoreCandidate — linked-class signals", () => {
-  it("both sides have transfer-class category → +2", () => {
+  it("both sides have internal-kind category → +2", () => {
     const c = candidate({
-      a_is_transfer_cat: true,
-      b_is_transfer_cat: true,
+      a_transfer_kind: "internal",
+      b_transfer_kind: "internal",
       date_gap: 1,
     });
     expect(scoreCandidate(c)).toBe(2);
   });
 
-  it("payment-class on one side and transfer-class on the other → +2", () => {
+  it("external on one side and internal on the other → +2", () => {
     const c = candidate({
-      a_is_payment_cat: true,
-      b_is_transfer_cat: true,
+      a_transfer_kind: "external",
+      b_transfer_kind: "internal",
       date_gap: 1,
     });
     expect(scoreCandidate(c)).toBe(2);
   });
 
-  it("only one side linked → no bonus", () => {
+  it("only one side has a non-none transferKind → no bonus", () => {
     const c = candidate({
-      a_is_transfer_cat: true,
-      b_is_transfer_cat: false,
+      a_transfer_kind: "internal",
+      b_transfer_kind: "none",
       date_gap: 1,
     });
     expect(scoreCandidate(c)).toBe(0);
@@ -173,8 +171,8 @@ describe("scoreCandidate — auto-link threshold combinations", () => {
     const c = candidate({
       a_account_type: "checking",
       b_account_type: "loan",
-      a_is_transfer_cat: true,
-      b_is_payment_cat: true,
+      a_transfer_kind: "internal",
+      b_transfer_kind: "external",
       date_gap: 0,
     });
     // 1 (date) + 2 (linked) + 3 (asymmetric loan) = 6

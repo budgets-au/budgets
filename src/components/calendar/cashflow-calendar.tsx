@@ -1062,8 +1062,12 @@ export function CashflowCalendar({
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="p-2 sm:p-3 flex flex-col">
-              <div className="grid grid-cols-7 mb-1 shrink-0">
+            {/* Tight vertical padding — the day names and the grid
+                hug the CardHeader's bottom border and the Card's
+                bottom edge so the calendar's total height is just
+                grid + chrome. */}
+            <CardContent className="px-2 sm:px-3 pt-1 pb-1 flex flex-col">
+              <div className="grid grid-cols-7 shrink-0">
                 {DAYS.map((d) => (
                   <div
                     key={d}

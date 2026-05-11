@@ -979,7 +979,18 @@ export function CashflowCalendar({
 
               <div className="grid grid-cols-7 gap-1">
                 {Array.from({ length: firstDayOfWeek }).map((_, i) => (
-                  <div key={`empty-${i}`} />
+                  // Force the empty leading cells to be square too so the
+                  // row's height is unambiguously the column width. Without
+                  // an aspect ratio here, the empty divs collapse to 0
+                  // height and the row sizes to the day-cell's intrinsic
+                  // content (number + dots) instead of the cell's
+                  // declared aspect-square — which Safari has been seen to
+                  // drop after a re-render. Inline style beats the
+                  // Tailwind utility on specificity.
+                  <div
+                    key={`empty-${i}`}
+                    style={{ aspectRatio: "1 / 1" }}
+                  />
                 ))}
                 {monthDays.map((day) => {
                   const dateStr = toISO(day);
@@ -1011,6 +1022,12 @@ export function CashflowCalendar({
                       key={dateStr}
                       type="button"
                       onClick={() => setSelectedDate(dateStr)}
+                      // Inline aspectRatio plus the Tailwind utility — the
+                      // utility covers most renders, the inline rule is the
+                      // last word in specificity for the cases where the
+                      // browser tries to vertical-fill the cell to a flex
+                      // line's grown height.
+                      style={{ aspectRatio: "1 / 1" }}
                       className={cn(
                         "aspect-square min-h-0 rounded-lg p-1.5 text-left flex flex-col overflow-hidden",
                         "border transition-colors text-[10px]",

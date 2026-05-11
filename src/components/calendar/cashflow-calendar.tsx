@@ -527,11 +527,20 @@ export function CashflowCalendar({
   const tomorrowISO = toISO(addDays(new Date(), 1));
   const projectionStartLabel =
     chartData.find((r) => r.rawDate === tomorrowISO)?.date as string | undefined;
-  // Last visible chart label — used as the x2 endpoint for the
-  // projection-area diagonal stripe overlay below.
-  const lastChartLabel = chartData.length > 0
-    ? (chartData[chartData.length - 1].date as string)
-    : undefined;
+  // Fraction of the chart's horizontal extent where today sits — used
+  // by the per-account gradient fills so the projected portion of each
+  // area renders at a different alpha than the realised portion. When
+  // today is off the visible window, the value is null and the
+  // per-account fills fall back to a uniform colour.
+  const todayFractionPct = useMemo<number | null>(() => {
+    if (chartData.length === 0) return null;
+    // Find the first row whose rawDate is on/after today.
+    const idx = chartData.findIndex(
+      (r) => (r.rawDate as string) >= todayISO,
+    );
+    if (idx === -1) return 100; // today is past the right edge — entire chart is "real"
+    return (idx / Math.max(1, chartData.length - 1)) * 100;
+  }, [chartData, todayISO]);
 
   // Overview / zoom controller. The whole dataset (earliest txn →
   // today + 3 months) is painted full-width as a coloured running total.
@@ -731,58 +740,52 @@ export function CashflowCalendar({
                     selectChartDay(iso);
                   }}
                 >
-                  {/* Diagonal-hash pattern for the projected-area
-                      overlay. SVG <defs> renders inside the chart's
-                      SVG. Stripe colour follows the theme's
-                      muted-foreground at low alpha so it reads as
-                      "this region is a projection" without competing
-                      with the data lines. */}
+                  {/* One linearGradient per account so the Area's
+                      fill steps down at the today fraction — full
+                      alpha for realised (left of today), much lower
+                      alpha for projected (right of today). The hard
+                      transition is achieved with two stops at the
+                      same offset. Gradient coords are
+                      objectBoundingBox-based, which is fine because
+                      every account's Area spans the same x-range as
+                      the chart. */}
                   <defs>
-                    <pattern
-                      id="projected-stripes"
-                      patternUnits="userSpaceOnUse"
-                      width="8"
-                      height="8"
-                      patternTransform="rotate(45)"
-                    >
-                      <line
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="8"
-                        stroke="var(--muted-foreground)"
-                        strokeWidth="1"
-                        strokeOpacity="0.18"
-                      />
-                    </pattern>
+                    {todayFractionPct !== null &&
+                      perAccount.map((a) => {
+                        const stopAt = `${todayFractionPct}%`;
+                        return (
+                          <linearGradient
+                            key={`grad-${a.id}`}
+                            id={`grad-${a.id}`}
+                            x1="0"
+                            y1="0"
+                            x2="1"
+                            y2="0"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor={a.color}
+                              stopOpacity={0.22}
+                            />
+                            <stop
+                              offset={stopAt}
+                              stopColor={a.color}
+                              stopOpacity={0.22}
+                            />
+                            <stop
+                              offset={stopAt}
+                              stopColor={a.color}
+                              stopOpacity={0.03}
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor={a.color}
+                              stopOpacity={0.03}
+                            />
+                          </linearGradient>
+                        );
+                      })}
                   </defs>
-                  {projectionStartLabel && lastChartLabel && (
-                    <>
-                      {/* Solid soft tint over the projected region —
-                          knocks down the chart's perceived brightness
-                          there so "real is here, pretend is there" is
-                          obvious from the colour change alone. */}
-                      <ReferenceArea
-                        x1={projectionStartLabel}
-                        x2={lastChartLabel}
-                        fill="var(--muted-foreground)"
-                        fillOpacity={0.12}
-                        stroke="none"
-                        ifOverflow="hidden"
-                      />
-                      {/* Diagonal stripes on top — reinforces the
-                          shift with a secondary cue for colour-blind
-                          users and on theme variants where the
-                          tint shift is subtle. */}
-                      <ReferenceArea
-                        x1={projectionStartLabel}
-                        x2={lastChartLabel}
-                        fill="url(#projected-stripes)"
-                        stroke="none"
-                        ifOverflow="hidden"
-                      />
-                    </>
-                  )}
                   <CartesianGrid stroke="var(--border)" strokeWidth={1} />
                   <XAxis
                     dataKey="date"
@@ -876,8 +879,12 @@ export function CashflowCalendar({
                       name={`acct:${a.name}`}
                       stroke={a.color}
                       strokeWidth={2}
-                      fill={a.color}
-                      fillOpacity={0.08}
+                      fill={
+                        todayFractionPct !== null
+                          ? `url(#grad-${a.id})`
+                          : a.color
+                      }
+                      fillOpacity={todayFractionPct !== null ? 1 : 0.08}
                       dot={false}
                       activeDot={{ r: 4, cursor: "pointer" }}
                       isAnimationActive={false}

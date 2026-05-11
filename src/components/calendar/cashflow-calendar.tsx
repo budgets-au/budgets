@@ -1012,10 +1012,16 @@ export function CashflowCalendar({
           }}
         >
           {/* CALENDAR */}
-          <Card className="flex flex-col overflow-hidden">
-            {/* Month nav lives inside the Card header so the calendar Card's
-                top edge aligns with the day-detail Card on the right. */}
-            <CardHeader className="flex flex-row items-center justify-between py-2 px-3 border-b space-y-0 shrink-0">
+          {/* py-0 + gap-0 override the Card primitive's default py-4 +
+              gap-4, both of which were adding ~32 px + 16 px of dead
+              vertical space around / between the header and the grid.
+              The calendar Card now collapses to its content. */}
+          <Card className="flex flex-col overflow-hidden py-0 gap-0">
+            {/* Month nav lives inside the Card header so the calendar
+                Card's top edge aligns with the day-detail Card on the
+                right. `pb-1` overrides the Card primitive's
+                [.border-b]:pb-4 variant. */}
+            <CardHeader className="flex flex-row items-center justify-between py-1 pb-1 px-3 border-b space-y-0 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
@@ -1062,16 +1068,15 @@ export function CashflowCalendar({
                 </Button>
               </div>
             </CardHeader>
-            {/* Tight vertical padding — the day names and the grid
-                hug the CardHeader's bottom border and the Card's
-                bottom edge so the calendar's total height is just
-                grid + chrome. */}
-            <CardContent className="px-2 sm:px-3 pt-1 pb-1 flex flex-col">
+            {/* No vertical padding on the content — the day-names
+                row sits flush against the header's bottom border and
+                the cell grid hugs the Card's bottom edge. */}
+            <CardContent className="px-2 sm:px-3 py-0 flex flex-col">
               <div className="grid grid-cols-7 shrink-0">
                 {DAYS.map((d) => (
                   <div
                     key={d}
-                    className="text-center text-xs text-muted-foreground font-medium py-1"
+                    className="text-center text-[10px] leading-tight text-muted-foreground font-medium py-0.5"
                   >
                     {d}
                   </div>

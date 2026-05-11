@@ -403,7 +403,6 @@ export function CashflowCalendar({
     end: endOfMonth(month),
   });
   const firstDayOfWeek = (getDay(startOfMonth(month)) + 6) % 7;
-  const rowCount = Math.ceil((firstDayOfWeek + monthDays.length) / 7);
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart],
@@ -978,10 +977,7 @@ export function CashflowCalendar({
                 ))}
               </div>
 
-              <div
-                className="flex-1 min-h-0 grid grid-cols-7 gap-1"
-                style={{ gridTemplateRows: `repeat(${rowCount}, minmax(0, 1fr))` }}
-              >
+              <div className="grid grid-cols-7 gap-1">
                 {Array.from({ length: firstDayOfWeek }).map((_, i) => (
                   <div key={`empty-${i}`} />
                 ))}
@@ -1016,7 +1012,7 @@ export function CashflowCalendar({
                       type="button"
                       onClick={() => setSelectedDate(dateStr)}
                       className={cn(
-                        "min-h-0 rounded-lg p-1.5 text-left flex flex-col overflow-hidden",
+                        "aspect-square min-h-0 rounded-lg p-1.5 text-left flex flex-col overflow-hidden",
                         "border transition-colors text-[10px]",
                         selected
                           ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500"

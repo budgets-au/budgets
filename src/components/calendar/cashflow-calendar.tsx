@@ -1002,12 +1002,10 @@ export function CashflowCalendar({
           className="shrink-0"
           style={{
             display: "grid",
-            // Cap the calendar at 300px — slightly wider than the
-            // earlier 285px attempt without giving back the chart's
-            // headroom. Cells land around 40 px. Chart fills the
-            // remaining horizontal space. Below lg, stack into one
-            // column.
-            gridTemplateColumns: isLgUp ? "minmax(0, 300px) 1fr" : "1fr",
+            // Cap the calendar at 350px. Cells land around 47px —
+            // comfortable room for the date number above the
+            // 4 px-dot row. Chart fills whatever's left.
+            gridTemplateColumns: isLgUp ? "minmax(0, 350px) 1fr" : "1fr",
             gridTemplateRows: "auto",
             minWidth: 0,
             gap: "12px",

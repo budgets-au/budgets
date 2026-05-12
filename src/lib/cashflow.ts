@@ -143,7 +143,17 @@ export function computeCashflow({
   const todayStr = toISO(new Date());
   const projectedByAccountDate = new Map<string, Map<string, CashflowEvent[]>>();
   for (const s of scheduledTransactions) {
-    if (!s.isActive) continue;
+    // Include active schedules AND superseded predecessors (the
+    // replace flow at /api/scheduled/[id]/replace flips
+    // isActive=false and sets endDate). The endDate bounds
+    // expandRecurrence below, so a predecessor's projection never
+    // crosses into the successor's window — only its realised past
+    // occurrences light up. Schedules paused manually (isActive=
+    // false, endDate=null) stay excluded. Belt-and-braces — both
+    // /api/cashflow and /api/reports/cashflow apply the same filter
+    // in SQL, but a caller could legitimately pass us pre-fetched
+    // data, so we enforce it here too.
+    if (!s.isActive && !s.endDate) continue;
     // For transfers, expandRecurrence emits two events (source + destination).
     // We can't pre-filter on `s.accountId` because the destination side might
     // be the only one in scope. Instead, filter at the per-event level below.

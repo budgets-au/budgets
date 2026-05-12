@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, transactions, scheduledTransactions } from "@/db/schema";
-import { and, gte, eq, inArray, sql } from "drizzle-orm";
+import { and, gte, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { parseISO } from "date-fns";
 import { computeCashflow } from "@/lib/cashflow";
 
@@ -81,10 +81,21 @@ export async function GET(request: Request) {
     .from(transactions)
     .where(and(...txnConditions));
 
+  // Pull active schedules AND superseded predecessors (the replace
+  // flow flips isActive=false and sets endDate). The predecessor's
+  // endDate bounds expandRecurrence in computeCashflow, so its
+  // future projections are naturally suppressed; we only end up
+  // surfacing the realised past occurrences of the older terms.
+  // User-paused schedules (isActive=false, endDate=null) stay out.
   const scheduledTxns = await db
     .select()
     .from(scheduledTransactions)
-    .where(eq(scheduledTransactions.isActive, true));
+    .where(
+      or(
+        eq(scheduledTransactions.isActive, true),
+        isNotNull(scheduledTransactions.endDate),
+      ),
+    );
 
   const result = computeCashflow({
     accounts: allAccounts,

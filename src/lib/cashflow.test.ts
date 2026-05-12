@@ -211,6 +211,137 @@ describe("computeCashflow — back-compute correctness", () => {
     // bb-1 txn should not affect aa-1's balance.
     expect(result.daily[0].balance).toBe(10000);
   });
+
+  it("lineage: superseded predecessor is admitted to the projection (no longer dropped by isActive=false)", () => {
+    // The replace flow at /api/scheduled/[id]/replace flips the
+    // predecessor's isActive to false and sets endDate to the day
+    // before the successor's start. The relaxed guard
+    // (`!s.isActive && !s.endDate`) admits the predecessor so its
+    // bounded projections can flow through expandRecurrence; the
+    // predecessor's endDate naturally caps it before the successor
+    // starts, so no double-counting.
+    //
+    // Note: we rewind the mocked "now" so the whole window is in
+    // the future relative to today. computeCashflow's past-vs-
+    // future gating uses real transactions for past dates only;
+    // projected events apply for FUTURE dates. To exercise the
+    // filter relaxation visibly we need both halves of the lineage
+    // to project forward.
+    vi.setSystemTime(new Date("2025-12-15T12:00:00Z"));
+    try {
+      const acct = makeAccount({
+        currentBalance: "0.00",
+        startingBalance: "0.00",
+      });
+      const predecessor: ScheduledTransaction = {
+        id: "00000000-0000-0000-0000-0000000000d1",
+        kind: "schedule",
+        payee: "Rent",
+        description: null,
+        amount: "-100.00",
+        amountMin: null,
+        type: "expense",
+        categoryId: null,
+        accountId: acct.id,
+        transferToAccountId: null,
+        frequency: "monthly",
+        interval: 1,
+        dayOfMonth: 1,
+        startDate: "2026-01-01",
+        endDate: "2026-03-31",
+        isActive: false,
+        isPaused: false,
+        isSample: false,
+        notes: null,
+        lineageId: "00000000-0000-0000-0000-0000000000ee",
+        supersedesId: null,
+        supersededAt: null,
+        createdAt: new Date("2025-12-01T00:00:00Z"),
+        updatedAt: new Date("2026-04-01T00:00:00Z"),
+      } as ScheduledTransaction;
+      const successor: ScheduledTransaction = {
+        ...predecessor,
+        id: "00000000-0000-0000-0000-0000000000d2",
+        amount: "-120.00",
+        startDate: "2026-04-01",
+        endDate: null,
+        isActive: true,
+        createdAt: new Date("2026-04-01T00:00:00Z"),
+        updatedAt: new Date("2026-04-01T00:00:00Z"),
+      };
+      const result = computeCashflow({
+        accounts: [acct],
+        realTransactions: [],
+        scheduledTransactions: [predecessor, successor],
+        from: parseISO("2026-01-01"),
+        to: parseISO("2026-06-30"),
+      });
+      // Six months of forward projection: 3 × -100 (Jan/Feb/Mar
+      // predecessor) + 3 × -120 (Apr/May/Jun successor) = -660 net.
+      const lastDay = result.daily[result.daily.length - 1];
+      expect(lastDay.date).toBe("2026-06-30");
+      expect(lastDay.balance).toBeCloseTo(-660, 2);
+      // Sanity: no double-counting around the hand-off.
+      const apr1 = result.daily.find((d) => d.date === "2026-04-01");
+      expect(apr1?.events.length).toBe(1);
+      expect(
+        parseFloat(apr1?.events[0].amount?.toString() ?? "0"),
+      ).toBeCloseTo(-120, 2);
+      const mar1 = result.daily.find((d) => d.date === "2026-03-01");
+      expect(mar1?.events.length).toBe(1);
+      expect(
+        parseFloat(mar1?.events[0].amount?.toString() ?? "0"),
+      ).toBeCloseTo(-100, 2);
+    } finally {
+      // Restore the suite-wide mocked "now" for the next test.
+      vi.setSystemTime(NOW);
+    }
+  });
+
+  it("paused schedule (isActive=false, endDate=null) stays excluded", () => {
+    // A user-paused schedule should NOT project — the missing
+    // endDate distinguishes pause from supersession. Without this
+    // negative case, the new filter would silently surface every
+    // paused row.
+    const acct = makeAccount({ currentBalance: "10000.00", startingBalance: "10000.00" });
+    const paused: ScheduledTransaction = {
+      id: "00000000-0000-0000-0000-0000000000f1",
+      kind: "schedule",
+      payee: "Paused subscription",
+      description: null,
+      amount: "-50.00",
+      amountMin: null,
+      type: "expense",
+      categoryId: null,
+      accountId: acct.id,
+      transferToAccountId: null,
+      frequency: "monthly",
+      interval: 1,
+      dayOfMonth: 1,
+      startDate: "2026-01-01",
+      endDate: null,
+      isActive: false,
+      isPaused: true,
+      isSample: false,
+      notes: null,
+      lineageId: "00000000-0000-0000-0000-0000000000ff",
+      supersedesId: null,
+      supersededAt: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-01T00:00:00Z"),
+    } as ScheduledTransaction;
+    const result = computeCashflow({
+      accounts: [acct],
+      realTransactions: [],
+      scheduledTransactions: [paused],
+      from: parseISO("2026-05-06"),
+      to: parseISO("2026-07-31"),
+    });
+    // Window in the future, no real txns, paused schedule shouldn't
+    // project — balance stays flat at currentBalance.
+    const lastDay = result.daily[result.daily.length - 1];
+    expect(lastDay.balance).toBe(10000);
+  });
 });
 
 describe("summarizeDay", () => {

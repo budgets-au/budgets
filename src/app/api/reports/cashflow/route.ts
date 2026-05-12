@@ -199,7 +199,17 @@ export async function GET(request: Request) {
     .leftJoin(categories, eq(scheduledTransactions.categoryId, categories.id))
     .where(
       and(
-        eq(scheduledTransactions.isActive, true),
+        // Include active schedules AND superseded ones (the replace
+        // flow flips isActive=false and sets endDate; user-pause
+        // leaves endDate null, so the isNotNull endDate cue
+        // distinguishes "this schedule's window has a known
+        // termination" from "this schedule is paused indefinitely").
+        // Past occurrences of the predecessor genuinely happened, so
+        // historical projection should include them.
+        or(
+          eq(scheduledTransactions.isActive, true),
+          isNotNull(scheduledTransactions.endDate),
+        ),
         isNotNull(scheduledTransactions.categoryId),
         ne(scheduledTransactions.frequency, "once"),
         or(isNull(scheduledTransactions.endDate), gte(scheduledTransactions.endDate, from)),

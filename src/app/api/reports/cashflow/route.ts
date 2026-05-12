@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { scheduledTransactions, categories } from "@/db/schema";
+import { scheduledTransactions, categories, accounts } from "@/db/schema";
+import { alias } from "drizzle-orm/sqlite-core";
 import { sql, and, eq, ne, isNotNull, gte, lte, inArray, or, isNull } from "drizzle-orm";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from "date-fns";
 import { expandRecurrence } from "@/lib/recurrence";
+
+// Destination-side account alias for joining `scheduledTransactions.transferToAccountId`
+// without colliding with the source-side `accounts` join.
+const destAcct = alias(accounts, "dest_acct_cashflow");
 
 export interface CashflowCategory {
   id: string;
@@ -163,6 +168,30 @@ export async function GET(request: Request) {
     GROUP BY substr(date, 1, 7)
   `);
 
+  // Past liability-account payments — the cash-side leg of any paired
+  // transfer whose counterpart account is `loan` or `credit`. These get
+  // hidden by the `is_transfer = 0` filters on the other queries, so they'd
+  // otherwise vanish from the report entirely. Restrict to the outflow side
+  // (amount < 0) and to uncategorised pairs so a user who's already
+  // categorised the cash-side row keeps their existing breakdown.
+  const loanPaymentRows = await db.all(sql`
+    SELECT
+      pair_acc.id          AS dest_account_id,
+      pair_acc.name        AS dest_account_name,
+      substr(t.date, 1, 7) AS month,
+      CAST(SUM(t.amount) AS REAL) AS total,
+      COUNT(t.id)          AS count
+    FROM transactions t
+    JOIN transactions pair  ON pair.id = t.transfer_pair_id
+    JOIN accounts pair_acc  ON pair_acc.id = pair.account_id
+    WHERE pair_acc.type IN ('loan', 'credit')
+      AND t.amount < 0
+      AND t.category_id IS NULL
+      AND t.date >= ${from} AND t.date <= ${to}
+      ${accountFilterT}
+    GROUP BY pair_acc.id, pair_acc.name, substr(t.date, 1, 7)
+  `);
+
   // Budgets and non-budget schedules both live in scheduled_transactions —
   // only `kind` distinguishes them. The legacy `budgets` table is no longer
   // written to by any UI (budget-progress also reads from kind='budget'
@@ -202,6 +231,47 @@ export async function GET(request: Request) {
         eq(scheduledTransactions.isActive, true),
         isNotNull(scheduledTransactions.categoryId),
         ne(scheduledTransactions.frequency, "once"),
+        or(isNull(scheduledTransactions.endDate), gte(scheduledTransactions.endDate, from)),
+        lte(scheduledTransactions.startDate, to),
+        accountIds.length > 0
+          ? inArray(scheduledTransactions.accountId, accountIds)
+          : undefined,
+      ),
+    );
+
+  // Future loan-payment projections — scheduled `type='transfer'` rows whose
+  // destination is a liability account. The form forces `categoryId = null`
+  // on transfer schedules, so these never make it through the categoryId-keyed
+  // projection above; we route them to a synthetic per-destination-account
+  // expense row instead.
+  const scheduledLoanRows = await db
+    .select({
+      id: scheduledTransactions.id,
+      kind: scheduledTransactions.kind,
+      payee: scheduledTransactions.payee,
+      description: scheduledTransactions.description,
+      amount: scheduledTransactions.amount,
+      type: scheduledTransactions.type,
+      categoryId: scheduledTransactions.categoryId,
+      accountId: scheduledTransactions.accountId,
+      transferToAccountId: scheduledTransactions.transferToAccountId,
+      frequency: scheduledTransactions.frequency,
+      interval: scheduledTransactions.interval,
+      startDate: scheduledTransactions.startDate,
+      endDate: scheduledTransactions.endDate,
+      dayOfMonth: scheduledTransactions.dayOfMonth,
+      destAccountId: destAcct.id,
+      destAccountName: destAcct.name,
+    })
+    .from(scheduledTransactions)
+    .innerJoin(destAcct, eq(scheduledTransactions.transferToAccountId, destAcct.id))
+    .where(
+      and(
+        eq(scheduledTransactions.isActive, true),
+        eq(scheduledTransactions.type, "transfer"),
+        ne(scheduledTransactions.frequency, "once"),
+        inArray(destAcct.type, ["loan", "credit"]),
+        isNull(scheduledTransactions.categoryId),
         or(isNull(scheduledTransactions.endDate), gte(scheduledTransactions.endDate, from)),
         lte(scheduledTransactions.startDate, to),
         accountIds.length > 0
@@ -365,12 +435,73 @@ export async function GET(request: Request) {
     uncatExpensesTotalCount += r.count;
   }
 
+  // Synthetic loan-payment categories — one per destination liability
+  // account. Aggregates two sources:
+  //   1. Past paired-transfer outflows from `loanPaymentRows`.
+  //   2. Future scheduled `type='transfer'` projections from `scheduledLoanRows`.
+  // Stored as `expense` rows keyed by `loan-payment-<destAccountId>` so a user
+  // who pays the same loan from multiple cash accounts still sees ONE row per
+  // liability, not one per cash-side account.
+  const loanPayments = new Map<string, CashflowCategory>();
+  function ensureLoanPaymentEntry(destAccountId: string, destAccountName: string) {
+    let entry = loanPayments.get(destAccountId);
+    if (!entry) {
+      entry = {
+        id: `loan-payment-${destAccountId}`,
+        name: `${destAccountName}`,
+        parentId: null,
+        parentName: null,
+        grandparentId: null,
+        grandparentName: null,
+        type: "expense",
+        byMonth: {},
+        countByMonth: {},
+        total: 0,
+        totalCount: 0,
+        budgetPerMonth: 0,
+        scheduledPerMonth: 0,
+        budgetByMonth: {},
+        scheduledByMonth: {},
+      };
+      loanPayments.set(destAccountId, entry);
+    }
+    return entry;
+  }
+  for (const r of loanPaymentRows as unknown as Array<{
+    dest_account_id: string;
+    dest_account_name: string;
+    month: string;
+    total: number;
+    count: number;
+  }>) {
+    const entry = ensureLoanPaymentEntry(r.dest_account_id, r.dest_account_name);
+    entry.byMonth[r.month] = (entry.byMonth[r.month] ?? 0) + r.total;
+    entry.countByMonth[r.month] = (entry.countByMonth[r.month] ?? 0) + r.count;
+    entry.total += r.total;
+    entry.totalCount += r.count;
+  }
+  for (const s of scheduledLoanRows) {
+    if (!s.destAccountId || !s.destAccountName) continue;
+    const entry = ensureLoanPaymentEntry(s.destAccountId, s.destAccountName);
+    const factor = (FREQ_MONTHLY[s.frequency] ?? 1) / (s.interval || 1);
+    entry.scheduledPerMonth += Math.abs(parseFloat(s.amount)) * factor;
+    const events = expandRecurrence(s, fromDate, toDate);
+    for (const e of events) {
+      const month = e.date.slice(0, 7);
+      entry.scheduledByMonth[month] =
+        (entry.scheduledByMonth[month] ?? 0) + Math.abs(parseFloat(e.amount));
+    }
+  }
+
   const income: CashflowCategory[] = [];
   const expenses: CashflowCategory[] = [];
 
   for (const cat of categoryMap.values()) {
     if (cat.type === "income") income.push(cat);
     else expenses.push(cat);
+  }
+  for (const lp of loanPayments.values()) {
+    expenses.push(lp);
   }
 
   // Add uncategorised rows if they have data

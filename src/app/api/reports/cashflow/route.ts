@@ -148,8 +148,20 @@ export async function GET(request: Request) {
   // account's starting_balance — for any account with a non-zero
   // starting figure (typical), the opening balance (and every
   // monthly closing balance derived from it) was off by exactly the
-  // starting amount. The hideTransfers toggle is honoured for the
-  // transactions half; starting balances are unaffected by it.
+  // starting amount.
+  //
+  // NOTE: hideTransfers is deliberately NOT applied to the balance
+  // walk below. From a single-account perspective every transfer
+  // (internal or payment) IS real cashflow — the outgoing leg
+  // actually leaves the account. Excluding transfers would skew
+  // selected-account closing balances by exactly the sum of that
+  // account's transfer legs. Across all accounts both legs of an
+  // internal transfer cancel, and a payment transfer's asset/
+  // liability legs cancel too, so leaving the filter off is a
+  // no-op in the multi-account case. The hideTransfers toggle still
+  // affects the income/expense category breakdown above where it
+  // belongs (transfer categories shouldn't appear as inflow or
+  // outflow there).
   const accountStartingFilter =
     accountIds.length > 0
       ? sql`WHERE id IN (${idList})`
@@ -162,21 +174,21 @@ export async function GET(request: Request) {
   const [openingRow] = await db.all(sql`
     SELECT CAST(COALESCE(SUM(amount), 0) AS REAL) AS balance
     FROM transactions WHERE date < ${from}
-    ${hideTransfers ? sql`AND is_transfer = 0` : sql``}
     ${accountFilter}
   `);
   const startingTotal = (startingRow as { total: number }).total ?? 0;
   const txnsBeforeFrom = (openingRow as { balance: number }).balance ?? 0;
   const openingBalance = startingTotal + txnsBeforeFrom;
 
-  // Monthly net for closing balance calculation
+  // Monthly net for closing balance calculation — same hideTransfers
+  // exclusion: closing balance must reflect the actual money
+  // movement, transfers included.
   const monthlyNets = await db.all(sql`
     SELECT
       substr(date, 1, 7)            AS month,
       CAST(SUM(amount) AS REAL)     AS net
     FROM transactions
     WHERE date >= ${from} AND date <= ${to}
-    ${hideTransfers ? sql`AND is_transfer = 0` : sql``}
     ${accountFilter}
     GROUP BY substr(date, 1, 7)
   `);

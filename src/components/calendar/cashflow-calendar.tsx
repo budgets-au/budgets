@@ -921,8 +921,14 @@ export function CashflowCalendar({
 
   return (
     <div className="h-full flex flex-col gap-3">
-      {/* Toolbar — legend + view toggle */}
-      <div className="shrink-0 flex items-center justify-end gap-1">
+      {/* Toolbar — selected-day on the left, legend + view toggle on
+          the right. The calendar Card's own header below now shows
+          the currently-viewed month instead of duplicating this. */}
+      <div className="shrink-0 flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold">
+          {format(parseISO(selectedDate), "EEEE, d MMMM yyyy")}
+        </h2>
+        <div className="flex items-center gap-1">
           <Popover>
             <PopoverTrigger
               render={
@@ -990,6 +996,7 @@ export function CashflowCalendar({
             Week
           </Button>
         </div>
+      </div>
         {viewMode === "month" ? (
         <>
         {/* Top row: calendar on the left, chart with embedded brush on
@@ -1030,12 +1037,12 @@ export function CashflowCalendar({
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              {/* Header shows the selected day — intentional even though
-                  the chevrons advance the visible month, because the
-                  selected day is what the day-detail panel below tracks
-                  and the user explicitly wants this label tied to it. */}
+              {/* Header tracks the currently-VIEWED month (May/June/etc).
+                  The selected day moved up into the wider toolbar so
+                  this header can sync with the chevrons that page the
+                  grid. */}
               <h2 className="text-base font-semibold">
-                {format(parseISO(selectedDate), "EEEE, d MMMM yyyy")}
+                {format(month, "MMMM yyyy")}
               </h2>
               <div className="flex items-center gap-2">
                 <Button

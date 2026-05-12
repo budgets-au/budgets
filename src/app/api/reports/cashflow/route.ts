@@ -142,14 +142,32 @@ export async function GET(request: Request) {
     GROUP BY substr(date, 1, 7)
   `);
 
-  // Opening balance = sum of all transactions before `from`
+  // Opening balance = SUM(accounts.starting_balance) + SUM(transactions.amount before `from`),
+  // matching the formula computeCashflow uses for the calendar. The
+  // earlier version only summed transactions and missed every
+  // account's starting_balance — for any account with a non-zero
+  // starting figure (typical), the opening balance (and every
+  // monthly closing balance derived from it) was off by exactly the
+  // starting amount. The hideTransfers toggle is honoured for the
+  // transactions half; starting balances are unaffected by it.
+  const accountStartingFilter =
+    accountIds.length > 0
+      ? sql`WHERE id IN (${idList})`
+      : sql`WHERE is_archived = 0`;
+  const [startingRow] = await db.all(sql`
+    SELECT CAST(COALESCE(SUM(CAST(starting_balance AS REAL)), 0) AS REAL) AS total
+    FROM accounts
+    ${accountStartingFilter}
+  `);
   const [openingRow] = await db.all(sql`
     SELECT CAST(COALESCE(SUM(amount), 0) AS REAL) AS balance
     FROM transactions WHERE date < ${from}
     ${hideTransfers ? sql`AND is_transfer = 0` : sql``}
     ${accountFilter}
   `);
-  const openingBalance = (openingRow as { balance: number }).balance ?? 0;
+  const startingTotal = (startingRow as { total: number }).total ?? 0;
+  const txnsBeforeFrom = (openingRow as { balance: number }).balance ?? 0;
+  const openingBalance = startingTotal + txnsBeforeFrom;
 
   // Monthly net for closing balance calculation
   const monthlyNets = await db.all(sql`

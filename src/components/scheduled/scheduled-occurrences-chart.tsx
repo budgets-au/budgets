@@ -49,9 +49,14 @@ export interface ChartSegment {
 const FORECAST_COLOUR_LIGHT = "#94a3b8"; // slate-400 — light theme
 const FORECAST_COLOUR_DARK = "#475569"; // slate-600 — needs to be darker to recede on the dark plot background
 const MISSED_COLOUR = "#ef4444"; // red-500, rendered at ~40% opacity for "muted"
-const OVER_COLOUR = "#dc2626"; // red-600 — actual exceeded expected, drawn as diagonal-line hatching in a red frame
-const UNDER_COLOUR = "#475569"; // slate-600 — actual fell short of expected, drawn as diagonal-line hatching in a slate frame
-const GAP_COLOUR = "#475569"; // slate-600 — unused-budget portion for range matches, hatched like under
+// Mid-tone hues so the bar frame + hatch read on both light and dark plot
+// backgrounds. Pattern strokes (below) get an additional `stroke-opacity`
+// so the diagonal lines composite onto the background instead of laying
+// down a solid colour that vanishes on whichever theme is too close to it.
+const OVER_COLOUR = "#ef4444"; // red-500
+const UNDER_COLOUR = "#94a3b8"; // slate-400
+const GAP_COLOUR = "#94a3b8";   // slate-400 — unused-budget portion, hatched like under
+const HATCH_STROKE_OPACITY = 0.55;
 
 function formatPeriod(days: number): string {
   if (days < 1.5) return "1 day";
@@ -263,7 +268,12 @@ export function ScheduledOccurrencesChart({
                 height="6"
                 patternTransform="rotate(45)"
               >
-                <line x1="0" y1="0" x2="0" y2="6" stroke={OVER_COLOUR} strokeWidth="2" />
+                <line
+                  x1="0" y1="0" x2="0" y2="6"
+                  stroke={OVER_COLOUR}
+                  strokeOpacity={HATCH_STROKE_OPACITY}
+                  strokeWidth="2"
+                />
               </pattern>
               <pattern
                 id="under-hatch"
@@ -272,7 +282,12 @@ export function ScheduledOccurrencesChart({
                 height="6"
                 patternTransform="rotate(45)"
               >
-                <line x1="0" y1="0" x2="0" y2="6" stroke={UNDER_COLOUR} strokeWidth="2" />
+                <line
+                  x1="0" y1="0" x2="0" y2="6"
+                  stroke={UNDER_COLOUR}
+                  strokeOpacity={HATCH_STROKE_OPACITY}
+                  strokeWidth="2"
+                />
               </pattern>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />

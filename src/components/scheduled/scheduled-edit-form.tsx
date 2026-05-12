@@ -170,8 +170,10 @@ export function ScheduledEditForm({
         ? Math.abs(parseFloat(amountMin)).toFixed(2)
         : null,
       type: effectiveType,
-      // Categories don't apply to transfers; never persist a stale value.
-      categoryId: effectiveType === "transfer" ? null : (categoryId || null),
+      // A transfer-type schedule may carry a category — e.g. a payment to a
+      // loan/credit account tagged with an `external` transferKind category
+      // so the cashflow Plan column attributes the projection to it.
+      categoryId: categoryId || null,
       transferToAccountId: !isBudget && effectiveType === "transfer" ? (transferToAccountId || null) : null,
       frequency,
       interval: isBudget ? 1 : parseInt(interval || "1"),
@@ -283,7 +285,7 @@ export function ScheduledEditForm({
             </div>
           )}
 
-          {!isBudget && type === "transfer" ? (
+          {!isBudget && type === "transfer" && (
             <div className={`${fieldGroupSpacing} flex-1 min-w-[7rem]`}>
               <Label className={labelCls}>To account *</Label>
               <Select value={transferToAccountId} onValueChange={(v) => setTransferToAccountId(v ?? "")} required>
@@ -299,9 +301,14 @@ export function ScheduledEditForm({
                 </SelectContent>
               </Select>
             </div>
-          ) : (
+          )}
+          {!isBudget && (
             <div className={`${fieldGroupSpacing} flex-1 min-w-[7rem]`}>
-              <Label className={labelCls}>Category</Label>
+              <Label className={labelCls}>
+                Category{type === "transfer" && (
+                  <span className="ml-1 text-[10px] text-muted-foreground font-normal">(optional)</span>
+                )}
+              </Label>
               <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
                 <SelectTrigger className={`${triggerCls} w-full`}>
                   <SelectValue>{categoryLabel}</SelectValue>

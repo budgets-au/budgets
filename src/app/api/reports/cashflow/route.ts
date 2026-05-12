@@ -246,6 +246,11 @@ export async function GET(request: Request) {
     const events = expandRecurrence(s, fromDate, toDate);
     const monthMap = scheduledByCategoryByMonth.get(s.categoryId) ?? {};
     for (const e of events) {
+      // Transfer schedules emit two events per occurrence (source +
+      // destination). Both legs describe the same monetary movement, so
+      // count only the source leg into the category's per-month bucket —
+      // otherwise the Plan column shows 2× the actual amount.
+      if (s.accountId && e.accountId !== s.accountId) continue;
       const month = e.date.slice(0, 7);
       monthMap[month] = (monthMap[month] ?? 0) + Math.abs(parseFloat(e.amount));
     }

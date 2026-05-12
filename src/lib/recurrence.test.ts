@@ -203,6 +203,39 @@ describe("expandRecurrence — basics", () => {
     expect(destJan?.amount).toBe("200");
   });
 
+  it("transfer projection yields one source-leg event per occurrence (cashflow Plan column)", () => {
+    // Regression: the cashflow report's per-category projection loop sums
+    // `Math.abs(amount)` over expandRecurrence events. Transfers emit BOTH
+    // legs, so without filtering by source the Plan column doubles. This
+    // test pins the contract the route now relies on:
+    //   `events.filter(e => e.accountId === schedule.accountId).length`
+    // equals the number of occurrences in the window.
+    const s = makeSchedule({
+      type: "transfer",
+      amount: "1000.00",
+      transferToAccountId: "00000000-0000-0000-0000-0000000000cc",
+      startDate: "2026-01-01",
+      frequency: "monthly",
+      interval: 1,
+    });
+    const events = expandRecurrence(
+      s,
+      parseISO("2026-01-01"),
+      parseISO("2026-03-31"),
+    );
+    // Three occurrences, two legs each → six raw events.
+    expect(events).toHaveLength(6);
+    const sourceLegs = events.filter((e) => e.accountId === s.accountId);
+    // Filtered to source only → one event per occurrence; sum of |amount|
+    // is 1000 × 3 = 3000, NOT 6000.
+    expect(sourceLegs).toHaveLength(3);
+    const total = sourceLegs.reduce(
+      (sum, e) => sum + Math.abs(parseFloat(e.amount)),
+      0,
+    );
+    expect(total).toBe(3000);
+  });
+
   it("respects endDate by truncating the series", () => {
     const s = makeSchedule({
       startDate: "2026-01-01",

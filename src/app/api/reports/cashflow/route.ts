@@ -223,6 +223,7 @@ export async function GET(request: Request) {
       startDate: scheduledTransactions.startDate,
       endDate: scheduledTransactions.endDate,
       dayOfMonth: scheduledTransactions.dayOfMonth,
+      isActive: scheduledTransactions.isActive,
       categoryTransferKind: categories.transferKind,
     })
     .from(scheduledTransactions)
@@ -276,11 +277,19 @@ export async function GET(request: Request) {
     // Inner transfers are net-zero by definition — don't roll their
     // projected amounts into any category's expense/income aggregate.
     if (s.categoryTransferKind === "internal") continue;
-    const factor = (FREQ_MONTHLY[s.frequency] ?? 1) / (s.interval || 1);
-    scheduledByCategory.set(
-      s.categoryId,
-      (scheduledByCategory.get(s.categoryId) ?? 0) + Math.abs(parseFloat(s.amount)) * factor,
-    );
+    // Per-mo normalised rate (Plan/mo column): only currently-active
+    // schedules contribute. A superseded predecessor (isActive=false,
+    // endDate set) is still pulled in above so its past occurrences
+    // can light up the months they actually fired — but its monthly
+    // rate would double-count against the successor's, blowing
+    // Plan/mo up to 2× the real recurring spend.
+    if (s.isActive) {
+      const factor = (FREQ_MONTHLY[s.frequency] ?? 1) / (s.interval || 1);
+      scheduledByCategory.set(
+        s.categoryId,
+        (scheduledByCategory.get(s.categoryId) ?? 0) + Math.abs(parseFloat(s.amount)) * factor,
+      );
+    }
     // Expand the per-occurrence dates so a quarterly bill lands in the
     // months it actually fires, not 1/3 of the amount in every month.
     const events = expandRecurrence(s, fromDate, toDate);

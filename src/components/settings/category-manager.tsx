@@ -1,11 +1,19 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -59,45 +67,20 @@ export function CategoryManager({
   const [cats, setCats] = useState<Category[]>(initialCategories);
   const [form, setForm] = useState<FormState | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
-  const renameInputRef = useRef<HTMLInputElement>(null);
+  /** Category id currently open in the edit dialog (null = closed).
+   * One source of truth so closing the dialog drops the state cleanly. */
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Local tax-rule state so edits feel instant; mirror PATCH back to the
-  // server (deep-merged) and refresh the route to pick up any other changes.
+  // Local tax-rule state — mirrors what's been saved to the server so the
+  // edit dialog can read the current rule and surface auto-classification
+  // defaults when no explicit override exists.
   const [taxRules, setTaxRules] = useState<TaxConfig["categoryRules"]>(
     taxConfig?.categoryRules ?? {},
   );
 
-  async function saveTaxRule(
-    categoryId: string,
-    update: Partial<{ workUsePct: number; bundledInWfh: boolean }>,
-  ) {
-    const cur = taxRules[categoryId] ?? { workUsePct: 0, bundledInWfh: false };
-    const next = { ...cur, ...update };
-    setTaxRules((prev) => ({ ...prev, [categoryId]: next }));
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          taxConfig: { categoryRules: { [categoryId]: next } },
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-    } catch (err) {
-      toast.error(`Could not save tax rule: ${err instanceof Error ? err.message : "Unknown"}`);
-      setTaxRules((prev) => ({ ...prev, [categoryId]: cur }));
-    }
-  }
-
   // Drag state
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
-
-  useEffect(() => {
-    if (renaming) renameInputRef.current?.focus();
-  }, [renaming?.id]);
-
 
   const parents = cats.filter((c) => !c.parentId);
   const childrenOf = (parentId: string) => cats.filter((c) => c.parentId === parentId);
@@ -223,55 +206,68 @@ export function CategoryManager({
       description: `Delete "${name}"? Any transactions using it will become uncategorised.`,
       confirmLabel: "Delete",
     });
-    if (!ok) return;
+    if (!ok) return false;
 
     const res = await fetch(`/api/categories/${id}`, { method: "DELETE" });
     if (!res.ok) {
       const { error } = await res.json().catch(() => ({ error: "Delete failed" }));
       toast.error(error);
-      return;
+      return false;
     }
     setCats((prev) =>
       prev.map((c) => (c.parentId === id ? { ...c, parentId: null } : c)).filter((c) => c.id !== id)
     );
     startTransition(() => router.refresh());
     toast.success(`Deleted "${name}"`);
+    return true;
   }
 
-  async function handleRename(id: string, newName: string) {
-    const trimmed = newName.trim();
-    const original = cats.find((c) => c.id === id)?.name ?? "";
-    setRenaming(null);
-    if (!trimmed || trimmed === original) return;
-
-    const res = await fetch(`/api/categories/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: trimmed }),
-    });
-
-    if (!res.ok) {
-      toast.error("Failed to rename category");
-      return;
-    }
-    const updated: Category = await res.json();
-    setCats((prev) => prev.map((c) => (c.id === id ? updated : c)));
-    startTransition(() => router.refresh());
-    toast.success(`Renamed to "${updated.name}"`);
-  }
-
-  async function handleSetTransferKind(
+  /** Save edits collected by the dialog. Splits the category-shape fields
+   * (PATCH /api/categories/[id]) from the tax-rule fields (PATCH
+   * /api/settings, deep-merged) and runs them in parallel so the dialog
+   * closes promptly. Returns true on success so the dialog can dismiss. */
+  async function handleEditSave(
     id: string,
-    transferKind: "none" | "internal" | "external",
-  ) {
-    const res = await fetch(`/api/categories/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transferKind }),
-    });
-    if (!res.ok) { toast.error("Failed to update category"); return; }
-    const updated: Category = await res.json();
-    setCats((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    catPatch: Partial<{ name: string; color: string; parentId: string | null; transferKind: "none" | "internal" | "external" }>,
+    taxPatch: { workUsePct: number; bundledInWfh: boolean } | null,
+  ): Promise<boolean> {
+    const requests: Promise<Response>[] = [];
+    if (Object.keys(catPatch).length > 0) {
+      requests.push(
+        fetch(`/api/categories/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(catPatch),
+        }),
+      );
+    }
+    if (taxPatch) {
+      requests.push(
+        fetch("/api/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ taxConfig: { categoryRules: { [id]: taxPatch } } }),
+        }),
+      );
+    }
+    if (requests.length === 0) return true;
+
+    const results = await Promise.all(requests);
+    if (results.some((r) => !r.ok)) {
+      toast.error("Failed to save category");
+      return false;
+    }
+
+    if (Object.keys(catPatch).length > 0) {
+      const updated: Category = await results[0].json();
+      setCats((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    }
+    if (taxPatch) {
+      setTaxRules((prev) => ({ ...prev, [id]: taxPatch }));
+    }
+    startTransition(() => router.refresh());
+    toast.success("Saved");
+    return true;
   }
 
   function toggleCollapse(id: string) {
@@ -290,22 +286,12 @@ export function CategoryManager({
   function renderCategory(cat: Category, depth = 0) {
     const children = childrenOf(cat.id);
     const isCollapsed = collapsed.has(cat.id);
-    const isRenaming = renaming?.id === cat.id;
     const isDragging = dragId === cat.id;
     const isDropTarget = dragOverTarget === cat.id;
     const canDrop = dragId ? isValidDrop(dragId, cat.id) : false;
     const subtreeCount = txCounts[cat.id] ?? 0;
     const signedAmount = txAmounts[cat.id] ?? 0;
     const displayAmount = Math.abs(signedAmount);
-    // Resolve per-category tax rule: explicit user setting wins; otherwise
-    // fall back to the pattern-based auto-classification so the user sees the
-    // sensible default (e.g. Internet/* auto-bundled in WFH).
-    const path = catMeta.get(cat.id)?.path ?? [cat.name];
-    const auto = classifyCategoryDefault(path);
-    const taxRule = taxRules[cat.id];
-    const workUsePct = taxRule?.workUsePct ?? auto.defaultPct;
-    const bundledInWfh = taxRule?.bundledInWfh ?? auto.bundledInWfh;
-    const hasTaxOverride = !!taxRule;
 
     return (
       <div key={cat.id}>
@@ -328,14 +314,13 @@ export function CategoryManager({
             onDrop(e: React.DragEvent) { e.preventDefault(); },
           })}
           // Inline-style the grid because Safari kept dropping
-          // `grid-template-columns` from Tailwind's arbitrary value AND
-          // from a named CSS class. Inline style is the only delivery
-          // channel that survives whatever Safari is doing to multi-
-          // track templates with `minmax()`.
+          // `grid-template-columns` from Tailwind's arbitrary value (and
+          // from named CSS classes too — observed pre-refactor). Inline
+          // style is the only delivery channel that survives whatever
+          // Safari is doing to multi-track templates with `minmax()`.
           style={{
             display: "grid",
-            gridTemplateColumns:
-              "16px minmax(0, 1fr) 3rem 5rem 4rem 3.5rem 2.5rem 5rem",
+            gridTemplateColumns: "16px minmax(0, 1fr) 3rem 5rem 2rem",
             alignItems: "center",
             columnGap: "0.5rem",
           }}
@@ -358,13 +343,7 @@ export function CategoryManager({
             <GripVertical className="h-4 w-4" />
           </span>
 
-          {/* Col 2: indent + chevron + dot + name (link). Indent applied
-              inside the cell so the right-side columns stay aligned. */}
-          {/* Indent via inline padding so the depth scale doesn't depend
-              on Tailwind ml-1/ml-6 classes (which Safari sometimes drops
-              from compiled chunks the same way it drops grid templates).
-              Depth 1 gets ~24px of inset, depth 2 gets ~48px — both
-              reach the chevron/dot/name through a vertical guide line. */}
+          {/* Col 2: indent + chevron + dot + name (link). */}
           <div
             className="flex items-center gap-2 min-w-0"
             style={
@@ -392,20 +371,15 @@ export function CategoryManager({
             <span
               className="w-2.5 h-2.5 rounded-full shrink-0"
               style={{ backgroundColor: cat.color }}
+              title={
+                cat.transferKind === "internal"
+                  ? "Inner transfer category"
+                  : cat.transferKind === "external"
+                    ? "External payment category"
+                    : undefined
+              }
             />
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                className="text-sm flex-1 min-w-0 border-b border-indigo-400 bg-transparent outline-none px-0.5"
-                value={renaming.value}
-                onChange={(e) => setRenaming({ id: cat.id, value: e.target.value })}
-                onBlur={() => handleRename(cat.id, renaming.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleRename(cat.id, renaming.value);
-                  if (e.key === "Escape") setRenaming(null);
-                }}
-              />
-            ) : subtreeCount > 0 ? (
+            {subtreeCount > 0 ? (
               <Link
                 href={`/transactions?categoryId=${cat.id}`}
                 onClick={(e) => e.stopPropagation()}
@@ -417,6 +391,25 @@ export function CategoryManager({
             ) : (
               <span className="text-sm flex-1 min-w-0 truncate">
                 {cat.name}
+              </span>
+            )}
+            {/* Tiny kind chip beside the name — keeps the row scannable
+                without resurrecting a full column. Suppressed for the
+                default ("none") so 99% of rows stay quiet. */}
+            {cat.transferKind === "internal" && (
+              <span
+                className="shrink-0 text-[9px] px-1 py-0 rounded bg-amber-500/15 text-amber-600"
+                title="Inner transfer — excluded from cashflow"
+              >
+                ⇅
+              </span>
+            )}
+            {cat.transferKind === "external" && (
+              <span
+                className="shrink-0 text-[9px] px-1 py-0 rounded bg-sky-500/15 text-sky-600"
+                title="External payment — counted as expense"
+              >
+                $
               </span>
             )}
           </div>
@@ -443,125 +436,17 @@ export function CategoryManager({
             {displayAmount > 0 ? formatAUD(displayAmount).replace("A$", "$") : "—"}
           </span>
 
-          {/* Col 5: transfer-kind cycle button. Click cycles
-              none → internal → external → none. Mutual exclusion is
-              automatic; one glyph per row makes the state legible at a glance. */}
-          <div className="flex items-center justify-end gap-1">
-            {(() => {
-              const next: Record<"none" | "internal" | "external", "none" | "internal" | "external"> = {
-                none: "internal",
-                internal: "external",
-                external: "none",
-              };
-              const kind = cat.transferKind;
-              const glyph = kind === "internal" ? "⇅" : kind === "external" ? "$" : "—";
-              const title =
-                kind === "internal"
-                  ? "Inner transfer — money between your accounts; excluded from cashflow. Click to make this an External payment."
-                  : kind === "external"
-                    ? "External payment — to an untracked debt; counted as an expense. Click to clear."
-                    : "Regular category — click to mark as Inner transfer (between your accounts).";
-              const styles =
-                kind === "internal"
-                  ? "bg-amber-500/15 text-amber-600"
-                  : kind === "external"
-                    ? "bg-sky-500/15 text-sky-600"
-                    : "bg-muted/50 text-muted-foreground/40 hover:bg-amber-500/15 hover:text-amber-600";
-              return (
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleSetTransferKind(cat.id, next[kind]); }}
-                  title={title}
-                  className={cn(
-                    "shrink-0 text-[10px] px-1.5 py-0.5 rounded-full transition-colors min-w-[20px]",
-                    styles,
-                  )}
-                >
-                  {glyph}
-                </button>
-              );
-            })()}
-          </div>
-
-          {/* Col 6: Work-use % input. Income rows render an empty placeholder
-              so the WFH column to its right stays aligned. */}
-          {cat.type === "expense" ? (
-            <div className="flex items-center justify-end gap-1">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={5}
-                defaultValue={workUsePct}
-                key={`pct-${cat.id}-${workUsePct}`}
-                onClick={(e) => e.stopPropagation()}
-                onBlur={(e) => {
-                  const n = parseFloat(e.target.value);
-                  if (Number.isNaN(n) || n === workUsePct) return;
-                  saveTaxRule(cat.id, { workUsePct: Math.max(0, Math.min(100, n)) });
-                }}
-                className={cn(
-                  "w-10 text-[11px] tabular-nums text-right border rounded px-1 py-0.5 bg-background",
-                  hasTaxOverride ? "border-indigo-400/60" : "border-border/50 text-muted-foreground",
-                )}
-                title="Work-use % claimable for this category"
-              />
-              <span className="text-[10px] text-muted-foreground/70">%</span>
-            </div>
-          ) : (
-            <span />
-          )}
-
-          {/* Col 7: WFH bundle toggle (expense rows only). */}
-          {cat.type === "expense" ? (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); saveTaxRule(cat.id, { bundledInWfh: !bundledInWfh }); }}
-              title={bundledInWfh
-                ? "Bundled in WFH fixed-rate (covers utilities/internet/phone) — click to unmark"
-                : "Mark as bundled in WFH fixed-rate"}
-              className={cn(
-                "justify-self-center shrink-0 text-[10px] px-1.5 py-0.5 rounded-full transition-colors",
-                bundledInWfh
-                  ? "bg-emerald-500/15 text-emerald-600"
-                  : "bg-muted text-muted-foreground hover:bg-emerald-500/15 hover:text-emerald-600",
-              )}
-            >
-              WFH
-            </button>
-          ) : (
-            <span />
-          )}
-
-          {/* Col 8: rename / add / delete actions, always visible. */}
-          <div className="flex items-center justify-end gap-1 text-muted-foreground/60">
-            <button
-              onClick={() => setRenaming({ id: cat.id, value: cat.name })}
-              className="hover:text-foreground px-1"
-              title="Rename"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
-            {depth < 2 ? (
-              <button
-                onClick={() => setForm({ ...EMPTY_FORM, type: cat.type as "income" | "expense", parentId: cat.id })}
-                className="hover:text-foreground px-1"
-                title="Add subcategory"
-              >
-                <Plus className="h-3 w-3" />
-              </button>
-            ) : (
-              // Keep the column width stable when the depth-2 row hides the
-              // Add button — empty placeholder matches the icon's footprint.
-              <span className="px-1 w-3" />
-            )}
-            <button
-              onClick={() => handleDelete(cat.id, cat.name)}
-              className="hover:text-red-500 px-1"
-              title="Delete"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
+          {/* Col 5: single Edit button. Opens the dialog with everything
+              else (rename, parent, colour, transfer kind, tax rules,
+              delete) laid out with proper labels. */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditingId(cat.id); }}
+            className="text-muted-foreground/60 hover:text-foreground px-1 justify-self-end"
+            title="Edit category"
+            aria-label={`Edit ${cat.name}`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
         </div>
 
         {!isCollapsed && children.map((child) => renderCategory(child, depth + 1))}
@@ -698,54 +583,6 @@ export function CategoryManager({
       )}
 
       <div className="p-4 space-y-5">
-        {/* Legend — explains every glyph on a row so the icons aren't
-            cryptic. The same colour treatment as the row controls so
-            users connect "amber ↕" / "sky $" / "emerald WFH" at a glance. */}
-        <div className="rounded-md border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
-          <p className="font-medium text-foreground/80 mb-1.5">Row legend</p>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-            <li className="flex items-center gap-2">
-              <GripVertical className="h-3.5 w-3.5 text-muted-foreground/60" />
-              <span>Drag to reorder, or onto another row to nest under it</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="underline text-indigo-600 dark:text-indigo-400">Name</span>
-              <span>— click to open the filtered transactions list</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-[10px] tabular-nums">12</span>
-              <span>— transaction count for the subtree (read-only)</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-[10px] tabular-nums">$1,234</span>
-              <span>— |sum of amounts| over the subtree (refunds reduce)</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600">⇅</span>
-              <span>Inner transfer — money moves between your own accounts; excluded from cashflow</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-600">$</span>
-              <span>External payment — to an untracked debt (e.g. external loan / CC); counted as expense</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-[10px] tabular-nums border border-border/50 rounded px-1">25</span>
-              <span className="text-[10px] text-muted-foreground/70">%</span>
-              <span>— work-use % claimable in the tax report</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600">WFH</span>
-              <span>Bundled in the WFH fixed-rate hourly claim</span>
-            </li>
-            <li className="flex items-center gap-2">
-              <Pencil className="h-3 w-3" />
-              <Plus className="h-3 w-3" />
-              <Trash2 className="h-3 w-3" />
-              <span>— rename · add subcategory · delete</span>
-            </li>
-          </ul>
-        </div>
-
         <div>
           <SectionDropZone target="income-root" label="Income" />
           {income.length === 0 && (
@@ -762,6 +599,325 @@ export function CategoryManager({
           {expense.map((c) => renderCategory(c))}
         </div>
       </div>
+
+      {editingId && (() => {
+        const editingCat = cats.find((c) => c.id === editingId);
+        if (!editingCat) return null;
+        return (
+          <CategoryEditDialog
+            // Re-mount when the editing target changes so local field state
+            // re-initialises from the new category cleanly. Without the key,
+            // switching from row A to row B would keep A's draft state.
+            key={editingCat.id}
+            cat={editingCat}
+            cats={cats}
+            taxRule={taxRules[editingCat.id]}
+            catMeta={catMeta}
+            childrenOf={childrenOf}
+            parents={parents}
+            isDescendantOf={isDescendantOf}
+            onSave={(catPatch, taxPatch) =>
+              handleEditSave(editingCat.id, catPatch, taxPatch)
+            }
+            onDelete={async () => {
+              const ok = await handleDelete(editingCat.id, editingCat.name);
+              if (ok) setEditingId(null);
+            }}
+            onClose={() => setEditingId(null)}
+          />
+        );
+      })()}
     </div>
+  );
+}
+
+// ── Edit dialog ─────────────────────────────────────────────────────────────
+
+/** Single-category edit dialog. Collects all editable fields in one panel
+ * — name, colour, parent, transfer kind, tax rule (work-use %, WFH bundle
+ * for expense categories) — and the destructive Delete action. Save runs
+ * two parallel PATCHes (category + tax-config) and closes on success. */
+function CategoryEditDialog({
+  cat,
+  cats,
+  taxRule,
+  catMeta,
+  childrenOf,
+  parents,
+  isDescendantOf,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  cat: Category;
+  cats: Category[];
+  taxRule: { workUsePct: number; bundledInWfh: boolean } | undefined;
+  catMeta: ReturnType<typeof buildCategoryMeta>["meta"];
+  childrenOf: (id: string) => Category[];
+  parents: Category[];
+  isDescendantOf: (candidateId: string, ancestorId: string) => boolean;
+  onSave: (
+    catPatch: Partial<{
+      name: string;
+      color: string;
+      parentId: string | null;
+      transferKind: "none" | "internal" | "external";
+    }>,
+    taxPatch: { workUsePct: number; bundledInWfh: boolean } | null,
+  ) => Promise<boolean>;
+  onDelete: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const path = catMeta.get(cat.id)?.path ?? [cat.name];
+  const auto = classifyCategoryDefault(path);
+  const initialWorkUsePct = taxRule?.workUsePct ?? auto.defaultPct;
+  const initialBundledInWfh = taxRule?.bundledInWfh ?? auto.bundledInWfh;
+
+  const [name, setName] = useState(cat.name);
+  const [color, setColor] = useState(cat.color);
+  const [parentId, setParentId] = useState(cat.parentId ?? "");
+  const [transferKind, setTransferKind] = useState<"none" | "internal" | "external">(cat.transferKind);
+  const [workUsePct, setWorkUsePct] = useState<number>(initialWorkUsePct);
+  const [bundledInWfh, setBundledInWfh] = useState<boolean>(initialBundledInWfh);
+  const [saving, setSaving] = useState(false);
+
+  const isExpense = cat.type === "expense";
+
+  // Valid-parent filter: same type, not the category itself, not a
+  // descendant (cycle-prevention). The depth check matches the drag-drop
+  // validator: target depth + dragged subtree depth must stay ≤ 2.
+  function descendantDepth(id: string): number {
+    const kids = cats.filter((c) => c.parentId === id);
+    if (kids.length === 0) return 0;
+    return 1 + Math.max(...kids.map((k) => descendantDepth(k.id)));
+  }
+  const myDepth = descendantDepth(cat.id);
+  function isValidParent(candidate: Category): boolean {
+    if (candidate.type !== cat.type) return false;
+    if (candidate.id === cat.id) return false;
+    if (isDescendantOf(candidate.id, cat.id)) return false;
+    const targetDepth = catMeta.get(candidate.id)?.depth ?? 0;
+    return targetDepth + 1 + myDepth <= 2;
+  }
+  const parentOptions = cats.filter(isValidParent);
+
+  async function handleSave() {
+    setSaving(true);
+    const catPatch: Parameters<typeof onSave>[0] = {};
+    if (name.trim() && name.trim() !== cat.name) catPatch.name = name.trim();
+    if (color !== cat.color) catPatch.color = color;
+    if ((parentId || null) !== (cat.parentId ?? null)) {
+      catPatch.parentId = parentId || null;
+    }
+    if (transferKind !== cat.transferKind) catPatch.transferKind = transferKind;
+
+    let taxPatch: Parameters<typeof onSave>[1] = null;
+    if (
+      isExpense &&
+      (workUsePct !== initialWorkUsePct || bundledInWfh !== initialBundledInWfh)
+    ) {
+      taxPatch = {
+        workUsePct: Math.max(0, Math.min(100, workUsePct)),
+        bundledInWfh,
+      };
+    }
+
+    const ok = await onSave(catPatch, taxPatch);
+    setSaving(false);
+    if (ok) onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit category</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="cat-name">Name</Label>
+            <Input
+              id="cat-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Parent</Label>
+            <Select
+              value={parentId}
+              onValueChange={(v) => setParentId(v ?? "")}
+            >
+              <SelectTrigger>
+                <SelectValue>
+                  {parentId
+                    ? (catMeta.get(parentId)?.path.join(" / ") ?? "Top-level")
+                    : "Top-level"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Top-level</SelectItem>
+                {parents.filter((p) => p.type === cat.type && p.id !== cat.id).map((p) => {
+                  const validTop = isValidParent(p);
+                  const subOptions = childrenOf(p.id).filter(isValidParent);
+                  if (!validTop && subOptions.length === 0) return null;
+                  return (
+                    <SelectGroup key={p.id}>
+                      {validTop && (
+                        <SelectItem value={p.id}>{p.name}</SelectItem>
+                      )}
+                      {subOptions.map((child) => (
+                        <SelectItem key={child.id} value={child.id} className="pl-5">
+                          {p.name} / {child.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              {cat.type === "income" ? "Income" : "Expense"} category — only same-type parents are valid. Max nesting depth is 3.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Colour</Label>
+            <div className="flex gap-1.5 flex-wrap">
+              {COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  className={cn(
+                    "w-6 h-6 rounded-full border-2 transition-transform",
+                    color === c
+                      ? "border-foreground scale-110"
+                      : "border-transparent",
+                  )}
+                  style={{ backgroundColor: c }}
+                  aria-label={`Colour ${c}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Transfer kind</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {([
+                {
+                  v: "none" as const,
+                  label: "Regular",
+                  hint: "Default — counts in cashflow as income or expense.",
+                },
+                {
+                  v: "internal" as const,
+                  label: "Inner transfer",
+                  hint: "Between accounts you own (Checking → Savings). Excluded from cashflow rollups.",
+                },
+                {
+                  v: "external" as const,
+                  label: "External payment",
+                  hint: "Payment to an untracked debt (external loan / CC). Counts as an expense.",
+                },
+              ]).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setTransferKind(opt.v)}
+                  className={cn(
+                    "text-xs px-2 py-1.5 rounded-md border transition-colors text-left",
+                    transferKind === opt.v
+                      ? opt.v === "internal"
+                        ? "border-amber-400/60 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                        : opt.v === "external"
+                          ? "border-sky-400/60 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+                          : "border-foreground/40 bg-muted text-foreground"
+                      : "border-border text-muted-foreground hover:bg-muted/60",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {transferKind === "internal"
+                ? "Money moves between your own accounts. Excluded from income/expense rollups; only affects balance."
+                : transferKind === "external"
+                  ? "Payment to a debt you don't track here. Counted as an expense in cashflow."
+                  : "Regular income/expense category."}
+            </p>
+          </div>
+
+          {isExpense && (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="cat-work-pct">Work-use %</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="cat-work-pct"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={workUsePct}
+                    onChange={(e) => {
+                      const n = parseFloat(e.target.value);
+                      setWorkUsePct(Number.isNaN(n) ? 0 : n);
+                    }}
+                    className="w-24"
+                  />
+                  <span className="text-xs text-muted-foreground">% claimable in the tax report</span>
+                </div>
+                {!taxRule && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Default {auto.defaultPct}% (auto-classified from category path).
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between gap-3 py-1">
+                <div className="min-w-0">
+                  <Label htmlFor="cat-wfh-bundle">Bundled in WFH</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Counts under the WFH fixed-rate hourly claim (utilities, internet, phone) instead of as a discrete deduction.
+                  </p>
+                </div>
+                <Switch
+                  id="cat-wfh-bundle"
+                  checked={bundledInWfh}
+                  onCheckedChange={setBundledInWfh}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        <DialogFooter className="sm:justify-between gap-2">
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            onClick={onDelete}
+            disabled={saving}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Delete
+          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="button" size="sm" onClick={handleSave} disabled={saving || !name.trim()}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

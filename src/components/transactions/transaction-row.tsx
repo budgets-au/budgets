@@ -25,6 +25,7 @@ import {
   Unlink,
   Wallet,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { amountClass, cn, formatAUD, formatDate } from "@/lib/utils";
 import { colourForFrequency } from "@/lib/schedule-colours";
 import { CategoryPicker } from "./category-picker";
@@ -182,6 +183,36 @@ function ExpandedField({
       </p>
       <div className="text-foreground/90">{children}</div>
     </div>
+  );
+}
+
+/** Inline reconcile toggle. Sits inside the expanded row panel so the
+ * operator can flip a txn's reconciled flag without leaving the
+ * transactions list. PATCHes `/api/transactions/{id}` directly so
+ * SWR caches stay coherent via the parent's onChange callback. */
+function ReconcileToggle({
+  transactionId,
+  isReconciled,
+  onChange,
+}: {
+  transactionId: string;
+  isReconciled: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <Switch
+      checked={isReconciled}
+      onCheckedChange={async (next) => {
+        const res = await fetch(`/api/transactions/${transactionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isReconciled: next }),
+        });
+        if (res.ok) onChange();
+      }}
+      aria-label="Toggle reconciled flag"
+      className="h-4"
+    />
   );
 }
 
@@ -619,7 +650,11 @@ export function TransactionRow({
                 </ExpandedField>
               )}
               <ExpandedField label="Reconciled">
-                {t.isReconciled ? "Yes" : "No"}
+                <ReconcileToggle
+                  transactionId={t.id}
+                  isReconciled={t.isReconciled}
+                  onChange={refresh}
+                />
               </ExpandedField>
               <ExpandedField label="Bank type">{t.type ?? "—"}</ExpandedField>
               <ExpandedField label="Bank balance">

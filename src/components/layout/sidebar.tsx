@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import { useAddCategory } from "@/hooks/use-add-category-dialog";
+import { useAddScheduled } from "@/hooks/use-add-scheduled-dialog";
 import { useLockDatabase } from "@/hooks/use-lock-database";
 import { SidebarAccounts } from "./sidebar-accounts";
 import { APP_VERSION } from "@/lib/version";
@@ -54,6 +55,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { ids } = useAccountFilter();
   const { open: openAddCategory } = useAddCategory();
+  const { open: openAddScheduled } = useAddScheduled();
   const { lock: lockDb, locking } = useLockDatabase();
 
   // Carry the global account filter across navigation so clicking a nav link
@@ -151,6 +153,21 @@ export function Sidebar() {
                     }}
                     title="Add category"
                     aria-label="Add category"
+                    className={NAV_AFFORDANCE_CLS}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {href === "/scheduled" && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openAddScheduled();
+                      setOpen(false);
+                    }}
+                    title="New scheduled transaction"
+                    aria-label="New scheduled transaction"
                     className={NAV_AFFORDANCE_CLS}
                   >
                     <Plus className="h-3.5 w-3.5" />

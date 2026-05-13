@@ -26,6 +26,11 @@ export interface DisplayPrefs {
   // ── Cashflow calendar ─────────────────────────────────────────
   /** "month" or "week" view on the calendar page. */
   calendarViewMode: "month" | "week";
+  /** When true, the calendar's "planned" dots only fire for bill-shaped
+   * schedules: expense category or transfer_kind=external (an outflow
+   * to an external loan/CC). Hides salary, internal transfers, and
+   * pure-income schedules — useful for an "what's due this month" view. */
+  calendarBillsOnly: boolean;
 
   // ── Scheduled missed-occurrences panel ────────────────────────
   /** Show dismissed missed-occurrences on the schedule view. */
@@ -89,6 +94,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   transactionsPageSize: 200,
   transactionsRowExpandable: true,
   calendarViewMode: "month",
+  calendarBillsOnly: false,
   missedShowDismissed: false,
   cashflowTotalsLevel: "grandparent",
   cashflowShowCounts: false,
@@ -198,6 +204,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     transactionsPageSize: num("transactionsPageSize"),
     transactionsRowExpandable: bool("transactionsRowExpandable"),
     calendarViewMode: pickEnum("calendarViewMode", ["month", "week"] as const),
+    calendarBillsOnly: bool("calendarBillsOnly"),
     missedShowDismissed: bool("missedShowDismissed"),
     cashflowTotalsLevel: pickEnum(
       "cashflowTotalsLevel",

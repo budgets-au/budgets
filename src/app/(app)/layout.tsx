@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { SessionProvider } from "@/components/layout/session-provider";
 import { ConfirmDialogProvider } from "@/hooks/use-confirm-dialog";
 import { AddCategoryProvider } from "@/hooks/use-add-category-dialog";
+import { AddScheduledProvider } from "@/hooks/use-add-scheduled-dialog";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -13,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <SessionProvider>
       <ConfirmDialogProvider>
         <AddCategoryProvider>
+        <AddScheduledProvider>
         <div className="flex min-h-screen bg-muted/30">
           <Sidebar />
           {/* min-w-0 / min-w-0 down the chain: flex children default to
@@ -24,6 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <main className="flex-1 min-w-0 pt-14 lg:pt-0">{children}</main>
           </div>
         </div>
+        </AddScheduledProvider>
         </AddCategoryProvider>
       </ConfirmDialogProvider>
     </SessionProvider>

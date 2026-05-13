@@ -14,6 +14,7 @@ import { BackupList } from "@/components/settings/backup-list";
 import { BackupSchedule } from "@/components/settings/backup-schedule";
 import { UserManager } from "@/components/settings/user-manager";
 import { SampleDataPanel } from "@/components/settings/sample-data-panel";
+import { OrphanCategoriesPanel } from "@/components/settings/orphan-categories-panel";
 
 export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }) {
   const { lock: lockNow, locking } = useLockDatabase();
@@ -107,6 +108,7 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
       <TabsContent value="security" className="space-y-6">
         <UserManager />
         <SampleDataPanel />
+        <OrphanCategoriesPanel />
         <div className="rounded-xl border bg-card divide-y">
           <div className="px-4 py-3">
             <h2 className="font-medium">Database passphrase</h2>

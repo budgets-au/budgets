@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.20.0 — 2026-05-13
+
+### Added
+- **Orphan-category cleaner** in Settings → Security. New admin
+  panel + API (`/api/categories/orphans`) finds non-system
+  categories with zero transactions, zero scheduled rows, and no
+  child categories, and removes them with one click. Conservative
+  by design — parents with descendants stay even if descendants
+  are unused.
+- **Quick-add scheduled affordance** in the sidebar. A `+` button
+  next to the *Scheduled* nav entry (matching the existing
+  Categories / Transactions affordances) pops the New-Scheduled
+  dialog from anywhere in the app shell. New
+  `useAddScheduled` hook + `AddScheduledProvider` mirror the
+  existing category pattern.
+- **Reconcile toggle inline.** The expanded transaction-row panel's
+  "Reconciled" field is now an interactive `<Switch>` — flip a
+  txn's reconciled flag without going through the account-level
+  reconcile dialog.
+- **Bills-only calendar toggle.** A `Bills only` button in the
+  calendar toolbar drops the planned-dot count on every day to
+  just expense schedules. Salary, internal transfers, and other
+  inflows disappear, so the calendar reads as "what's due this
+  month". Pref `calendarBillsOnly` follows the operator across
+  devices.
+
 ## 0.19.0 — 2026-05-13
 
 ### Fixed

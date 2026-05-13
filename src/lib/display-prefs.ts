@@ -66,6 +66,10 @@ export interface DisplayPrefs {
   /** How many months back the missed-occurrences panel looks for
    * a candidate transaction to match against. */
   scheduledMatchWindowMonths: number;
+  /** How many days an occurrence has to post before it can surface
+   * as "missed". A schedule due today still has graceDays of room
+   * to post via the bank feed before the panel flags it. */
+  scheduledMissedGraceDays: number;
 }
 
 export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
@@ -87,6 +91,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   reportsPeriodByTab: {},
   globalAccountIds: [],
   scheduledMatchWindowMonths: 6,
+  scheduledMissedGraceDays: 4,
 };
 
 /** Legacy localStorage key — kept so the existing tests still
@@ -197,5 +202,6 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     reportsPeriodByTab: periodMap("reportsPeriodByTab"),
     globalAccountIds: stringArray("globalAccountIds"),
     scheduledMatchWindowMonths: num("scheduledMatchWindowMonths"),
+    scheduledMissedGraceDays: num("scheduledMissedGraceDays"),
   };
 }

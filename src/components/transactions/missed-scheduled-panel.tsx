@@ -22,6 +22,10 @@ import type { ScheduledTransaction } from "@/db/schema";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const WINDOW_DAYS = 30;
+/** Selectable grace-period values in the panel header. Spread covers
+ * "alert immediately" (0d) through "weekend + long bank holiday"
+ * (7d) and beyond for high-lag feeds. */
+const GRACE_DAY_OPTIONS = [0, 1, 2, 3, 4, 5, 7, 10, 14] as const;
 
 interface ScheduledRow {
   id: string;
@@ -133,11 +137,16 @@ export function MissedScheduledPanel({ accounts }: { accounts: Account[] }) {
   const txnFromISO = toISO(subDays(today, WINDOW_DAYS + MATCH_TOLERANCE_DAYS_RANGE));
 
   const [expanded, setExpanded] = useState(false);
-  // showDismissed lives in the DB-backed display-prefs blob so it
-  // follows the operator across devices.
+  // showDismissed + grace-period setting live in the DB-backed
+  // display-prefs blob so they follow the operator across devices.
   const { prefs: displayPrefs, setPref } = useDisplayPrefs();
   const showDismissed = displayPrefs.missedShowDismissed;
   const setShowDismissed = (v: boolean) => setPref("missedShowDismissed", v);
+  // Schedules due in the last N days still have room to post via the
+  // bank feed before they get flagged. Default 4d swallows a normal
+  // weekend + holiday lag without producing false-positive alerts.
+  const graceDays = displayPrefs.scheduledMissedGraceDays;
+  const graceCutoffISO = toISO(subDays(today, graceDays));
 
   const [dismissTarget, setDismissTarget] = useState<DisplayRow | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
@@ -285,6 +294,10 @@ export function MissedScheduledPanel({ accounts }: { accounts: Account[] }) {
           },
         );
         for (const u of missed) {
+          // Skip occurrences still inside the grace window — a bill
+          // due today (or two days ago) hasn't had a chance to post
+          // yet, so flagging it as missed would be a false positive.
+          if (u.date > graceCutoffISO) continue;
           const meta = matchable.find(
             (m) =>
               m.date === u.date &&
@@ -347,7 +360,7 @@ export function MissedScheduledPanel({ accounts }: { accounts: Account[] }) {
       active: all.filter((r) => !r.dismissal),
       dismissed: all.filter((r) => r.dismissal),
     };
-  }, [scheduled, txns, fromISO, toISOStr, dismissalByKey, accountById, categories]);
+  }, [scheduled, txns, fromISO, toISOStr, dismissalByKey, accountById, categories, graceCutoffISO]);
 
   // Hide only when there's literally nothing to show. If everything has been
   // dismissed, the panel still renders so the user can find the toggle and
@@ -614,6 +627,27 @@ export function MissedScheduledPanel({ accounts }: { accounts: Account[] }) {
               <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
             )}
           </button>
+          <label
+            className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0"
+            onClick={(e) => e.stopPropagation()}
+            title="Wait this many days after the due date before flagging a missing transaction. Absorbs normal bank-feed lag."
+          >
+            <span>Grace</span>
+            <select
+              value={graceDays}
+              onChange={(e) =>
+                setPref("scheduledMissedGraceDays", parseInt(e.target.value, 10))
+              }
+              className="bg-background border rounded px-1 py-0.5 text-xs tabular-nums focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              aria-label="Grace period before flagging missed transactions"
+            >
+              {GRACE_DAY_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}d
+                </option>
+              ))}
+            </select>
+          </label>
           {dismissed.length > 0 && (
             <label
               className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0"

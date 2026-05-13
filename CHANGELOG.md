@@ -4,6 +4,20 @@ All notable changes to this project are recorded here. The version policy
 is **bump minor on every shipped change** (per user directive); patch
 remains 0 until released hotfixes warrant it.
 
+## 0.5.0 — 2026-05-13
+
+### Added
+- **Missed-transactions grace period.** Schedules due today (or in
+  the last few days) no longer immediately flag as missed — the
+  bank feed usually needs a couple of days to post the actual
+  transaction. New `scheduledMissedGraceDays` pref controls the
+  window; default `4` days swallows a normal weekend + holiday lag.
+  Once an occurrence is older than the grace window, it surfaces as
+  missed if no matching txn has been claimed for it.
+- Header dropdown in the missed-scheduled panel exposes the setting
+  (0/1/2/3/4/5/7/10/14 days). The choice lives in the DB-backed
+  `display_prefs` blob so it follows the operator across devices.
+
 ## 0.4.0 — 2026-05-13
 
 ### Changed

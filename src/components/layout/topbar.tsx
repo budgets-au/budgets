@@ -33,7 +33,7 @@ export function Topbar({
             <span className="hidden sm:inline">{session?.user?.name ?? "Account"}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
+            <DropdownMenuItem onClick={() => signOut({ redirectTo: "/login" })}>
               <LogOut className="h-4 w-4 mr-2" />
               Sign out
             </DropdownMenuItem>

@@ -4,6 +4,23 @@ All notable changes to this project are recorded here. The version policy
 is **bump minor on every shipped change** (per user directive); patch
 remains 0 until released hotfixes warrant it.
 
+## 0.9.0 — 2026-05-13
+
+### Added
+- **Release version in sidebar footer.** A `v0.x.y` tag now sits
+  above the Lock / Sign out panel — single source of truth read
+  from `package.json` via `src/lib/version.ts`. Subtle styling
+  (small caps, tabular nums); it's reference info, not a CTA.
+
+### Fixed
+- **Sign-out redirect now goes to `/login`.** Both the sidebar
+  (`signOut` button) and the topbar dropdown were passing
+  `callbackUrl: "/login"`. That option is deprecated in NextAuth v5
+  and is silently ignored — the user landed on the default
+  `<AUTH_URL>/` (which mapped to `0.0.0.0:3000` for this deploy).
+  Switched both call-sites to the v5 `redirectTo: "/login"` so the
+  redirect honours the supplied path.
+
 ## 0.8.0 — 2026-05-13
 
 ### Changed

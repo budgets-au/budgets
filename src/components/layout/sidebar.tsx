@@ -27,6 +27,7 @@ import { useAccountFilter } from "@/hooks/use-account-filter";
 import { useAddCategory } from "@/hooks/use-add-category-dialog";
 import { useLockDatabase } from "@/hooks/use-lock-database";
 import { SidebarAccounts } from "./sidebar-accounts";
+import { APP_VERSION } from "@/lib/version";
 
 /** Square icon button anchored to the right of a nav row — used for
  * the per-row affordances (import next to Transactions, add-category
@@ -163,11 +164,18 @@ export function Sidebar() {
           <SidebarAccounts onPick={() => setOpen(false)} />
         </nav>
 
+        {/* Release tag above the footer actions so the operator can
+            see what build they're on (matches the image / GitHub tag
+            we cut). Subtle styling — it's reference info, not a CTA. */}
+        <div className="border-t px-6 pt-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/60 tabular-nums">
+          v{APP_VERSION}
+        </div>
+
         {/* Footer actions: drop the SQLCipher key (everyone bounces to
             /unlock) and sign out (clears the auth cookie). Kept at the
             bottom of the sidebar so they're always reachable without
             scrolling past the account list. */}
-        <div className="border-t py-1">
+        <div className="py-1">
           <button
             type="button"
             onClick={lockDb}
@@ -183,7 +191,7 @@ export function Sidebar() {
           </button>
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => signOut({ redirectTo: "/login" })}
             className="flex w-full items-center gap-3 px-6 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
             <LogOut className="h-4 w-4 shrink-0" />

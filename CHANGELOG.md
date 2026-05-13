@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.44.0 — 2026-05-13
+
+### Fixed
+- **Tracked-stock widget no longer risks crashing the dashboard.**
+  Two defensive guards in `TrackedStockCard`: the SWR fetcher
+  now throws on non-2xx responses (so SWR returns `undefined`
+  instead of handing the consumer an `{error: …}` body that
+  would crash on `.filter()` / `.series`), and the investments
+  list falls back to `[]` if the response somehow isn't an
+  array.
+
+### Changed
+- **`transactionsRowExpandable` defaults to `false`** for new
+  operators. Clicking a transaction row no longer toggles the
+  expand panel unless the user opts in via Settings → General.
+
 ## 0.43.0 — 2026-05-13
 
 ### Fixed

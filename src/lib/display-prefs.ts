@@ -135,7 +135,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   transactionsShowNotes: false,
   transactionsShowLinkedDetails: false,
   transactionsPageSize: 200,
-  transactionsRowExpandable: true,
+  transactionsRowExpandable: false,
   transactionsSavedFilters: [],
   calendarViewMode: "month",
   calendarBillsOnly: false,

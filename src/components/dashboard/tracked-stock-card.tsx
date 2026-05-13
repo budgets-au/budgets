@@ -12,7 +12,14 @@ import {
 } from "@/components/ui/chart-tooltip";
 import { cn } from "@/lib/utils";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+/** Fetcher that throws on non-2xx so SWR returns `undefined` instead
+ * of an error-shaped JSON body that consumers would try to
+ * `.filter()` / `.series` against. */
+const fetcher = async <T,>(url: string): Promise<T> => {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url} → ${r.status}`);
+  return r.json();
+};
 
 interface InvestmentRow {
   id: string;
@@ -78,11 +85,17 @@ export function TrackedStockCard({
   const investmentId =
     typeof config?.investmentId === "string" ? config.investmentId : null;
 
-  const { data: investments = [] } = useSWR<InvestmentRow[]>(
+  const { data: investmentsData } = useSWR<InvestmentRow[]>(
     "/api/investments",
     fetcher,
     { revalidateOnFocus: false },
   );
+  // Defensive cast: if /api/investments is unreachable or returns
+  // an error-shaped JSON body, fall back to an empty list rather
+  // than calling `.filter()` on `{error: "…"}`.
+  const investments: InvestmentRow[] = Array.isArray(investmentsData)
+    ? investmentsData
+    : [];
   // Only kinds with a meaningful day-to-day price line: outright
   // stocks the operator owns, and paper-trade what-if positions.
   // RSUs and options have their own widgets / lifecycle.

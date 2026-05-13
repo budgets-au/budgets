@@ -9,6 +9,17 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.28.0 — 2026-05-13
+
+### Fixed
+- **Cashflow report — header split now sits at the bottom of the
+  header cell.** The table's scroll wrapper had a `border` on all
+  four sides, so a 1px line was visible at the top of the sticky
+  header row. Combined with the per-cell `shadow-[inset_0_-1px…]`
+  at the bottom of the header, the user saw the divider in the
+  wrong place. Wrapper switched to `border-x border-b`, leaving
+  only the inset shadow as the visible header/body separator.
+
 ## 0.27.0 — 2026-05-13
 
 ### Added

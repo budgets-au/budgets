@@ -1211,7 +1211,11 @@ export function CashflowReport({
         the wrapper's top instead of the (already-scrolled-off) page.
         Filters + controls above this stay visible because the page
         itself no longer needs to scroll the table out of view. */}
-    <div className="overflow-auto rounded-lg border max-h-[calc(100vh-220px)]">
+    {/* Skip the wrapper's top border so the only horizontal line on
+        the header row is the inset shadow under each <th> — putting
+        the split visually at the BOTTOM of the header cells instead
+        of doubling up with a wrapper-border line at the top. */}
+    <div className="overflow-auto rounded-lg border-x border-b max-h-[calc(100vh-220px)]">
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-muted">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -73,20 +73,40 @@ export function DashboardGrid() {
       : DEFAULT_DASHBOARD_LAYOUT;
   const activeLayout = draftLayout ?? baseLayout;
 
-  const rglLayout: RglItem[] = activeLayout
-    .filter((l) => WIDGETS_BY_ID.has(l.widgetId))
-    .map((l) => {
-      const widget = WIDGETS_BY_ID.get(l.widgetId)!;
-      return {
-        i: l.widgetId,
-        x: l.x,
-        y: l.y,
-        w: l.w,
-        h: l.h,
-        minW: widget.minSize?.w,
-        minH: widget.minSize?.h,
-      };
-    });
+  // Memoise the derived RGL layout + the layouts prop object so RGL
+  // and its child charts (Recharts ResponsiveContainer + its own
+  // ResizeObserver) don't see fresh references on every render. A
+  // fresh `layouts` prop on every render was good enough to push the
+  // chain over React's update-depth ceiling once a tracked-stock
+  // widget (with its own ResponsiveContainer) joined the dashboard.
+  const rglLayout = useMemo<RglItem[]>(
+    () =>
+      activeLayout
+        .filter((l) => WIDGETS_BY_ID.has(l.widgetId))
+        .map((l) => {
+          const widget = WIDGETS_BY_ID.get(l.widgetId)!;
+          return {
+            i: l.widgetId,
+            x: l.x,
+            y: l.y,
+            w: l.w,
+            h: l.h,
+            minW: widget.minSize?.w,
+            minH: widget.minSize?.h,
+          };
+        }),
+    [activeLayout],
+  );
+  const layouts = useMemo(
+    () => ({
+      lg: rglLayout,
+      md: rglLayout,
+      sm: rglLayout,
+      xs: rglLayout,
+      xxs: rglLayout,
+    }),
+    [rglLayout],
+  );
 
   const placedIds = new Set(activeLayout.map((l) => l.widgetId));
   const availableWidgets = WIDGETS.filter((w) => !placedIds.has(w.id));
@@ -203,21 +223,6 @@ export function DashboardGrid() {
     ? WIDGETS_BY_ID.get(draggedWidgetId)
     : null;
 
-  // Force ResponsiveGridLayout to remount when the saved baseLayout
-  // changes shape (widgets added/removed across loads). RGL holds
-  // its own internal layout state on mount and doesn't always
-  // pick up replaced `layouts` props — without this key the
-  // dashboard would render its initial-mount layout (the SWR
-  // fallback default) even after the saved layout finishes
-  // loading, which looked exactly like "the dashboard reset on
-  // refresh". The signature is stable while only x/y/w/h or
-  // config change (those go through onLayoutChange which already
-  // updates RGL's internal state correctly).
-  const baseLayoutSignature = baseLayout
-    .map((l) => l.widgetId)
-    .sort()
-    .join("|");
-
   return (
     <>
       <div className="flex justify-end px-3 pt-2 pb-1">
@@ -229,15 +234,8 @@ export function DashboardGrid() {
       </div>
       <div className="px-3 pb-3">
         <ResponsiveGridLayout
-          key={baseLayoutSignature || "default"}
           className="layout"
-          layouts={{
-            lg: rglLayout,
-            md: rglLayout,
-            sm: rglLayout,
-            xs: rglLayout,
-            xxs: rglLayout,
-          }}
+          layouts={layouts}
           breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
           cols={{ lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 }}
           rowHeight={80}

@@ -9,6 +9,34 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.47.0 — 2026-05-13
+
+### Fixed
+- **Dashboard React error #185 ("Maximum update depth exceeded")
+  on tracked-stock add — round 2.** The previous onLayoutChange
+  short-circuit was necessary but not sufficient; the loop was
+  reignited by an unrelated cascade:
+  - The derived `rglLayout` and `layouts` prop were recomputed
+    fresh every render, so react-grid-layout received a new
+    object identity on every render — its internal `useMemo` /
+    `useEffect` pipeline kept tripping, which combined with
+    Recharts' own per-chart `ResizeObserver` cascading state
+    updates added up to React's depth ceiling.
+  - The `key={baseLayoutSignature}` we added in 0.42.0 to force
+    RGL to re-mount when SWR delivered the saved layout was
+    *also* tripping the chain: when the user's saved layout
+    contained a widget the SWR fallback didn't (e.g. the
+    tracked-stock), the SWR-load transition flipped the key →
+    RGL remounted → every child widget remounted → every
+    Recharts container remounted → enough fresh state updates
+    fired in one pass to blow the limit.
+
+  Now: `rglLayout` and `layouts` are memoised on `activeLayout`,
+  so RGL sees stable references when content is stable; and the
+  remount key is removed (RGL's responsive variant picks up the
+  changed `layouts` prop via its own deep-equality check, so
+  forcing a remount was always belt-and-braces).
+
 ## 0.46.0 — 2026-05-13
 
 ### Changed

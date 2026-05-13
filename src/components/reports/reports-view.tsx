@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { useAccountFilter } from "@/hooks/use-account-filter";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import {
   BarChart,
   Bar,
@@ -44,29 +45,6 @@ interface MonthRow {
   net: string;
 }
 
-const PERIOD_STORAGE_KEY = "reports-period-by-tab";
-type PeriodStore = Record<string, { from: string; to: string }>;
-
-function readPeriodStore(): PeriodStore {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = localStorage.getItem(PERIOD_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as PeriodStore) : {};
-  } catch {
-    return {};
-  }
-}
-
-function writePeriodFor(tab: string, from: string, to: string) {
-  if (typeof window === "undefined") return;
-  if (tab === "tax") return;
-  const store = readPeriodStore();
-  store[tab] = { from, to };
-  try {
-    localStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify(store));
-  } catch {}
-}
-
 export function ReportsView({
   accounts,
 }: {
@@ -77,17 +55,21 @@ export function ReportsView({
   const [to, setTo] = useState(format(endOfMonth(now), "yyyy-MM-dd"));
   const [activeTab, setActiveTab] = useState("cashflow");
 
-  // Per-tab period persistence. Tax owns its own FY scope so it's excluded.
+  // Per-tab period persistence + hideTransfers both live in the
+  // DB-backed displayPrefs blob now, so the operator's choices follow
+  // them across devices instead of staying in per-browser localStorage.
+  const { prefs: displayPrefs, setPref } = useDisplayPrefs();
+  const hideTransfers = displayPrefs.reportsHideTransfers;
+  function toggleHideTransfers() {
+    setPref("reportsHideTransfers", !hideTransfers);
+  }
+
   // On tab change (and initial mount): load that tab's stored range, or fall
   // back to a per-tab default so reports don't bleed periods into each other.
-  // Storage writes happen inside applyRange (the user-driven setters) — not
-  // a persist effect — so the load doesn't accidentally stomp the stored
-  // value with stale state captured in the effect's closure.
+  // Tax owns its own FY scope so it's excluded.
   useEffect(() => {
-    if (typeof window === "undefined") return;
     if (activeTab === "tax") return;
-    const store = readPeriodStore();
-    const stored = store[activeTab];
+    const stored = displayPrefs.reportsPeriodByTab[activeTab];
     if (stored?.from && stored?.to) {
       setFrom(stored.from);
       setTo(stored.to);
@@ -103,28 +85,15 @@ export function ReportsView({
       );
       setTo(format(endOfMonth(today), "yyyy-MM-dd"));
     }
-  }, [activeTab]);
+  }, [activeTab, displayPrefs.reportsPeriodByTab]);
 
   function applyRange(newFrom: string, newTo: string) {
     setFrom(newFrom);
     setTo(newTo);
-    writePeriodFor(activeTab, newFrom, newTo);
-  }
-
-  // Default to true on SSR + first paint; sync from localStorage in a
-  // mount-effect. Reading storage in the initialiser caused the Switch to
-  // hydrate with a different checked state than the server rendered.
-  const [hideTransfers, setHideTransfers] = useState<boolean>(true);
-  useEffect(() => {
-    const stored = localStorage.getItem("reports-hide-transfers");
-    if (stored !== null) setHideTransfers(stored === "true");
-  }, []);
-
-  function toggleHideTransfers() {
-    setHideTransfers((prev) => {
-      const next = !prev;
-      localStorage.setItem("reports-hide-transfers", String(next));
-      return next;
+    if (activeTab === "tax") return;
+    setPref("reportsPeriodByTab", {
+      ...displayPrefs.reportsPeriodByTab,
+      [activeTab]: { from: newFrom, to: newTo },
     });
   }
 

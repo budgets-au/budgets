@@ -23,7 +23,6 @@ import { TransactionRow } from "@/components/transactions/transaction-row";
 import { toast } from "sonner";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
-const PAGE_SIZE_STORAGE_KEY = "transactions-page-size";
 const DEFAULT_PAGE_SIZE = 200;
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -115,36 +114,23 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkCategoryId, setBulkCategoryId] = useState<string>("");
   const [bulkApplying, setBulkApplying] = useState(false);
-  // SSR-safe default; localStorage read deferred to a post-mount effect so the
-  // server-rendered HTML and the first client render agree.
-  const [showNotes, setShowNotes] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  // Page-size — SSR-safe default, hydrated from localStorage on mount so
-  // the initial render matches the server output and dodges a hydration
-  // mismatch.
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
-  useEffect(() => {
-    const stored = localStorage.getItem(PAGE_SIZE_STORAGE_KEY);
-    const n = stored ? parseInt(stored, 10) : NaN;
-    if ((PAGE_SIZE_OPTIONS as readonly number[]).includes(n)) {
-      setPageSize(n);
-    }
-  }, []);
-  useEffect(() => {
-    const stored = localStorage.getItem("transactions-show-notes");
-    if (stored !== null) setShowNotes(stored !== "false");
-  }, []);
-  useEffect(() => {
-    localStorage.setItem("transactions-show-notes", String(showNotes));
-  }, [showNotes]);
-  const [showLinkedDetails, setShowLinkedDetails] = useState(false);
-  useEffect(() => {
-    const stored = localStorage.getItem("transactions-show-linked-details");
-    if (stored !== null) setShowLinkedDetails(stored === "true");
-  }, []);
-  useEffect(() => {
-    localStorage.setItem("transactions-show-linked-details", String(showLinkedDetails));
-  }, [showLinkedDetails]);
+  // All three view-prefs (page size, show-notes, show-linked-details)
+  // now live in the DB-backed display-prefs blob alongside the other
+  // toggles so they follow the operator across systems instead of
+  // drifting between browser localStorages.
+  const { prefs: displayPrefs, setPref } = useDisplayPrefs();
+  const showNotes = displayPrefs.transactionsShowNotes;
+  const showLinkedDetails = displayPrefs.transactionsShowLinkedDetails;
+  const pageSize = (PAGE_SIZE_OPTIONS as readonly number[]).includes(
+    displayPrefs.transactionsPageSize,
+  )
+    ? displayPrefs.transactionsPageSize
+    : DEFAULT_PAGE_SIZE;
+  const setShowNotes = (v: boolean) => setPref("transactionsShowNotes", v);
+  const setShowLinkedDetails = (v: boolean) =>
+    setPref("transactionsShowLinkedDetails", v);
+  const setPageSize = (n: number) => setPref("transactionsPageSize", n);
 
   const { data: categories = initialCategories, mutate: mutateCategories } =
     useSWR<{ id: string; name: string; parentId: string | null }[]>(
@@ -178,7 +164,6 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
   // gated by both the URL transfersFilter ("none" hides it because
   // pairs are filtered out anyway) AND the user's persistent display
   // preference. Either condition false → panel hidden.
-  const { prefs: displayPrefs } = useDisplayPrefs();
   const showLinkedPanel =
     transfersFilter !== "none" && displayPrefs.transactionsShowLinkedPanel;
   const directionRaw = searchParams.get("direction");
@@ -792,12 +777,6 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                         onChange={(e) => {
                           const next = parseInt(e.target.value, 10);
                           setPageSize(next);
-                          try {
-                            localStorage.setItem(
-                              PAGE_SIZE_STORAGE_KEY,
-                              String(next),
-                            );
-                          } catch {}
                           // Reset to page 1 — the current page may exceed
                           // the new totalPages when the size shrinks.
                           goToPage(1);

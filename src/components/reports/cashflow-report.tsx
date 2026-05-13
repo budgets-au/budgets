@@ -6,6 +6,7 @@ import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import type { CashflowReport as CashflowData, CashflowCategory } from "@/app/api/reports/cashflow/route";
 import { CashflowCellDialog, type CashflowCellQuery } from "./cashflow-cell-dialog";
 
@@ -911,75 +912,35 @@ export function CashflowReport({
   accountIds: string[];
   hideTransfers: boolean;
 }) {
-  // SSR/client mismatch hazard: useState initializers run on the server
-  // too, where localStorage doesn't exist. Use SSR-safe defaults here and
-  // sync from localStorage in a mount-effect, otherwise hydration drops
-  // the wrong value. (Saves write back to localStorage on every change.)
-  const [totalsLevel, setTotalsLevel] = useState<TotalsLevel>("grandparent");
-  const [showCounts, setShowCounts] = useState<boolean>(false);
-  const [showTotal, setShowTotal] = useState<boolean>(true);
-  const [showAvg, setShowAvg] = useState<boolean>(true);
-  // Single Plan toggle (was separate Budget + Scheduled). A category never
-  // has both a budget and a scheduled at the same time, so one column shows
-  // whichever applies. Migrate from the old two keys on first read.
-  const [showPlan, setShowPlan] = useState<boolean>(false);
-
-  useEffect(() => {
-    const lv = localStorage.getItem("cashflow-totals-level") as TotalsLevel | null;
-    if (lv) setTotalsLevel(lv);
-    setShowCounts(localStorage.getItem("cashflow-show-counts") === "true");
-    setShowTotal(localStorage.getItem("cashflow-show-total") !== "false");
-    setShowAvg(localStorage.getItem("cashflow-show-avg") !== "false");
-    const cur = localStorage.getItem("cashflow-show-plan");
-    if (cur !== null) {
-      setShowPlan(cur === "true");
-    } else {
-      const oldB = localStorage.getItem("cashflow-show-budget") === "true";
-      const oldS = localStorage.getItem("cashflow-show-scheduled") === "true";
-      setShowPlan(oldB || oldS);
-    }
-  }, []);
+  // All view toggles for the Cash Flow report tab now live in the
+  // DB-backed display-prefs blob, so they follow the operator across
+  // devices instead of drifting between browser localStorages.
+  const { prefs: displayPrefs, setPref } = useDisplayPrefs();
+  const totalsLevel = displayPrefs.cashflowTotalsLevel;
+  const showCounts = displayPrefs.cashflowShowCounts;
+  const showTotal = displayPrefs.cashflowShowTotal;
+  const showAvg = displayPrefs.cashflowShowAvg;
+  const showPlan = displayPrefs.cashflowShowPlan;
 
   function toggleShowCounts() {
-    setShowCounts((prev) => {
-      const next = !prev;
-      localStorage.setItem("cashflow-show-counts", String(next));
-      return next;
-    });
+    setPref("cashflowShowCounts", !showCounts);
   }
-
   function toggleShowTotal() {
-    setShowTotal((prev) => {
-      const next = !prev;
-      localStorage.setItem("cashflow-show-total", String(next));
-      return next;
-    });
+    setPref("cashflowShowTotal", !showTotal);
   }
-
   function toggleShowAvg() {
-    setShowAvg((prev) => {
-      const next = !prev;
-      localStorage.setItem("cashflow-show-avg", String(next));
-      return next;
-    });
+    setPref("cashflowShowAvg", !showAvg);
   }
-
   function toggleShowPlan() {
-    setShowPlan((prev) => {
-      const next = !prev;
-      localStorage.setItem("cashflow-show-plan", String(next));
-      return next;
-    });
+    setPref("cashflowShowPlan", !showPlan);
+  }
+  function changeTotalsLevel(level: TotalsLevel) {
+    setPref("cashflowTotalsLevel", level);
   }
 
   const [collapsedGps, setCollapsedGps] = useState<Set<string>>(new Set());
   const [collapsedSubs, setCollapsedSubs] = useState<Set<string>>(new Set());
   const [cellQuery, setCellQuery] = useState<CashflowCellQuery | null>(null);
-
-  function changeTotalsLevel(level: TotalsLevel) {
-    setTotalsLevel(level);
-    localStorage.setItem("cashflow-totals-level", level);
-  }
 
   function toggleGp(id: string) {
     setCollapsedGps((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });

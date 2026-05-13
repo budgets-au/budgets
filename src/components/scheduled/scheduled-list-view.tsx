@@ -588,21 +588,15 @@ export function ScheduledListView({
 
   // Window for matching: rolling N-month look-back from today, where N
   // is user-controlled via the dropdown in the details title (default
-  // 6m). Persisted to localStorage so the user's preferred window
-  // survives page reloads.
-  const [matchWindowMonths, setMatchWindowMonths] = useState<number>(
-    DEFAULT_MATCH_WINDOW_MONTHS,
-  );
-  useEffect(() => {
-    const v = localStorage.getItem("scheduled-match-window-months");
-    const n = v ? parseInt(v, 10) : NaN;
-    if (Number.isFinite(n) && MATCH_WINDOW_OPTIONS.some((o) => o.months === n)) {
-      setMatchWindowMonths(n);
-    }
-  }, []);
+  // 6m). DB-backed via displayPrefs so the preference follows the
+  // operator across devices.
+  const { prefs: matchPrefs, setPref: setMatchPref } = useDisplayPrefs();
+  const storedWindow = matchPrefs.scheduledMatchWindowMonths;
+  const matchWindowMonths = MATCH_WINDOW_OPTIONS.some((o) => o.months === storedWindow)
+    ? storedWindow
+    : DEFAULT_MATCH_WINDOW_MONTHS;
   function setMatchWindowPersisted(months: number) {
-    setMatchWindowMonths(months);
-    localStorage.setItem("scheduled-match-window-months", String(months));
+    setMatchPref("scheduledMatchWindowMonths", months);
   }
   const today = new Date();
   const fromISO = toISO(subMonths(today, matchWindowMonths));

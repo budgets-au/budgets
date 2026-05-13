@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import useSWR from "swr";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { useDarkMode } from "@/hooks/use-dark-mode";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD } from "@/lib/utils";
 import type {
   CashflowReport as CashflowData,
@@ -12,7 +13,6 @@ import type {
 } from "@/app/api/reports/cashflow/route";
 
 type SankeyScope = "all" | "income" | "expenses";
-const SCOPE_STORAGE_KEY = "reports-sankey-scope";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -320,18 +320,10 @@ export function SankeyReport({
   );
   const isDark = useDarkMode();
 
-  const [scope, setScope] = useState<SankeyScope>("all");
-  useEffect(() => {
-    const stored = localStorage.getItem(SCOPE_STORAGE_KEY);
-    if (stored === "income" || stored === "expenses" || stored === "all") {
-      setScope(stored);
-    }
-  }, []);
+  const { prefs, setPref } = useDisplayPrefs();
+  const scope: SankeyScope = prefs.reportsSankeyScope;
   function changeScope(next: SankeyScope) {
-    setScope(next);
-    try {
-      localStorage.setItem(SCOPE_STORAGE_KEY, next);
-    } catch {}
+    setPref("reportsSankeyScope", next);
   }
 
   // Set of cat ids whose children are revealed. Depth-0 cats are always

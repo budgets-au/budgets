@@ -6,9 +6,9 @@ import { differenceInDays, parseISO } from "date-fns";
 import { ChevronDown, ChevronRight, Eye, EyeOff, Printer } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD } from "@/lib/utils";
 
-const EXCLUDED_STORAGE_KEY = "envelope-excluded-cat-ids";
 import type {
   CashflowReport as CashflowData,
   CashflowCategory,
@@ -233,30 +233,15 @@ export function EnvelopeReport({
     });
   }
 
-  // Excluded cat ids — the eye-off toggle. Persisted to localStorage so the
-  // user's curated envelope set survives reloads. Default-load happens in
-  // an effect to dodge the SSR/hydration mismatch hazard.
-  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(EXCLUDED_STORAGE_KEY);
-      if (!raw) return;
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) setExcludedIds(new Set(arr.filter((x) => typeof x === "string")));
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  // Excluded cat ids — the eye-off toggle. DB-backed via displayPrefs
+  // so the operator's curated envelope set follows them across devices.
+  const { prefs, setPref } = useDisplayPrefs();
+  const excludedIds = new Set(prefs.envelopeExcludedCatIds);
   function toggleExcluded(id: string) {
-    setExcludedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      try {
-        localStorage.setItem(EXCLUDED_STORAGE_KEY, JSON.stringify([...next]));
-      } catch {}
-      return next;
-    });
+    const next = new Set(excludedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setPref("envelopeExcludedCatIds", [...next]);
   }
   const [showHidden, setShowHidden] = useState(false);
 

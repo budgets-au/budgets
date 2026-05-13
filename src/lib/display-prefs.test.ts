@@ -22,18 +22,47 @@ describe("parseDisplayPrefs", () => {
 
   it("uses the stored value when present and well-typed", () => {
     expect(parseDisplayPrefs(`{"scheduledShowWeekly":false}`)).toEqual({
+      ...DISPLAY_PREFS_DEFAULT,
       scheduledShowWeekly: false,
-      transactionsShowLinkedPanel: true,
     });
     expect(parseDisplayPrefs(`{"transactionsShowLinkedPanel":false}`)).toEqual({
-      scheduledShowWeekly: true,
+      ...DISPLAY_PREFS_DEFAULT,
       transactionsShowLinkedPanel: false,
     });
     expect(
       parseDisplayPrefs(
         `{"scheduledShowWeekly":false,"transactionsShowLinkedPanel":false}`,
       ),
-    ).toEqual({ scheduledShowWeekly: false, transactionsShowLinkedPanel: false });
+    ).toEqual({
+      ...DISPLAY_PREFS_DEFAULT,
+      scheduledShowWeekly: false,
+      transactionsShowLinkedPanel: false,
+    });
+  });
+
+  it("accepts an already-parsed object (the API route path)", () => {
+    // API route hands an object straight in rather than re-stringifying
+    // the JSONB column. Same defaults-merge logic should apply.
+    expect(parseDisplayPrefs({ cashflowShowPlan: true })).toEqual({
+      ...DISPLAY_PREFS_DEFAULT,
+      cashflowShowPlan: true,
+    });
+  });
+
+  it("parses the enum + numeric fields with their tolerant validators", () => {
+    expect(
+      parseDisplayPrefs(`{"calendarViewMode":"week","transactionsPageSize":50}`),
+    ).toEqual({
+      ...DISPLAY_PREFS_DEFAULT,
+      calendarViewMode: "week",
+      transactionsPageSize: 50,
+    });
+    // Garbage values for enum / number land back on defaults.
+    expect(
+      parseDisplayPrefs(
+        `{"calendarViewMode":"decade","transactionsPageSize":"oops","cashflowTotalsLevel":"galaxy"}`,
+      ),
+    ).toEqual(DISPLAY_PREFS_DEFAULT);
   });
 
   it("falls back to the default for individual keys whose stored value isn't a boolean", () => {
@@ -52,8 +81,8 @@ describe("parseDisplayPrefs", () => {
         `{"scheduledShowWeekly":false,"futureKnob":"someValue"}`,
       ),
     ).toEqual({
+      ...DISPLAY_PREFS_DEFAULT,
       scheduledShowWeekly: false,
-      transactionsShowLinkedPanel: true,
     });
   });
 });

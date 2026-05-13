@@ -3,8 +3,8 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 
-const STORAGE_KEY = "global-account-ids";
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface Account {
@@ -13,10 +13,11 @@ interface Account {
 }
 
 /**
- * URL ↔ localStorage backed multi-select for the global account filter.
- * The URL is the source of truth (so views can read it server-side or via
- * `useSearchParams`); localStorage just remembers the last selection so
- * navigation between pages doesn't drop the filter.
+ * URL ↔ DB-backed multi-select for the global account filter. The URL
+ * stays the source of truth within a page navigation (so views can
+ * read it server-side or via `useSearchParams`); the DB-backed
+ * displayPrefs blob remembers the last selection so opening the app
+ * on a fresh device restores the same filter.
  *
  * "All accounts" (empty URL filter) expands to every *visible*
  * (non-archived) account, so consumers iterating `ids` never accidentally
@@ -29,6 +30,7 @@ export function useAccountFilter() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { data: accounts = [] } = useSWR<Account[]>("/api/accounts", fetcher);
+  const { prefs, setPref } = useDisplayPrefs();
 
   const urlIds = (searchParams.get("accountIds") ?? "")
     .split(",")
@@ -42,22 +44,17 @@ export function useAccountFilter() {
 
   // On first mount: if the URL has no filter but we remembered one, push it
   // back into the URL so all consumers see a consistent value.
+  const restored = useRef(false);
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (restored.current) return;
     if (urlIds.length > 0) return;
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
-    try {
-      const restored: string[] = JSON.parse(stored);
-      if (!Array.isArray(restored) || restored.length === 0) return;
-      const p = new URLSearchParams(searchParams.toString());
-      p.set("accountIds", restored.join(","));
-      router.replace(`${pathname}?${p}`);
-    } catch {
-      /* ignore corrupt localStorage */
-    }
+    if (prefs.globalAccountIds.length === 0) return;
+    restored.current = true;
+    const p = new URLSearchParams(searchParams.toString());
+    p.set("accountIds", prefs.globalAccountIds.join(","));
+    router.replace(`${pathname}?${p}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [prefs.globalAccountIds.join(",")]);
 
   // Persist whenever the URL ids change. Only the user's explicit
   // selection is stored — never the expanded "all visible" form, since
@@ -65,17 +62,15 @@ export function useAccountFilter() {
   //
   // SKIP the very first run on mount: the URL starts empty until the
   // restore effect above pushes the saved selection back in, so writing
-  // `[]` here would clobber localStorage before restore can read it
-  // (the previous bug: the global selector wasn't persisting across
-  // sessions). Once mounted, every real change persists.
+  // `[]` here would clobber the saved value before restore can read it.
   const firstPersist = useRef(true);
   useEffect(() => {
-    if (typeof window === "undefined") return;
     if (firstPersist.current) {
       firstPersist.current = false;
       return;
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(urlIds));
+    if (urlIds.join(",") === prefs.globalAccountIds.join(",")) return;
+    setPref("globalAccountIds", urlIds);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlIds.join(",")]);
 

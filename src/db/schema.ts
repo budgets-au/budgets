@@ -366,6 +366,14 @@ export const appSettings = sqliteTable("app_settings", {
   superPartnerLabel: text("super_partner_label"),
   taxConfig: text("tax_config", { mode: "json" }).$type<TaxConfig>(),
   backupSchedule: text("backup_schedule", { mode: "json" }).$type<BackupSchedule>(),
+  /** DB-backed equivalent of the per-browser localStorage blob —
+   * unified place for every client toggle / view preference. Shape
+   * is owned by `src/lib/display-prefs.ts` (DisplayPrefs interface).
+   * Parsed defensively at every read so a malformed or partial blob
+   * still surfaces sensible defaults. */
+  displayPrefs: text("display_prefs", { mode: "json" }).$type<
+    Partial<Record<string, unknown>>
+  >(),
   /** Idempotency flag for the unlock-time sample-data seeder.
    * Set to 1 the first time the seeder runs (or when the seeder
    * detects an existing populated DB and skips). Once 1, never seed

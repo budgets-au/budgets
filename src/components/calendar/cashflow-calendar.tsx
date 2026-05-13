@@ -79,7 +79,7 @@ export function CashflowCalendar({
   // Linked-counterpart detail toggle in the day-detail panel — reuses the
   // same display pref the main /transactions list reads so flipping the
   // toggle in Settings → General affects both views consistently.
-  const { prefs: displayPrefs } = useDisplayPrefs();
+  const { prefs: displayPrefs, setPref } = useDisplayPrefs();
   const [month, setMonth] = useState(new Date());
   // Day detail panel selection. Defaults to today; click a calendar cell to
   // change it. Stored as ISO date string so equality comparison is trivial.
@@ -131,7 +131,12 @@ export function CashflowCalendar({
       chartTo === toISO(addDays(parseISO(todayISO), halfDays))
     );
   }
-  const [viewMode, setViewMode] = useState<"month" | "week">("month");
+  // Calendar's month/week toggle now lives in the DB-backed
+  // display-prefs blob alongside every other view preference, so the
+  // mode follows the operator across devices instead of drifting per
+  // browser. `setViewMode` writes back through the hook.
+  const viewMode = displayPrefs.calendarViewMode;
+  const setViewMode = (v: "month" | "week") => setPref("calendarViewMode", v);
 
   // Track lg+ via matchMedia rather than CSS @media inside a named class —
   // the latter has been dropped by Safari multiple times. isLgUp drives the
@@ -147,16 +152,6 @@ export function CashflowCalendar({
   const [weekStart, setWeekStart] = useState(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }),
   );
-  // Persist the month/week toggle across sessions. Read in an effect (not in
-  // the initializer) so the SSR-rendered "month" default matches the first
-  // client paint and avoids a hydration mismatch.
-  useEffect(() => {
-    const saved = localStorage.getItem("cashflow-calendar-view");
-    if (saved === "month" || saved === "week") setViewMode(saved);
-  }, []);
-  useEffect(() => {
-    localStorage.setItem("cashflow-calendar-view", viewMode);
-  }, [viewMode]);
 
   const calFrom = toISO(viewMode === "month" ? startOfMonth(month) : weekStart);
   const calTo = toISO(viewMode === "month" ? endOfMonth(month) : addDays(weekStart, 6));

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import useSWR from "swr";
 import {
   DISPLAY_PREFS_DEFAULT,
   DISPLAY_PREFS_STORAGE_KEY,
@@ -8,51 +9,97 @@ import {
   type DisplayPrefs,
 } from "@/lib/display-prefs";
 
-/** React hook around the display-prefs blob. Defaults render on the
- * server and on first client mount (so SSR and the initial client
- * tree match — see feedback_hydration_localstorage), then a
- * useEffect re-reads from storage and re-renders if the stored value
- * differs from the defaults. */
+const fetcher = async (url: string): Promise<DisplayPrefs> => {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to load display prefs: ${res.status}`);
+  return res.json();
+};
+
+/** Hook around the DB-backed display preferences. Previously these
+ * lived in per-browser localStorage and drifted whenever the
+ * operator moved to a different device. They're now centrally
+ * stored in `app_settings.display_prefs` so a single setting follows
+ * the user across systems.
+ *
+ * The hook returns the same `{ prefs, setPref }` shape consumers
+ * already used; the storage mechanism underneath swaps in
+ * transparently. Reads land via SWR (cached, revalidated on focus),
+ * writes hit PATCH /api/display-prefs and optimistically update the
+ * cache so toggles feel instant. */
 export function useDisplayPrefs(): {
   prefs: DisplayPrefs;
   setPref: <K extends keyof DisplayPrefs>(key: K, value: DisplayPrefs[K]) => void;
 } {
-  const [prefs, setPrefs] = useState<DisplayPrefs>(DISPLAY_PREFS_DEFAULT);
+  const { data, mutate } = useSWR<DisplayPrefs>(
+    "/api/display-prefs",
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      fallbackData: { ...DISPLAY_PREFS_DEFAULT },
+    },
+  );
+  const prefs = data ?? DISPLAY_PREFS_DEFAULT;
 
+  // One-time migration: if the server's blob is still all-default
+  // (i.e. a fresh install) AND the local browser has a legacy
+  // localStorage blob from before the DB-backed switch, push that
+  // blob to the server so the operator doesn't re-configure from
+  // scratch on first run.
+  const migrationRanRef = useRef(false);
   useEffect(() => {
-    const stored = parseDisplayPrefs(
-      typeof window === "undefined"
-        ? null
-        : window.localStorage.getItem(DISPLAY_PREFS_STORAGE_KEY),
-    );
-    setPrefs(stored);
-    // Cross-tab sync: another tab toggling the setting should propagate
-    // here without a refresh. Only fires for changes from OTHER tabs;
-    // same-tab writes go through setPref directly.
-    function onStorage(e: StorageEvent) {
-      if (e.key !== DISPLAY_PREFS_STORAGE_KEY) return;
-      setPrefs(parseDisplayPrefs(e.newValue));
+    if (migrationRanRef.current) return;
+    if (typeof window === "undefined") return;
+    if (!data) return; // wait for first fetch
+    migrationRanRef.current = true;
+    try {
+      const stored = window.localStorage.getItem(DISPLAY_PREFS_STORAGE_KEY);
+      if (!stored) return;
+      const fromLocal = parseDisplayPrefs(stored);
+      // Only push if the server's value differs from defaults in
+      // none of the keys, and the local has at least one non-default
+      // override — otherwise we'd overwrite an intentional change
+      // someone made on another device.
+      const serverAny = data as unknown as Record<string, unknown>;
+      const localAny = fromLocal as unknown as Record<string, unknown>;
+      const defaultAny = DISPLAY_PREFS_DEFAULT as unknown as Record<string, unknown>;
+      const serverIsDefaults = Object.keys(defaultAny).every(
+        (k) => serverAny[k] === defaultAny[k],
+      );
+      const localHasOverride = Object.keys(defaultAny).some(
+        (k) => localAny[k] !== defaultAny[k],
+      );
+      if (!serverIsDefaults || !localHasOverride) return;
+      void fetch("/api/display-prefs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fromLocal),
+      }).then((r) => {
+        if (r.ok) void mutate(fromLocal, { revalidate: false });
+      });
+    } catch {
+      /* ignore — private mode, blocked storage, etc. */
     }
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [data, mutate]);
 
   const setPref = useCallback(
     <K extends keyof DisplayPrefs>(key: K, value: DisplayPrefs[K]) => {
-      setPrefs((cur) => {
-        const next = { ...cur, [key]: value };
-        try {
-          window.localStorage.setItem(
-            DISPLAY_PREFS_STORAGE_KEY,
-            JSON.stringify(next),
-          );
-        } catch {
-          /* private mode / quota — fall back to in-memory only */
-        }
-        return next;
-      });
+      const next = { ...prefs, [key]: value };
+      // Optimistic update so toggles feel instant; SWR will reconcile
+      // with the server response on success.
+      void mutate(
+        async () => {
+          const res = await fetch("/api/display-prefs", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ [key]: value }),
+          });
+          if (!res.ok) throw new Error(`PATCH /api/display-prefs ${res.status}`);
+          return (await res.json()) as DisplayPrefs;
+        },
+        { optimisticData: next, rollbackOnError: true, revalidate: false },
+      );
     },
-    [],
+    [prefs, mutate],
   );
 
   return { prefs, setPref };

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { parseISO, subDays } from "date-fns";
 import { AlertCircle, ChevronDown, ChevronRight, X, Undo2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD, formatDate, amountClass } from "@/lib/utils";
 import { colourForFrequency, freqLabel } from "@/lib/schedule-colours";
 import { expandRecurrence } from "@/lib/recurrence";
@@ -132,15 +133,11 @@ export function MissedScheduledPanel({ accounts }: { accounts: Account[] }) {
   const txnFromISO = toISO(subDays(today, WINDOW_DAYS + MATCH_TOLERANCE_DAYS_RANGE));
 
   const [expanded, setExpanded] = useState(false);
-  // SSR-safe default; localStorage read deferred to a post-mount effect so the
-  // server-rendered HTML and the first client render agree.
-  const [showDismissed, setShowDismissed] = useState(false);
-  useEffect(() => {
-    setShowDismissed(localStorage.getItem("missed-show-dismissed") === "true");
-  }, []);
-  useEffect(() => {
-    localStorage.setItem("missed-show-dismissed", String(showDismissed));
-  }, [showDismissed]);
+  // showDismissed lives in the DB-backed display-prefs blob so it
+  // follows the operator across devices.
+  const { prefs: displayPrefs, setPref } = useDisplayPrefs();
+  const showDismissed = displayPrefs.missedShowDismissed;
+  const setShowDismissed = (v: boolean) => setPref("missedShowDismissed", v);
 
   const [dismissTarget, setDismissTarget] = useState<DisplayRow | null>(null);
   const [noteDraft, setNoteDraft] = useState("");

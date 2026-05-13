@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.15.0 — 2026-05-13
+
+### Changed
+- **Sidebar version label centered.** Was left-aligned under the
+  nav padding; now sits visually centred above the Lock / Sign-out
+  buttons so it reads as a footer plate rather than a stray line.
+
+### Added
+- **`Row expand` toggle on the transactions list.** Click-to-expand
+  metadata (notes, bank ID, posted timestamp, import details) is
+  now controlled by `transactionsRowExpandable` on the DB-backed
+  prefs blob. Default ON (preserves existing UX); when OFF, clicks
+  on a row are inert and any already-open row collapses. Pref
+  applies to both the main transactions list and the calendar
+  day-detail panel that reuses the same `TransactionRow`.
+
 ## 0.14.0 — 2026-05-13
 
 ### Added

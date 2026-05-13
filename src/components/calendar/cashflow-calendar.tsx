@@ -1607,11 +1607,17 @@ function DayDetailPanel({
                       showDate={false}
                       showCheckbox={false}
                       showBalance={false}
-                      isExpanded={expandedId === t.id}
-                      onToggleExpand={() =>
-                        setExpandedId((cur) =>
-                          cur === t.id ? null : t.id,
-                        )
+                      isExpanded={
+                        displayPrefs.transactionsRowExpandable &&
+                        expandedId === t.id
+                      }
+                      onToggleExpand={
+                        displayPrefs.transactionsRowExpandable
+                          ? () =>
+                              setExpandedId((cur) =>
+                                cur === t.id ? null : t.id,
+                              )
+                          : undefined
                       }
                       match={match}
                       onChange={() => mutateTxns()}

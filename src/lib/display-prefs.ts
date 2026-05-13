@@ -26,6 +26,10 @@ export interface DisplayPrefs {
   transactionsShowLinkedDetails: boolean;
   /** Page size for the main transactions list. */
   transactionsPageSize: number;
+  /** Whether clicking a transaction row expands it to show full
+   * metadata (notes, bank-ID, posted timestamp, import details).
+   * Off → clicks are inert; the row stays a single line. */
+  transactionsRowExpandable: boolean;
 
   // ── Cashflow calendar ─────────────────────────────────────────
   /** "month" or "week" view on the calendar page. */
@@ -91,6 +95,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   transactionsShowNotes: false,
   transactionsShowLinkedDetails: false,
   transactionsPageSize: 200,
+  transactionsRowExpandable: true,
   calendarViewMode: "month",
   missedShowDismissed: false,
   cashflowTotalsLevel: "grandparent",
@@ -199,6 +204,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     transactionsShowNotes: bool("transactionsShowNotes"),
     transactionsShowLinkedDetails: bool("transactionsShowLinkedDetails"),
     transactionsPageSize: num("transactionsPageSize"),
+    transactionsRowExpandable: bool("transactionsRowExpandable"),
     calendarViewMode: pickEnum("calendarViewMode", ["month", "week"] as const),
     missedShowDismissed: bool("missedShowDismissed"),
     cashflowTotalsLevel: pickEnum(

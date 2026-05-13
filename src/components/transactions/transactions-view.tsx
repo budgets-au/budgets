@@ -122,6 +122,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
   const { prefs: displayPrefs, setPref } = useDisplayPrefs();
   const showNotes = displayPrefs.transactionsShowNotes;
   const showLinkedDetails = displayPrefs.transactionsShowLinkedDetails;
+  const rowExpandable = displayPrefs.transactionsRowExpandable;
   const pageSize = (PAGE_SIZE_OPTIONS as readonly number[]).includes(
     displayPrefs.transactionsPageSize,
   )
@@ -130,6 +131,8 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
   const setShowNotes = (v: boolean) => setPref("transactionsShowNotes", v);
   const setShowLinkedDetails = (v: boolean) =>
     setPref("transactionsShowLinkedDetails", v);
+  const setRowExpandable = (v: boolean) =>
+    setPref("transactionsRowExpandable", v);
   const setPageSize = (n: number) => setPref("transactionsPageSize", n);
 
   const { data: categories = initialCategories, mutate: mutateCategories } =
@@ -607,6 +610,14 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                   />
                 </label>
               )}
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0">
+                <span>Row expand</span>
+                <Switch
+                  checked={rowExpandable}
+                  onCheckedChange={(v) => setRowExpandable(v)}
+                  aria-label="Enable click-to-expand on transaction rows"
+                />
+              </label>
               {countData && (
                 <span className="ml-auto text-xs text-muted-foreground tabular-nums">
                   {countData.total.toLocaleString()} transactions
@@ -730,11 +741,14 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                         showCheckbox
                         isSelected={selectedIds.has(t.id)}
                         onToggleSelect={() => toggleRow(t.id)}
-                        isExpanded={expandedId === t.id}
-                        onToggleExpand={() =>
-                          setExpandedId((cur) =>
-                            cur === t.id ? null : t.id,
-                          )
+                        isExpanded={rowExpandable && expandedId === t.id}
+                        onToggleExpand={
+                          rowExpandable
+                            ? () =>
+                                setExpandedId((cur) =>
+                                  cur === t.id ? null : t.id,
+                                )
+                            : undefined
                         }
                         match={
                           match

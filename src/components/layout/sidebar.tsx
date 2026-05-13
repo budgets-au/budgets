@@ -167,7 +167,7 @@ export function Sidebar() {
         {/* Release tag above the footer actions so the operator can
             see what build they're on (matches the image / GitHub tag
             we cut). Subtle styling — it's reference info, not a CTA. */}
-        <div className="border-t px-6 pt-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground/60 tabular-nums">
+        <div className="border-t px-6 pt-3 pb-1 text-center text-[10px] uppercase tracking-wider text-muted-foreground/60 tabular-nums">
           v{APP_VERSION}
         </div>
 

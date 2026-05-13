@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.26.0 — 2026-05-13
+
+### Fixed (visibility)
+- **Surface `display-prefs` PATCH failures.** A toast + console
+  error now fire whenever the API rejects a pref save (non-2xx
+  response). Previously the optimistic rollback would silently
+  snap a toggle back without telling the operator that anything
+  went wrong — which made any persistence regression invisible
+  ("I hid this category and it came back" with no signal
+  pointing at the save layer).
+- 4 new round-trip regression tests at
+  `src/__tests__/golden/display-prefs-roundtrip.test.ts` lock in
+  the API-layer persistence: fresh-DB defaults, PATCH-then-GET
+  round-trip, empty-array unhide-all, and unrelated-key
+  preservation across multiple PATCHes. 241/241 tests pass.
+
 ## 0.25.0 — 2026-05-13
 
 ### Changed

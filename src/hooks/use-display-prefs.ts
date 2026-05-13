@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import useSWR from "swr";
+import { toast } from "sonner";
 import {
   DISPLAY_PREFS_DEFAULT,
   DISPLAY_PREFS_STORAGE_KEY,
@@ -85,7 +86,11 @@ export function useDisplayPrefs(): {
     <K extends keyof DisplayPrefs>(key: K, value: DisplayPrefs[K]) => {
       const next = { ...prefs, [key]: value };
       // Optimistic update so toggles feel instant; SWR will reconcile
-      // with the server response on success.
+      // with the server response on success. On any non-2xx response
+      // the optimistic data rolls back (the toggle visibly snaps
+      // back) AND a toast surfaces the failure — silently dropping
+      // saves was a long-standing source of "why didn't my hide
+      // stick?" reports.
       void mutate(
         async () => {
           const res = await fetch("/api/display-prefs", {
@@ -93,7 +98,17 @@ export function useDisplayPrefs(): {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ [key]: value }),
           });
-          if (!res.ok) throw new Error(`PATCH /api/display-prefs ${res.status}`);
+          if (!res.ok) {
+            const detail = await res.text().catch(() => "");
+            console.error(
+              `[display-prefs] PATCH ${key} → ${res.status}`,
+              detail,
+            );
+            toast.error(
+              `Couldn't save preference (${res.status}). Check console for details.`,
+            );
+            throw new Error(`PATCH /api/display-prefs ${res.status}`);
+          }
           return (await res.json()) as DisplayPrefs;
         },
         { optimisticData: next, rollbackOnError: true, revalidate: false },

@@ -4,6 +4,21 @@ All notable changes to this project are recorded here. The version policy
 is **bump minor on every shipped change** (per user directive); patch
 remains 0 until released hotfixes warrant it.
 
+## 0.4.0 — 2026-05-13
+
+### Changed
+- **Cashflow report column headers freeze while scrolling.** The
+  table wrapper is now its own vertical scroll container
+  (`max-h: calc(100vh - 220px)`), and every `<th>` in the header row
+  is `position: sticky` to that container's top. Everything above
+  the table — page-level filters, tab bar, and the per-report
+  controls — stays naturally pinned because the page itself stops
+  scrolling. The left-most Category column keeps its horizontal-
+  scroll sticky behaviour; the corner cell takes a higher z-index
+  so the top-left intersection paints correctly. Bottom borders
+  rendered as inset shadows since collapsed table borders drop
+  under sticky cells.
+
 ## 0.3.0 — 2026-05-13
 
 ### Changed

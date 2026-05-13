@@ -1056,49 +1056,53 @@ export function CashflowReport({
 
         </div>
       </div>
-    <div className="overflow-x-auto rounded-lg border">
+    {/* Inner scroll container so the table's `thead` can sticky to
+        the wrapper's top instead of the (already-scrolled-off) page.
+        Filters + controls above this stay visible because the page
+        itself no longer needs to scroll the table out of view. */}
+    <div className="overflow-auto rounded-lg border max-h-[calc(100vh-220px)]">
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="bg-muted border-b">
-            <th className="text-left px-3 py-2 font-semibold sticky left-0 bg-muted w-44 min-w-44">
+          <tr className="bg-muted">
+            <th className="text-left px-3 py-2 font-semibold sticky top-0 left-0 bg-muted w-44 min-w-44 z-20 shadow-[inset_0_-1px_0_0_var(--border)]">
               Category
             </th>
             {months.map((m) => (
               <Fragment key={m}>
                 {showPlan && (
-                  <th className={`text-right px-2 py-2 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wider whitespace-nowrap border-l border-border ${m === thisMonth ? "bg-indigo-500/10" : ""}`}>
+                  <th className={`text-right px-2 py-2 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wider whitespace-nowrap border-l border-border sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10" : "bg-muted"}`}>
                     Plan
                   </th>
                 )}
                 <th
-                  className={`text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] ${!showPlan ? "border-l border-border" : ""} ${
-                    m === thisMonth ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400" : ""
+                  className={`text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${!showPlan ? "border-l border-border" : ""} ${
+                    m === thisMonth ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400" : "bg-muted"
                   }`}
                 >
                   {format(parseISO(`${m}-01`), "MMM ''yy")}
                 </th>
                 {showCounts && (
-                  <th className={`text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] ${m === thisMonth ? "bg-indigo-500/10" : ""}`}>
+                  <th className={`text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10" : "bg-muted"}`}>
                     #
                   </th>
                 )}
               </Fragment>
             ))}
             {showTotal && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px]">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)]">
                 Total
               </th>
             )}
             {showTotal && showCounts && (
-              <th className="text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px]">#</th>
+              <th className="text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)]">#</th>
             )}
             {showAvg && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)]">
                 Avg/mo
               </th>
             )}
             {showPlan && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground/70">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground/70 bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)]">
                 Plan/mo
               </th>
             )}

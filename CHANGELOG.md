@@ -9,6 +9,43 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.43.0 — 2026-05-13
+
+### Fixed
+- **Dashboard layout (and chart palette, and every other DB-only
+  pref) now actually persists across refresh.** Root cause was
+  not the save path — that worked fine end-to-end as the
+  round-trip test confirmed. The destructive code was a "one-time"
+  localStorage-to-DB migration `useEffect` in `useDisplayPrefs`:
+  - The migration's "is the server still all-defaults?" check
+    compared `data` to the defaults. But on the first render
+    `data` is the SWR `fallbackData` — which **is** the defaults.
+    So the check was always true on first render.
+  - For any browser carrying a legacy `display-prefs`
+    localStorage entry (left over from pre-DB versions; nothing
+    in the current codebase writes it), the migration fired on
+    every page load. It PATCHed the full parsed localStorage
+    blob — with `dashboardLayout: []` and every other DB-only
+    key defaulted in — and the API merge clobbered the live
+    server data with those defaults.
+  - The earlier "chart theme not saving" reports were the same
+    bug. The earlier `keepalive` and `<ResponsiveGridLayout
+    key=…>` fixes addressed real edge cases but were not the
+    main culprit.
+
+  The migration `useEffect` has been removed entirely. The
+  legacy localStorage entry becomes inert; the new "Reset
+  browser data" action below cleans it up if the user wants.
+
+### Added
+- **Settings → Security → Reset browser data.** Single button:
+  clears `localStorage`, `sessionStorage`, the `theme` cookie,
+  and calls NextAuth `signOut({ redirectTo: "/login" })`.
+  Server-side prefs are deliberately untouched — those follow
+  the account, not the browser, so re-logging in restores them.
+  Useful for users carrying any stale browser state from older
+  releases, and as a generic "log in fresh" escape hatch.
+
 ## 0.42.0 — 2026-05-13
 
 ### Fixed

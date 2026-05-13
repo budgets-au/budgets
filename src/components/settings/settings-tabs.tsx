@@ -15,6 +15,7 @@ import { BackupSchedule } from "@/components/settings/backup-schedule";
 import { UserManager } from "@/components/settings/user-manager";
 import { SampleDataPanel } from "@/components/settings/sample-data-panel";
 import { OrphanCategoriesPanel } from "@/components/settings/orphan-categories-panel";
+import { ResetBrowserData } from "@/components/settings/reset-browser-data";
 import { SchedulePaletteEditor } from "@/components/settings/schedule-palette-editor";
 
 export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }) {
@@ -129,6 +130,7 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
         <UserManager />
         <SampleDataPanel />
         <OrphanCategoriesPanel />
+        <ResetBrowserData />
         <div className="rounded-xl border bg-card divide-y">
           <div className="px-4 py-3">
             <h2 className="font-medium">Database passphrase</h2>

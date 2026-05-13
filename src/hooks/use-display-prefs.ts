@@ -1,12 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import {
   DISPLAY_PREFS_DEFAULT,
-  DISPLAY_PREFS_STORAGE_KEY,
-  parseDisplayPrefs,
   type DisplayPrefs,
 } from "@/lib/display-prefs";
 
@@ -40,47 +38,6 @@ export function useDisplayPrefs(): {
     },
   );
   const prefs = data ?? DISPLAY_PREFS_DEFAULT;
-
-  // One-time migration: if the server's blob is still all-default
-  // (i.e. a fresh install) AND the local browser has a legacy
-  // localStorage blob from before the DB-backed switch, push that
-  // blob to the server so the operator doesn't re-configure from
-  // scratch on first run.
-  const migrationRanRef = useRef(false);
-  useEffect(() => {
-    if (migrationRanRef.current) return;
-    if (typeof window === "undefined") return;
-    if (!data) return; // wait for first fetch
-    migrationRanRef.current = true;
-    try {
-      const stored = window.localStorage.getItem(DISPLAY_PREFS_STORAGE_KEY);
-      if (!stored) return;
-      const fromLocal = parseDisplayPrefs(stored);
-      // Only push if the server's value differs from defaults in
-      // none of the keys, and the local has at least one non-default
-      // override — otherwise we'd overwrite an intentional change
-      // someone made on another device.
-      const serverAny = data as unknown as Record<string, unknown>;
-      const localAny = fromLocal as unknown as Record<string, unknown>;
-      const defaultAny = DISPLAY_PREFS_DEFAULT as unknown as Record<string, unknown>;
-      const serverIsDefaults = Object.keys(defaultAny).every(
-        (k) => serverAny[k] === defaultAny[k],
-      );
-      const localHasOverride = Object.keys(defaultAny).some(
-        (k) => localAny[k] !== defaultAny[k],
-      );
-      if (!serverIsDefaults || !localHasOverride) return;
-      void fetch("/api/display-prefs", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(fromLocal),
-      }).then((r) => {
-        if (r.ok) void mutate(fromLocal, { revalidate: false });
-      });
-    } catch {
-      /* ignore — private mode, blocked storage, etc. */
-    }
-  }, [data, mutate]);
 
   const setPref = useCallback(
     <K extends keyof DisplayPrefs>(key: K, value: DisplayPrefs[K]) => {

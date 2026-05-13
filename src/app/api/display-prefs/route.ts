@@ -2,12 +2,28 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { appSettings } from "@/db/schema";
+import { appSettings, categories } from "@/db/schema";
 import {
   DISPLAY_PREFS_DEFAULT,
   parseDisplayPrefs,
   type DisplayPrefs,
 } from "@/lib/display-prefs";
+
+/** Build the initial pref blob for a fresh install. New operators
+ * should land on a cashflow report with internal-transfer categories
+ * already hidden — those rows are mostly zero-net noise (asset moves
+ * between own accounts) and the per-category eye system means they
+ * can always be un-hidden if wanted. */
+async function computeInitialPrefs(): Promise<DisplayPrefs> {
+  const transferCats = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(eq(categories.transferKind, "internal"));
+  return {
+    ...DISPLAY_PREFS_DEFAULT,
+    cashflowExcludedCatIds: transferCats.map((c) => c.id),
+  };
+}
 
 /** Read the current display-prefs blob, merged with defaults so the
  * client gets a fully-populated DisplayPrefs every time. */
@@ -21,7 +37,10 @@ export async function GET() {
     .from(appSettings)
     .where(eq(appSettings.id, 1));
   const stored = rows[0]?.displayPrefs;
-  return NextResponse.json(parseDisplayPrefs(stored ?? null));
+  if (stored == null) {
+    return NextResponse.json(await computeInitialPrefs());
+  }
+  return NextResponse.json(parseDisplayPrefs(stored));
 }
 
 /** Patch one or more pref keys. Request body is a partial
@@ -51,7 +70,14 @@ export async function PATCH(request: Request) {
     .select({ displayPrefs: appSettings.displayPrefs })
     .from(appSettings)
     .where(eq(appSettings.id, 1));
-  const current = parseDisplayPrefs(existing[0]?.displayPrefs ?? null);
+  // First write applies the same dynamic defaults GET returns so the
+  // operator's transfer-cat-hidden defaults survive their first
+  // explicit patch (otherwise that patch would create the row over a
+  // stock DISPLAY_PREFS_DEFAULT with empty cashflowExcludedCatIds).
+  const current =
+    existing[0]?.displayPrefs == null
+      ? await computeInitialPrefs()
+      : parseDisplayPrefs(existing[0].displayPrefs);
   // Re-parse the merged candidate to discard any unknown / wrongly-
   // typed keys the client tried to slip in. The parser is the single
   // gatekeeper for the schema.

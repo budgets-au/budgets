@@ -25,7 +25,6 @@ import { TaxDeductionsReport } from "./tax-deductions-report";
 import { ExpensesDrilldown } from "./expenses-drilldown";
 import { EnvelopeReport } from "./envelope-report";
 import { SankeyReport } from "./sankey-report";
-import { Switch } from "@/components/ui/switch";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -55,14 +54,16 @@ export function ReportsView({
   const [to, setTo] = useState(format(endOfMonth(now), "yyyy-MM-dd"));
   const [activeTab, setActiveTab] = useState("cashflow");
 
-  // Per-tab period persistence + hideTransfers both live in the
-  // DB-backed displayPrefs blob now, so the operator's choices follow
-  // them across devices instead of staying in per-browser localStorage.
+  // Per-tab period persistence lives in the DB-backed displayPrefs
+  // blob so the operator's choices follow them across devices.
   const { prefs: displayPrefs, setPref } = useDisplayPrefs();
-  const hideTransfers = displayPrefs.reportsHideTransfers;
-  function toggleHideTransfers() {
-    setPref("reportsHideTransfers", !hideTransfers);
-  }
+  // The old global "Hide transfers" toggle was removed in 0.7.0 — the
+  // cashflow report now does this via per-category eye icons (with
+  // internal-transfer cats hidden by default for new users), and the
+  // envelope report has its own equivalent. Other tabs see all rows,
+  // transfers included. Kept as a hardcoded `false` so subcomponents'
+  // prop signatures don't need to churn.
+  const hideTransfers = false;
 
   // On tab change (and initial mount): load that tab's stored range, or fall
   // back to a per-tab default so reports don't bleed periods into each other.
@@ -171,15 +172,6 @@ export function ReportsView({
           })}
         </div>
 
-        {/* Hide transfers toggle */}
-        <div className="flex items-center gap-2 ml-auto">
-          <span className="text-xs text-muted-foreground">Hide transfers</span>
-          <Switch
-            checked={hideTransfers}
-            onCheckedChange={toggleHideTransfers}
-            aria-label="Hide transfer-typed transactions"
-          />
-        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>

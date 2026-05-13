@@ -4,6 +4,28 @@ All notable changes to this project are recorded here. The version policy
 is **bump minor on every shipped change** (per user directive); patch
 remains 0 until released hotfixes warrant it.
 
+## 0.7.0 — 2026-05-13
+
+### Removed
+- **Global "Hide transfers" toggle.** The page-level toggle is gone;
+  it was binary and only really hid a single internal-transfer
+  category row. The cashflow report's per-category eye system
+  replaces it with finer-grained control, and the envelope report
+  has its own equivalent. Other report tabs now show every category
+  regardless of `transfer_kind`. The toggle's pref
+  (`reportsHideTransfers`) has been removed from `DisplayPrefs`.
+
+### Changed
+- **New installs default to transfers-hidden on the cashflow
+  report.** When a fresh `app_settings` row is created,
+  `cashflowExcludedCatIds` is seeded with the IDs of every
+  internal-transfer category — so the operator lands on a clean
+  cashflow view out of the box. Existing operators are unaffected;
+  their current pref blob keeps whatever they've configured.
+  Implemented as a dynamic default in both GET and PATCH on
+  `/api/display-prefs`, so a first-time patch doesn't accidentally
+  blow away the seeded defaults.
+
 ## 0.6.0 — 2026-05-13
 
 ### Added

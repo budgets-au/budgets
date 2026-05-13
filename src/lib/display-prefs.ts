@@ -36,9 +36,6 @@ export interface DisplayPrefs {
   missedShowDismissed: boolean;
 
   // ── Reports ───────────────────────────────────────────────────
-  /** Hide transfer rows from the income/expense breakdown on the
-   * Reports → Cash Flow tab. Closing-balance walk is unaffected. */
-  reportsHideTransfers: boolean;
   /** Subtotal grouping on Reports → Cash Flow. */
   cashflowTotalsLevel: "grandparent" | "parent" | "none";
   /** Show the count-of-transactions column on Reports → Cash Flow. */
@@ -89,7 +86,6 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   transactionsPageSize: 200,
   calendarViewMode: "month",
   missedShowDismissed: false,
-  reportsHideTransfers: true,
   cashflowTotalsLevel: "grandparent",
   cashflowShowCounts: false,
   cashflowShowTotal: true,
@@ -196,7 +192,6 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     transactionsPageSize: num("transactionsPageSize"),
     calendarViewMode: pickEnum("calendarViewMode", ["month", "week"] as const),
     missedShowDismissed: bool("missedShowDismissed"),
-    reportsHideTransfers: bool("reportsHideTransfers"),
     cashflowTotalsLevel: pickEnum(
       "cashflowTotalsLevel",
       ["grandparent", "parent", "none"] as const,

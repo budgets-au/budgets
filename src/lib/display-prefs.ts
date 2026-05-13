@@ -57,6 +57,13 @@ export interface DisplayPrefs {
   cashflowShowHidden: boolean;
   /** Sankey diagram scope on Reports → Sankey. */
   reportsSankeyScope: "all" | "income" | "expenses";
+  /** Sort column for the Envelope report. `name` is the default and
+   * matches "tree categories alphabetically"; `period` sorts by the
+   * rolled-up total for the selected window. */
+  envelopeSortColumn: "name" | "period";
+  /** Sort direction for the Envelope report. Applies at every tree
+   * level so the same axis ranks roots, sub-parents, and leaves. */
+  envelopeSortDir: "asc" | "desc";
   /** Excluded category IDs on Reports → Envelope. */
   envelopeExcludedCatIds: string[];
   /** Per-tab from/to date range on the Reports page. Keyed by tab id. */
@@ -94,6 +101,8 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   cashflowExcludedCatIds: [],
   cashflowShowHidden: false,
   reportsSankeyScope: "all",
+  envelopeSortColumn: "name",
+  envelopeSortDir: "asc",
   envelopeExcludedCatIds: [],
   reportsPeriodByTab: {},
   globalAccountIds: [],
@@ -206,6 +215,11 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
       "reportsSankeyScope",
       ["all", "income", "expenses"] as const,
     ),
+    envelopeSortColumn: pickEnum(
+      "envelopeSortColumn",
+      ["name", "period"] as const,
+    ),
+    envelopeSortDir: pickEnum("envelopeSortDir", ["asc", "desc"] as const),
     envelopeExcludedCatIds: stringArray("envelopeExcludedCatIds"),
     reportsPeriodByTab: periodMap("reportsPeriodByTab"),
     globalAccountIds: stringArray("globalAccountIds"),

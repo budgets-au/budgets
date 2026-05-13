@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { differenceInDays, parseISO } from "date-fns";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Printer } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Eye, EyeOff, Printer } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
@@ -115,6 +115,8 @@ function flattenForDisplay(
   collapsed: Set<string>,
   excluded: Set<string>,
   showHidden: boolean,
+  sortColumn: "name" | "period",
+  sortDir: "asc" | "desc",
 ): RenderRow[] {
   // Pre-compute effective totals so sorts at every level use the same
   // (post-exclusion) magnitudes that the rows display, instead of the
@@ -129,6 +131,22 @@ function flattenForDisplay(
     return v;
   }
 
+  function compareIds(a: string, b: string): number {
+    if (sortColumn === "name") {
+      const aName = tree.nodes.get(a)?.name ?? "";
+      const bName = tree.nodes.get(b)?.name ?? "";
+      const cmp = aName.localeCompare(bName, undefined, { sensitivity: "base" });
+      return sortDir === "asc" ? cmp : -cmp;
+    }
+    // Period: use rolled total when showHidden is on so excluded rows
+    // keep a stable position relative to their unexcluded siblings;
+    // otherwise rank by the effective (post-exclusion) magnitudes the
+    // rows actually display.
+    const av = showHidden ? (tree.rolled.get(a) ?? 0) : effective(a);
+    const bv = showHidden ? (tree.rolled.get(b) ?? 0) : effective(b);
+    return sortDir === "asc" ? av - bv : bv - av;
+  }
+
   const rows: RenderRow[] = [];
   function walk(id: string, ancestorExcluded: boolean) {
     const n = tree.nodes.get(id);
@@ -139,18 +157,8 @@ function flattenForDisplay(
     if (isExcluded && !showHidden) return;
     const eff = isExcluded ? 0 : effective(id);
     const activeKids = (tree.childrenOf.get(id) ?? [])
-      .map((cid) => ({
-        cid,
-        // Sort key: when showHidden is on, fall back to the raw rolled
-        // total so excluded rows still find a stable position. Otherwise
-        // use effective so live rows rank by the totals on display.
-        sortBy: showHidden
-          ? (tree.rolled.get(cid) ?? 0)
-          : effective(cid),
-        rolled: tree.rolled.get(cid) ?? 0,
-      }))
-      .filter((x) => x.rolled > 0)
-      .sort((a, b) => b.sortBy - a.sortBy);
+      .filter((cid) => (tree.rolled.get(cid) ?? 0) > 0)
+      .sort(compareIds);
     rows.push({
       id,
       name: n.name,
@@ -160,20 +168,13 @@ function flattenForDisplay(
       isExcluded,
     });
     if (collapsed.has(id)) return;
-    for (const { cid } of activeKids) walk(cid, isExcluded);
+    for (const cid of activeKids) walk(cid, isExcluded);
   }
   const roots = Array.from(tree.nodes.values())
     .filter((n) => n.depth === 0 && (tree.rolled.get(n.id) ?? 0) > 0)
-    .sort((a, b) => {
-      const av = showHidden
-        ? (tree.rolled.get(a.id) ?? 0)
-        : effective(a.id);
-      const bv = showHidden
-        ? (tree.rolled.get(b.id) ?? 0)
-        : effective(b.id);
-      return bv - av;
-    });
-  for (const r of roots) walk(r.id, false);
+    .map((n) => n.id)
+    .sort(compareIds);
+  for (const id of roots) walk(id, false);
   return rows;
 }
 
@@ -245,6 +246,25 @@ export function EnvelopeReport({
   }
   const [showHidden, setShowHidden] = useState(false);
 
+  // Sort state lives on displayPrefs too. Defaults to category-name
+  // ascending so the table opens in a predictable order; click a
+  // column header to flip the direction (same column) or switch
+  // axis (different column). The sort applies at every tree level —
+  // roots, sub-parents, and leaves all rank by the same key.
+  const sortColumn = prefs.envelopeSortColumn;
+  const sortDir = prefs.envelopeSortDir;
+  function clickSort(col: "name" | "period") {
+    if (col === sortColumn) {
+      setPref("envelopeSortDir", sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setPref("envelopeSortColumn", col);
+      // Sensible default direction per axis: alphabetic ascending,
+      // money descending (biggest envelopes first when the operator
+      // switches to the period axis).
+      setPref("envelopeSortDir", col === "name" ? "asc" : "desc");
+    }
+  }
+
   if (isLoading) {
     return (
       <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
@@ -281,7 +301,14 @@ export function EnvelopeReport({
     setCollapsedIds(new Set());
   }
 
-  const rows = flattenForDisplay(tree, collapsedIds, excludedIds, showHidden);
+  const rows = flattenForDisplay(
+    tree,
+    collapsedIds,
+    excludedIds,
+    showHidden,
+    sortColumn,
+    sortDir,
+  );
   // Grand total = sum of effective totals at depth-0, excluding rows that
   // are themselves excluded (but still displayed when showHidden is on).
   const grandTotal = rows
@@ -359,11 +386,54 @@ export function EnvelopeReport({
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th className="text-left px-3 py-2 font-medium">Category</th>
-                  <th className="text-right px-3 py-2 font-medium">Period</th>
-                  <th className="text-right px-3 py-2 font-medium">Monthly</th>
-                  <th className="text-right px-3 py-2 font-medium">Weekly</th>
-                  <th className="text-right px-3 py-2 font-medium">Daily</th>
+                  <SortableTh
+                    align="left"
+                    label="Category"
+                    column="name"
+                    activeColumn={sortColumn}
+                    direction={sortDir}
+                    onClick={() => clickSort("name")}
+                  />
+                  <SortableTh
+                    align="right"
+                    label="Period"
+                    column="period"
+                    activeColumn={sortColumn}
+                    direction={sortDir}
+                    onClick={() => clickSort("period")}
+                  />
+                  {/* Monthly / Weekly / Daily are scaled derivatives of
+                      Period — sorting by any of them produces the same
+                      order as Period — so the headers piggyback on the
+                      same `period` axis. The arrow shows on whichever
+                      numeric column the operator's currently sorting by. */}
+                  <SortableTh
+                    align="right"
+                    label="Monthly"
+                    column="period"
+                    activeColumn={sortColumn}
+                    direction={sortDir}
+                    onClick={() => clickSort("period")}
+                    suppressIndicator
+                  />
+                  <SortableTh
+                    align="right"
+                    label="Weekly"
+                    column="period"
+                    activeColumn={sortColumn}
+                    direction={sortDir}
+                    onClick={() => clickSort("period")}
+                    suppressIndicator
+                  />
+                  <SortableTh
+                    align="right"
+                    label="Daily"
+                    column="period"
+                    activeColumn={sortColumn}
+                    direction={sortDir}
+                    onClick={() => clickSort("period")}
+                    suppressIndicator
+                  />
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -462,5 +532,55 @@ export function EnvelopeReport({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Column header that doubles as a sort toggle. The active column
+ * shows an up/down arrow matching `direction`; inactive columns get
+ * a neutral double-arrow on hover only, so the header bar stays
+ * quiet at rest. `suppressIndicator` lets the numeric piggyback
+ * columns (Monthly/Weekly/Daily) defer their arrow to the canonical
+ * Period column when the operator's sorted by period. */
+function SortableTh({
+  align,
+  label,
+  column,
+  activeColumn,
+  direction,
+  onClick,
+  suppressIndicator,
+}: {
+  align: "left" | "right";
+  label: string;
+  column: "name" | "period";
+  activeColumn: "name" | "period";
+  direction: "asc" | "desc";
+  onClick: () => void;
+  suppressIndicator?: boolean;
+}) {
+  const isActive = column === activeColumn && !suppressIndicator;
+  const Icon = isActive
+    ? direction === "asc"
+      ? ArrowUp
+      : ArrowDown
+    : ArrowUpDown;
+  return (
+    <th className={`px-3 py-2 font-medium ${align === "left" ? "text-left" : "text-right"}`}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-foreground focus:outline-none focus:text-foreground ${
+          align === "right" ? "ml-auto" : ""
+        } ${isActive ? "text-foreground" : ""}`}
+        aria-label={`Sort by ${label}`}
+      >
+        <span>{label}</span>
+        <Icon
+          className={`h-3 w-3 ${
+            isActive ? "opacity-80" : "opacity-30 group-hover:opacity-60"
+          }`}
+        />
+      </button>
+    </th>
   );
 }

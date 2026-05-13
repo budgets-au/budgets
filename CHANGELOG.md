@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.13.0 — 2026-05-13
+
+### Changed
+- **Envelope report sorts by category name by default.** Previous
+  behaviour ranked rows by descending period total at every tree
+  level; the new default is alphabetical (case-insensitive) so the
+  same envelope sits in the same place each visit, regardless of
+  the time window.
+- **Column headers are now sortable.** Click `Category` to flip
+  between A→Z and Z→A; click `Period` (or any of `Monthly` /
+  `Weekly` / `Daily` — they're derivatives of the same axis) to
+  switch to magnitude sorting. The arrow indicator shows on the
+  active column; default direction picked per axis (ascending for
+  name, descending for money). Sort choice persists in the
+  DB-backed display-prefs blob (`envelopeSortColumn` /
+  `envelopeSortDir`).
+
 ## 0.12.0 — 2026-05-13
 
 ### Changed

@@ -200,7 +200,10 @@ describe("expandRecurrence — basics", () => {
     const sourceJan = jan.find((e) => e.accountId === s.accountId);
     const destJan = jan.find((e) => e.accountId === s.transferToAccountId);
     expect(sourceJan?.amount).toBe("-200.00");
-    expect(destJan?.amount).toBe("200");
+    // Destination uses the formatAmount(-parseFloat) flip — produces
+    // a canonical 2-decimal string ("200.00") just like the source
+    // leg, not the bare "200" the older string-cast produced.
+    expect(destJan?.amount).toBe("200.00");
   });
 
   it("transfer projection yields one source-leg event per occurrence (cashflow Plan column)", () => {

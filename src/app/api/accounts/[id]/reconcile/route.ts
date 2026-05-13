@@ -41,14 +41,21 @@ export async function POST(
 
   const expected = parseFloat(account.startingBalance) + parseFloat(sumRow.total);
   const stated = parseFloat(balance);
-  const diff = Math.round((stated - expected) * 100) / 100;
+  // Compare in integer cents so float drift across a long sum of
+  // transactions can't produce a false "matched" or false "off by
+  // a fraction of a cent". Rounding both sides to cents before the
+  // diff also means the reported `diff` is always a clean 0.01
+  // multiple, never something like 0.004999.
+  const expectedCents = Math.round(expected * 100);
+  const statedCents = Math.round(stated * 100);
+  const diffCents = statedCents - expectedCents;
 
-  if (Math.abs(diff) > 0.005) {
+  if (diffCents !== 0) {
     return NextResponse.json({
       matched: false,
-      expected: expected.toFixed(2),
-      stated: stated.toFixed(2),
-      diff: diff.toFixed(2),
+      expected: (expectedCents / 100).toFixed(2),
+      stated: (statedCents / 100).toFixed(2),
+      diff: (diffCents / 100).toFixed(2),
     });
   }
 

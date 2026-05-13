@@ -278,42 +278,53 @@ export function seedSystemCategoriesIfMissing(): void {
 export function seedSampleDataIfMissing(): void {
   if (!state.drizzleDb || !state.client) return;
   try {
-    const settingsRow = state.drizzleDb
-      .select({ flag: appSettings.sampleDataSeeded })
-      .from(appSettings)
-      .where(eq(appSettings.id, 1))
-      .all();
-    if (settingsRow[0]?.flag) return;
-
-    // Existing-install gate: if the DB already has any non-sample
-    // accounts or transactions, skip seeding and lock the flag so
-    // we never re-check.
-    const existingAccount = state.drizzleDb
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(eq(accounts.isSample, false))
-      .limit(1)
-      .all();
-    const existingTxn = state.drizzleDb
-      .select({ id: transactions.id })
-      .from(transactions)
-      .where(eq(transactions.isSample, false))
-      .limit(1)
-      .all();
-    if (existingAccount.length > 0 || existingTxn.length > 0) {
-      upsertSampleDataSeededFlag(true);
-      return;
-    }
-
-    const cats = state.drizzleDb
-      .select({ id: categories.id, name: categories.name })
-      .from(categories)
-      .all();
-    const categoryIdsByName = new Map(cats.map((c) => [c.name, c.id]));
-
-    const payload = buildSampleData({ today: new Date(), categoryIdsByName });
-
+    // Wrap the entire flag-check / existing-data-gate / insert /
+    // flag-write inside a single SQLite transaction so two
+    // simultaneous unlocks can't both pass the gate before either
+    // commits — without this, a fast double-unlock can double-seed.
+    // SQLite's connection-level write-lock serialises the transactions,
+    // so the second caller observes flag=true and short-circuits.
     state.drizzleDb.transaction((tx) => {
+      const settingsRow = tx
+        .select({ flag: appSettings.sampleDataSeeded })
+        .from(appSettings)
+        .where(eq(appSettings.id, 1))
+        .all();
+      if (settingsRow[0]?.flag) return;
+
+      // Existing-install gate: if the DB already has any non-sample
+      // accounts or transactions, skip seeding and lock the flag so
+      // we never re-check.
+      const existingAccount = tx
+        .select({ id: accounts.id })
+        .from(accounts)
+        .where(eq(accounts.isSample, false))
+        .limit(1)
+        .all();
+      const existingTxn = tx
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(eq(transactions.isSample, false))
+        .limit(1)
+        .all();
+      if (existingAccount.length > 0 || existingTxn.length > 0) {
+        tx.insert(appSettings)
+          .values({ id: 1, sampleDataSeeded: true })
+          .onConflictDoUpdate({
+            target: appSettings.id,
+            set: { sampleDataSeeded: true, updatedAt: new Date() },
+          })
+          .run();
+        return;
+      }
+
+      const cats = tx
+        .select({ id: categories.id, name: categories.name })
+        .from(categories)
+        .all();
+      const categoryIdsByName = new Map(cats.map((c) => [c.name, c.id]));
+      const payload = buildSampleData({ today: new Date(), categoryIdsByName });
+
       // Defer FK enforcement to COMMIT so the self-referencing
       // transferPairId between paired transactions doesn't fail the
       // first half before the second half lands. SQLite resets this
@@ -322,11 +333,17 @@ export function seedSampleDataIfMissing(): void {
       tx.insert(accounts).values(payload.accounts).run();
       tx.insert(transactions).values(payload.transactions).run();
       tx.insert(scheduledTransactions).values(payload.schedules).run();
+      tx.insert(appSettings)
+        .values({ id: 1, sampleDataSeeded: true })
+        .onConflictDoUpdate({
+          target: appSettings.id,
+          set: { sampleDataSeeded: true, updatedAt: new Date() },
+        })
+        .run();
+      console.log(
+        `[db] Seeded sample data: ${payload.accounts.length} accounts, ${payload.transactions.length} transactions, ${payload.schedules.length} schedules.`,
+      );
     });
-    upsertSampleDataSeededFlag(true);
-    console.log(
-      `[db] Seeded sample data: ${payload.accounts.length} accounts, ${payload.transactions.length} transactions, ${payload.schedules.length} schedules.`,
-    );
   } catch (e) {
     console.error("[db] Failed to seed sample data:", e);
   }

@@ -11,6 +11,7 @@ import {
   parseISO,
 } from "date-fns";
 import type { ScheduledTransaction } from "@/db/schema";
+import { formatAmount } from "@/lib/utils";
 
 /** Subset of the scheduled-transactions row that recurrence projection
  * actually reads. Declared structurally so callers can pass a trimmed
@@ -110,7 +111,7 @@ function eventsForOccurrence(
       // Opposite sign: source side stores negative, destination credits the
       // same magnitude positively. Avoids double-flipping by toggling the
       // numeric value rather than re-parsing the original string.
-      amount: String(-parseFloat(scheduled.amount)),
+      amount: formatAmount(-parseFloat(scheduled.amount)),
       payee: scheduled.payee ?? "",
       description: scheduled.description ?? "",
       isProjected: true,

@@ -9,6 +9,28 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.19.0 — 2026-05-13
+
+### Fixed
+- **Sample-data seed race.** Two concurrent unlocks could both pass
+  the `sampleDataSeeded=false` gate before either committed, causing
+  the seed payload to insert twice. The check / existing-data gate /
+  insert / flag-write now all run inside a single
+  `db.transaction()`, relying on SQLite's connection-level
+  write-lock to serialise the second caller — they observe
+  `flag=true` and short-circuit.
+- **Reconcile false-positive under float drift.** The
+  `Math.abs(diff) > 0.005` tolerance compared two `parseFloat` sums
+  in pennies-near-the-boundary, allowing a sub-cent drift across
+  100+ transactions to either match-spuriously or report a fractional
+  diff. Both sides are now rounded to integer cents before the
+  comparison; `diff` is therefore always a clean `0.01` multiple.
+- **Inconsistent destination-leg amount format on transfer
+  schedules.** `String(-parseFloat(amount))` was producing bare
+  `"200"` strings on the destination leg where the source leg has
+  `"-200.00"`. Both legs now serialise via `formatAmount()` for
+  uniformity.
+
 ## 0.18.0 — 2026-05-13
 
 ### Changed

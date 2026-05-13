@@ -9,6 +9,40 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.14.0 — 2026-05-13
+
+### Added
+- **Golden Book accounting test suite.** A deterministic 12-month
+  fixture (2 accounts, 3-level category tree, schedule supersession,
+  internal transfers, a refund + an uncategorised txn) plus a
+  hand-computed truth table now exercises `/api/reports/cashflow`
+  end-to-end on every `npm test`. 46 new tests catch:
+    - opening balance dropping `accounts.starting_balance` (140d53e)
+    - hide-transfers leaking into the closing-balance walk (a183ba8)
+    - Plan/mo double-counting superseded schedules (9a2c47b)
+    - superseded predecessor's historical firings going missing
+      (07326cb)
+    - per-account reconciliation drift
+    - period-continuity drift
+    - schedule projection inconsistency
+- **Pure accounting-invariant helpers** in
+  `src/lib/test-invariants/accounting-invariants.ts` — conservation
+  of money, account reconciliation, period continuity,
+  categorisation completeness, roll-up integrity, avg idempotency,
+  schedule projection consistency. Stateless, exported, reusable by
+  any future feature test or admin "validate my data" CLI.
+- **In-memory DB test harness** (`src/__tests__/golden/_helpers/`)
+  spins up `@signalapp/better-sqlite3` at `:memory:`, runs every
+  drizzle migration, and stashes the handle on `globalThis.__dbState`
+  so the production `@/db` proxy resolves to the test DB. Route
+  handlers run end-to-end without modification.
+
+### Validated
+- Temporarily reverted commit 9a2c47b's `isActive` guard during
+  development and confirmed the suite fires
+  (`expected 1127 to be close to 580`) — proof the regression net
+  actually catches what it claims to.
+
 ## 0.13.0 — 2026-05-13
 
 ### Changed

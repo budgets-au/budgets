@@ -113,13 +113,19 @@ export interface DisplayPrefs {
   // ── Dashboard ─────────────────────────────────────────────────
   /** Per-operator dashboard grid layout. Each entry positions a
    * widget (by registry id) at a cell on the 12-col grid. Empty
-   * array = use the registry-defined default layout. */
+   * array = use the registry-defined default layout.
+   *
+   * `config` is an opaque per-widget bag — e.g. the tracked-stock
+   * widget stores `{ investmentId: "<uuid>" }` here. Stored as
+   * `unknown` so adding a new configurable widget doesn't require
+   * a parser change. */
   dashboardLayout: Array<{
     widgetId: string;
     x: number;
     y: number;
     w: number;
     h: number;
+    config?: Record<string, unknown>;
   }>;
 }
 
@@ -296,26 +302,27 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
   }
   function layoutArray(
     key: keyof DisplayPrefs,
-  ): Array<{ widgetId: string; x: number; y: number; w: number; h: number }> {
-    const v = obj[key];
-    if (!Array.isArray(v)) {
-      return [
-        ...(DISPLAY_PREFS_DEFAULT[key] as Array<{
-          widgetId: string;
-          x: number;
-          y: number;
-          w: number;
-          h: number;
-        }>),
-      ];
-    }
-    const out: Array<{
+  ): Array<{
+    widgetId: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    config?: Record<string, unknown>;
+  }> {
+    type Entry = {
       widgetId: string;
       x: number;
       y: number;
       w: number;
       h: number;
-    }> = [];
+      config?: Record<string, unknown>;
+    };
+    const v = obj[key];
+    if (!Array.isArray(v)) {
+      return [...(DISPLAY_PREFS_DEFAULT[key] as Entry[])];
+    }
+    const out: Entry[] = [];
     for (const x of v) {
       if (
         x &&
@@ -330,13 +337,18 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
         typeof (x as { h?: unknown }).h === "number" &&
         Number.isFinite((x as { h: number }).h)
       ) {
-        out.push({
+        const cfgRaw = (x as { config?: unknown }).config;
+        const entry: Entry = {
           widgetId: (x as { widgetId: string }).widgetId,
           x: (x as { x: number }).x,
           y: (x as { y: number }).y,
           w: (x as { w: number }).w,
           h: (x as { h: number }).h,
-        });
+        };
+        if (cfgRaw && typeof cfgRaw === "object" && !Array.isArray(cfgRaw)) {
+          entry.config = cfgRaw as Record<string, unknown>;
+        }
+        out.push(entry);
       }
     }
     return out;

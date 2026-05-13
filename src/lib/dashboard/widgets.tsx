@@ -10,6 +10,19 @@ import { NetWorthTrendCard } from "@/components/dashboard/net-worth-trend-card";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress-card";
 import { UpcomingSchedulesCard } from "@/components/dashboard/upcoming-schedules-card";
 import { AccountsCard } from "@/components/dashboard/accounts-card";
+import { TrackedStockCard } from "@/components/dashboard/tracked-stock-card";
+
+/** Props every widget renderer receives. `config` is the
+ * per-instance bag stored alongside x/y/w/h in the saved layout;
+ * widgets that don't need config simply ignore it. `editMode` lets
+ * a widget surface configuration UI (e.g. tracked-stock's symbol
+ * picker) only while the operator is editing. `onConfigChange` is
+ * the write-back callback. */
+export interface WidgetRenderProps {
+  config?: Record<string, unknown>;
+  editMode: boolean;
+  onConfigChange?: (next: Record<string, unknown>) => void;
+}
 
 /** A single dashboard widget — a discrete content block the operator
  * can drag onto the grid, rearrange, resize within sane limits, or
@@ -25,7 +38,7 @@ export interface WidgetSpec {
   /** Minimum size — keeps the widget from being shrunk into
    * unreadability. */
   minSize?: { w: number; h: number };
-  render: () => ReactNode;
+  render: (props: WidgetRenderProps) => ReactNode;
 }
 
 /** Every widget known to the dashboard. Adding a new widget = one
@@ -39,6 +52,13 @@ export const WIDGETS: WidgetSpec[] = [
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
     render: () => <NetWorthCard />,
+  },
+  {
+    id: "tracked-stock",
+    title: "Tracked stock",
+    defaultLayout: { w: 3, h: 3 },
+    minSize: { w: 2, h: 2 },
+    render: (props) => <TrackedStockCard {...props} />,
   },
   {
     id: "income-30d",

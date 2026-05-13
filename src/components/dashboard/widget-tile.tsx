@@ -15,15 +15,19 @@ import type { WidgetSpec } from "@/lib/dashboard/widgets";
 export function WidgetTile({
   widget,
   editMode,
+  config,
   onRemove,
+  onConfigChange,
 }: {
   widget: WidgetSpec;
   editMode: boolean;
+  config?: Record<string, unknown>;
   onRemove: () => void;
+  onConfigChange?: (next: Record<string, unknown>) => void;
 }) {
   return (
     <div className="relative h-full w-full">
-      {widget.render()}
+      {widget.render({ config, editMode, onConfigChange })}
       {editMode && (
         <div className="absolute inset-0 z-10 rounded-md border-2 border-dashed border-primary/50 bg-background/10 pointer-events-none">
           <button

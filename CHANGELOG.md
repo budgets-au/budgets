@@ -9,6 +9,29 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.40.0 — 2026-05-13
+
+### Added
+- **Tracked-stock dashboard widget.** A new card that watches a
+  single operator-picked stock or paper-trade position. In edit
+  mode the card shows a dropdown of every tracked
+  `kind="stock" | "paper"` investment; outside edit mode it renders
+  the symbol + current price + day change + a 1-month sparkline
+  (Recharts AreaChart wired through the existing
+  `/api/investments/[id]/history?range=1m` endpoint). Add the
+  widget multiple times if you want to track multiple positions
+  side-by-side.
+
+### Changed
+- **Widgets can now carry per-instance config.** `dashboardLayout`
+  entries gained an optional `config: Record<string, unknown>`
+  bag. The display-prefs parser preserves it as opaque data so
+  new configurable widgets don't need a parser change; the grid
+  threads `{ config, editMode, onConfigChange }` through to each
+  widget's `render()`. Existing widgets ignore the props; the
+  tracked-stock widget uses `config.investmentId` to remember
+  which position it's pinned to.
+
 ## 0.39.0 — 2026-05-13
 
 ### Changed

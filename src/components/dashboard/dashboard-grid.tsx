@@ -31,6 +31,7 @@ type LayoutEntry = {
   y: number;
   w: number;
   h: number;
+  config?: Record<string, unknown>;
 };
 
 type RglItem = {
@@ -113,15 +114,42 @@ export function DashboardGrid() {
   }
   function onLayoutChange(newLayout: readonly RglItem[]) {
     if (!editMode) return;
-    setDraftLayout(
-      newLayout.map((l) => ({
-        widgetId: l.i,
-        x: l.x,
-        y: l.y,
-        w: l.w,
-        h: l.h,
-      })),
+    // Preserve each entry's existing config when only x/y/w/h move.
+    setDraftLayout((cur) => {
+      const c = cur ?? baseLayout;
+      const byId = new Map(c.map((l) => [l.widgetId, l] as const));
+      return newLayout.map((l) => {
+        const existing = byId.get(l.i);
+        const entry: LayoutEntry = {
+          widgetId: l.i,
+          x: l.x,
+          y: l.y,
+          w: l.w,
+          h: l.h,
+        };
+        if (existing?.config) entry.config = existing.config;
+        return entry;
+      });
+    });
+  }
+
+  function updateWidgetConfig(
+    widgetId: string,
+    config: Record<string, unknown>,
+  ) {
+    // Config edits write straight through to the persisted layout
+    // — there's no Cancel-to-revert for a config picker the way
+    // there is for x/y/w/h. The operator can just pick again to
+    // revert.
+    const cur = draftLayout ?? baseLayout;
+    const next = cur.map((l) =>
+      l.widgetId === widgetId ? { ...l, config } : l,
     );
+    if (editMode) {
+      setDraftLayout(next);
+    } else {
+      setPref("dashboardLayout", next);
+    }
   }
   function onDrop(_layout: readonly RglItem[], item: RglItem | undefined) {
     const widgetId = draggedWidgetId;
@@ -193,12 +221,15 @@ export function DashboardGrid() {
           {rglLayout.map((l) => {
             const widget = WIDGETS_BY_ID.get(l.i);
             if (!widget) return null;
+            const entry = activeLayout.find((e) => e.widgetId === l.i);
             return (
               <div key={l.i}>
                 <WidgetTile
                   widget={widget}
                   editMode={editMode}
+                  config={entry?.config}
                   onRemove={() => removeWidget(l.i)}
+                  onConfigChange={(cfg) => updateWidgetConfig(l.i, cfg)}
                 />
               </div>
             );

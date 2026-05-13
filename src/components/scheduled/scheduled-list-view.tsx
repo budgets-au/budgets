@@ -21,6 +21,10 @@ import { ScheduledEditForm, type ScheduledFormRow } from "@/components/scheduled
 import { NewScheduledDialog } from "@/components/scheduled/new-scheduled-dialog";
 import { ScheduledForecastRows } from "@/components/scheduled/scheduled-forecast-rows";
 import { ScheduledOccurrencesChart, type ChartSegment } from "@/components/scheduled/scheduled-occurrences-chart";
+import {
+  FABULOUS_THEME_ID,
+  resolveSchedulePalette,
+} from "@/lib/chart-palettes";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import type { ScheduledTransaction, Category } from "@/db/schema";
@@ -1632,7 +1636,17 @@ export function ScheduledListView({
                   <ScheduledOccurrencesChart
                     segments={chartSegments}
                     onBarClick={handleChartBarClick}
-                    theme={displayPrefs.chartScheduleTheme}
+                    theme={
+                      displayPrefs.chartScheduleTheme === FABULOUS_THEME_ID
+                        ? "fabulous"
+                        : "standard"
+                    }
+                    palette={
+                      resolveSchedulePalette(
+                        displayPrefs.chartScheduleTheme,
+                        displayPrefs.chartSchedulePalettes,
+                      ) ?? undefined
+                    }
                   />
                 </div>
                 <div

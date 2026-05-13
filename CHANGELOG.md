@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.34.0 — 2026-05-13
+
+### Added
+- **Schedule-chart palette editor in Settings.** The simple
+  Fabulous / Standard dropdown becomes a full palette catalogue:
+  the built-in Standard palette renders read-only at the top with
+  its four colour swatches (actual / saved / over / forecast), and
+  the operator can add as many custom palettes underneath as they
+  want. Each editable row is a name field + four swatches; each
+  swatch opens a popover with the native colour wheel + a hex
+  input. The active-theme selector at the top of the panel lists
+  Fabulous, Standard, and every custom palette by name. Deleting
+  the currently-active palette falls back to Standard so the chart
+  never tries to paint with an undefined colour.
+- New colour-picker primitive (`src/components/ui/color-picker.tsx`)
+  reusable wherever a palette swatch is needed — the same shape as
+  the rest of the popover-based settings affordances.
+
+### Changed
+- `chartScheduleTheme` is now a free string (palette id) rather
+  than a `"fabulous" | "standard"` union. The chart resolves
+  unknown ids back to Standard so a deleted palette can never
+  break rendering.
+- The schedule chart accepts an optional `palette` prop driving
+  the four "standard"-theme colours; Fabulous mode ignores it.
+
 ## 0.33.0 — 2026-05-13
 
 ### Added

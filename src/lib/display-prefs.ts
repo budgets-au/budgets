@@ -35,12 +35,27 @@ export interface DisplayPrefs {
    * to an external loan/CC). Hides salary, internal transfers, and
    * pure-income schedules — useful for an "what's due this month" view. */
   calendarBillsOnly: boolean;
-  /** Visual theme for the scheduled-occurrences chart. "fabulous" =
-   * the original per-segment lineage colours + hatched delta fills
-   * (more information per bar, busier look). "standard" = solid
-   * muted yellow / green / red for actual / saved / over (simpler,
-   * matches the rest of the site). */
-  chartScheduleTheme: "fabulous" | "standard";
+  /** Visual theme for the scheduled-occurrences chart. Either the
+   * literal `"fabulous"` (per-segment lineage colours + hatched
+   * delta fills) or a palette id — either the built-in `"standard"`
+   * or one of the user's custom palettes from
+   * `chartSchedulePalettes` below. Stored as a free string so
+   * deletes don't break the type — `resolveSchedulePalette()`
+   * falls back to Standard on an unknown id. */
+  chartScheduleTheme: string;
+  /** User-defined "standard"-style palettes. Each palette names
+   * four colours (actual / saved / over / forecast) the simpler
+   * solid-fill chart renderer consumes. Initially empty — the
+   * built-in "Standard" palette lives in code and is always
+   * available without needing an entry here. */
+  chartSchedulePalettes: Array<{
+    id: string;
+    name: string;
+    actual: string;
+    saved: string;
+    over: string;
+    forecast: string;
+  }>;
 
   // ── Scheduled missed-occurrences panel ────────────────────────
   /** Show dismissed missed-occurrences on the schedule view. */
@@ -119,6 +134,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   calendarViewMode: "month",
   calendarBillsOnly: false,
   chartScheduleTheme: "fabulous",
+  chartSchedulePalettes: [],
   missedShowDismissed: false,
   cashflowTotalsLevel: "grandparent",
   cashflowShowCounts: false,
@@ -224,6 +240,60 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     }
     return out;
   }
+  function schedulePalettes(
+    key: keyof DisplayPrefs,
+  ): Array<{
+    id: string;
+    name: string;
+    actual: string;
+    saved: string;
+    over: string;
+    forecast: string;
+  }> {
+    const v = obj[key];
+    if (!Array.isArray(v)) {
+      return [
+        ...(DISPLAY_PREFS_DEFAULT[key] as Array<{
+          id: string;
+          name: string;
+          actual: string;
+          saved: string;
+          over: string;
+          forecast: string;
+        }>),
+      ];
+    }
+    const out: Array<{
+      id: string;
+      name: string;
+      actual: string;
+      saved: string;
+      over: string;
+      forecast: string;
+    }> = [];
+    for (const x of v) {
+      if (
+        x &&
+        typeof x === "object" &&
+        typeof (x as { id?: unknown }).id === "string" &&
+        typeof (x as { name?: unknown }).name === "string" &&
+        typeof (x as { actual?: unknown }).actual === "string" &&
+        typeof (x as { saved?: unknown }).saved === "string" &&
+        typeof (x as { over?: unknown }).over === "string" &&
+        typeof (x as { forecast?: unknown }).forecast === "string"
+      ) {
+        out.push({
+          id: (x as { id: string }).id,
+          name: (x as { name: string }).name,
+          actual: (x as { actual: string }).actual,
+          saved: (x as { saved: string }).saved,
+          over: (x as { over: string }).over,
+          forecast: (x as { forecast: string }).forecast,
+        });
+      }
+    }
+    return out;
+  }
   function layoutArray(
     key: keyof DisplayPrefs,
   ): Array<{ widgetId: string; x: number; y: number; w: number; h: number }> {
@@ -305,10 +375,11 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     transactionsSavedFilters: savedFilters("transactionsSavedFilters"),
     calendarViewMode: pickEnum("calendarViewMode", ["month", "week"] as const),
     calendarBillsOnly: bool("calendarBillsOnly"),
-    chartScheduleTheme: pickEnum(
-      "chartScheduleTheme",
-      ["fabulous", "standard"] as const,
-    ),
+    chartScheduleTheme:
+      typeof obj.chartScheduleTheme === "string" && obj.chartScheduleTheme
+        ? obj.chartScheduleTheme
+        : DISPLAY_PREFS_DEFAULT.chartScheduleTheme,
+    chartSchedulePalettes: schedulePalettes("chartSchedulePalettes"),
     missedShowDismissed: bool("missedShowDismissed"),
     cashflowTotalsLevel: pickEnum(
       "cashflowTotalsLevel",

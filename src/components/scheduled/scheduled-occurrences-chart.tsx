@@ -175,26 +175,44 @@ interface OccurrencePoint {
  * palette and is friendlier at a glance. */
 type ScheduleChartTheme = "fabulous" | "standard";
 
-// "Standard" theme palette — muted Tailwind-300 shades. Saved
-// (under-cap delta) intentionally matches the forecast grey so the
-// "money you didn't have to spend" reads the same neutral tone as
-// "the bar hasn't fired yet".
-const STD_ACTUAL = "#86efac";   // green-300 — solid Actual fill
-const STD_SAVED  = "#cbd5e1";   // slate-300 — saved-vs-cap fill, same as forecast
-const STD_OVER   = "#fca5a5";   // red-300   — over-budget fill
-const STD_MISSED = "#fca5a5";   // red-300   — missed-occurrence fill
-const STD_FORECAST = "#cbd5e1"; // slate-300 — forecast (not-yet-fired) fill
+/** Standard-theme colours. When the caller passes a `palette` prop
+ * (resolved from the user's chosen palette id), these four slots
+ * are overridden by the palette values. The "missed" slot has no
+ * palette equivalent — it always reuses the over-cap red. */
+interface StandardPalette {
+  actual: string;
+  saved: string;
+  over: string;
+  forecast: string;
+}
+const DEFAULT_STANDARD_PALETTE: StandardPalette = {
+  actual: "#86efac", // green-300
+  saved: "#cbd5e1", // slate-300
+  over: "#fca5a5", // red-300
+  forecast: "#cbd5e1", // slate-300
+};
 
 export function ScheduledOccurrencesChart({
   segments,
   onBarClick,
   theme = "fabulous",
+  palette,
 }: {
   segments: ChartSegment[];
   onBarClick?: (date: string) => void;
   theme?: ScheduleChartTheme;
+  /** Standard-theme palette override (ignored when theme is
+   * "fabulous"). Falls back to the built-in DEFAULT_STANDARD_PALETTE
+   * shades. */
+  palette?: StandardPalette;
 }) {
   const isDark = useDarkMode();
+  const stdPalette = palette ?? DEFAULT_STANDARD_PALETTE;
+  const STD_ACTUAL = stdPalette.actual;
+  const STD_SAVED = stdPalette.saved;
+  const STD_OVER = stdPalette.over;
+  const STD_MISSED = stdPalette.over;
+  const STD_FORECAST = stdPalette.forecast;
   const forecastColour =
     theme === "standard"
       ? STD_FORECAST

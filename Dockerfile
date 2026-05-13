@@ -30,6 +30,41 @@ ENV NEXTAUTH_SECRET=build-time-placeholder
 ENV SQLITE_KEY=build-time-placeholder
 RUN npm run build
 
+# Slim the dependencies the runner stage will copy. CRITICAL that
+# this happens here in the builder, not in the runner: a `rm` in a
+# later layer only hides files via overlay, the bytes still ship.
+# Trimming BEFORE the runner's COPY actually shrinks the layer
+# transferred across.
+#
+# @signalapp/better-sqlite3 ships ~62 MB of native-build artefacts
+# (object files, gyp targets, the SQLite C source tree) that
+# node-gyp uses to compile and the runtime never re-reads. Only
+# `build/Release/better_sqlite3.node` is loaded via the require-
+# hook in lib/database.js.
+#
+# Sharp ships per-libc prebuilt libvips bundles. The container's
+# Alpine base is musl, so the glibc variants are pure dead weight.
+# Slimmed in both ./node_modules (the explicit COPY path) and the
+# Next standalone bundle (the path that ships sharp at runtime).
+RUN set -e \
+ && find ./node_modules/@signalapp/better-sqlite3/build \
+      -mindepth 1 -maxdepth 1 \
+      -not -name 'Release' \
+      -exec rm -rf {} + \
+ && find ./node_modules/@signalapp/better-sqlite3/build/Release \
+      -mindepth 1 -maxdepth 1 \
+      -not -name 'better_sqlite3.node' \
+      -exec rm -rf {} + \
+ && rm -rf ./node_modules/@signalapp/better-sqlite3/src \
+           ./node_modules/@signalapp/better-sqlite3/deps \
+           ./node_modules/@signalapp/better-sqlite3/binding.gyp \
+ && rm -rf ./node_modules/@img/sharp-libvips-linux-x64 \
+           ./node_modules/@img/sharp-linux-x64 \
+ && if [ -d ./.next/standalone/node_modules/@img ]; then \
+      rm -rf ./.next/standalone/node_modules/@img/sharp-libvips-linux-x64 \
+             ./.next/standalone/node_modules/@img/sharp-linux-x64; \
+    fi
+
 # Stage 3: Runner
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -97,30 +132,6 @@ RUN set -e \
            ./node_modules/@signalapp/better-sqlite3/node_modules/tar \
            ./node_modules/@signalapp/better-sqlite3/node_modules/minipass \
            ./node_modules/@signalapp/better-sqlite3/node_modules/minizlib \
- # @signalapp/better-sqlite3's `build/` directory ships ~62 MB of
- # native-build intermediates (object files, gyp targets, copied
- # SQLite C sources). Only `build/Release/better_sqlite3.node` is
- # loaded at runtime via the require-hook in lib/database.js. The
- # `src/`, `deps/`, `binding.gyp` files are all consumed by
- # node-gyp at build time — irrelevant to the runner.
- && find ./node_modules/@signalapp/better-sqlite3/build \
-      -mindepth 1 -maxdepth 1 \
-      -not -name 'Release' \
-      -exec rm -rf {} + \
- && find ./node_modules/@signalapp/better-sqlite3/build/Release \
-      -mindepth 1 -maxdepth 1 \
-      -not -name 'better_sqlite3.node' \
-      -exec rm -rf {} + \
- && rm -rf ./node_modules/@signalapp/better-sqlite3/src \
-           ./node_modules/@signalapp/better-sqlite3/deps \
-           ./node_modules/@signalapp/better-sqlite3/binding.gyp \
- # Sharp ships per-libc prebuilt libvips bundles. The container's
- # Alpine base uses musl, so only the musl-x64 pair is needed at
- # runtime; the glibc variants (~16 MB) are pure dead weight here.
- # If the base image ever switches to debian/ubuntu, drop the
- # `linuxmusl-x64` lines and keep the `linux-x64` ones instead.
- && rm -rf ./node_modules/@img/sharp-libvips-linux-x64 \
-           ./node_modules/@img/sharp-linux-x64 \
  && printf '%s\n' '{' \
       '  "name": "budgets",' \
       '  "version": "0.1.0",' \

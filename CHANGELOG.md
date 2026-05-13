@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.11.0 — 2026-05-13
+
+### Optimised
+- **Slim actually shrinks the image now.** 0.10.0 moved the slim
+  RUN into the runner stage thinking that would reduce image size —
+  but `rm` in a later layer only *hides* files via overlay; the
+  bytes still ship in the earlier COPY layer, so the published
+  image stayed at ~320 MB even with the slimmed runtime view.
+  Slimming now happens in the **builder** stage, immediately after
+  `npm run build`, so the runner's `COPY --from=builder` transfers
+  the already-trimmed tree. The runner-stage RUN keeps the cheap
+  source-tree removals (drizzle.config.ts, src/, scripts/, etc.)
+  but no longer pretends to slim @signalapp / @img.
+
 ## 0.10.0 — 2026-05-13
 
 ### Changed

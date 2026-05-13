@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.45.0 — 2026-05-13
+
+### Fixed
+- **Dashboard no longer crashes with React error #185 ("Maximum
+  update depth exceeded") when adding a tracked-stock widget.**
+  Root cause was a feedback loop between `onLayoutChange` and
+  react-grid-layout. Each invocation of my handler returned a
+  freshly-allocated `LayoutEntry[]` even when the content was
+  identical to what we'd just stored; the new reference flowed
+  back into the `layouts` prop, RGL fired `onLayoutChange`
+  again, and the cycle compounded until React bailed. The
+  handler now compares against the previous draft layout
+  field-by-field and returns the *same* reference when nothing
+  structurally changed — so a redundant RGL re-fire is a
+  no-op. The Recharts "width(-1)/height(-1)" warning that
+  appeared alongside the crash was a benign side-effect (the
+  chart's parent had no measured size during the offending
+  frame) and goes away once the loop stops.
+
 ## 0.44.0 — 2026-05-13
 
 ### Fixed

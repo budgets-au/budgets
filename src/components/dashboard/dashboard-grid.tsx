@@ -121,11 +121,10 @@ export function DashboardGrid() {
   }
   function onLayoutChange(newLayout: readonly RglItem[]) {
     if (!editMode) return;
-    // Preserve each entry's existing config when only x/y/w/h move.
     setDraftLayout((cur) => {
       const c = cur ?? baseLayout;
       const byId = new Map(c.map((l) => [l.widgetId, l] as const));
-      return newLayout.map((l) => {
+      const next: LayoutEntry[] = newLayout.map((l) => {
         const existing = byId.get(l.i);
         const entry: LayoutEntry = {
           widgetId: l.i,
@@ -137,6 +136,26 @@ export function DashboardGrid() {
         if (existing?.config) entry.config = existing.config;
         return entry;
       });
+      // Return the existing reference if nothing structurally
+      // changed. Without this short-circuit, RGL re-fires
+      // onLayoutChange with the same content immediately after we
+      // set state — we hand back a new array, the layouts prop
+      // changes by reference, RGL fires again, and React eventually
+      // throws "Maximum update depth exceeded".
+      const same =
+        next.length === c.length &&
+        next.every((n, i) => {
+          const o = c[i];
+          return (
+            o !== undefined &&
+            o.widgetId === n.widgetId &&
+            o.x === n.x &&
+            o.y === n.y &&
+            o.w === n.w &&
+            o.h === n.h
+          );
+        });
+      return same ? c : next;
     });
   }
 

@@ -4,6 +4,38 @@ All notable changes to this project are recorded here. The version policy
 is **bump minor on every shipped change** (per user directive); patch
 remains 0 until released hotfixes warrant it.
 
+The canonical version pointer lives in `src/lib/version.ts`
+(`APP_VERSION`). `package.json`'s `version` field is no longer
+bumped on each release — it stays pinned so the Docker layer that
+runs `npm ci` survives version bumps and rebuilds in seconds.
+
+## 0.10.0 — 2026-05-13
+
+### Changed
+- **Version stamping decoupled from `package.json`.** `APP_VERSION`
+  now lives in `src/lib/version.ts` as a string literal. The Docker
+  layer that runs `npm ci` is keyed on `package.json`, so bumping
+  `package.json.version` on every change was invalidating the
+  node_modules layer and forcing a 4-minute `npm ci` re-run per
+  release. With the version pointer separated, only the late-stage
+  `COPY . .` layer changes — npm-ci stays cached, and rebuilds
+  drop from ~13 min to ~3 min for code-only diffs.
+  `scripts/docker-release.mjs` reads `APP_VERSION` directly from
+  `src/lib/version.ts` via a simple regex.
+
+### Optimised
+- **Runtime image trimmed from ~320 MB to ~250 MB.** Two changes
+  in the Dockerfile runner stage:
+    - `@signalapp/better-sqlite3/build/` is reduced from ~62 MB
+      to just `build/Release/better_sqlite3.node` (the only file
+      `require()` actually loads). Object files, gyp targets and
+      copied SQLite C sources are stripped. The package's own
+      `src/`, `deps/`, and `binding.gyp` go too — all build-time
+      only.
+    - Sharp's glibc-libvips variant (`@img/sharp-libvips-linux-x64`
+      + `@img/sharp-linux-x64`, ~16 MB combined) is removed since
+      the base image uses Alpine/musl. The musl variant stays.
+
 ## 0.9.0 — 2026-05-13
 
 ### Added

@@ -48,8 +48,17 @@ if (!REGISTRY) {
 const FQN = `${REGISTRY}/${IMAGE}`;
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const pkg = JSON.parse(
-  readFileSync(resolve(repoRoot, "package.json"), "utf8"),
+// Version comes from src/lib/version.ts rather than package.json so
+// the Docker layer that runs `npm ci` (keyed on package.json) stays
+// cached across version bumps. Format is `export const APP_VERSION
+// = "X.Y.Z";` — same string the running app surfaces in the
+// sidebar.
+const versionFile = readFileSync(
+  resolve(repoRoot, "src/lib/version.ts"),
+  "utf8",
+);
+const versionMatch = versionFile.match(
+  /APP_VERSION\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+(?:[-+][^"]*)?)"/,
 );
 const allowDirty = process.argv.includes("--allow-dirty");
 const dryRun = process.argv.includes("--dry-run");
@@ -117,9 +126,11 @@ if (dirty && !allowDirty) {
   process.exit(1);
 }
 
-const version = pkg.version;
+const version = versionMatch?.[1];
 if (!version) {
-  console.error("✗ package.json is missing a version field.");
+  console.error(
+    "✗ Couldn't parse APP_VERSION from src/lib/version.ts.\n  Expected a line like: export const APP_VERSION = \"X.Y.Z\";",
+  );
   process.exit(1);
 }
 

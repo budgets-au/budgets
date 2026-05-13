@@ -9,6 +9,16 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.16.0 — 2026-05-13
+
+### Changed
+- **"Linked details" toggle moved to Settings → General → Display.**
+  Was an inline switch at the top of the transactions list; lives
+  better next to the existing Weekly column + Linked panel
+  preferences. Behaviour is unchanged — same
+  `transactionsShowLinkedDetails` pref, just a single discoverable
+  home for it.
+
 ## 0.15.0 — 2026-05-13
 
 ### Changed

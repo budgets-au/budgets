@@ -129,8 +129,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
     ? displayPrefs.transactionsPageSize
     : DEFAULT_PAGE_SIZE;
   const setShowNotes = (v: boolean) => setPref("transactionsShowNotes", v);
-  const setShowLinkedDetails = (v: boolean) =>
-    setPref("transactionsShowLinkedDetails", v);
+  // setShowLinkedDetails removed — toggle moved to Settings → General.
   const setRowExpandable = (v: boolean) =>
     setPref("transactionsRowExpandable", v);
   const setPageSize = (n: number) => setPref("transactionsPageSize", n);
@@ -600,16 +599,6 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                   aria-label="Show notes column"
                 />
               </label>
-              {showLinkedPanel && (
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0">
-                  <span>Linked details</span>
-                  <Switch
-                    checked={showLinkedDetails}
-                    onCheckedChange={(v) => setShowLinkedDetails(v)}
-                    aria-label="Show linked transfer details"
-                  />
-                </label>
-              )}
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0">
                 <span>Row expand</span>
                 <Switch

@@ -1502,6 +1502,10 @@ function DayDetailPanel({
   // main list uses, isolated to this panel so opening a day's row
   // doesn't affect /transactions.
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // The row-expand pref also gates the click here so behaviour stays
+  // consistent with the main list (toggling it in Settings affects
+  // both surfaces).
+  const { prefs: detailPrefs } = useDisplayPrefs();
   // Client-side sort state for the panel's rows. The day is small
   // enough that re-sorting on click is cheap, so no server round-trip.
   const [sort, setSort] = useState<TransactionSortState>({
@@ -1608,11 +1612,11 @@ function DayDetailPanel({
                       showCheckbox={false}
                       showBalance={false}
                       isExpanded={
-                        displayPrefs.transactionsRowExpandable &&
+                        detailPrefs.transactionsRowExpandable &&
                         expandedId === t.id
                       }
                       onToggleExpand={
-                        displayPrefs.transactionsRowExpandable
+                        detailPrefs.transactionsRowExpandable
                           ? () =>
                               setExpandedId((cur) =>
                                 cur === t.id ? null : t.id,

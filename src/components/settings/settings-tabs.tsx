@@ -67,6 +67,23 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
               aria-label="Toggle linked transactions panel"
             />
           </label>
+          <label className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Linked details inside panel</p>
+              <p className="text-xs text-muted-foreground">
+                When the linked panel is on, also show the paired payee and
+                paired amount cells. Off keeps the panel narrow — just the
+                direction arrow and account chip.
+              </p>
+            </div>
+            <Switch
+              checked={prefs.transactionsShowLinkedDetails}
+              onCheckedChange={(v) =>
+                setPref("transactionsShowLinkedDetails", v)
+              }
+              aria-label="Toggle linked-transaction detail cells"
+            />
+          </label>
         </div>
         <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">About</p>

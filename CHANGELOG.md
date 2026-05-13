@@ -9,6 +9,27 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.46.0 — 2026-05-13
+
+### Changed
+- **Schedule chart palette editor rework — list + modal.** Earlier
+  inline-editor variants kept getting eaten by click-handler /
+  focus-management edge cases ("Add palette doesn't fire",
+  "swatches don't open the picker"). The new design splits the
+  two concerns:
+  - The Settings panel is a flat radio list of themes. Each row
+    shows the name, a 4-dot palette preview, and (for custom
+    rows only) a pencil + trash. Clicking the radio just
+    selects the active theme — no other side effects.
+  - Add palette + Edit both open the SAME modal dialog with the
+    full editor (name + four colour pickers + Save / Cancel).
+    Dialog owns its editing state locally; Cancel discards,
+    Save commits via `setPref`. No z-index or pointer-events
+    fighting with the row's selection radio.
+  - Delete on a custom palette confirms via the shared
+    `useConfirm` dialog, and falls back to Standard if you
+    delete the currently-active palette.
+
 ## 0.45.0 — 2026-05-13
 
 ### Fixed

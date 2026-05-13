@@ -1,9 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ColorPicker } from "@/components/ui/color-picker";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { cn } from "@/lib/utils";
 import {
@@ -12,55 +20,81 @@ import {
   type SchedulePalette,
 } from "@/lib/chart-palettes";
 
-/** Schedule-chart palette catalogue. Each entry is a row containing
- * a radio for "active theme", a name (editable on custom rows), four
- * colour swatches (editable on custom rows), and a remove button on
- * custom rows. Fabulous sits at the top with no colour swatches —
- * the chart renders it with its own lineage palette + hatched fills.
+/** Schedule-chart palette catalogue.
  *
- * Note: rows are plain divs, NOT `<label>` elements. Wrapping a
- * label around a radio AND interactive controls (color-swatch
- * popover triggers, the delete button, the name input) caused click
- * events on those controls to fight with the label's
- * radio-activation default — pressing a swatch sometimes selected
- * the radio instead of opening the colour picker. The radio is its
- * own clickable element; the rest of the row is purely visual. */
+ * Design rework (n-th attempt — earlier inline-editor variants got
+ * eaten by click-handler / focus-management edge cases):
+ *
+ *   1. The list is a flat radio group of themes. Fabulous (lineage)
+ *      + Standard (built-in) sit at the top, then any custom
+ *      palettes. Each row shows the name and a row of four colour
+ *      dots so you can pick from a glance.
+ *   2. The list never edits anything. Custom rows have a pencil
+ *      (open editor) and a trash (delete after confirm). Built-in
+ *      rows have neither.
+ *   3. Add palette + Edit both open the SAME modal dialog. The
+ *      dialog owns the editing state locally; Cancel discards,
+ *      Save writes back via `setPref`. Putting the edit UI in a
+ *      separate dialog means no z-index / pointer-events fights
+ *      with the list row's click handlers.
+ */
 export function SchedulePaletteEditor() {
   const { prefs, setPref } = useDisplayPrefs();
+  const confirm = useConfirm();
   const custom = prefs.chartSchedulePalettes;
   const activeId = prefs.chartScheduleTheme;
+
+  // null = closed; isNew tracks whether Save creates vs. updates.
+  const [editing, setEditing] = useState<SchedulePalette | null>(null);
+  const [isNew, setIsNew] = useState(false);
 
   function selectActive(id: string) {
     setPref("chartScheduleTheme", id);
   }
 
-  function addPalette() {
-    const id = crypto.randomUUID();
-    setPref("chartSchedulePalettes", [
-      ...custom,
-      {
-        ...STANDARD_PALETTE,
-        id,
-        name: `Custom ${custom.length + 1}`,
-      },
-    ]);
+  function openAdd() {
+    setIsNew(true);
+    setEditing({
+      ...STANDARD_PALETTE,
+      id: crypto.randomUUID(),
+      name: `Custom ${custom.length + 1}`,
+    });
   }
 
-  function deletePalette(id: string) {
+  function openEdit(p: SchedulePalette) {
+    setIsNew(false);
+    setEditing(p);
+  }
+
+  function commit() {
+    if (!editing || !editing.name.trim()) return;
+    if (isNew) {
+      setPref("chartSchedulePalettes", [...custom, editing]);
+    } else {
+      setPref(
+        "chartSchedulePalettes",
+        custom.map((p) => (p.id === editing.id ? editing : p)),
+      );
+    }
+    setEditing(null);
+  }
+
+  async function deletePalette(p: SchedulePalette) {
+    const ok = await confirm({
+      title: `Delete "${p.name}"?`,
+      description:
+        "Custom palette only — built-in Fabulous and Standard always stay.",
+      confirmLabel: "Delete",
+      tone: "destructive",
+    });
+    if (!ok) return;
     setPref(
       "chartSchedulePalettes",
-      custom.filter((p) => p.id !== id),
+      custom.filter((c) => c.id !== p.id),
     );
-    if (activeId === id) {
+    if (activeId === p.id) {
       setPref("chartScheduleTheme", STANDARD_PALETTE.id);
     }
-  }
-
-  function patchPalette(id: string, patch: Partial<SchedulePalette>) {
-    setPref(
-      "chartSchedulePalettes",
-      custom.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-    );
   }
 
   return (
@@ -69,63 +103,75 @@ export function SchedulePaletteEditor() {
         <h2 className="font-medium">Schedule chart theme</h2>
         <p className="mt-1 text-xs text-muted-foreground">
           Pick which theme the schedule view chart uses.{" "}
-          <strong>Fabulous</strong> uses per-segment lineage colours +
-          hatched delta fills. <strong>Standard</strong> and any custom
-          palette render solid fills using the four data-type colours
-          (actual / saved / over / forecast).
+          <strong>Fabulous</strong> renders per-segment lineage colours
+          with hatched delta fills; the others are solid four-colour
+          palettes (Actual / Saved / Over / Forecast).
         </p>
       </div>
 
       <div className="space-y-2 p-3">
         <ThemeRow
-          id={FABULOUS_THEME_ID}
           name="Fabulous"
+          subtitle="Lineage palette + hatched fills"
           active={activeId === FABULOUS_THEME_ID}
           onSelect={() => selectActive(FABULOUS_THEME_ID)}
-          isFabulous
         />
-        <PaletteRow
+        <ThemeRow
+          name={STANDARD_PALETTE.name}
+          subtitle="Built-in solid palette"
           palette={STANDARD_PALETTE}
           active={activeId === STANDARD_PALETTE.id}
           onSelect={() => selectActive(STANDARD_PALETTE.id)}
-          readOnly
         />
         {custom.map((p) => (
-          <PaletteRow
+          <ThemeRow
             key={p.id}
+            name={p.name}
             palette={p}
             active={activeId === p.id}
             onSelect={() => selectActive(p.id)}
-            onChange={(patch) => patchPalette(p.id, patch)}
-            onDelete={() => deletePalette(p.id)}
+            onEdit={() => openEdit(p)}
+            onDelete={() => deletePalette(p)}
           />
         ))}
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={addPalette}
+          onClick={openAdd}
           className="w-full"
         >
           <Plus className="mr-1 h-4 w-4" /> Add palette
         </Button>
       </div>
+
+      <PaletteEditDialog
+        palette={editing}
+        isNew={isNew}
+        onChange={setEditing}
+        onCommit={commit}
+        onCancel={() => setEditing(null)}
+      />
     </div>
   );
 }
 
 function ThemeRow({
-  id,
   name,
+  subtitle,
+  palette,
   active,
   onSelect,
-  isFabulous,
+  onEdit,
+  onDelete,
 }: {
-  id: string;
   name: string;
+  subtitle?: string;
+  palette?: SchedulePalette;
   active: boolean;
   onSelect: () => void;
-  isFabulous?: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <div
@@ -139,130 +185,156 @@ function ThemeRow({
         name="schedule-chart-theme"
         checked={active}
         onChange={onSelect}
-        value={id}
         aria-label={`Use ${name} theme`}
         className="h-4 w-4 cursor-pointer accent-indigo-500"
       />
-      <span className="flex-1 text-sm font-medium">{name}</span>
-      {isFabulous && (
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          lineage palette
-        </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate">{name}</p>
+        {subtitle && (
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            {subtitle}
+          </p>
+        )}
+      </div>
+      {palette && (
+        <div className="flex items-center gap-1">
+          <SwatchDot color={palette.actual} title="Actual" />
+          <SwatchDot color={palette.saved} title="Saved" />
+          <SwatchDot color={palette.over} title="Over" />
+          <SwatchDot color={palette.forecast} title="Forecast" />
+        </div>
       )}
-    </div>
-  );
-}
-
-function PaletteRow({
-  palette,
-  active,
-  onSelect,
-  readOnly = false,
-  onChange,
-  onDelete,
-}: {
-  palette: SchedulePalette;
-  active: boolean;
-  onSelect: () => void;
-  readOnly?: boolean;
-  onChange?: (patch: Partial<SchedulePalette>) => void;
-  onDelete?: () => void;
-}) {
-  // Local editable name so each keystroke doesn't round-trip through
-  // SWR. Committed back to the pref on blur.
-  const [name, setName] = useState(palette.name);
-
-  return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center gap-3 rounded-md border p-2 transition-colors",
-        active ? "border-primary/60 bg-accent/50" : "hover:bg-accent/30",
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`Edit ${name}`}
+          className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
       )}
-    >
-      <input
-        type="radio"
-        name="schedule-chart-theme"
-        checked={active}
-        onChange={onSelect}
-        value={palette.id}
-        aria-label={`Use ${palette.name} palette`}
-        className="h-4 w-4 cursor-pointer accent-indigo-500"
-      />
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onBlur={() => {
-          if (onChange && name.trim() && name !== palette.name) {
-            onChange({ name: name.trim() });
-          } else if (!name.trim()) {
-            setName(palette.name);
-          }
-        }}
-        disabled={readOnly}
-        aria-label={`Palette name for ${palette.name}`}
-        className="min-w-0 flex-1 rounded border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-default disabled:border-transparent disabled:bg-transparent disabled:opacity-100"
-      />
-      <PaletteSwatch
-        label="Actual"
-        value={palette.actual}
-        readOnly={readOnly}
-        onChange={(v) => onChange?.({ actual: v })}
-      />
-      <PaletteSwatch
-        label="Saved"
-        value={palette.saved}
-        readOnly={readOnly}
-        onChange={(v) => onChange?.({ saved: v })}
-      />
-      <PaletteSwatch
-        label="Over"
-        value={palette.over}
-        readOnly={readOnly}
-        onChange={(v) => onChange?.({ over: v })}
-      />
-      <PaletteSwatch
-        label="Forecast"
-        value={palette.forecast}
-        readOnly={readOnly}
-        onChange={(v) => onChange?.({ forecast: v })}
-      />
-      {onDelete && !readOnly && (
+      {onDelete && (
         <button
           type="button"
           onClick={onDelete}
-          aria-label={`Delete palette ${palette.name}`}
-          className="rounded p-1 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+          aria-label={`Delete ${name}`}
+          className="rounded p-1 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground transition-colors"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       )}
     </div>
   );
 }
 
-function PaletteSwatch({
+function SwatchDot({ color, title }: { color: string; title: string }) {
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      className="block h-4 w-4 rounded-full border border-foreground/20"
+      style={{ backgroundColor: color }}
+    />
+  );
+}
+
+function PaletteEditDialog({
+  palette,
+  isNew,
+  onChange,
+  onCommit,
+  onCancel,
+}: {
+  palette: SchedulePalette | null;
+  isNew: boolean;
+  onChange: (next: SchedulePalette) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+}) {
+  const open = palette !== null;
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onCancel();
+      }}
+    >
+      <DialogContent className="sm:max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle>{isNew ? "New palette" : "Edit palette"}</DialogTitle>
+        </DialogHeader>
+        {palette && (
+          <div className="space-y-4">
+            <label className="block">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                Name
+              </span>
+              <input
+                type="text"
+                autoFocus
+                value={palette.name}
+                onChange={(e) =>
+                  onChange({ ...palette, name: e.target.value })
+                }
+                aria-label="Palette name"
+                className="mt-1 w-full rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <SwatchField
+                label="Actual"
+                value={palette.actual}
+                onChange={(v) => onChange({ ...palette, actual: v })}
+              />
+              <SwatchField
+                label="Saved"
+                value={palette.saved}
+                onChange={(v) => onChange({ ...palette, saved: v })}
+              />
+              <SwatchField
+                label="Over"
+                value={palette.over}
+                onChange={(v) => onChange({ ...palette, over: v })}
+              />
+              <SwatchField
+                label="Forecast"
+                value={palette.forecast}
+                onChange={(v) => onChange({ ...palette, forecast: v })}
+              />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={onCommit}
+            disabled={!palette?.name.trim()}
+          >
+            {isNew ? "Create" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SwatchField({
   label,
   value,
-  readOnly,
   onChange,
 }: {
   label: string;
   value: string;
-  readOnly: boolean;
   onChange: (next: string) => void;
 }) {
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <ColorPicker
-        value={value}
-        onChange={onChange}
-        ariaLabel={`${label} colour`}
-        disabled={readOnly}
-      />
-      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
+    <div className="flex items-center gap-2 rounded-md border bg-background/40 p-2">
+      <ColorPicker value={value} onChange={onChange} ariaLabel={label} />
+      <span className="text-xs font-medium">{label}</span>
     </div>
   );
 }

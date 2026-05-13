@@ -9,6 +9,17 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.21.0 — 2026-05-13
+
+### Added
+- **Saved filter presets** on the transactions list. A new
+  `Saved` popover next to the existing filter pills captures the
+  current URL query under a name (e.g. "Big spends",
+  "Internal transfers last quarter") and restores it with a click.
+  Storage lives on the DB-backed `transactionsSavedFilters` blob,
+  so presets follow the operator across devices. Same-name re-save
+  overwrites the existing preset; presets sort alphabetically.
+
 ## 0.20.0 — 2026-05-13
 
 ### Added

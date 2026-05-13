@@ -17,6 +17,7 @@ import { formatAUD, amountClass, diffDaysISO, cn } from "@/lib/utils";
 import { buildCategoryMeta } from "@/lib/category-path";
 import type { Category } from "@/db/schema";
 import { TransactionFilters } from "@/components/transactions/transaction-filters";
+import { SavedFilters } from "@/components/transactions/saved-filters";
 import { TransferSuggestionsPanel } from "@/components/transactions/transfer-suggestions-panel";
 import { MissedScheduledPanel } from "@/components/transactions/missed-scheduled-panel";
 import { TransactionRow } from "@/components/transactions/transaction-row";
@@ -507,6 +508,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
             direction,
           }}
         />
+        <SavedFilters />
       </div>
 
       <TransferSuggestionsPanel onChanged={() => mutateTxns()} />

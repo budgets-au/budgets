@@ -22,6 +22,10 @@ export interface DisplayPrefs {
    * metadata (notes, bank-ID, posted timestamp, import details).
    * Off → clicks are inert; the row stays a single line. */
   transactionsRowExpandable: boolean;
+  /** Named filter presets — captures the current transactions-list
+   * search params under a name the operator picks. Keyed by a
+   * client-generated UUID so renames + re-saves don't collide. */
+  transactionsSavedFilters: Array<{ id: string; name: string; query: string }>;
 
   // ── Cashflow calendar ─────────────────────────────────────────
   /** "month" or "week" view on the calendar page. */
@@ -93,6 +97,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   transactionsShowLinkedDetails: false,
   transactionsPageSize: 200,
   transactionsRowExpandable: true,
+  transactionsSavedFilters: [],
   calendarViewMode: "month",
   calendarBillsOnly: false,
   missedShowDismissed: false,
@@ -172,6 +177,33 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     }
     return [...(DISPLAY_PREFS_DEFAULT[key] as string[])];
   }
+  function savedFilters(
+    key: keyof DisplayPrefs,
+  ): Array<{ id: string; name: string; query: string }> {
+    const v = obj[key];
+    if (!Array.isArray(v)) {
+      return [
+        ...(DISPLAY_PREFS_DEFAULT[key] as Array<{ id: string; name: string; query: string }>),
+      ];
+    }
+    const out: Array<{ id: string; name: string; query: string }> = [];
+    for (const x of v) {
+      if (
+        x &&
+        typeof x === "object" &&
+        typeof (x as { id?: unknown }).id === "string" &&
+        typeof (x as { name?: unknown }).name === "string" &&
+        typeof (x as { query?: unknown }).query === "string"
+      ) {
+        out.push({
+          id: (x as { id: string }).id,
+          name: (x as { name: string }).name,
+          query: (x as { query: string }).query,
+        });
+      }
+    }
+    return out;
+  }
   function periodMap(
     key: keyof DisplayPrefs,
   ): Record<string, { from: string; to: string }> {
@@ -203,6 +235,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     transactionsShowLinkedDetails: bool("transactionsShowLinkedDetails"),
     transactionsPageSize: num("transactionsPageSize"),
     transactionsRowExpandable: bool("transactionsRowExpandable"),
+    transactionsSavedFilters: savedFilters("transactionsSavedFilters"),
     calendarViewMode: pickEnum("calendarViewMode", ["month", "week"] as const),
     calendarBillsOnly: bool("calendarBillsOnly"),
     missedShowDismissed: bool("missedShowDismissed"),

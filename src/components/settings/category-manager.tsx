@@ -524,7 +524,7 @@ export function CategoryManager({
                 typeFilter={form.type === "income" ? "income" : "expense"}
                 maxDepth={1}
                 uncategorisedLabel="Top-level"
-                triggerClassName="h-9 text-sm px-3 gap-1 text-foreground hover:bg-muted bg-background border rounded-md inline-flex items-center justify-between min-w-0 w-full disabled:opacity-50"
+                triggerClassName="h-9 text-sm px-3 w-full"
                 popoverClassName="w-[var(--anchor-width)] p-0 gap-0 overflow-hidden min-w-72"
               />
             </div>
@@ -736,7 +736,7 @@ function CategoryEditDialog({
               // which must stay ≤ 2 — so candidate.depth ≤ 1 - myDepth.
               maxDepth={1 - myDepth}
               uncategorisedLabel="Top-level"
-              triggerClassName="h-9 text-sm px-3 gap-1 text-foreground hover:bg-muted bg-background border rounded-md inline-flex items-center justify-between min-w-0 w-full disabled:opacity-50"
+              triggerClassName="h-9 text-sm px-3 w-full"
               popoverClassName="w-[var(--anchor-width)] p-0 gap-0 overflow-hidden min-w-72"
             />
             <p className="text-[11px] text-muted-foreground">

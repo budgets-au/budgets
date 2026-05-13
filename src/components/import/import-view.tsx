@@ -1272,7 +1272,7 @@ function RuleCreator({
         categories={categories}
         disabled={saving || categories.length === 0 || !normalizedPayee}
         placeholder={saving ? "Saving…" : "Set category…"}
-        triggerClassName="h-7 text-xs px-2 py-0 min-w-[160px] gap-1 text-foreground hover:bg-muted bg-background border rounded inline-flex items-center justify-between disabled:opacity-50"
+        triggerClassName="py-0 min-w-[160px]"
         uncategorisedLabel={null}
       />
     </span>

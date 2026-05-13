@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { buildCategoryMeta } from "@/lib/category-path";
+import { cn } from "@/lib/utils";
 
 /** Minimal category shape every consumer already has on hand —
  * `type` is widened to `string` to absorb the drizzle row shape
@@ -75,8 +76,14 @@ interface Entry {
   leaf: string;
 }
 
-const DEFAULT_TRIGGER_CLS =
-  "h-7 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground bg-background border rounded inline-flex items-center justify-between min-w-0 max-w-full disabled:opacity-50";
+/** Base styling that every CategoryDropdown trigger inherits — the
+ * structural bits (inline-flex layout, rounded border, foreground
+ * colour, disabled treatment) that any caller would have to
+ * re-derive otherwise. Caller-supplied `triggerClassName` is MERGED
+ * on top via `cn()` so an override like `h-9 w-full` widens the
+ * button without losing the border / text colour / chevron layout. */
+const TRIGGER_BASE_CLS =
+  "inline-flex items-center justify-between gap-1 min-w-0 max-w-full h-7 text-xs px-2 bg-background text-foreground border rounded-md hover:bg-muted/40 transition-colors disabled:opacity-50";
 
 const DEFAULT_POPOVER_CLS = "w-72 p-0 gap-0 overflow-hidden";
 
@@ -239,7 +246,7 @@ export function CategoryDropdown({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        className={triggerClassName ?? DEFAULT_TRIGGER_CLS}
+        className={cn(TRIGGER_BASE_CLS, triggerClassName)}
         disabled={disabled}
       >
         <span className="truncate">{triggerLabel}</span>

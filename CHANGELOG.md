@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.32.0 — 2026-05-13
+
+### Fixed
+- **CategoryDropdown trigger merges consumer classes instead of
+  replacing them.** Bug shape: a caller supplying `triggerClassName`
+  was wiping out every default (`border`, `rounded`, `text-foreground`,
+  `inline-flex`). Most visible on the scheduled-transaction edit
+  form — the Category pill rendered without a border, with default
+  text colour against the form's dark background, looking
+  unstyled. The base class now lives separately and the caller's
+  override is folded in via `cn()` (tailwind-merge handles
+  conflicts), so every consumer keeps the same structural shell
+  while still being able to override sizing or background.
+- Inline cell trigger on the main transactions list opts out of
+  the new base's border / bg via `border-0 bg-transparent` so it
+  still reads as a bare in-cell affordance.
+
 ## 0.31.0 — 2026-05-13
 
 ### Added

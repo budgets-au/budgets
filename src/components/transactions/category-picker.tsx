@@ -50,7 +50,7 @@ export function CategoryPicker({
       onChange={applyValue}
       categories={categories}
       disabled={pending}
-      triggerClassName="h-6 text-xs px-1 gap-1 text-muted-foreground hover:text-foreground hover:bg-accent rounded inline-flex items-center justify-between min-w-0 max-w-full disabled:opacity-50"
+      triggerClassName="h-6 px-1 border-0 bg-transparent text-muted-foreground hover:text-foreground hover:bg-accent"
     />
   );
 }

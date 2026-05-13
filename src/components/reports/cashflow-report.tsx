@@ -4,7 +4,7 @@ import { Fragment, createContext, useContext, useEffect, useState } from "react"
 import useSWR from "swr";
 import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import type { CashflowReport as CashflowData, CashflowCategory } from "@/app/api/reports/cashflow/route";
@@ -12,6 +12,39 @@ import { CashflowCellDialog, type CashflowCellQuery } from "./cashflow-cell-dial
 
 const CellOpenerContext = createContext<((q: CashflowCellQuery) => void) | null>(null);
 const useCellOpener = () => useContext(CellOpenerContext);
+
+/** Per-row "hide" toggle. Each LeafRow / SubParentHeaderRow /
+ * GrandparentHeaderRow looks this up to render its eye icon. The
+ * `isHidden` predicate is shared so a parent's exclusion cascades
+ * to its descendants without each row hauling around the full set. */
+const HideToggleContext = createContext<{
+  isHidden: (id: string) => boolean;
+  toggle: (id: string) => void;
+} | null>(null);
+const useHideToggle = () => useContext(HideToggleContext);
+
+function HideEye({ catId, isHidden }: { catId: string; isHidden: boolean }) {
+  const ctx = useHideToggle();
+  if (!ctx) return null;
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        ctx.toggle(catId);
+      }}
+      className={`ml-auto p-0.5 rounded hover:bg-muted transition-opacity ${
+        isHidden
+          ? "opacity-70 hover:opacity-100"
+          : "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
+      }`}
+      title={isHidden ? "Show this category" : "Hide this category"}
+      aria-label={isHidden ? "Show category" : "Hide category"}
+    >
+      {isHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+    </button>
+  );
+}
 
 function monthRange(m: string): { from: string; to: string; label: string } {
   const start = `${m}-01`;
@@ -428,6 +461,7 @@ function ParentHeaderRow({
   negate, href, grandparent, hasDirect, showValues = true, opts,
   budgetPerMonth, scheduledPerMonth, budgetByMonth, scheduledByMonth,
   isCollapsed, onToggle, categoryIdForCell, fromForCell, toForCell,
+  hideTargetId, isHidden,
 }: {
   name: string;
   months: string[];
@@ -453,6 +487,10 @@ function ParentHeaderRow({
   categoryIdForCell?: string;
   fromForCell?: string;
   toForCell?: string;
+  /** When set, an eye icon next to the name toggles this category's
+   * exclusion from the report. Synthetic rows (no DB id) omit it. */
+  hideTargetId?: string;
+  isHidden?: boolean;
 }) {
   const display = (v: number | undefined) => (negate && v !== undefined ? -v : v);
   const Chevron = isCollapsed ? ChevronRight : ChevronDown;
@@ -484,17 +522,18 @@ function ParentHeaderRow({
     : undefined;
   return (
     <tr
-      className={`border-b ${grandparent ? "border-border bg-muted/30" : "border-border/50"} ${onToggle ? "cursor-pointer" : ""}`}
+      className={`group border-b ${grandparent ? "border-border bg-muted/30" : "border-border/50"} ${onToggle ? "cursor-pointer" : ""} ${isHidden ? "opacity-50" : ""}`}
       onClick={onToggle}
     >
       <td className={`px-3 py-1.5 text-sm sticky left-0 whitespace-nowrap ${grandparent ? `font-semibold bg-muted/30 ${nameColor}` : `font-medium bg-background ${nameColor}`}`}>
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1 min-w-0">
           {onToggle && <Chevron className="h-3 w-3 shrink-0 text-muted-foreground" />}
           {href ? (
             <Link href={href} onClick={(e) => e.stopPropagation()} className="hover:underline hover:text-indigo-600 transition-colors">
               {name}
             </Link>
           ) : name}
+          {hideTargetId && <HideEye catId={hideTargetId} isHidden={!!isHidden} />}
         </span>
       </td>
       {months.map((m) => {
@@ -536,7 +575,7 @@ function ParentHeaderRow({
 
 function SubParentHeaderRow({
   sub, months, thisMonth, negate, from, to,
-  showValues = true, opts, isCollapsed, onToggle,
+  showValues = true, opts, isCollapsed, onToggle, isHidden,
 }: {
   sub: ParentSubGroup;
   months: string[];
@@ -548,6 +587,7 @@ function SubParentHeaderRow({
   opts: ColOpts;
   isCollapsed?: boolean;
   onToggle?: () => void;
+  isHidden?: boolean;
 }) {
   const display = (v: number | undefined) => (negate && v !== undefined ? -v : v);
   const href = sub.parentCat ? `/transactions?categoryId=${sub.parentCat.id}&from=${from}&to=${to}` : undefined;
@@ -579,15 +619,16 @@ function SubParentHeaderRow({
         })
     : undefined;
   return (
-    <tr className={`border-b border-border/50 ${onToggle ? "cursor-pointer" : ""}`} onClick={onToggle}>
+    <tr className={`group border-b border-border/50 ${onToggle ? "cursor-pointer" : ""} ${isHidden ? "opacity-50" : ""}`} onClick={onToggle}>
       <td className={`pl-9 pr-3 py-1.5 text-sm font-medium sticky left-0 bg-background whitespace-nowrap ${nameColor}`}>
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1 min-w-0">
           {onToggle && <Chevron className="h-3 w-3 shrink-0 text-muted-foreground" />}
           {href ? (
             <Link href={href} onClick={(e) => e.stopPropagation()} className="hover:underline hover:text-indigo-600 transition-colors">
               {sub.parentName}
             </Link>
           ) : sub.parentName}
+          <HideEye catId={sub.parentId} isHidden={!!isHidden} />
         </span>
       </td>
       {months.map((m) => {
@@ -626,7 +667,7 @@ function SubParentHeaderRow({
 }
 
 function LeafRow({
-  cat, months, thisMonth, negate, from, to, opts, indent,
+  cat, months, thisMonth, negate, from, to, opts, indent, isHidden,
 }: {
   cat: CashflowCategory;
   months: string[];
@@ -636,6 +677,7 @@ function LeafRow({
   to: string;
   opts: ColOpts;
   indent: "none" | "child" | "grandchild";
+  isHidden?: boolean;
 }) {
   // Uncategorised synthetic rows ("uncategorised-income"/"uncategorised-expenses")
   // get a clickthrough to the transactions page filtered by NULL category, with
@@ -683,8 +725,13 @@ function LeafRow({
         })
     : undefined;
   return (
-    <tr className="hover:bg-muted/30 border-b border-border/50">
-      <td className={tdClass}>{nameEl}</td>
+    <tr className={`group hover:bg-muted/30 border-b border-border/50 ${isHidden ? "opacity-50" : ""}`}>
+      <td className={tdClass}>
+        <span className="flex items-center gap-1 min-w-0">
+          <span className="truncate">{nameEl}</span>
+          {!isUncategorised && <HideEye catId={cat.id} isHidden={!!isHidden} />}
+        </span>
+      </td>
       {months.map((m) => {
         const plan = planAt(cat.budgetByMonth, cat.scheduledByMonth, m);
         const over = isOverPlan(cat.byMonth[m], plan, !!negate);
@@ -776,7 +823,8 @@ function renderGroups(
   to: string,
   totalsLevel: TotalsLevel,
   collapse: CollapseState,
-  opts: ColOpts
+  opts: ColOpts,
+  isHiddenCat: (id: string) => boolean,
 ) {
   return groups.map((g) => {
     if (g.kind === "standalone") {
@@ -790,6 +838,7 @@ function renderGroups(
           from={from}
           to={to}
           opts={opts}
+          isHidden={isHiddenCat(g.cat.id)}
         />
       );
     }
@@ -806,13 +855,14 @@ function renderGroups(
         totalsLevel={totalsLevel}
         collapse={collapse}
         opts={opts}
+        isHiddenCat={isHiddenCat}
       />
     );
   });
 }
 
 function GrandparentRows({
-  group, months, thisMonth, negate, from, to, totalsLevel, collapse, opts,
+  group, months, thisMonth, negate, from, to, totalsLevel, collapse, opts, isHiddenCat,
 }: {
   group: GrandparentGroup;
   months: string[];
@@ -823,8 +873,10 @@ function GrandparentRows({
   totalsLevel: TotalsLevel;
   collapse: CollapseState;
   opts: ColOpts;
+  isHiddenCat: (id: string) => boolean;
 }) {
   const isGpCollapsed = collapse.collapsedGps.has(group.grandparentId);
+  const gpHidden = isHiddenCat(group.grandparentId);
 
   return (
     <>
@@ -851,6 +903,8 @@ function GrandparentRows({
         categoryIdForCell={group.grandparentId}
         fromForCell={from}
         toForCell={to}
+        hideTargetId={group.grandparentId}
+        isHidden={gpHidden}
       />
       {!isGpCollapsed && group.subGroups.map((sub) => {
         if (sub.children.length === 0) {
@@ -864,10 +918,12 @@ function GrandparentRows({
               from={from}
               to={to}
               opts={opts}
+              isHidden={gpHidden || isHiddenCat(sub.parentCat.id)}
             />
           ) : null;
         }
         const isSubCollapsed = collapse.collapsedSubs.has(sub.parentId);
+        const subHidden = gpHidden || isHiddenCat(sub.parentId);
         return (
           <Fragment key={`sub-${sub.parentId}`}>
             <SubParentHeaderRow
@@ -881,6 +937,7 @@ function GrandparentRows({
               opts={opts}
               isCollapsed={isSubCollapsed}
               onToggle={() => collapse.onToggleSub(sub.parentId)}
+              isHidden={subHidden}
             />
             {!isSubCollapsed && sub.children.map((gc) => (
               <GrandchildRow
@@ -892,6 +949,7 @@ function GrandparentRows({
                 from={from}
                 to={to}
                 opts={opts}
+                isHidden={subHidden || isHiddenCat(gc.id)}
               />
             ))}
           </Fragment>
@@ -921,6 +979,8 @@ export function CashflowReport({
   const showTotal = displayPrefs.cashflowShowTotal;
   const showAvg = displayPrefs.cashflowShowAvg;
   const showPlan = displayPrefs.cashflowShowPlan;
+  const showHidden = displayPrefs.cashflowShowHidden;
+  const excludedIds = displayPrefs.cashflowExcludedCatIds;
 
   function toggleShowCounts() {
     setPref("cashflowShowCounts", !showCounts);
@@ -933,6 +993,15 @@ export function CashflowReport({
   }
   function toggleShowPlan() {
     setPref("cashflowShowPlan", !showPlan);
+  }
+  function toggleShowHidden() {
+    setPref("cashflowShowHidden", !showHidden);
+  }
+  function toggleHideCat(catId: string) {
+    const next = excludedIds.includes(catId)
+      ? excludedIds.filter((x) => x !== catId)
+      : [...excludedIds, catId];
+    setPref("cashflowExcludedCatIds", next);
   }
   function changeTotalsLevel(level: TotalsLevel) {
     setPref("cashflowTotalsLevel", level);
@@ -965,7 +1034,7 @@ export function CashflowReport({
     return <p className="text-sm text-muted-foreground py-8 text-center">No data for this period.</p>;
   }
 
-  const { months, income, expenses, totals, closingBalance } = data;
+  const { months, income, expenses, closingBalance } = data;
   const thisMonth = format(new Date(), "yyyy-MM");
   const totalCols =
     1 + months.length +
@@ -976,8 +1045,45 @@ export function CashflowReport({
     (showAvg ? 1 : 0) +
     (showPlan ? 1 : 0);
 
-  const incomeGroups = buildGroups(income);
-  const expenseGroups = buildGroups(expenses);
+  // Hidden-category logic. A cat is hidden when it (or any ancestor)
+  // is in the excluded set — hiding "Food" should drop "Food /
+  // Groceries" and "Food / Restaurants" out of the rollup too.
+  // Hidden cats are ALWAYS excluded from totals; the showHidden
+  // toggle only controls whether they're rendered (greyed out, in
+  // their own section) so the operator can find and un-hide them.
+  const excludedSet = new Set(excludedIds);
+  function catIsHidden(c: CashflowCategory): boolean {
+    if (excludedSet.has(c.id)) return true;
+    if (c.parentId && excludedSet.has(c.parentId)) return true;
+    if (c.grandparentId && excludedSet.has(c.grandparentId)) return true;
+    return false;
+  }
+  const visibleIncome = income.filter((c) => !catIsHidden(c));
+  const visibleExpenses = expenses.filter((c) => !catIsHidden(c));
+  const hiddenIncome = income.filter((c) => catIsHidden(c));
+  const hiddenExpenses = expenses.filter((c) => catIsHidden(c));
+
+  // Visible groups feed the primary income/expense sections. Hidden
+  // groups (built from the hidden cats only) feed a separate section
+  // rendered when showHidden is on — keeps the main tree's aggregates
+  // free of hidden cats while still letting the operator see what's
+  // been excluded.
+  const incomeGroups = buildGroups(visibleIncome);
+  const expenseGroups = buildGroups(visibleExpenses);
+  const hiddenIncomeGroups = buildGroups(hiddenIncome);
+  const hiddenExpenseGroups = buildGroups(hiddenExpenses);
+
+  // Recompute aggregate totals from visible cats so hidden cats don't
+  // pollute Total Income / Total Expenses / Surplus.
+  const totals = {
+    income: aggregateByMonth(visibleIncome),
+    expenses: aggregateByMonth(visibleExpenses),
+    net: {} as Record<string, number>,
+  };
+  for (const m of months) {
+    totals.net[m] = (totals.income[m] ?? 0) + (totals.expenses[m] ?? 0);
+  }
+  const hasHidden = hiddenIncome.length > 0 || hiddenExpenses.length > 0;
 
   const gpIds = [...incomeGroups, ...expenseGroups]
     .flatMap((g) => g.kind === "grandparent" ? [g.grandparentId] : []);
@@ -996,6 +1102,7 @@ export function CashflowReport({
 
   return (
     <CellOpenerContext.Provider value={setCellQuery}>
+    <HideToggleContext.Provider value={{ isHidden: (id) => excludedSet.has(id), toggle: toggleHideCat }}>
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-4">
         {/* Collapse all / Expand all */}
@@ -1053,6 +1160,22 @@ export function CashflowReport({
           <span className="text-xs text-muted-foreground">Show counts</span>
           <Switch checked={showCounts} onCheckedChange={toggleShowCounts} aria-label="Show transaction counts" />
         </div>
+
+        {/* Show hidden categories — only rendered when there's
+            actually something hidden to reveal; otherwise the toggle
+            would just sit there doing nothing. */}
+        {hasHidden && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Show {excludedSet.size} hidden
+            </span>
+            <Switch
+              checked={showHidden}
+              onCheckedChange={toggleShowHidden}
+              aria-label="Show hidden categories"
+            />
+          </div>
+        )}
 
         </div>
       </div>
@@ -1124,7 +1247,7 @@ export function CashflowReport({
               </td>
             </tr>
           )}
-          {renderGroups(incomeGroups, months, thisMonth, false, from, to, totalsLevel, collapse, opts)}
+          {renderGroups(incomeGroups, months, thisMonth, false, from, to, totalsLevel, collapse, opts, () => false)}
           <TotalsRow label="Total Income" months={months} values={totals.income} thisMonth={thisMonth} mode="net" opts={opts} />
 
           {/* ── EXPENSES ── */}
@@ -1136,8 +1259,23 @@ export function CashflowReport({
               </td>
             </tr>
           )}
-          {renderGroups(expenseGroups, months, thisMonth, true, from, to, totalsLevel, collapse, opts)}
+          {renderGroups(expenseGroups, months, thisMonth, true, from, to, totalsLevel, collapse, opts, () => false)}
           <TotalsRow label="Total Expenses" months={months} values={totals.expenses} thisMonth={thisMonth} negate opts={opts} />
+
+          {/* ── HIDDEN CATEGORIES ── only when the operator has flipped
+              showHidden on AND there's at least one hidden cat with
+              activity in the window. Rendered greyed-out, excluded
+              from every total above. */}
+          {showHidden && hasHidden && (
+            <>
+              <SectionHeader
+                label="Hidden Categories (excluded from totals)"
+                cols={totalCols}
+              />
+              {renderGroups(hiddenIncomeGroups, months, thisMonth, false, from, to, totalsLevel, collapse, opts, () => true)}
+              {renderGroups(hiddenExpenseGroups, months, thisMonth, true, from, to, totalsLevel, collapse, opts, () => true)}
+            </>
+          )}
         </tbody>
       </table>
     </div>
@@ -1148,6 +1286,7 @@ export function CashflowReport({
       onClose={() => setCellQuery(null)}
     />
     </div>
+    </HideToggleContext.Provider>
     </CellOpenerContext.Provider>
   );
 }

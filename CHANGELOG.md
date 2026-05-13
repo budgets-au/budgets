@@ -4,6 +4,23 @@ All notable changes to this project are recorded here. The version policy
 is **bump minor on every shipped change** (per user directive); patch
 remains 0 until released hotfixes warrant it.
 
+## 0.6.0 — 2026-05-13
+
+### Added
+- **Cashflow report — per-category visibility.** Each category row
+  now has a hover-reveal eye icon next to its name. Clicking it
+  hides that category (and all descendants) from the report. Hidden
+  categories are excluded from every total — Total Income, Total
+  Expenses, Surplus / Deficit, plus parent / grandparent rollups.
+  Closing Balance is unaffected (it's the real bank-balance walk).
+- New "Show N hidden" toggle in the cashflow controls bar appears
+  whenever there's something hidden. Flipping it reveals a separate
+  **Hidden Categories** section at the bottom of the table (greyed
+  out, eye-off icon) so the operator can find and un-hide what they
+  previously dismissed.
+- Exclusion list lives in `cashflowExcludedCatIds` on the DB-backed
+  display-prefs blob — follows the operator across devices.
+
 ## 0.5.0 — 2026-05-13
 
 ### Added

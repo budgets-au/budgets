@@ -49,6 +49,15 @@ export interface DisplayPrefs {
   cashflowShowAvg: boolean;
   /** Show the Plan (scheduled + budget) overlay on Reports → Cash Flow. */
   cashflowShowPlan: boolean;
+  /** Category IDs hidden on Reports → Cash Flow. Hidden categories
+   * are excluded from every total / parent rollup; toggling them
+   * back on only requires `cashflowShowHidden` so the user can find
+   * them. Cascades to descendants (hiding a parent hides children). */
+  cashflowExcludedCatIds: string[];
+  /** When true, hidden cashflow categories are still rendered
+   * (greyed out) so the operator can un-hide them. They remain
+   * excluded from totals regardless. */
+  cashflowShowHidden: boolean;
   /** Sankey diagram scope on Reports → Sankey. */
   reportsSankeyScope: "all" | "income" | "expenses";
   /** Excluded category IDs on Reports → Envelope. */
@@ -86,6 +95,8 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   cashflowShowTotal: true,
   cashflowShowAvg: true,
   cashflowShowPlan: false,
+  cashflowExcludedCatIds: [],
+  cashflowShowHidden: false,
   reportsSankeyScope: "all",
   envelopeExcludedCatIds: [],
   reportsPeriodByTab: {},
@@ -194,6 +205,8 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     cashflowShowTotal: bool("cashflowShowTotal"),
     cashflowShowAvg: bool("cashflowShowAvg"),
     cashflowShowPlan: bool("cashflowShowPlan"),
+    cashflowExcludedCatIds: stringArray("cashflowExcludedCatIds"),
+    cashflowShowHidden: bool("cashflowShowHidden"),
     reportsSankeyScope: pickEnum(
       "reportsSankeyScope",
       ["all", "income", "expenses"] as const,

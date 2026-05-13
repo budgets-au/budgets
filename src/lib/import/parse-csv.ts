@@ -1,5 +1,6 @@
 import Papa from "papaparse";
 import { parse, isValid } from "date-fns";
+import { formatAmount } from "@/lib/utils";
 import { newImportHash } from "./hash";
 import { assignPostedSeq } from "./posted-seq";
 
@@ -47,8 +48,7 @@ function parseDate(raw: string): string {
 function normaliseAmount(raw: string): string {
   // Remove currency symbols and commas
   const cleaned = raw.replace(/[$,\s]/g, "").trim();
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? "0" : num.toFixed(2);
+  return formatAmount(parseFloat(cleaned));
 }
 
 interface DetectedColumns {
@@ -166,7 +166,7 @@ export function parseCSV(content: string): ImportRow[] {
     if (cols.debit !== undefined && cols.credit !== undefined) {
       const debit = parseFloat(row[cols.debit!]?.replace(/[$,\s]/g, "") || "0") || 0;
       const credit = parseFloat(row[cols.credit!]?.replace(/[$,\s]/g, "") || "0") || 0;
-      amount = (credit - debit).toFixed(2);
+      amount = formatAmount(credit - debit);
     } else {
       amount = normaliseAmount(row[cols.amount] ?? "0");
     }

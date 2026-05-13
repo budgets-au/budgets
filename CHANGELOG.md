@@ -9,6 +9,17 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.18.0 — 2026-05-13
+
+### Changed
+- **Centralised amount formatting.** New `formatAmount(n)` helper in
+  `lib/utils.ts` is the canonical 2-decimal string serialiser; the
+  three import parsers (CSV / QIF / OFX) now call it instead of
+  hand-rolling `.toFixed(2)` so every incoming transaction lands in
+  the DB with a uniform `"123.45"` / `"-123.45"` shape.
+- Tightened the `display-prefs.ts` preamble (was a 10-line
+  docstring; now one sentence — field-level comments stay).
+
 ## 0.17.0 — 2026-05-13
 
 ### Changed

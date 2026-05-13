@@ -1,4 +1,5 @@
 import { parse, isValid } from "date-fns";
+import { formatAmount } from "@/lib/utils";
 import { newImportHash } from "./hash";
 import { assignPostedSeq } from "./posted-seq";
 
@@ -209,7 +210,7 @@ export function parseQIF(content: string): ImportRow[] {
       case "D": currentTxn.date = parseQIFDate(value); break;
       case "T":
       case "U":
-        currentTxn.amount = parseFloat(value.replace(/,/g, "")).toFixed(2);
+        currentTxn.amount = formatAmount(parseFloat(value.replace(/,/g, "")));
         break;
       case "P": currentTxn.payee = value; break;
       case "M": currentTxn.memo = value; break;
@@ -231,7 +232,7 @@ export function parseQIF(content: string): ImportRow[] {
         break;
       case "$":
         currentTxn.pendingSplit = currentTxn.pendingSplit ?? {};
-        currentTxn.pendingSplit.amount = parseFloat(value.replace(/,/g, "")).toFixed(2);
+        currentTxn.pendingSplit.amount = formatAmount(parseFloat(value.replace(/,/g, "")));
         break;
     }
   }

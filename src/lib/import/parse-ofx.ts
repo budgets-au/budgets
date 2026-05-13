@@ -1,3 +1,4 @@
+import { formatAmount } from "@/lib/utils";
 import { newImportHash } from "./hash";
 import { assignPostedSeq } from "./posted-seq";
 
@@ -177,7 +178,7 @@ export function parseOFX(content: string): { rows: ImportRow[]; meta: OFXMeta } 
     const dateRaw = extractTag(block, "DTPOSTED") ?? extractTag(block, "DTUSER") ?? "";
     const date = parseOFXDate(dateRaw);
     const postedAt = parseOFXTimestamp(dateRaw);
-    const amount = parseFloat(extractTag(block, "TRNAMT") ?? "0").toFixed(2);
+    const amount = formatAmount(parseFloat(extractTag(block, "TRNAMT") ?? "0"));
     const payee = (extractTag(block, "NAME") ?? extractTag(block, "MEMO") ?? "").trim();
     const description = extractTag(block, "MEMO") ?? payee;
     // FITID disambiguates identical-looking txns from the bank's perspective.

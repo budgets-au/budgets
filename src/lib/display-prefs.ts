@@ -1,14 +1,6 @@
-/**
- * User-tunable display preferences. Stored centrally in the
- * `app_settings.display_prefs` JSON column so all client toggles
- * sync across devices instead of living in per-browser localStorage.
- *
- * The shape is the single source of truth for every preference key —
- * adding a new toggle means adding a field here, supplying a default
- * in DISPLAY_PREFS_DEFAULT, and reading/writing it in the parser
- * below. The pure helpers stay test-friendly and keep the hook +
- * API route thin.
- */
+/** User-tunable display preferences, synced across devices via
+ * `app_settings.display_prefs`. Adding a key: add the field below,
+ * a default in `DISPLAY_PREFS_DEFAULT`, and a read in the parser. */
 export interface DisplayPrefs {
   // ── Scheduled list ────────────────────────────────────────────
   /** Show the per-row "Weekly" column + footer on the scheduled list. */

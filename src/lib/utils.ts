@@ -15,6 +15,18 @@ export function formatAUD(amount: number | string): string {
   }).format(num);
 }
 
+/** Cent-accurate string representation of a money amount — the
+ * canonical form for storing into the `amount` text column.
+ * Centralises `.toFixed(2)` so every importer / migration / API
+ * writes uniform `"123.45"` / `"-123.45"` strings instead of
+ * mixing in `"123"` / `"123.4"`. Accepts string-or-number for the
+ * many parse-then-store call-sites. */
+export function formatAmount(amount: number | string): string {
+  const num = typeof amount === "string" ? parseFloat(amount) : amount;
+  if (!Number.isFinite(num)) return "0.00";
+  return num.toFixed(2);
+}
+
 export function formatDate(date: string | Date): string {
   if (typeof date === "string") {
     return format(parseISO(date), "d MMM yyyy");

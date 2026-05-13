@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.30.0 — 2026-05-13
+
+### Changed
+- **All chart tooltips themed via a shared primitive.** New
+  `<ChartTooltipCard>` / `<ChartTooltipHeader>` / `<ChartTooltipRow>`
+  primitives live at `src/components/ui/chart-tooltip.tsx` and
+  every Recharts `<Tooltip>` in the app now uses them via a small
+  per-chart `content` component. Replaces the default Recharts
+  widget styling with the site's Popover card aesthetic (rounded
+  / border / bg-popover / tabular-nums for amounts / coloured
+  swatches per series).
+  Migrated: dashboard net-worth trend, super-history chart,
+  cashflow-calendar daily-balance chart, reports → Monthly,
+  reports → Income/Expense by Category pie, reports → Sankey,
+  reports → expenses drilldown pie, investments → history,
+  investments → watchlist detail. (The schedule chart from 0.29.0
+  also picks up the new primitive in place of its inline styling.)
+
 ## 0.29.0 — 2026-05-13
 
 ### Changed

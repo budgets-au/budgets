@@ -34,6 +34,47 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatAUD, formatDateShort, amountClass, cn } from "@/lib/utils";
+import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+} from "@/components/ui/chart-tooltip";
+
+/** Themed tooltip for the calendar's per-day balance chart. Renames
+ * the `acct:<name>` series keys to just `<name>` and prettifies the
+ * daily-net row label. */
+function CalendarChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ name?: string | number; value?: number; color?: string }>;
+  label?: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <ChartTooltipCard>
+      {label && <ChartTooltipHeader title={String(label)} />}
+      {payload.map((row) => {
+        const n = String(row.name ?? "");
+        const display = n.startsWith("acct:")
+          ? n.slice(5)
+          : n === "net"
+            ? "Daily net"
+            : n;
+        return (
+          <ChartTooltipRow
+            key={n}
+            label={display}
+            value={formatAUD(Number(row.value ?? 0))}
+            swatch={row.color}
+          />
+        );
+      })}
+    </ChartTooltipCard>
+  );
+}
 import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import type { DailyBalance, AccountSeries } from "@/lib/cashflow";
 import { summarizeDay } from "@/lib/cashflow";
@@ -822,17 +863,7 @@ export function CashflowCalendar({
                     domain={yDomain[0] !== yDomain[1] ? yDomain : ["auto", "auto"]}
                     width={44}
                   />
-                  <Tooltip
-                    formatter={(value, name) => {
-                      const formatted = formatAUD(Number(value ?? 0));
-                      const n = String(name ?? "");
-                      if (n.startsWith("acct:")) return [formatted, n.slice(5)];
-                      if (n === "net") return [formatted, "Daily net"];
-                      return [formatted, n];
-                    }}
-                    labelStyle={{ fontSize: 11 }}
-                    contentStyle={{ fontSize: 12 }}
-                  />
+                  <Tooltip content={<CalendarChartTooltip />} />
                   {/* When the "Projected" divider and the "Selected" line
                       land on the same column, their labels stack and read
                       as one garbled string ("SelProjected"). Detect the

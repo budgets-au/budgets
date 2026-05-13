@@ -13,6 +13,36 @@ import { ChevronDown, ChevronLeft, ChevronRight, Printer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { amountClass, formatAUD, formatDate } from "@/lib/utils";
+import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+} from "@/components/ui/chart-tooltip";
+
+function ExpensesPieTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{
+    name?: string | number;
+    value?: number;
+    payload?: { fill?: string };
+  }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0];
+  return (
+    <ChartTooltipCard>
+      <ChartTooltipHeader title={String(row.name ?? "")} />
+      <ChartTooltipRow
+        label="Total"
+        value={formatAUD(Number(row.value ?? 0))}
+        swatch={row.payload?.fill}
+      />
+    </ChartTooltipCard>
+  );
+}
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -421,7 +451,7 @@ export function ExpensesDrilldown({
                     <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(v) => formatAUD(Number(v ?? 0))} />
+                <Tooltip content={<ExpensesPieTooltip />} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>

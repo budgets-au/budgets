@@ -13,6 +13,43 @@ import {
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { formatAUD } from "@/lib/utils";
 import { formatFy } from "@/lib/tax/fy";
+import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+} from "@/components/ui/chart-tooltip";
+
+function SuperTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ name?: string | number; value?: number; color?: string }>;
+  label?: number;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const fy = typeof label === "number" ? formatFy(label) : String(label ?? "");
+  return (
+    <ChartTooltipCard>
+      <ChartTooltipHeader title={fy} />
+      {payload.map((row) => {
+        const v =
+          typeof row.value === "number" && Number.isFinite(row.value)
+            ? formatAUD(row.value)
+            : "—";
+        return (
+          <ChartTooltipRow
+            key={String(row.name)}
+            label={String(row.name)}
+            value={v}
+            swatch={row.color}
+          />
+        );
+      })}
+    </ChartTooltipCard>
+  );
+}
 
 interface ChartYear {
   fyEndYear: number;
@@ -118,18 +155,7 @@ export function SuperHistoryChart({
             tickFormatter={(v: number) => compactAUD(v)}
             width={48}
           />
-          <Tooltip
-            labelFormatter={(y) => formatFy(Number(y))}
-            formatter={(value, name) => {
-              const v = typeof value === "number" ? value : Number(value);
-              if (name === "Increase") {
-                return [Number.isFinite(v) ? formatAUD(v) : "—", "Increase"];
-              }
-              return [formatAUD(v), String(name)];
-            }}
-            labelStyle={{ fontSize: 11 }}
-            contentStyle={{ fontSize: 12, padding: "4px 8px" }}
-          />
+          <Tooltip content={<SuperTooltip />} />
           <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
           {fundColumns.map((fund, i) => (
             <Area

@@ -7,6 +7,41 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD } from "@/lib/utils";
+import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+} from "@/components/ui/chart-tooltip";
+
+/** Sankey hover surfaces either a node (single value) or a link
+ * (source → target with a flow value). Recharts shapes vary by
+ * Sankey version, so this tolerates both shapes. */
+function SankeyTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{
+    name?: string | number;
+    value?: number;
+    payload?: { source?: { name?: string }; target?: { name?: string }; name?: string };
+  }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0];
+  const inner = row.payload;
+  const source = inner?.source?.name;
+  const target = inner?.target?.name;
+  const isLink = source != null && target != null;
+  return (
+    <ChartTooltipCard>
+      <ChartTooltipHeader
+        title={isLink ? `${source} → ${target}` : String(inner?.name ?? row.name ?? "")}
+      />
+      <ChartTooltipRow label="Flow" value={formatAUD(Number(row.value ?? 0))} />
+    </ChartTooltipCard>
+  );
+}
 import type {
   CashflowReport as CashflowData,
   CashflowCategory,
@@ -725,10 +760,7 @@ export function SankeyReport({
                 node={makeCustomNode(isDark, colorsByIdx, expand)}
                 link={makeCustomLink(linkColors)}
               >
-                <Tooltip
-                  formatter={(v) => formatAUD(Number(v ?? 0))}
-                  contentStyle={{ fontSize: 12, padding: "4px 8px" }}
-                />
+                <Tooltip content={<SankeyTooltip />} />
               </Sankey>
             </ResponsiveContainer>
           </div>

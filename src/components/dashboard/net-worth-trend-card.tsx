@@ -4,7 +4,30 @@ import useSWR from "swr";
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+} from "@/components/ui/chart-tooltip";
 import { formatAUD } from "@/lib/utils";
+
+function NetWorthTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: { label: string; netWorth: number } }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0]?.payload;
+  if (!p) return null;
+  return (
+    <ChartTooltipCard className="min-w-[10rem]">
+      <ChartTooltipHeader title={p.label} />
+      <ChartTooltipRow label="Net Worth" value={formatAUD(p.netWorth)} />
+    </ChartTooltipCard>
+  );
+}
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -91,17 +114,7 @@ export function NetWorthTrendCard() {
                   />
                 </linearGradient>
               </defs>
-              <Tooltip
-                contentStyle={{
-                  fontSize: "11px",
-                  padding: "4px 8px",
-                  background: "var(--popover)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "6px",
-                }}
-                formatter={(v) => [formatAUD(Number(v)), "Net Worth"]}
-                labelStyle={{ display: "none" }}
-              />
+              <Tooltip content={<NetWorthTooltip />} />
               <Area
                 type="monotone"
                 dataKey="netWorth"

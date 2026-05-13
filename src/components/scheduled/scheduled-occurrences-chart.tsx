@@ -16,6 +16,12 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { formatAUD } from "@/lib/utils";
+import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+  ChartTooltipDivider,
+} from "@/components/ui/chart-tooltip";
 
 // Tracks `.dark` on <html> so chart fills (which Recharts wants as plain
 // strings, not CSS variables) can flip with the theme. MutationObserver
@@ -91,53 +97,32 @@ function ChartTooltip({
       : null;
 
   return (
-    <div className="rounded-md border bg-popover shadow-md px-3 py-2 text-xs space-y-1 min-w-[12rem]">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="font-medium text-foreground">
-          {format(parseISO(p.date), "d MMM yyyy")}
-        </span>
-        <span
-          className={`text-[10px] uppercase tracking-wider ${
-            isMatched
-              ? "text-emerald-600"
-              : isMissed
-                ? "text-red-500"
-                : "text-muted-foreground"
-          }`}
-        >
-          {isMatched ? "Matched" : isMissed ? "Missed" : "Forecast"}
-        </span>
-      </div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-        {p.segmentLabel}
-      </div>
-      <div className="border-t pt-1 space-y-0.5">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">Actual</span>
-          <span className="tabular-nums">
-            {actual != null ? formatAUD(actual) : "—"}
-          </span>
+    <ChartTooltipCard className="min-w-[12rem]">
+      <ChartTooltipHeader
+        title={format(parseISO(p.date), "d MMM yyyy")}
+        status={isMatched ? "matched" : isMissed ? "missed" : "forecast"}
+        statusLabel={isMatched ? "Matched" : isMissed ? "Missed" : "Forecast"}
+        subtitle={p.segmentLabel}
+      />
+      <ChartTooltipDivider />
+      <ChartTooltipRow
+        label="Actual"
+        value={actual != null ? formatAUD(actual) : "—"}
+      />
+      <ChartTooltipRow label="Planned" value={formatAUD(planned)} />
+      {overUnder && (
+        <ChartTooltipRow
+          label={overUnder.label}
+          value={`${overUnder.label === "Over" ? "+" : "−"}${formatAUD(overUnder.value)}`}
+          tone={overUnder.label === "Over" ? "negative" : "positive"}
+        />
+      )}
+      {isForecast && (
+        <div className="text-muted-foreground italic">
+          No transaction matched yet
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">Planned</span>
-          <span className="tabular-nums">{formatAUD(planned)}</span>
-        </div>
-        {overUnder && (
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-muted-foreground">{overUnder.label}</span>
-            <span className={`tabular-nums font-medium ${overUnder.tone}`}>
-              {overUnder.label === "Over" ? "+" : "−"}
-              {formatAUD(overUnder.value)}
-            </span>
-          </div>
-        )}
-        {isForecast && (
-          <div className="text-muted-foreground italic pt-0.5">
-            No transaction matched yet
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </ChartTooltipCard>
   );
 }
 

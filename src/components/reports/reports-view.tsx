@@ -22,6 +22,61 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ChevronDown } from "lucide-react";
 import { formatAUD } from "@/lib/utils";
 import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+} from "@/components/ui/chart-tooltip";
+
+function ReportsBarTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ name?: string | number; value?: number; color?: string }>;
+  label?: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <ChartTooltipCard>
+      <ChartTooltipHeader title={String(label ?? "")} />
+      {payload.map((row) => (
+        <ChartTooltipRow
+          key={String(row.name)}
+          label={String(row.name)}
+          value={formatAUD(Number(row.value ?? 0))}
+          swatch={row.color}
+        />
+      ))}
+    </ChartTooltipCard>
+  );
+}
+
+function ReportsPieTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{
+    name?: string | number;
+    value?: number;
+    payload?: { fill?: string };
+  }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0];
+  return (
+    <ChartTooltipCard>
+      <ChartTooltipHeader title={String(row.name ?? "")} />
+      <ChartTooltipRow
+        label="Total"
+        value={formatAUD(Number(row.value ?? 0))}
+        swatch={row.payload?.fill}
+      />
+    </ChartTooltipCard>
+  );
+}
+import {
   format,
   subMonths,
   startOfMonth,
@@ -279,7 +334,7 @@ export function ReportsView({
                 }))}>
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} width={45} />
-                  <Tooltip formatter={(v) => formatAUD(Number(v ?? 0))} />
+                  <Tooltip content={<ReportsBarTooltip />} />
                   <Legend />
                   <Bar dataKey="Income" fill="#22c55e" radius={[3, 3, 0, 0]} />
                   <Bar dataKey="Expenses" fill="#ef4444" radius={[3, 3, 0, 0]} />
@@ -348,7 +403,7 @@ export function ReportsView({
                         <Cell key={i} fill={["#22c55e", "#16a34a", "#15803d", "#14532d", "#065f46"][i % 5]} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v) => formatAUD(Number(v ?? 0))} />
+                    <Tooltip content={<ReportsPieTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>

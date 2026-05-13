@@ -23,6 +23,38 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
+import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+} from "@/components/ui/chart-tooltip";
+
+/** Tooltip for the line chart of historical close prices. Caller
+ * passes a `renderValue` for currency formatting since the panel
+ * already knows the ticker's currency. */
+function PriceTooltip({
+  active,
+  payload,
+  label,
+  renderValue,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: { close: number } }>;
+  label?: string;
+  renderValue: (close: number) => string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0]?.payload;
+  if (!p) return null;
+  return (
+    <ChartTooltipCard>
+      <ChartTooltipHeader
+        title={label ? format(parseISO(String(label)), "d MMM yyyy") : ""}
+      />
+      <ChartTooltipRow label="Price" value={renderValue(p.close)} />
+    </ChartTooltipCard>
+  );
+}
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -260,14 +292,11 @@ function PriceChart({
           />
           <Tooltip
             cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
-            labelFormatter={(d) => format(parseISO(String(d)), "d MMM yyyy")}
-            formatter={(_value, _name, item) => {
-              const p = item?.payload as { close: number } | undefined;
-              if (!p) return ["—", "Price"];
-              return [`${currency} ${p.close.toFixed(2)}`, "Price"];
-            }}
-            labelStyle={{ fontSize: 11 }}
-            contentStyle={{ fontSize: 12, padding: "4px 8px" }}
+            content={
+              <PriceTooltip
+                renderValue={(close) => `${currency} ${close.toFixed(2)}`}
+              />
+            }
           />
           <Line
             type="monotone"

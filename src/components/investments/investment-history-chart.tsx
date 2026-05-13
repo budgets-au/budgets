@@ -14,6 +14,41 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { formatAUD } from "@/lib/utils";
+import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+} from "@/components/ui/chart-tooltip";
+
+function HistoryTooltip({
+  active,
+  payload,
+  label,
+  mode,
+  currency,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: ChartPoint }>;
+  label?: string;
+  mode: "price" | "value";
+  currency: string;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0]?.payload;
+  if (!p) return null;
+  return (
+    <ChartTooltipCard>
+      <ChartTooltipHeader
+        title={label ? format(parseISO(String(label)), "d MMM yyyy") : ""}
+      />
+      {mode === "price" ? (
+        <ChartTooltipRow label="Price" value={`${currency} ${p.close.toFixed(2)}`} />
+      ) : (
+        <ChartTooltipRow label={`Value (${currency})`} value={formatAUD(p.value)} />
+      )}
+    </ChartTooltipCard>
+  );
+}
 
 interface ChartPoint {
   date: string;
@@ -101,17 +136,7 @@ export function InvestmentHistoryChart({
           />
           <Tooltip
             cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
-            labelFormatter={(d) => format(parseISO(String(d)), "d MMM yyyy")}
-            formatter={(_value, _name, item) => {
-              const p = item?.payload as ChartPoint | undefined;
-              if (!p) return ["—", ""];
-              if (mode === "price") {
-                return [`${currency} ${p.close.toFixed(2)}`, "Price"];
-              }
-              return [formatAUD(p.value), `Value (${currency})`];
-            }}
-            labelStyle={{ fontSize: 11 }}
-            contentStyle={{ fontSize: 12, padding: "4px 8px" }}
+            content={<HistoryTooltip mode={mode} currency={currency} />}
           />
           <Line
             type="monotone"

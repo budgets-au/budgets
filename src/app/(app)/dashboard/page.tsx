@@ -13,6 +13,8 @@ import { ImportAccountsButton } from "@/components/accounts/import-accounts-butt
 import { StocksSummaryCard } from "@/components/dashboard/stocks-summary-card";
 import { SuperSummaryCard } from "@/components/dashboard/super-summary-card";
 import { UpcomingSchedulesCard } from "@/components/dashboard/upcoming-schedules-card";
+import { NetWorthTrendCard } from "@/components/dashboard/net-worth-trend-card";
+import { BudgetProgressCard } from "@/components/dashboard/budget-progress-card";
 
 export default async function DashboardPage() {
   await auth();
@@ -117,6 +119,8 @@ export default async function DashboardPage() {
 
           <StocksSummaryCard />
           <SuperSummaryCard />
+          <NetWorthTrendCard />
+          <BudgetProgressCard />
         </div>
 
         {/* Accounts */}

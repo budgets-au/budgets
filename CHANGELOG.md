@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.22.0 — 2026-05-13
+
+### Added
+- **Net-worth trend card** on the dashboard. 12-month historical
+  trajectory of `Σ(starting_balance) + Σ(transactions)` rendered as
+  a sparkline with the current value + delta-vs-12-mo-ago summary.
+  New API at `/api/dashboard/net-worth-trend` does the SQL — one
+  starting-balance pull + one cumulative-sum query per month-end
+  (~12ms total on a 10k-row DB). Visible-account convention matches
+  the existing Net Worth headline card.
+- **Budget progress card** on the dashboard. Top-5 active budget
+  schedules sorted by % consumed (over-budget items lead), with a
+  green/red progress bar per row. Hides itself when no budget
+  schedules exist so it doesn't squat empty for operators who
+  haven't set any up. Reuses the existing
+  `/api/scheduled/budget-progress` endpoint + `/api/scheduled` +
+  `/api/categories` for label lookups.
+
 ## 0.21.0 — 2026-05-13
 
 ### Added

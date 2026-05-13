@@ -81,6 +81,7 @@ function AmountCell({
   muted,
   overPlan,
   borderLeft,
+  computed,
   onClick,
 }: {
   value: number | undefined;
@@ -93,6 +94,11 @@ function AmountCell({
   overPlan?: boolean;
   /** Adds a left border so adjacent month groups read as visually distinct. */
   borderLeft?: boolean;
+  /** Flags this as a calculated column (Total / Avg / Plan-mo) — adds
+   * a left separator and a subtle background tint so the operator
+   * sees at a glance which figures are aggregates and which are raw
+   * monthly data. */
+  computed?: boolean;
   /** When set and the value is non-zero, the rendered amount becomes a
    * button that opens the cell-drilldown dialog. */
   onClick?: () => void;
@@ -106,7 +112,11 @@ function AmountCell({
       : className;
   const isClickable = onClick && value !== undefined && value !== 0;
   return (
-    <td className={`px-3 py-1.5 text-right tabular-nums ${colHighlight ? "bg-indigo-500/10" : ""} ${borderLeft ? "border-l border-border" : ""} ${colour}`}>
+    <td
+      className={`px-3 py-1.5 text-right tabular-nums ${
+        colHighlight ? "bg-indigo-500/10" : computed ? "bg-muted/40" : ""
+      } ${borderLeft || computed ? "border-l border-border" : ""} ${colour}`}
+    >
       {isClickable ? (
         <button
           type="button"
@@ -171,9 +181,21 @@ function planAt(
   return v > 0 ? v : undefined;
 }
 
-function CountCell({ value, colHighlight }: { value: number | undefined; colHighlight?: boolean }) {
+function CountCell({
+  value,
+  colHighlight,
+  computed,
+}: {
+  value: number | undefined;
+  colHighlight?: boolean;
+  computed?: boolean;
+}) {
   return (
-    <td className={`px-2 py-1.5 text-right tabular-nums text-xs text-muted-foreground ${colHighlight ? "bg-indigo-500/10" : ""}`}>
+    <td
+      className={`px-2 py-1.5 text-right tabular-nums text-xs text-muted-foreground ${
+        colHighlight ? "bg-indigo-500/10" : computed ? "bg-muted/40" : ""
+      } ${computed ? "border-l border-border" : ""}`}
+    >
       {value ? value : "—"}
     </td>
   );
@@ -181,8 +203,12 @@ function CountCell({ value, colHighlight }: { value: number | undefined; colHigh
 
 function BudgetCell({ value }: { value?: number }) {
   const { text } = formatAmount(value ? value : undefined, "plain");
+  // Plan/mo is always a computed column — left separator + muted bg
+  // baked in so callers don't repeat the styling everywhere.
   return (
-    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground/70">{text}</td>
+    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground/70 bg-muted/40 border-l border-border">
+      {text}
+    </td>
   );
 }
 
@@ -561,11 +587,12 @@ function ParentHeaderRow({
         <AmountCell
           value={showValues ? display(total) : undefined}
           muted
+          computed
           onClick={showValues ? openTotal : undefined}
         />
       )}
-      {opts.showTotal && opts.showCounts && <td />}
-      {opts.showAvg && <AmountCell value={showValues && months.length > 0 ? display(total / months.length) : undefined} muted />}
+      {opts.showTotal && opts.showCounts && <td className="bg-muted/40 border-l border-border" />}
+      {opts.showAvg && <AmountCell value={showValues && months.length > 0 ? display(total / months.length) : undefined} muted computed />}
       {opts.showPlan && (
         <BudgetCell value={(budgetPerMonth ?? 0) + (scheduledPerMonth ?? 0)} />
       )}
@@ -656,11 +683,12 @@ function SubParentHeaderRow({
         <AmountCell
           value={showValues ? display(sub.total) : undefined}
           muted
+          computed
           onClick={showValues ? openTotal : undefined}
         />
       )}
-      {opts.showTotal && opts.showCounts && <td />}
-      {opts.showAvg && <AmountCell value={showValues && months.length > 0 ? display(sub.total / months.length) : undefined} muted />}
+      {opts.showTotal && opts.showCounts && <td className="bg-muted/40 border-l border-border" />}
+      {opts.showAvg && <AmountCell value={showValues && months.length > 0 ? display(sub.total / months.length) : undefined} muted computed />}
       {opts.showPlan && <BudgetCell value={sub.budgetPerMonth + sub.scheduledPerMonth} />}
     </tr>
   );
@@ -752,9 +780,9 @@ function LeafRow({
           </Fragment>
         );
       })}
-      {opts.showTotal && <AmountCell value={cat.total} negate={negate} onClick={openTotal} />}
-      {opts.showTotal && opts.showCounts && <CountCell value={cat.totalCount} />}
-      {opts.showAvg && <AmountCell value={months.length > 0 ? cat.total / months.length : undefined} negate={negate} muted />}
+      {opts.showTotal && <AmountCell value={cat.total} negate={negate} computed onClick={openTotal} />}
+      {opts.showTotal && opts.showCounts && <CountCell value={cat.totalCount} computed />}
+      {opts.showAvg && <AmountCell value={months.length > 0 ? cat.total / months.length : undefined} negate={negate} muted computed />}
       {opts.showPlan && <BudgetCell value={cat.budgetPerMonth + cat.scheduledPerMonth} />}
     </tr>
   );
@@ -788,17 +816,17 @@ function TotalsRow({
         </Fragment>
       ))}
       {opts.showTotal && (mode === "balance" ? (
-        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">—</td>
+        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums bg-muted/40 border-l border-border">—</td>
       ) : (
-        <AmountCell value={total} mode={mode} negate={negate} />
+        <AmountCell value={total} mode={mode} negate={negate} computed />
       ))}
-      {opts.showTotal && opts.showCounts && <td className="px-2 py-2" />}
+      {opts.showTotal && opts.showCounts && <td className="px-2 py-2 bg-muted/40 border-l border-border" />}
       {opts.showAvg && (mode === "balance" ? (
-        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">—</td>
+        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums bg-muted/40 border-l border-border">—</td>
       ) : (
-        <AmountCell value={avg} mode={mode} negate={negate} muted />
+        <AmountCell value={avg} mode={mode} negate={negate} muted computed />
       ))}
-      {opts.showPlan && <td className="px-3 py-2 text-right text-muted-foreground/50 tabular-nums">—</td>}
+      {opts.showPlan && <td className="px-3 py-2 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>}
     </tr>
   );
 }
@@ -1212,20 +1240,20 @@ export function CashflowReport({
               </Fragment>
             ))}
             {showTotal && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)]">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Total
               </th>
             )}
             {showTotal && showCounts && (
-              <th className="text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)]">#</th>
+              <th className="text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">#</th>
             )}
             {showAvg && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)]">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Avg/mo
               </th>
             )}
             {showPlan && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground/70 bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)]">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground/70 bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Plan/mo
               </th>
             )}

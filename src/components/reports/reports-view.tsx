@@ -82,11 +82,6 @@ function buildRangePresets(now: Date): RangePreset[][] {
   ];
 }
 
-function formatRangeShort(from: string, to: string): string {
-  const a = format(new Date(from), "d MMM yy");
-  const b = format(new Date(to), "d MMM yy");
-  return `${a} – ${b}`;
-}
 import { CashflowReport } from "./cashflow-report";
 import { TaxDeductionsReport } from "./tax-deductions-report";
 import { ExpensesDrilldown } from "./expenses-drilldown";
@@ -214,8 +209,15 @@ export function ReportsView({
             currently active preset (or "Custom range" when from/to
             land between presets) and opens a 2-column grid: this
             period on the left, last period on the right, one pair
-            per row (Month, Quarter, Year, Financial Year). */}
-        <RangePresetPopover from={from} to={to} now={now} onApply={applyRange} />
+            per row (Month, Quarter, Year, Financial Year). Wrapped
+            in a label stack so it baselines with the From/To
+            inputs instead of floating above them. */}
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">
+            Quick range
+          </label>
+          <RangePresetPopover from={from} to={to} now={now} onApply={applyRange} />
+        </div>
 
       </div>
 
@@ -451,20 +453,13 @@ function PresetButton({
     <button
       type="button"
       onClick={onPick}
-      className={`text-left rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+      className={`text-left rounded-md px-3 py-2 text-xs font-medium transition-colors ${
         isActive
           ? "bg-indigo-600 text-white hover:bg-indigo-700"
           : "hover:bg-muted"
       }`}
     >
-      <div className="font-medium">{preset.label}</div>
-      <div
-        className={`text-[10px] tabular-nums ${
-          isActive ? "text-white/80" : "text-muted-foreground"
-        }`}
-      >
-        {formatRangeShort(preset.from, preset.to)}
-      </div>
+      {preset.label}
     </button>
   );
 }

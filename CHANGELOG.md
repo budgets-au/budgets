@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.12.0 — 2026-05-13
+
+### Changed
+- **Reports date-range popover baselines with the From/To inputs.**
+  Trigger now has a "Quick range" label stacked above it (matching
+  the existing date-field pattern), so all three controls line up
+  on the same row instead of the popover button floating to the top.
+- **Preset tiles drop the absolute date subtitle.** The label
+  alone (e.g. "This Quarter") is enough; the dates underneath were
+  visual clutter for an action the operator already knows the
+  semantics of.
+
+### Cashflow report
+- **Total / Avg/mo / Plan/mo columns visually distinct from monthly
+  data.** Each calculated column now carries a left border (matching
+  the per-month separators) and a subtle `bg-muted/40` tint so the
+  operator can tell aggregate figures from raw month-by-month
+  values at a glance. Applies in both the header row and every body
+  row (category leaves, sub/grandparent headers, TotalsRow).
+
 ## 0.11.0 — 2026-05-13
 
 ### Optimised

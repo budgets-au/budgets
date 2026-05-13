@@ -9,6 +9,34 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.33.0 — 2026-05-13
+
+### Added
+- **Editable widget-grid dashboard.** The fixed Tailwind dashboard
+  becomes a 12-column responsive grid where every card is a
+  draggable, resizable widget. An "Edit dashboard" button top-right
+  reveals a hover overlay on each tile (trash-icon to remove) and
+  slides a right-hand drawer in listing widgets that aren't
+  currently placed. Drop any drawer pill onto the grid to place it
+  at its default size; rearrange and resize freely; hit Save to
+  persist the layout to the cross-device display-prefs blob, or
+  Cancel to revert. Empty saved layout means "use the
+  registry-defined default" so existing operators see no change on
+  first load.
+- Three previously server-rendered summary cards (Net Worth, Income
+  30d, Expenses 30d) and the per-type accounts list become
+  self-contained client components fetching via the same `/api`
+  routes the rest of the app uses. No new data routes; all
+  widget-grid plumbing lives behind the registry at
+  `src/lib/dashboard/widgets.tsx`.
+
+### Changed
+- Standard schedule-chart palette: Actual is now muted green
+  (green-300), Saved matches the forecast grey (slate-300), Over
+  stays muted red (red-300). The previous amber Actual + green
+  Saved combination read as two cheerful primaries rather than the
+  intended neutral baseline.
+
 ## 0.32.0 — 2026-05-13
 
 ### Fixed

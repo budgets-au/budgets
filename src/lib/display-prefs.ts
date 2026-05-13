@@ -94,6 +94,18 @@ export interface DisplayPrefs {
    * as "missed". A schedule due today still has graceDays of room
    * to post via the bank feed before the panel flags it. */
   scheduledMissedGraceDays: number;
+
+  // ── Dashboard ─────────────────────────────────────────────────
+  /** Per-operator dashboard grid layout. Each entry positions a
+   * widget (by registry id) at a cell on the 12-col grid. Empty
+   * array = use the registry-defined default layout. */
+  dashboardLayout: Array<{
+    widgetId: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }>;
 }
 
 export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
@@ -123,6 +135,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   globalAccountIds: [],
   scheduledMatchWindowMonths: 6,
   scheduledMissedGraceDays: 4,
+  dashboardLayout: [],
 };
 
 /** Legacy localStorage key — kept so the existing tests still
@@ -211,6 +224,53 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     }
     return out;
   }
+  function layoutArray(
+    key: keyof DisplayPrefs,
+  ): Array<{ widgetId: string; x: number; y: number; w: number; h: number }> {
+    const v = obj[key];
+    if (!Array.isArray(v)) {
+      return [
+        ...(DISPLAY_PREFS_DEFAULT[key] as Array<{
+          widgetId: string;
+          x: number;
+          y: number;
+          w: number;
+          h: number;
+        }>),
+      ];
+    }
+    const out: Array<{
+      widgetId: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+    }> = [];
+    for (const x of v) {
+      if (
+        x &&
+        typeof x === "object" &&
+        typeof (x as { widgetId?: unknown }).widgetId === "string" &&
+        typeof (x as { x?: unknown }).x === "number" &&
+        Number.isFinite((x as { x: number }).x) &&
+        typeof (x as { y?: unknown }).y === "number" &&
+        Number.isFinite((x as { y: number }).y) &&
+        typeof (x as { w?: unknown }).w === "number" &&
+        Number.isFinite((x as { w: number }).w) &&
+        typeof (x as { h?: unknown }).h === "number" &&
+        Number.isFinite((x as { h: number }).h)
+      ) {
+        out.push({
+          widgetId: (x as { widgetId: string }).widgetId,
+          x: (x as { x: number }).x,
+          y: (x as { y: number }).y,
+          w: (x as { w: number }).w,
+          h: (x as { h: number }).h,
+        });
+      }
+    }
+    return out;
+  }
   function periodMap(
     key: keyof DisplayPrefs,
   ): Record<string, { from: string; to: string }> {
@@ -274,5 +334,6 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     globalAccountIds: stringArray("globalAccountIds"),
     scheduledMatchWindowMonths: num("scheduledMatchWindowMonths"),
     scheduledMissedGraceDays: num("scheduledMissedGraceDays"),
+    dashboardLayout: layoutArray("dashboardLayout"),
   };
 }

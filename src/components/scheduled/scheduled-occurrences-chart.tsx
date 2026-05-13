@@ -175,9 +175,12 @@ interface OccurrencePoint {
  * palette and is friendlier at a glance. */
 type ScheduleChartTheme = "fabulous" | "standard";
 
-// "Standard" theme palette — muted Tailwind-300/400 shades.
-const STD_ACTUAL = "#fcd34d";   // amber-300 — solid Actual fill
-const STD_SAVED  = "#86efac";   // green-300 — under / saved-vs-cap fill
+// "Standard" theme palette — muted Tailwind-300 shades. Saved
+// (under-cap delta) intentionally matches the forecast grey so the
+// "money you didn't have to spend" reads the same neutral tone as
+// "the bar hasn't fired yet".
+const STD_ACTUAL = "#86efac";   // green-300 — solid Actual fill
+const STD_SAVED  = "#cbd5e1";   // slate-300 — saved-vs-cap fill, same as forecast
 const STD_OVER   = "#fca5a5";   // red-300   — over-budget fill
 const STD_MISSED = "#fca5a5";   // red-300   — missed-occurrence fill
 const STD_FORECAST = "#cbd5e1"; // slate-300 — forecast (not-yet-fired) fill

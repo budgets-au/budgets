@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.31.0 — 2026-05-13
+
+### Added
+- **Schedule chart theme dropdown** in Settings → General → Charts.
+  Two options to choose between:
+    - **Fabulous** (default): per-segment lineage colours +
+      hatched delta fills — the original look, packs more info
+      per bar.
+    - **Standard**: solid muted yellow / green / red for
+      actual / saved / over — simpler, matches the rest of the
+      site's palette. Forecast bars use a muted slate, missed
+      occurrences use the same muted red as over-budget.
+  Pref `chartScheduleTheme` follows the operator across devices
+  via the DB-backed display-prefs blob. Future "chart theme"
+  options will live in the same Charts section.
+
 ## 0.30.0 — 2026-05-13
 
 ### Changed

@@ -35,6 +35,12 @@ export interface DisplayPrefs {
    * to an external loan/CC). Hides salary, internal transfers, and
    * pure-income schedules — useful for an "what's due this month" view. */
   calendarBillsOnly: boolean;
+  /** Visual theme for the scheduled-occurrences chart. "fabulous" =
+   * the original per-segment lineage colours + hatched delta fills
+   * (more information per bar, busier look). "standard" = solid
+   * muted yellow / green / red for actual / saved / over (simpler,
+   * matches the rest of the site). */
+  chartScheduleTheme: "fabulous" | "standard";
 
   // ── Scheduled missed-occurrences panel ────────────────────────
   /** Show dismissed missed-occurrences on the schedule view. */
@@ -100,6 +106,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   transactionsSavedFilters: [],
   calendarViewMode: "month",
   calendarBillsOnly: false,
+  chartScheduleTheme: "fabulous",
   missedShowDismissed: false,
   cashflowTotalsLevel: "grandparent",
   cashflowShowCounts: false,
@@ -238,6 +245,10 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     transactionsSavedFilters: savedFilters("transactionsSavedFilters"),
     calendarViewMode: pickEnum("calendarViewMode", ["month", "week"] as const),
     calendarBillsOnly: bool("calendarBillsOnly"),
+    chartScheduleTheme: pickEnum(
+      "chartScheduleTheme",
+      ["fabulous", "standard"] as const,
+    ),
     missedShowDismissed: bool("missedShowDismissed"),
     cashflowTotalsLevel: pickEnum(
       "cashflowTotalsLevel",

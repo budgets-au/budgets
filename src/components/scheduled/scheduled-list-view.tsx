@@ -1632,6 +1632,7 @@ export function ScheduledListView({
                   <ScheduledOccurrencesChart
                     segments={chartSegments}
                     onBarClick={handleChartBarClick}
+                    theme={displayPrefs.chartScheduleTheme}
                   />
                 </div>
                 <div

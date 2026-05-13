@@ -104,6 +104,37 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
             />
           </label>
         </div>
+        <div className="rounded-xl border bg-card divide-y">
+          <div className="px-4 py-3">
+            <h2 className="font-medium">Charts</h2>
+          </div>
+          <label className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Schedule chart theme</p>
+              <p className="text-xs text-muted-foreground">
+                <strong>Fabulous</strong> uses per-segment lineage colours
+                + hatched delta fills — more info per bar, busier look.
+                <strong> Standard</strong> renders solid muted yellow /
+                green / red for actual / saved / over — simpler and
+                matches the rest of the site.
+              </p>
+            </div>
+            <select
+              value={prefs.chartScheduleTheme}
+              onChange={(e) =>
+                setPref(
+                  "chartScheduleTheme",
+                  e.target.value as "fabulous" | "standard",
+                )
+              }
+              className="bg-background border rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              aria-label="Schedule chart theme"
+            >
+              <option value="fabulous">Fabulous</option>
+              <option value="standard">Standard</option>
+            </select>
+          </label>
+        </div>
         <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">About</p>
           <p>Household Budget Tracker · AUD · Local / Docker</p>

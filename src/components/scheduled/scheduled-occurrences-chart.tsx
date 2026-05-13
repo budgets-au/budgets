@@ -167,15 +167,37 @@ interface OccurrencePoint {
   trend?: number;
 }
 
+/** Two visual styles for the scheduled-occurrences chart. The choice
+ * is a user pref (`chartScheduleTheme`) since each has trade-offs:
+ * "fabulous" packs more info per bar (per-segment lineage colours +
+ * hatched delta fills) but reads busy; "standard" is solid muted
+ * yellow / green / red triplet that matches the rest of the site's
+ * palette and is friendlier at a glance. */
+type ScheduleChartTheme = "fabulous" | "standard";
+
+// "Standard" theme palette — muted Tailwind-300/400 shades.
+const STD_ACTUAL = "#fcd34d";   // amber-300 — solid Actual fill
+const STD_SAVED  = "#86efac";   // green-300 — under / saved-vs-cap fill
+const STD_OVER   = "#fca5a5";   // red-300   — over-budget fill
+const STD_MISSED = "#fca5a5";   // red-300   — missed-occurrence fill
+const STD_FORECAST = "#cbd5e1"; // slate-300 — forecast (not-yet-fired) fill
+
 export function ScheduledOccurrencesChart({
   segments,
   onBarClick,
+  theme = "fabulous",
 }: {
   segments: ChartSegment[];
   onBarClick?: (date: string) => void;
+  theme?: ScheduleChartTheme;
 }) {
   const isDark = useDarkMode();
-  const forecastColour = isDark ? FORECAST_COLOUR_DARK : FORECAST_COLOUR_LIGHT;
+  const forecastColour =
+    theme === "standard"
+      ? STD_FORECAST
+      : isDark
+        ? FORECAST_COLOUR_DARK
+        : FORECAST_COLOUR_LIGHT;
   const data = useMemo<OccurrencePoint[]>(() => {
     const points: OccurrencePoint[] = [];
     for (const seg of segments) {
@@ -414,12 +436,24 @@ export function ScheduledOccurrencesChart({
               {data.map((p, i) => {
                 const fill =
                   p.status === "matched"
-                    ? p.baseColor ?? p.segmentColor
+                    ? theme === "standard"
+                      ? STD_ACTUAL
+                      : p.baseColor ?? p.segmentColor
                     : p.status === "forecast"
-                    ? forecastColour
-                    : "transparent";
+                      ? forecastColour
+                      : "transparent";
                 const opacity =
-                  p.status === "matched" ? 0.85 : p.status === "forecast" ? 0.7 : 0;
+                  theme === "standard"
+                    ? p.status === "matched"
+                      ? 1
+                      : p.status === "forecast"
+                        ? 0.6
+                        : 0
+                    : p.status === "matched"
+                      ? 0.85
+                      : p.status === "forecast"
+                        ? 0.7
+                        : 0;
                 // No top radius when there's a delta segment stacked above.
                 const topRadius = p.deltaAmount > 0 ? 0 : 2;
                 return (
@@ -450,24 +484,25 @@ export function ScheduledOccurrencesChart({
                 let opacity: number;
                 let stroke: string | undefined;
                 let strokeWidth: number | undefined;
+                const isStandard = theme === "standard";
                 if (p.deltaKind === "over") {
-                  fill = "url(#over-hatch)";
+                  fill = isStandard ? STD_OVER : "url(#over-hatch)";
                   opacity = 1;
-                  stroke = OVER_COLOUR;
-                  strokeWidth = 1.5;
+                  stroke = isStandard ? undefined : OVER_COLOUR;
+                  strokeWidth = isStandard ? undefined : 1.5;
                 } else if (p.deltaKind === "gap") {
-                  fill = "url(#under-hatch)";
+                  fill = isStandard ? STD_SAVED : "url(#under-hatch)";
                   opacity = 1;
-                  stroke = GAP_COLOUR;
-                  strokeWidth = 1.5;
+                  stroke = isStandard ? undefined : GAP_COLOUR;
+                  strokeWidth = isStandard ? undefined : 1.5;
                 } else if (p.deltaKind === "under") {
-                  fill = "url(#under-hatch)";
+                  fill = isStandard ? STD_SAVED : "url(#under-hatch)";
                   opacity = 1;
-                  stroke = UNDER_COLOUR;
-                  strokeWidth = 1.5;
+                  stroke = isStandard ? undefined : UNDER_COLOUR;
+                  strokeWidth = isStandard ? undefined : 1.5;
                 } else if (p.deltaKind === "missed") {
-                  fill = MISSED_COLOUR;
-                  opacity = 0.4;
+                  fill = isStandard ? STD_MISSED : MISSED_COLOUR;
+                  opacity = isStandard ? 1 : 0.4;
                 } else {
                   fill = "transparent";
                   opacity = 0;

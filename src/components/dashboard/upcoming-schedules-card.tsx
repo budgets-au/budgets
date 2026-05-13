@@ -1,31 +1,19 @@
+"use client";
+
+import useSWR from "swr";
 import Link from "next/link";
 import { Repeat } from "lucide-react";
 import { addDays, parseISO } from "date-fns";
-import { db } from "@/db";
-import { scheduledTransactions, accounts, transactions } from "@/db/schema";
-import { eq, and, ne, gte, inArray, sql } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { expandRecurrence } from "@/lib/recurrence";
 import { colourForFrequency, freqLabel } from "@/lib/schedule-colours";
 import { formatAUD, amountClass, formatDate } from "@/lib/utils";
+import type { UpcomingScheduleRow } from "@/lib/dashboard/upcoming-schedules";
 
-const HORIZON_DAYS = 30;
-const MAX_ROWS = 10;
-/** Tolerance for considering an upcoming occurrence already paid — same
- * window the scheduled list uses for its greedy matcher. */
-const MATCH_TOLERANCE_DAYS = 5;
-/** Amount equality tolerance, in dollars. */
-const AMOUNT_TOLERANCE = 1.0;
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-interface Row {
-  scheduledId: string;
-  date: string;
-  frequency: string;
-  interval: number;
-  payee: string | null;
-  amount: string;
-  accountName: string | null;
-  accountColor: string | null;
+interface ApiPayload {
+  rows: UpcomingScheduleRow[];
+  horizonDays: number;
 }
 
 function relativeWord(today: Date, target: Date): string {
@@ -39,109 +27,18 @@ function relativeWord(today: Date, target: Date): string {
   return formatDate(target);
 }
 
-export async function UpcomingSchedulesCard() {
+/** Next-30-days upcoming scheduled occurrences. Backed by
+ * /api/dashboard/upcoming which expands recurrences server-side and
+ * filters out anything that already has a matching posted txn. */
+export function UpcomingSchedulesCard() {
+  const { data } = useSWR<ApiPayload>("/api/dashboard/upcoming", fetcher);
+  const rows = data?.rows ?? [];
+  const horizonDays = data?.horizonDays ?? 30;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const horizon = addDays(today, HORIZON_DAYS);
-
-  const schedules = await db
-    .select({
-      schedule: scheduledTransactions,
-      accountName: accounts.name,
-      accountColor: accounts.color,
-    })
-    .from(scheduledTransactions)
-    .leftJoin(accounts, eq(scheduledTransactions.accountId, accounts.id))
-    .where(
-      and(
-        eq(scheduledTransactions.isActive, true),
-        ne(scheduledTransactions.kind, "budget"),
-      ),
-    );
-
-  // Recent + horizon-window transactions per scheduled account, used to
-  // skip occurrences that are already posted within tolerance.
-  const accountIds = Array.from(
-    new Set(
-      schedules
-        .map((s) => s.schedule.accountId)
-        .filter((id): id is string => !!id),
-    ),
-  );
-  const matchWindowStart = addDays(today, -MATCH_TOLERANCE_DAYS)
-    .toISOString()
-    .slice(0, 10);
-  const recentTxns =
-    accountIds.length > 0
-      ? await db
-          .select({
-            accountId: transactions.accountId,
-            date: transactions.date,
-            amount: transactions.amount,
-          })
-          .from(transactions)
-          .where(
-            and(
-              inArray(transactions.accountId, accountIds),
-              gte(transactions.date, matchWindowStart),
-            ),
-          )
-      : [];
-  // Per-account index for fast amount/date lookup.
-  const txByAccount = new Map<string, { date: string; amount: number }[]>();
-  for (const t of recentTxns) {
-    const arr = txByAccount.get(t.accountId) ?? [];
-    arr.push({ date: t.date, amount: parseFloat(t.amount) });
-    txByAccount.set(t.accountId, arr);
-  }
-
-  function isAlreadyPaid(
-    accountId: string,
-    occurrenceDate: string,
-    amount: number,
-  ): boolean {
-    const txns = txByAccount.get(accountId);
-    if (!txns) return false;
-    const occ = parseISO(occurrenceDate).getTime();
-    for (const t of txns) {
-      if (Math.abs(t.amount - amount) > AMOUNT_TOLERANCE) continue;
-      const dt = parseISO(t.date).getTime();
-      const days = Math.abs((dt - occ) / 86400000);
-      if (days <= MATCH_TOLERANCE_DAYS) return true;
-    }
-    return false;
-  }
-
-  const events: Row[] = [];
-  for (const r of schedules) {
-    const occurrences = expandRecurrence(r.schedule, today, horizon);
-    for (const o of occurrences) {
-      // Transfer schedules emit both a source (debit) and a destination
-      // (credit) event. Show only the debit side — the row's amount is
-      // the schedule's stored amount, and the destination is implicit.
-      if (o.accountId !== r.schedule.accountId) continue;
-
-      const amount = parseFloat(o.amount);
-      if (isAlreadyPaid(o.accountId, o.date, amount)) continue;
-
-      events.push({
-        scheduledId: r.schedule.id,
-        date: o.date,
-        frequency: r.schedule.frequency,
-        interval: r.schedule.interval,
-        payee: r.schedule.payee,
-        amount: o.amount,
-        accountName: r.accountName,
-        accountColor: r.accountColor,
-      });
-    }
-  }
-
-  events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  const rows = events.slice(0, MAX_ROWS);
 
   return (
-    <Card data-size="sm">
+    <Card data-size="sm" className="h-full">
       <CardHeader className="pb-1 flex flex-row items-center justify-between">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           Upcoming
@@ -156,7 +53,7 @@ export async function UpcomingSchedulesCard() {
       <CardContent className="p-0">
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground py-6 text-center">
-            Nothing due in the next {HORIZON_DAYS} days.
+            Nothing due in the next {horizonDays} days.
           </p>
         ) : (
           <ul className="divide-y">
@@ -169,9 +66,6 @@ export async function UpcomingSchedulesCard() {
                     href={`/scheduled?id=${row.scheduledId}`}
                     className="grid items-center gap-3 px-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
                     style={{
-                      // Fixed column template so amounts/dates line up
-                      // across rows. Account column collapses to 0 on
-                      // smaller screens via the hidden span below.
                       gridTemplateColumns:
                         "90px 90px minmax(0, 1fr) 110px 90px",
                     }}

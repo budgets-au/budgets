@@ -85,15 +85,15 @@ export const WIDGETS: WidgetSpec[] = [
   {
     id: "net-worth-trend",
     title: "Net Worth Trend",
-    defaultLayout: { w: 3, h: 3 },
-    minSize: { w: 2, h: 3 },
+    defaultLayout: { w: 3, h: 2 },
+    minSize: { w: 2, h: 2 },
     render: () => <NetWorthTrendCard />,
   },
   {
     id: "budget-progress",
     title: "Budget Progress",
-    defaultLayout: { w: 3, h: 4 },
-    minSize: { w: 2, h: 3 },
+    defaultLayout: { w: 3, h: 2 },
+    minSize: { w: 2, h: 2 },
     render: () => <BudgetProgressCard />,
   },
   {
@@ -133,11 +133,12 @@ export const DEFAULT_DASHBOARD_LAYOUT: Array<{
   { widgetId: "expenses-30d", x: 4, y: 0, w: 2, h: 2 },
   { widgetId: "stocks-summary", x: 6, y: 0, w: 2, h: 2 },
   { widgetId: "super-summary", x: 8, y: 0, w: 2, h: 2 },
-  // Row 2: trend + budget
-  { widgetId: "net-worth-trend", x: 0, y: 2, w: 6, h: 3 },
-  { widgetId: "budget-progress", x: 6, y: 2, w: 6, h: 3 },
+  // Row 2: trend + budget (tighter — both cards have small
+  // content; the chart + a few budget rows fit comfortably in 2)
+  { widgetId: "net-worth-trend", x: 0, y: 2, w: 6, h: 2 },
+  { widgetId: "budget-progress", x: 6, y: 2, w: 6, h: 2 },
   // Row 3: accounts
-  { widgetId: "accounts", x: 0, y: 5, w: 12, h: 6 },
+  { widgetId: "accounts", x: 0, y: 4, w: 12, h: 6 },
   // Row 4: upcoming
-  { widgetId: "upcoming-schedules", x: 0, y: 11, w: 12, h: 4 },
+  { widgetId: "upcoming-schedules", x: 0, y: 10, w: 12, h: 4 },
 ];

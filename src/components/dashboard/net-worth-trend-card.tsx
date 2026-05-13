@@ -48,7 +48,7 @@ export function NetWorthTrendCard() {
 
   if (!data || data.trend.length < 2) {
     return (
-      <Card data-size="sm">
+      <Card data-size="sm" className="h-full">
         <CardHeader className="pb-1">
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Net Worth Trend
@@ -81,13 +81,13 @@ export function NetWorthTrendCard() {
   }));
 
   return (
-    <Card data-size="sm">
-      <CardHeader className="pb-1">
+    <Card data-size="sm" className="h-full flex flex-col">
+      <CardHeader className="pb-1 shrink-0">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           Net Worth Trend
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0 flex flex-col">
         <p className="text-2xl font-bold">{formatAUD(last)}</p>
         <div className={`flex items-center gap-1 text-xs mt-1 ${tone}`}>
           <Icon className="h-3 w-3" />
@@ -97,7 +97,7 @@ export function NetWorthTrendCard() {
             {pctDelta.toFixed(1)}%) vs 12 mo ago
           </span>
         </div>
-        <div className="h-12 mt-2 -mx-1">
+        <div className="flex-1 min-h-0 mt-2 -mx-1">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData}>
               <defs>

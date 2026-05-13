@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { Target } from "lucide-react";
 import Link from "next/link";
@@ -27,9 +28,20 @@ interface CategoryRow {
   name: string;
 }
 
-/** Top-5 in-period budget progress on the dashboard. Hides itself
- * silently when there are no active budget schedules — most users
- * never set one up, so we don't want the card squatting empty. */
+/** Approx per-budget row height in pixels (text-xs label + 1.5px
+ * progress bar + space-y-0.5 between + space-y-2.5 between rows ≈
+ * 38px). Slightly conservative so a row that almost fits never
+ * gets clipped. */
+const ROW_HEIGHT_PX = 38;
+/** Hard cap — never compute more than this many rows even if the
+ * card is enormous. Beyond ~10 the card stops being a summary. */
+const MAX_ROWS = 10;
+
+/** In-period budget progress on the dashboard. Sized dynamically:
+ * we measure the card's inner-content height and render only as
+ * many rows as fit. Hides itself silently when there are no active
+ * budget schedules — most users never set one up, so we don't want
+ * the card squatting empty. */
 export function BudgetProgressCard() {
   const { data: progress = [] } = useSWR<ProgressRow[]>(
     "/api/scheduled/budget-progress",
@@ -47,6 +59,20 @@ export function BudgetProgressCard() {
     { revalidateOnFocus: false },
   );
 
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [visibleCount, setVisibleCount] = useState<number>(MAX_ROWS);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height ?? 0;
+      setVisibleCount(Math.min(MAX_ROWS, Math.max(0, Math.floor(h / ROW_HEIGHT_PX))));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   if (progress.length === 0) return null;
 
   const schedById = new Map(scheduled.map((s) => [s.id, s]));
@@ -54,10 +80,8 @@ export function BudgetProgressCard() {
 
   // Join + dedupe. Multiple active budget schedules can target the
   // same category (a paused-then-replaced budget, or layered
-  // parent/child entries). Without deduping, the same category would
-  // show as repeated rows in the card. Group by `categoryId ||
-  // scheduledId` (fallback for budgets with no category) and sum the
-  // caps + spent within each bucket so each category appears once.
+  // parent/child entries). Group by `categoryId || scheduledId`
+  // (fallback for budgets with no category) and sum caps + spent.
   type Row = { key: string; label: string; cap: number; spent: number };
   const byKey = new Map<string, Row>();
   for (const p of progress) {
@@ -84,14 +108,15 @@ export function BudgetProgressCard() {
       ...r,
       pct: r.cap > 0 ? Math.min((r.spent / r.cap) * 100, 200) : 0,
     }))
-    .sort((a, b) => b.pct - a.pct)
-    .slice(0, 5);
+    .sort((a, b) => b.pct - a.pct);
 
   if (rows.length === 0) return null;
 
+  const visibleRows = rows.slice(0, visibleCount);
+
   return (
-    <Card data-size="sm">
-      <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0">
+    <Card data-size="sm" className="h-full flex flex-col">
+      <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0 shrink-0">
         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
           <Target className="h-3.5 w-3.5" />
           Budget progress
@@ -103,28 +128,30 @@ export function BudgetProgressCard() {
           All →
         </Link>
       </CardHeader>
-      <CardContent className="space-y-2.5">
-        {rows.map((r) => {
-          const over = r.spent > r.cap;
-          return (
-            <div key={r.key} className="space-y-0.5">
-              <div className="flex items-baseline justify-between text-xs gap-2">
-                <span className="truncate flex-1 min-w-0">{r.label}</span>
-                <span
-                  className={`tabular-nums ${over ? "text-red-500 font-medium" : "text-muted-foreground"}`}
-                >
-                  {formatAUD(r.spent)} / {formatAUD(r.cap)}
-                </span>
+      <CardContent className="flex-1 min-h-0 overflow-hidden">
+        <div ref={contentRef} className="h-full space-y-2.5 overflow-hidden">
+          {visibleRows.map((r) => {
+            const over = r.spent > r.cap;
+            return (
+              <div key={r.key} className="space-y-0.5">
+                <div className="flex items-baseline justify-between text-xs gap-2">
+                  <span className="truncate flex-1 min-w-0">{r.label}</span>
+                  <span
+                    className={`tabular-nums ${over ? "text-red-500 font-medium" : "text-muted-foreground"}`}
+                  >
+                    {formatAUD(r.spent)} / {formatAUD(r.cap)}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${over ? "bg-red-500" : "bg-indigo-500"}`}
+                    style={{ width: `${Math.min(r.pct, 100)}%` }}
+                  />
+                </div>
               </div>
-              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all ${over ? "bg-red-500" : "bg-indigo-500"}`}
-                  style={{ width: `${Math.min(r.pct, 100)}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );

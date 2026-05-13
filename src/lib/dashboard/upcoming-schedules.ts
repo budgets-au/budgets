@@ -5,7 +5,10 @@ import { scheduledTransactions, accounts, transactions } from "@/db/schema";
 import { expandRecurrence } from "@/lib/recurrence";
 
 const HORIZON_DAYS = 30;
-const MAX_ROWS = 10;
+/** Generous upper bound — the client widget dynamically slices the
+ * list to whatever fits its rendered height, so we hand back a
+ * comfortable buffer rather than the historical hard-cap of 10. */
+const MAX_ROWS = 50;
 /** Tolerance for considering an upcoming occurrence already paid —
  * same window the scheduled list uses for its greedy matcher. */
 const MATCH_TOLERANCE_DAYS = 5;

@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { Repeat } from "lucide-react";
-import { addDays, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { colourForFrequency, freqLabel } from "@/lib/schedule-colours";
 import { formatAUD, amountClass, formatDate } from "@/lib/utils";
@@ -15,6 +16,11 @@ interface ApiPayload {
   rows: UpcomingScheduleRow[];
   horizonDays: number;
 }
+
+/** Approximate per-row height in pixels. py-1.5 (12px) + ~20px
+ * for the text line + 1px divider ≈ 33px; round down to 32 so a
+ * row that almost fits never gets pre-clipped. */
+const ROW_HEIGHT_PX = 32;
 
 function relativeWord(today: Date, target: Date): string {
   const ms = target.getTime() - today.getTime();
@@ -29,7 +35,12 @@ function relativeWord(today: Date, target: Date): string {
 
 /** Next-30-days upcoming scheduled occurrences. Backed by
  * /api/dashboard/upcoming which expands recurrences server-side and
- * filters out anything that already has a matching posted txn. */
+ * filters out anything that already has a matching posted txn.
+ *
+ * The card slices the API's rows to whatever count fits its
+ * rendered height — resize the widget tile up to show more, or
+ * down to show fewer. The API hands back up to 50 rows so even a
+ * generous resize doesn't run out of items. */
 export function UpcomingSchedulesCard() {
   const { data } = useSWR<ApiPayload>("/api/dashboard/upcoming", fetcher);
   const rows = data?.rows ?? [];
@@ -37,9 +48,29 @@ export function UpcomingSchedulesCard() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Dynamically size the visible row count based on the card's
+  // measured inner-content height. Starts at the full row count so
+  // the first paint isn't an empty list; ResizeObserver tightens it
+  // after the layout settles.
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [maxRows, setMaxRows] = useState<number>(rows.length);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height ?? 0;
+      setMaxRows(Math.max(0, Math.floor(h / ROW_HEIGHT_PX)));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const visibleRows = rows.slice(0, maxRows);
+
   return (
-    <Card data-size="sm" className="h-full">
-      <CardHeader className="pb-1 flex flex-row items-center justify-between">
+    <Card data-size="sm" className="h-full flex flex-col overflow-hidden">
+      <CardHeader className="pb-1 flex flex-row items-center justify-between shrink-0">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           Upcoming
         </CardTitle>
@@ -50,62 +81,64 @@ export function UpcomingSchedulesCard() {
           See all →
         </Link>
       </CardHeader>
-      <CardContent className="p-0">
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6 text-center">
-            Nothing due in the next {horizonDays} days.
-          </p>
-        ) : (
-          <ul className="divide-y">
-            {rows.map((row, i) => {
-              const target = parseISO(row.date);
-              const amt = parseFloat(row.amount);
-              return (
-                <li key={`${row.scheduledId}-${row.date}-${i}`}>
-                  <Link
-                    href={`/scheduled?id=${row.scheduledId}`}
-                    className="grid items-center gap-3 px-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
-                    style={{
-                      gridTemplateColumns:
-                        "90px 90px minmax(0, 1fr) 110px 90px",
-                    }}
-                  >
-                    <span
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-[10px] font-medium whitespace-nowrap justify-self-start"
-                      style={{ backgroundColor: colourForFrequency(row.frequency) }}
+      <CardContent className="p-0 flex-1 min-h-0">
+        <div ref={contentRef} className="h-full overflow-hidden">
+          {rows.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">
+              Nothing due in the next {horizonDays} days.
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {visibleRows.map((row, i) => {
+                const target = parseISO(row.date);
+                const amt = parseFloat(row.amount);
+                return (
+                  <li key={`${row.scheduledId}-${row.date}-${i}`}>
+                    <Link
+                      href={`/scheduled?id=${row.scheduledId}`}
+                      className="grid items-center gap-3 px-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
+                      style={{
+                        gridTemplateColumns:
+                          "90px 90px minmax(0, 1fr) 110px 90px",
+                      }}
                     >
-                      <Repeat className="h-2.5 w-2.5" aria-hidden="true" />
-                      {freqLabel(row.frequency, row.interval)}
-                    </span>
-                    <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-                      {relativeWord(today, target)}
-                    </span>
-                    <span className="font-medium truncate min-w-0">
-                      {row.payee ?? "—"}
-                    </span>
-                    <span className="hidden sm:flex justify-start min-w-0">
-                      {row.accountName && (
-                        <span
-                          className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap truncate max-w-full"
-                          style={{
-                            backgroundColor: row.accountColor ?? "#94a3b8",
-                          }}
-                        >
-                          {row.accountName}
-                        </span>
-                      )}
-                    </span>
-                    <span
-                      className={`tabular-nums font-medium whitespace-nowrap text-right ${amountClass(amt)}`}
-                    >
-                      {formatAUD(amt)}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-[10px] font-medium whitespace-nowrap justify-self-start"
+                        style={{ backgroundColor: colourForFrequency(row.frequency) }}
+                      >
+                        <Repeat className="h-2.5 w-2.5" aria-hidden="true" />
+                        {freqLabel(row.frequency, row.interval)}
+                      </span>
+                      <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                        {relativeWord(today, target)}
+                      </span>
+                      <span className="font-medium truncate min-w-0">
+                        {row.payee ?? "—"}
+                      </span>
+                      <span className="hidden sm:flex justify-start min-w-0">
+                        {row.accountName && (
+                          <span
+                            className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap truncate max-w-full"
+                            style={{
+                              backgroundColor: row.accountColor ?? "#94a3b8",
+                            }}
+                          >
+                            {row.accountName}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={`tabular-nums font-medium whitespace-nowrap text-right ${amountClass(amt)}`}
+                      >
+                        {formatAUD(amt)}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

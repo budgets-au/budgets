@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.39.0 — 2026-05-13
+
+### Changed
+- **Net Worth Trend + Budget Progress widgets default to a tighter
+  height** (`h:2` rather than `h:3`/`h:4`). Both have small
+  content — a chart + a few budget rows — and were squatting on
+  more vertical space than they needed. Cards now also fill their
+  cell (`h-full flex flex-col`) so resizing taller works cleanly.
+- **Budget Progress slices to fit.** Rather than the historical
+  fixed top-5, the card now measures its inner-content height and
+  renders only as many budget rows as fit (capped at 10). Resize
+  the tile to show more or fewer.
+- **Upcoming Schedules slices to fit.** Same dynamic-fit treatment
+  applied via ResizeObserver — the API hands back up to 50 rows
+  and the card picks whatever count fits its rendered height. The
+  old hard cap of 10 went away both server-side and client-side.
+
 ## 0.38.0 — 2026-05-13
 
 ### Fixed

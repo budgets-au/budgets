@@ -34,19 +34,10 @@ import {
   subYears,
 } from "date-fns";
 
-/** Australian financial year runs 1 July – 30 June. Anchor depends
- * on whether the supplied date is in the first or second half of
- * the calendar year. */
-function startOfFinancialYear(d: Date): Date {
-  const y = d.getFullYear();
-  // getMonth: 0 = January, 6 = July.
-  return new Date(d.getMonth() >= 6 ? y : y - 1, 6, 1);
-}
-function endOfFinancialYear(d: Date): Date {
-  const start = startOfFinancialYear(d);
-  // June 30 of the following calendar year.
-  return new Date(start.getFullYear() + 1, 5, 30);
-}
+import {
+  startOfFinancialYear,
+  endOfFinancialYear,
+} from "@/lib/financial-year";
 
 interface RangePreset {
   key: string;
@@ -87,6 +78,7 @@ import { TaxDeductionsReport } from "./tax-deductions-report";
 import { ExpensesDrilldown } from "./expenses-drilldown";
 import { EnvelopeReport } from "./envelope-report";
 import { SankeyReport } from "./sankey-report";
+import { YoYReport } from "./yoy-report";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -225,6 +217,7 @@ export function ReportsView({
         <TabsList data-print-hide>
           <TabsTrigger value="cashflow">Cash Flow</TabsTrigger>
           <TabsTrigger value="monthly">Monthly</TabsTrigger>
+          <TabsTrigger value="yoy">Year over Year</TabsTrigger>
           <TabsTrigger value="expenses">Expenses by Category</TabsTrigger>
           <TabsTrigger value="income">Income by Category</TabsTrigger>
           <TabsTrigger value="envelope">Envelope</TabsTrigger>
@@ -235,6 +228,12 @@ export function ReportsView({
         {/* Cash Flow Report */}
         <TabsContent value="cashflow">
           <CashflowReport from={from} to={to} accountIds={accountIds} hideTransfers={hideTransfers} />
+        </TabsContent>
+
+        {/* Year over Year — owns its own FY scope (anchored to today's
+            financial year, not the page from/to), same as Tax. */}
+        <TabsContent value="yoy">
+          <YoYReport accountIds={accountIds} hideTransfers={hideTransfers} />
         </TabsContent>
 
         {/* Tax Deductions Report — owns its own FY scope, ignores the page-level

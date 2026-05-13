@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.23.0 — 2026-05-13
+
+### Added
+- **Year over Year report tab.** Compares per-category totals
+  between this Australian FY and the previous one, side by side
+  with absolute and percent deltas. Sorted by |Δ| descending so
+  the biggest movers lead. Scope segmented control (Expenses /
+  Incomes / Both) at the top, with sign-aware tone — more spend
+  is red, less spend is green; more income green, less income red.
+  Top 50 of any larger result; tab owns its own FY scope (ignores
+  the page from/to like the Tax tab does).
+- **Shared FY helpers** at `src/lib/financial-year.ts`
+  (`startOfFinancialYear`, `endOfFinancialYear`,
+  `financialYearLabel`) — pulled the existing inline FY math out
+  of `reports-view.tsx` so the YoY tab can reuse it.
+
 ## 0.22.0 — 2026-05-13
 
 ### Added

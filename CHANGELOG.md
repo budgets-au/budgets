@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.25.0 — 2026-05-13
+
+### Changed
+- **YoY report uses the envelope-report collapsing tree style.**
+  Replaced the flat top-50 leaf list with a 3-level hierarchy
+  (grandparent → parent → leaf) that opens with every parent
+  collapsed, mirroring the envelope-report's UX. Click a chevron
+  to drill in; `Expand all / Collapse all` button in the header
+  applies the same op globally. Each level's children sort by
+  |Δ| descending so the biggest movers within each parent surface
+  first. Sign-aware tone (red for more-spend / less-income, green
+  for less-spend / more-income) preserved. Synthetic parent /
+  grandparent rows are filled in when only leaves appear in the
+  data, same as the envelope-report's tree builder.
+
 ## 0.24.0 — 2026-05-13
 
 ### Fixed

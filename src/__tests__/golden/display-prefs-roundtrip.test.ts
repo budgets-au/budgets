@@ -139,6 +139,34 @@ describe("golden / display-prefs round-trip", () => {
     expect(body.cashflowTotalsLevel).toBe("parent");
   });
 
+  it("PATCH dashboardLayout with per-instance config round-trip", async () => {
+    // The tracked-stock widget pins its investmentId via the
+    // per-entry `config` bag. Make sure that bag survives.
+    const layout = [
+      { widgetId: "net-worth", x: 0, y: 0, w: 2, h: 2 },
+      {
+        widgetId: "tracked-stock",
+        x: 2,
+        y: 0,
+        w: 3,
+        h: 3,
+        config: { investmentId: "inv-abc-123" },
+      },
+    ];
+    const patch = await prefsPATCH(
+      new Request("http://test/api/display-prefs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dashboardLayout: layout }),
+      }),
+    );
+    expect(patch.status).toBe(200);
+
+    const get = await prefsGET();
+    const body = (await get.json()) as { dashboardLayout: typeof layout };
+    expect(body.dashboardLayout).toEqual(layout);
+  });
+
   it("PATCH dashboardLayout round-trip", async () => {
     // Operator drags widgets around and hits Save. The new layout
     // must survive — the parser used to drop entries silently if

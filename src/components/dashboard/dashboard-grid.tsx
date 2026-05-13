@@ -97,7 +97,14 @@ export function DashboardGrid() {
   }
   function saveEdit() {
     if (draftLayout) {
-      setPref("dashboardLayout", draftLayout);
+      // Filter to known widgets. React-grid-layout can transiently
+      // hold placeholder entries ("__dropping-elem__" during a drag,
+      // or a stale entry for a widget that was renamed) that we
+      // don't want to persist.
+      const sanitized = draftLayout.filter((l) =>
+        WIDGETS_BY_ID.has(l.widgetId),
+      );
+      setPref("dashboardLayout", sanitized);
     }
     setDraftLayout(null);
     setEditMode(false);

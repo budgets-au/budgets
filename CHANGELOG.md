@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.41.0 — 2026-05-13
+
+### Fixed
+- **Dashboard: sanitise saved layout before PATCH.** `saveEdit`
+  now drops entries whose `widgetId` isn't in the registry before
+  the optimistic mutate fires. React-grid-layout can transiently
+  hold placeholder entries (e.g. `__dropping-elem__` during a
+  drag) or stale entries for renamed widgets; persisting any of
+  those would yield "dashboard resets on refresh" because the
+  next load filters them back out and you'd see fewer widgets
+  than you placed. Plus a round-trip regression test for the
+  per-instance config bag (tracked-stock's `investmentId`) so
+  future parser regressions are caught at the API layer.
+
 ## 0.40.0 — 2026-05-13
 
 ### Added

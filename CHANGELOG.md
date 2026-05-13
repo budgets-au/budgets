@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.42.0 — 2026-05-13
+
+### Fixed
+- **Dashboard layout persists across refresh.** Two
+  complementary fixes, both pointing at the same user-visible
+  "save click but reload shows default" symptom:
+  - `fetch("/api/display-prefs")` now carries `keepalive: true`
+    on the PATCH so a hit-Save-then-refresh combo doesn't cancel
+    the in-flight save. Default browser behaviour aborts
+    in-flight requests on unload; the layout never reaches the
+    DB and the next load re-reads the previous (default) state.
+  - `<ResponsiveGridLayout>` now takes a `key` derived from the
+    saved layout's widget-id signature. React-grid-layout caches
+    its initial layout state on mount and doesn't always replace
+    it from a changed `layouts` prop — so the dashboard would
+    keep rendering the SWR fallback (defaults) even after the
+    saved layout finally loaded. Remounting on signature change
+    forces RGL to pick up the saved layout cleanly.
+
 ## 0.41.0 — 2026-05-13
 
 ### Fixed

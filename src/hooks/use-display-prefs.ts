@@ -97,6 +97,11 @@ export function useDisplayPrefs(): {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ [key]: value }),
+            // Survive a page-unload that happens immediately after
+            // a save click — without keepalive, the browser
+            // cancels the in-flight PATCH and the layout reverts
+            // on the next load.
+            keepalive: true,
           });
           if (!res.ok) {
             const detail = await res.text().catch(() => "");

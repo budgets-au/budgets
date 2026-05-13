@@ -184,6 +184,21 @@ export function DashboardGrid() {
     ? WIDGETS_BY_ID.get(draggedWidgetId)
     : null;
 
+  // Force ResponsiveGridLayout to remount when the saved baseLayout
+  // changes shape (widgets added/removed across loads). RGL holds
+  // its own internal layout state on mount and doesn't always
+  // pick up replaced `layouts` props — without this key the
+  // dashboard would render its initial-mount layout (the SWR
+  // fallback default) even after the saved layout finishes
+  // loading, which looked exactly like "the dashboard reset on
+  // refresh". The signature is stable while only x/y/w/h or
+  // config change (those go through onLayoutChange which already
+  // updates RGL's internal state correctly).
+  const baseLayoutSignature = baseLayout
+    .map((l) => l.widgetId)
+    .sort()
+    .join("|");
+
   return (
     <>
       <div className="flex justify-end px-3 pt-2 pb-1">
@@ -195,6 +210,7 @@ export function DashboardGrid() {
       </div>
       <div className="px-3 pb-3">
         <ResponsiveGridLayout
+          key={baseLayoutSignature || "default"}
           className="layout"
           layouts={{
             lg: rglLayout,

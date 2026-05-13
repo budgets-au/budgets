@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.37.0 — 2026-05-13
+
+### Added
+- **Options and Paper-trade dashboard widgets.** Two new
+  drag-and-drop widgets siblings of the existing Stocks card:
+  `Options` filters investments where `kind="option"` and adds an
+  "expiring ≤30d" annotation when relevant; `Paper trades`
+  filters `kind="paper"` and shows the position count alongside
+  the value/return. Both surface per-currency totals (AUD + USD
+  kept separate, never silently FX-added) the same way the
+  Stocks card does. Not in the default layout — operators opt in
+  via the edit drawer, matching the convention that new widgets
+  surface as additions rather than auto-inserts.
+
 ## 0.36.0 — 2026-05-13
 
 ### Fixed

@@ -3,6 +3,8 @@ import { NetWorthCard } from "@/components/dashboard/net-worth-card";
 import { Income30dCard } from "@/components/dashboard/income-30d-card";
 import { Expenses30dCard } from "@/components/dashboard/expenses-30d-card";
 import { StocksSummaryCard } from "@/components/dashboard/stocks-summary-card";
+import { OptionsSummaryCard } from "@/components/dashboard/options-summary-card";
+import { PaperTradeSummaryCard } from "@/components/dashboard/paper-trade-summary-card";
 import { SuperSummaryCard } from "@/components/dashboard/super-summary-card";
 import { NetWorthTrendCard } from "@/components/dashboard/net-worth-trend-card";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress-card";
@@ -58,6 +60,20 @@ export const WIDGETS: WidgetSpec[] = [
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
     render: () => <StocksSummaryCard />,
+  },
+  {
+    id: "options-summary",
+    title: "Options",
+    defaultLayout: { w: 2, h: 2 },
+    minSize: { w: 2, h: 2 },
+    render: () => <OptionsSummaryCard />,
+  },
+  {
+    id: "paper-trade-summary",
+    title: "Paper trades",
+    defaultLayout: { w: 2, h: 2 },
+    minSize: { w: 2, h: 2 },
+    render: () => <PaperTradeSummaryCard />,
   },
   {
     id: "super-summary",

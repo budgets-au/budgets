@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.35.0 — 2026-05-13
+
+### Changed
+- **Dashboard edit-mode drawer moves to the left edge.** The
+  right-hand drawer was covering the dashboard grid itself,
+  obscuring exactly the thing the operator was trying to edit. It
+  now slides in from the left at the same width as the navigation
+  sidebar (`w-60`) and at a higher z-index, so it covers the
+  navigator (which serves no purpose during dashboard editing)
+  rather than the content.
+- **Schedule chart theme picker is now a radio list.** The single
+  active-theme dropdown + separate palette catalogue merge into
+  one component: each row is a radio + palette name + four colour
+  swatches + a remove button. Fabulous sits at the top with no
+  swatches. The combined layout makes the active selection more
+  obvious and removes the round-trip through a dropdown for what
+  is essentially a one-of-N choice.
+
+### Fixed
+- Added a regression test that round-trips
+  `chartScheduleTheme: "<custom-id>"` + a custom
+  `chartSchedulePalettes` entry through PATCH → GET. Confirms the
+  parser broadening from 0.34.0 actually persists a custom-palette
+  selection (previously locked to the `"fabulous" | "standard"`
+  enum, which would silently drop a custom id back to the default).
+
 ## 0.34.0 — 2026-05-13
 
 ### Added

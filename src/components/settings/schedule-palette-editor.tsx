@@ -5,95 +5,91 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
+import { cn } from "@/lib/utils";
 import {
   FABULOUS_THEME_ID,
   STANDARD_PALETTE,
   type SchedulePalette,
 } from "@/lib/chart-palettes";
 
-/** Editor for the schedule-chart palette catalogue. Built-in
- * "Standard" sits at the top read-only as a reference card; custom
- * palettes follow, each with name + four colour swatches + a
- * remove button. "Add palette" seeds a new entry with the Standard
- * colours so the operator only has to adjust what they want to
- * change. */
+/** Schedule-chart palette catalogue. Each entry is a row containing
+ * a radio for "active theme", a name (editable on custom rows), four
+ * colour swatches (editable on custom rows), and a remove button on
+ * custom rows. Fabulous sits at the top with no colour swatches —
+ * the chart renders it with its own lineage palette + hatched fills.
+ * "Add palette" seeds a new row with the Standard colours so the
+ * operator only has to adjust the slots they want to change. */
 export function SchedulePaletteEditor() {
   const { prefs, setPref } = useDisplayPrefs();
   const custom = prefs.chartSchedulePalettes;
   const activeId = prefs.chartScheduleTheme;
 
-  function updateCustom(next: SchedulePalette[]) {
-    setPref("chartSchedulePalettes", next);
+  function selectActive(id: string) {
+    setPref("chartScheduleTheme", id);
   }
 
   function addPalette() {
     const id = crypto.randomUUID();
-    const existingCount = custom.length;
-    updateCustom([
+    setPref("chartSchedulePalettes", [
       ...custom,
       {
         ...STANDARD_PALETTE,
         id,
-        name: `Custom ${existingCount + 1}`,
+        name: `Custom ${custom.length + 1}`,
       },
     ]);
   }
 
   function deletePalette(id: string) {
-    updateCustom(custom.filter((p) => p.id !== id));
-    // If the deleted palette was active, fall back to the built-in
-    // Standard so the chart never tries to render an unknown id.
+    setPref(
+      "chartSchedulePalettes",
+      custom.filter((p) => p.id !== id),
+    );
     if (activeId === id) {
       setPref("chartScheduleTheme", STANDARD_PALETTE.id);
     }
   }
 
   function patchPalette(id: string, patch: Partial<SchedulePalette>) {
-    updateCustom(
+    setPref(
+      "chartSchedulePalettes",
       custom.map((p) => (p.id === id ? { ...p, ...patch } : p)),
     );
   }
 
   return (
-    <div className="rounded-xl border bg-card divide-y">
-      <div className="px-4 py-3">
+    <div className="rounded-xl border bg-card">
+      <div className="border-b px-4 py-3">
         <h2 className="font-medium">Schedule chart theme</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          The Schedule view chart picks one theme. <strong>Fabulous</strong>{" "}
-          uses per-segment lineage colours and hatched delta fills.{" "}
-          <strong>Standard</strong> and any custom palette below render solid
-          fills coloured by the four data types (actual spend, saved vs cap,
-          over cap, forecast).
+          Pick which theme the schedule view chart uses.{" "}
+          <strong>Fabulous</strong> uses per-segment lineage colours +
+          hatched delta fills. <strong>Standard</strong> and any custom
+          palette render solid fills using the four data-type colours
+          (actual / saved / over / forecast).
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <p className="text-sm font-medium">Active theme</p>
-        <select
-          value={activeId}
-          onChange={(e) => setPref("chartScheduleTheme", e.target.value)}
-          className="rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          aria-label="Active schedule chart theme"
-        >
-          <option value={FABULOUS_THEME_ID}>Fabulous</option>
-          <option value={STANDARD_PALETTE.id}>{STANDARD_PALETTE.name}</option>
-          {custom.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="px-4 py-3 space-y-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Palettes
-        </p>
-        <PaletteRow palette={STANDARD_PALETTE} readOnly />
+      <div className="space-y-2 p-3">
+        <ThemeRow
+          id={FABULOUS_THEME_ID}
+          name="Fabulous"
+          active={activeId === FABULOUS_THEME_ID}
+          onSelect={() => selectActive(FABULOUS_THEME_ID)}
+          isFabulous
+        />
+        <PaletteRow
+          palette={STANDARD_PALETTE}
+          active={activeId === STANDARD_PALETTE.id}
+          onSelect={() => selectActive(STANDARD_PALETTE.id)}
+          readOnly
+        />
         {custom.map((p) => (
           <PaletteRow
             key={p.id}
             palette={p}
+            active={activeId === p.id}
+            onSelect={() => selectActive(p.id)}
             onChange={(patch) => patchPalette(p.id, patch)}
             onDelete={() => deletePalette(p.id)}
           />
@@ -111,23 +107,78 @@ export function SchedulePaletteEditor() {
   );
 }
 
+function ThemeRow({
+  id,
+  name,
+  active,
+  onSelect,
+  isFabulous,
+}: {
+  id: string;
+  name: string;
+  active: boolean;
+  onSelect: () => void;
+  isFabulous?: boolean;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors",
+        active ? "border-primary/60 bg-accent/50" : "hover:bg-accent/30",
+      )}
+    >
+      <input
+        type="radio"
+        name="schedule-chart-theme"
+        checked={active}
+        onChange={onSelect}
+        value={id}
+        className="h-4 w-4 cursor-pointer accent-indigo-500"
+      />
+      <span className="flex-1 text-sm font-medium">{name}</span>
+      {isFabulous && (
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          lineage palette
+        </span>
+      )}
+    </label>
+  );
+}
+
 function PaletteRow({
   palette,
+  active,
+  onSelect,
   readOnly = false,
   onChange,
   onDelete,
 }: {
   palette: SchedulePalette;
+  active: boolean;
+  onSelect: () => void;
   readOnly?: boolean;
   onChange?: (patch: Partial<SchedulePalette>) => void;
   onDelete?: () => void;
 }) {
-  // Local editable name so each keystroke doesn't round-trip
-  // through SWR. Committed back to the pref on blur.
+  // Local editable name so each keystroke doesn't round-trip through
+  // SWR. Committed back to the pref on blur.
   const [name, setName] = useState(palette.name);
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-md border bg-background/40 p-2">
+    <label
+      className={cn(
+        "flex flex-wrap items-center gap-3 rounded-md border p-2 transition-colors",
+        active ? "border-primary/60 bg-accent/50" : "hover:bg-accent/30",
+      )}
+    >
+      <input
+        type="radio"
+        name="schedule-chart-theme"
+        checked={active}
+        onChange={onSelect}
+        value={palette.id}
+        className="h-4 w-4 cursor-pointer accent-indigo-500"
+      />
       <input
         type="text"
         value={name}
@@ -139,9 +190,10 @@ function PaletteRow({
             setName(palette.name);
           }
         }}
+        onClick={(e) => e.preventDefault()}
         disabled={readOnly}
         aria-label={`Palette name for ${palette.name}`}
-        className="min-w-0 flex-1 rounded border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+        className="min-w-0 flex-1 rounded border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-default disabled:border-transparent disabled:bg-transparent disabled:opacity-100"
       />
       <PaletteSwatch
         label="Actual"
@@ -170,14 +222,17 @@ function PaletteRow({
       {onDelete && !readOnly && (
         <button
           type="button"
-          onClick={onDelete}
+          onClick={(e) => {
+            e.preventDefault();
+            onDelete();
+          }}
           aria-label={`Delete palette ${palette.name}`}
           className="rounded p-1 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
         >
           <Trash2 className="h-4 w-4" />
         </button>
       )}
-    </div>
+    </label>
   );
 }
 
@@ -193,7 +248,10 @@ function PaletteSwatch({
   onChange: (next: string) => void;
 }) {
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div
+      className="flex flex-col items-center gap-0.5"
+      onClick={(e) => e.preventDefault()}
+    >
       <ColorPicker
         value={value}
         onChange={onChange}

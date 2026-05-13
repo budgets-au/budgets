@@ -138,4 +138,38 @@ describe("golden / display-prefs round-trip", () => {
     expect(body.cashflowShowHidden).toBe(true);
     expect(body.cashflowTotalsLevel).toBe("parent");
   });
+
+  it("PATCH chartScheduleTheme + chartSchedulePalettes round-trip", async () => {
+    // User adds a custom palette and selects it as active. Both
+    // values must survive the round-trip — the parser used to lock
+    // chartScheduleTheme to a "fabulous" | "standard" enum, which
+    // would silently drop a custom palette id back to the default.
+    const palette = {
+      id: "pal-night",
+      name: "Night",
+      actual: "#222222",
+      saved: "#333333",
+      over: "#aa0000",
+      forecast: "#888888",
+    };
+    const patch = await prefsPATCH(
+      new Request("http://test/api/display-prefs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chartSchedulePalettes: [palette],
+          chartScheduleTheme: "pal-night",
+        }),
+      }),
+    );
+    expect(patch.status).toBe(200);
+
+    const get = await prefsGET();
+    const body = (await get.json()) as {
+      chartScheduleTheme: string;
+      chartSchedulePalettes: Array<typeof palette>;
+    };
+    expect(body.chartScheduleTheme).toBe("pal-night");
+    expect(body.chartSchedulePalettes).toEqual([palette]);
+  });
 });

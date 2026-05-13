@@ -29,8 +29,14 @@ export function WidgetDrawer({
     <div
       aria-hidden={!open}
       className={cn(
-        "fixed top-0 right-0 z-40 flex h-full w-80 max-w-[85vw] flex-col border-l bg-popover text-popover-foreground shadow-lg transition-transform duration-200 ease-in-out",
-        open ? "translate-x-0" : "pointer-events-none translate-x-full",
+        // Sits in the same left-edge slot as the navigation sidebar
+        // (`<Sidebar>` is z-50, w-60 = 240px). Putting the drawer
+        // there means it covers the navigator while editing instead
+        // of overlapping the dashboard grid itself; closing the
+        // drawer reveals the navigator again. z-60 keeps it above
+        // the sidebar so the navigator never bleeds through.
+        "fixed top-0 left-0 z-60 flex h-full w-60 flex-col border-r bg-popover text-popover-foreground shadow-lg transition-transform duration-200 ease-in-out",
+        open ? "translate-x-0" : "pointer-events-none -translate-x-full",
       )}
     >
       <div className="border-b p-4">

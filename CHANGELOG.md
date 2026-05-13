@@ -24,6 +24,13 @@ runs `npm ci` survives version bumps and rebuilds in seconds.
   radio is its own clickable target. `Add palette` is unaffected
   but gets an explicit `type="button"` for symmetry.
 
+### Changed
+- Dashboard heading tightened: the Edit-dashboard toolbar drops
+  from `p-4/lg:p-6` (16/24 px) to `px-3 pt-2 pb-1` (12/8/4 px) and
+  the Edit button shrinks to `size="xs"`. The grid wrapper drops
+  to `px-3 pb-3` — the gap between the page title and the first
+  widget row was eating an entire card's worth of vertical space.
+
 ## 0.35.0 — 2026-05-13
 
 ### Changed

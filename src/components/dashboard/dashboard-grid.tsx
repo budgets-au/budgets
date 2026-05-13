@@ -151,14 +151,14 @@ export function DashboardGrid() {
 
   return (
     <>
-      <div className="flex justify-end p-4 lg:p-6 pb-0">
+      <div className="flex justify-end px-3 pt-2 pb-1">
         {!editMode && (
-          <Button size="sm" variant="outline" onClick={startEdit}>
+          <Button size="xs" variant="outline" onClick={startEdit}>
             <Pencil className="mr-1 h-3 w-3" /> Edit dashboard
           </Button>
         )}
       </div>
-      <div className="p-4 lg:p-6 pt-2">
+      <div className="px-3 pb-3">
         <ResponsiveGridLayout
           className="layout"
           layouts={{

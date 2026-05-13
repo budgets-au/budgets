@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.29.0 — 2026-05-13
+
+### Changed
+- **Schedule chart tooltip rewritten.** The previous tooltip fired
+  the Recharts default formatter once per stacked-bar segment,
+  producing four near-identical rows of `Actual · Cap -$X from
+  Jun 25 : $Y` on a single hover. Replaced with a custom themed
+  card matching the site's Popover styling (rounded-md / border /
+  bg-popover / tabular-nums). One panel per hover, surfacing
+  only what the operator cares about: date + status pill,
+  segment label, and three rows — Actual, Planned, Over/Under
+  (sign- and tone-coded; red for Over, green for Under).
+
 ## 0.28.0 — 2026-05-13
 
 ### Fixed

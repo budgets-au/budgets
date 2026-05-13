@@ -58,6 +58,89 @@ const UNDER_COLOUR = "#94a3b8"; // slate-400
 const GAP_COLOUR = "#94a3b8";   // slate-400 — unused-budget portion, hatched like under
 const HATCH_STROKE_OPACITY = 0.55;
 
+/** Themed tooltip for the schedule chart. Replaces Recharts' default
+ * multi-row formatter — which fired once per stacked bar segment and
+ * produced repeated lines — with a single panel that surfaces only
+ * the four numbers an operator actually wants: the date, the actual
+ * spend, the planned amount, and the over/under delta. Styling
+ * mirrors the rest of the site's Popover cards (rounded-md + border
+ * + bg-popover + tabular-nums for the amounts). */
+function ChartTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: OccurrencePoint }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0]?.payload;
+  if (!p) return null;
+
+  const isMatched = p.status === "matched";
+  const isForecast = p.status === "forecast";
+  const isMissed = p.status === "missed";
+
+  const actual = isMatched ? p.actual : null;
+  const planned = p.expected;
+  const delta = isMatched ? p.actual - p.expected : null;
+  const overUnder =
+    delta != null && Math.abs(delta) > 0.005
+      ? delta > 0
+        ? { label: "Over", value: delta, tone: "text-red-500" }
+        : { label: "Under", value: -delta, tone: "text-emerald-600" }
+      : null;
+
+  return (
+    <div className="rounded-md border bg-popover shadow-md px-3 py-2 text-xs space-y-1 min-w-[12rem]">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="font-medium text-foreground">
+          {format(parseISO(p.date), "d MMM yyyy")}
+        </span>
+        <span
+          className={`text-[10px] uppercase tracking-wider ${
+            isMatched
+              ? "text-emerald-600"
+              : isMissed
+                ? "text-red-500"
+                : "text-muted-foreground"
+          }`}
+        >
+          {isMatched ? "Matched" : isMissed ? "Missed" : "Forecast"}
+        </span>
+      </div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {p.segmentLabel}
+      </div>
+      <div className="border-t pt-1 space-y-0.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Actual</span>
+          <span className="tabular-nums">
+            {actual != null ? formatAUD(actual) : "—"}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">Planned</span>
+          <span className="tabular-nums">{formatAUD(planned)}</span>
+        </div>
+        {overUnder && (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">{overUnder.label}</span>
+            <span className={`tabular-nums font-medium ${overUnder.tone}`}>
+              {overUnder.label === "Over" ? "+" : "−"}
+              {formatAUD(overUnder.value)}
+            </span>
+          </div>
+        )}
+        {isForecast && (
+          <div className="text-muted-foreground italic pt-0.5">
+            No transaction matched yet
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function formatPeriod(days: number): string {
   if (days < 1.5) return "1 day";
   if (days < 10) return `${Math.round(days)} days`;
@@ -315,38 +398,7 @@ export function ScheduledOccurrencesChart({
             />
             <Tooltip
               cursor={{ fill: "hsl(var(--muted))", opacity: 0.3 }}
-              labelFormatter={(d) => format(parseISO(String(d)), "d MMM yyyy")}
-              formatter={(_value, name, item) => {
-                const p = item?.payload as OccurrencePoint | undefined;
-                if (!p) return ["—", String(name ?? "")];
-                if (name === "deltaAmount") {
-                  // Suppress the variance row for non-matched / no-delta cases
-                  // so the tooltip stays compact.
-                  if (p.deltaKind === "missed") {
-                    return [formatAUD(p.expected), `Expected · ${p.segmentLabel}`];
-                  }
-                  if (p.deltaKind === "over") {
-                    return [`+${formatAUD(p.deltaAmount).replace("A$", "$")}`, "Over expected"];
-                  }
-                  if (p.deltaKind === "gap") {
-                    return [`−${formatAUD(p.deltaAmount).replace("A$", "$")}`, "Under max"];
-                  }
-                  if (p.deltaKind === "under") {
-                    return [`−${formatAUD(p.deltaAmount).replace("A$", "$")}`, "Under expected"];
-                  }
-                  return [null, null] as unknown as [string, string];
-                }
-                // baseAmount row
-                if (p.status === "forecast") {
-                  return [formatAUD(p.amount), `Forecast · ${p.segmentLabel}`];
-                }
-                if (p.status === "matched") {
-                  return [formatAUD(p.actual), `Actual · ${p.segmentLabel}`];
-                }
-                return [null, null] as unknown as [string, string];
-              }}
-              labelStyle={{ fontSize: 11 }}
-              contentStyle={{ fontSize: 12, padding: "4px 8px" }}
+              content={<ChartTooltip />}
             />
             {matchedAverage !== null && (
               <ReferenceLine

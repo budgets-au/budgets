@@ -6,9 +6,13 @@ import { cn } from "@/lib/utils";
 /** Bite-sized colour picker: a square swatch that opens a popover
  * containing the browser's native <input type="color"> plus a hex
  * input for paste/clipboard flows. Used by the schedule-chart
- * palette editor — overkill for "pick a colour", but the native
- * popup alone is too clunky once the user wants to compare two
- * shades side by side. */
+ * palette editor.
+ *
+ * Uses PopoverTrigger directly (no `render` prop) — matching the
+ * working searchable-combobox pattern. An earlier `render={...}`
+ * variant didn't wire the trigger's click → popover correctly in
+ * this base-ui version, so the swatch looked like a button but did
+ * nothing on click. */
 export function ColorPicker({
   value,
   onChange,
@@ -22,24 +26,28 @@ export function ColorPicker({
   disabled?: boolean;
   className?: string;
 }) {
-  const trigger = (
-    <button
-      type="button"
-      aria-label={ariaLabel}
-      disabled={disabled}
-      className={cn(
-        "h-7 w-7 rounded-md border shadow-sm transition-shadow hover:shadow disabled:cursor-not-allowed disabled:opacity-50",
-        className,
-      )}
-      style={{ backgroundColor: value }}
-    />
-  );
   if (disabled) {
-    return trigger;
+    return (
+      <span
+        aria-label={ariaLabel}
+        className={cn(
+          "block h-7 w-7 rounded-md border shadow-sm opacity-50",
+          className,
+        )}
+        style={{ backgroundColor: value }}
+      />
+    );
   }
   return (
     <Popover>
-      <PopoverTrigger render={trigger} />
+      <PopoverTrigger
+        aria-label={ariaLabel}
+        className={cn(
+          "h-7 w-7 rounded-md border shadow-sm transition-shadow hover:shadow",
+          className,
+        )}
+        style={{ backgroundColor: value }}
+      />
       <PopoverContent className="w-48 gap-3 p-3">
         <input
           type="color"
@@ -53,9 +61,8 @@ export function ColorPicker({
           value={value}
           onChange={(e) => {
             const v = e.target.value.trim();
-            // Accept any-length hex while typing; only commit when
-            // it parses as a valid #rrggbb literal so we don't push
-            // partial junk to the prefs blob.
+            // Only commit valid #rrggbb literals so partial typing
+            // doesn't poison the prefs blob.
             if (/^#[0-9a-fA-F]{6}$/.test(v)) onChange(v);
           }}
           aria-label={`${ariaLabel} hex value`}

@@ -33,9 +33,12 @@ export function WidgetDrawer({
         // (`<Sidebar>` is z-50, w-60 = 240px). Putting the drawer
         // there means it covers the navigator while editing instead
         // of overlapping the dashboard grid itself; closing the
-        // drawer reveals the navigator again. z-60 keeps it above
-        // the sidebar so the navigator never bleeds through.
-        "fixed top-0 left-0 z-60 flex h-full w-60 flex-col border-r bg-popover text-popover-foreground shadow-lg transition-transform duration-200 ease-in-out",
+        // drawer reveals the navigator again. z-[60] (arbitrary,
+        // not the default Tailwind z-50 max) keeps it above the
+        // sidebar so the navigator never bleeds through and — more
+        // importantly — the Save/Cancel buttons aren't click-stolen
+        // by sidebar links sitting in the same screen real-estate.
+        "fixed top-0 left-0 z-[60] flex h-full w-60 flex-col border-r bg-popover text-popover-foreground shadow-lg transition-transform duration-200 ease-in-out",
         open ? "translate-x-0" : "pointer-events-none -translate-x-full",
       )}
     >

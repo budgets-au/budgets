@@ -9,6 +9,28 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.38.0 — 2026-05-13
+
+### Fixed
+- **Colour-swatch popover trigger now opens reliably.** The
+  `PopoverTrigger` was using base-ui's `render={...}` template prop
+  with an empty self-closing button. In base-ui 1.4.1 that
+  template path didn't wire the click → open-popover handler
+  through; the swatch looked clickable but did nothing. Switched
+  to the simpler "PopoverTrigger renders its own button + we pass
+  className/style/aria-label" pattern (the same shape used in
+  searchable-combobox and saved-filters).
+- **Dashboard widget drawer z-index bumped to `z-[60]`.** The
+  drawer was using `z-60` (no Tailwind default — `z-50` is the
+  ceiling unless you use an arbitrary value), so it stacked
+  *behind* the navigation sidebar at `z-50`. Result: clicks on
+  the drawer's Save button were intercepted by sidebar elements
+  in the same screen real-estate, which is why "Save layout"
+  appeared to do nothing.
+- Added a round-trip test for `dashboardLayout` PATCH → GET that
+  confirms the parser preserves the saved layout (caught no bug
+  but locks behaviour in against future regressions).
+
 ## 0.37.0 — 2026-05-13
 
 ### Added

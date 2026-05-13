@@ -139,6 +139,31 @@ describe("golden / display-prefs round-trip", () => {
     expect(body.cashflowTotalsLevel).toBe("parent");
   });
 
+  it("PATCH dashboardLayout round-trip", async () => {
+    // Operator drags widgets around and hits Save. The new layout
+    // must survive — the parser used to drop entries silently if
+    // any field failed validation, masking the save.
+    const layout = [
+      { widgetId: "net-worth", x: 0, y: 0, w: 2, h: 2 },
+      { widgetId: "income-30d", x: 2, y: 0, w: 2, h: 2 },
+      { widgetId: "stocks-summary", x: 4, y: 0, w: 4, h: 3 },
+    ];
+    const patch = await prefsPATCH(
+      new Request("http://test/api/display-prefs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dashboardLayout: layout }),
+      }),
+    );
+    expect(patch.status).toBe(200);
+
+    const get = await prefsGET();
+    const body = (await get.json()) as {
+      dashboardLayout: typeof layout;
+    };
+    expect(body.dashboardLayout).toEqual(layout);
+  });
+
   it("PATCH chartScheduleTheme + chartSchedulePalettes round-trip", async () => {
     // User adds a custom palette and selects it as active. Both
     // values must survive the round-trip — the parser used to lock

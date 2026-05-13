@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Save, X } from "lucide-react";
+import { toast } from "sonner";
 import {
   ArrowDownToLine,
   ArrowLeftRight,
@@ -190,6 +191,236 @@ function ExpandedField({
  * operator can flip a txn's reconciled flag without leaving the
  * transactions list. PATCHes `/api/transactions/{id}` directly so
  * SWR caches stay coherent via the parent's onChange callback. */
+/** The row's click-to-expand metadata panel. Opens in read mode;
+ * the pencil icon at the top-right switches to edit mode where the
+ * user-controllable text fields (payee, description, amount, date,
+ * bank type, bank balance, FITID) become inputs. Save batches the
+ * changed fields into a single PATCH; Cancel discards. Read-only
+ * system fields (timestamps, hashes, normalised payee, transaction
+ * ID) stay as `<code>` blocks throughout. */
+function ExpandedPanel({
+  t,
+  refresh,
+}: {
+  t: TransactionRowData;
+  refresh: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // Only the user-controllable fields the PATCH endpoint accepts.
+  // Bank-derived metadata (type, balance, FITID) stays read-only —
+  // editing those is an edge case and would need a schema widening
+  // we don't have a reason for yet.
+  const [draft, setDraft] = useState({
+    date: t.date,
+    payee: t.payee ?? "",
+    amount: t.amount,
+    description: t.description ?? "",
+  });
+  function enterEdit() {
+    setDraft({
+      date: t.date,
+      payee: t.payee ?? "",
+      amount: t.amount,
+      description: t.description ?? "",
+    });
+    setEditing(true);
+  }
+  function cancel() {
+    setEditing(false);
+  }
+
+  async function save() {
+    // Minimal patch — only changed fields get sent so an
+    // Edit-then-Save-without-edits is a no-op.
+    const patch: Record<string, unknown> = {};
+    if (draft.date !== t.date) patch.date = draft.date;
+    if (draft.payee !== (t.payee ?? "")) patch.payee = draft.payee || "";
+    if (draft.amount !== t.amount) patch.amount = draft.amount;
+    if (draft.description !== (t.description ?? ""))
+      patch.description = draft.description || "";
+    if (Object.keys(patch).length === 0) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/transactions/${t.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(detail || `PATCH ${res.status}`);
+      }
+      toast.success("Transaction updated");
+      setEditing(false);
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr className="bg-muted/40">
+      <td
+        colSpan={100}
+        className="px-6 py-3 border-b"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-end mb-2 gap-1.5">
+          {editing ? (
+            <>
+              <button
+                type="button"
+                onClick={cancel}
+                disabled={saving}
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border hover:bg-background transition-colors disabled:opacity-60"
+              >
+                <X className="h-3 w-3" /> Cancel
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                disabled={saving}
+                className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-60"
+              >
+                <Save className="h-3 w-3" /> {saving ? "Saving…" : "Save"}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={enterEdit}
+              title="Edit this transaction"
+              aria-label="Edit transaction"
+              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border hover:bg-background transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <Pencil className="h-3 w-3" /> Edit
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-xs">
+          {editing && (
+            <>
+              <ExpandedField label="Date">
+                <EditInput
+                  type="date"
+                  value={draft.date}
+                  onChange={(v) => setDraft((d) => ({ ...d, date: v }))}
+                />
+              </ExpandedField>
+              <ExpandedField label="Payee">
+                <EditInput
+                  value={draft.payee}
+                  onChange={(v) => setDraft((d) => ({ ...d, payee: v }))}
+                />
+              </ExpandedField>
+              <ExpandedField label="Amount">
+                <EditInput
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  value={draft.amount}
+                  onChange={(v) => setDraft((d) => ({ ...d, amount: v }))}
+                />
+              </ExpandedField>
+            </>
+          )}
+          <ExpandedField label="Notes" wide>
+            <NotesCell
+              transactionId={t.id}
+              notes={t.notes}
+              onSaved={refresh}
+            />
+          </ExpandedField>
+          <ExpandedField label="Description" wide>
+            {editing ? (
+              <EditInput
+                value={draft.description}
+                onChange={(v) => setDraft((d) => ({ ...d, description: v }))}
+              />
+            ) : (
+              <span>{t.description || "—"}</span>
+            )}
+          </ExpandedField>
+          <ExpandedField label="Reconciled">
+            <ReconcileToggle
+              transactionId={t.id}
+              isReconciled={t.isReconciled}
+              onChange={refresh}
+            />
+          </ExpandedField>
+          <ExpandedField label="Bank type">{t.type ?? "—"}</ExpandedField>
+          <ExpandedField label="Bank balance">
+            {t.bankBalance != null ? formatAUD(t.bankBalance) : "—"}
+          </ExpandedField>
+          <ExpandedField label="Bank ID (FITID)">
+            <code className="text-[11px] break-all">{t.rawFitid ?? "—"}</code>
+          </ExpandedField>
+          {/* Read-only system fields — stay rendered in both modes
+              so the operator can refer to them while editing the
+              user-controllable values above. */}
+          <ExpandedField label="Posted">
+            {t.postedAt ? new Date(t.postedAt).toLocaleString() : "—"}
+          </ExpandedField>
+          <ExpandedField label="Posted seq">{t.postedSeq ?? "—"}</ExpandedField>
+          <ExpandedField label="Imported">
+            {new Date(t.createdAt).toLocaleString()}
+          </ExpandedField>
+          <ExpandedField label="Import format">
+            {t.importFormat ? t.importFormat.toUpperCase() : "Manual"}
+          </ExpandedField>
+          <ExpandedField label="Updated">
+            {new Date(t.updatedAt).toLocaleString()}
+          </ExpandedField>
+          <ExpandedField label="Import hash">
+            <code className="text-[11px] break-all">{t.importHash ?? "—"}</code>
+          </ExpandedField>
+          <ExpandedField label="Normalised payee">
+            <code className="text-[11px] break-all">
+              {t.normalizedPayee ?? "—"}
+            </code>
+          </ExpandedField>
+          <ExpandedField label="Transaction ID">
+            <code className="text-[11px] break-all">{t.id}</code>
+          </ExpandedField>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** Inline text input styled to match the read-mode field height so
+ * Edit mode doesn't reflow the grid. Used inside ExpandedField. */
+function EditInput({
+  value,
+  onChange,
+  type = "text",
+  inputMode,
+  step,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  type?: "text" | "date" | "number";
+  inputMode?: "decimal";
+  step?: string;
+}) {
+  return (
+    <input
+      type={type}
+      inputMode={inputMode}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-6 w-full text-xs px-1.5 rounded border bg-background focus:outline-none focus:ring-1 focus:ring-indigo-500"
+    />
+  );
+}
+
 function ReconcileToggle({
   transactionId,
   isReconciled,
@@ -629,76 +860,7 @@ export function TransactionRow({
           {t.payee || t.description || "—"}
         </td>
       </tr>
-      {isExpanded && (
-        <tr className="bg-muted/40">
-          <td
-            colSpan={100}
-            className="px-6 py-3 border-b"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-xs">
-              <ExpandedField label="Notes" wide>
-                <NotesCell
-                  transactionId={t.id}
-                  notes={t.notes}
-                  onSaved={refresh}
-                />
-              </ExpandedField>
-              {t.description && (
-                <ExpandedField label="Description" wide>
-                  <span>{t.description}</span>
-                </ExpandedField>
-              )}
-              <ExpandedField label="Reconciled">
-                <ReconcileToggle
-                  transactionId={t.id}
-                  isReconciled={t.isReconciled}
-                  onChange={refresh}
-                />
-              </ExpandedField>
-              <ExpandedField label="Bank type">{t.type ?? "—"}</ExpandedField>
-              <ExpandedField label="Bank balance">
-                {t.bankBalance != null ? formatAUD(t.bankBalance) : "—"}
-              </ExpandedField>
-              <ExpandedField label="Posted">
-                {t.postedAt
-                  ? new Date(t.postedAt).toLocaleString()
-                  : "—"}
-              </ExpandedField>
-              <ExpandedField label="Posted seq">
-                {t.postedSeq ?? "—"}
-              </ExpandedField>
-              <ExpandedField label="Imported">
-                {new Date(t.createdAt).toLocaleString()}
-              </ExpandedField>
-              <ExpandedField label="Import format">
-                {t.importFormat ? t.importFormat.toUpperCase() : "Manual"}
-              </ExpandedField>
-              <ExpandedField label="Updated">
-                {new Date(t.updatedAt).toLocaleString()}
-              </ExpandedField>
-              <ExpandedField label="Bank ID (FITID)">
-                <code className="text-[11px] break-all">
-                  {t.rawFitid ?? "—"}
-                </code>
-              </ExpandedField>
-              <ExpandedField label="Import hash">
-                <code className="text-[11px] break-all">
-                  {t.importHash ?? "—"}
-                </code>
-              </ExpandedField>
-              <ExpandedField label="Normalised payee">
-                <code className="text-[11px] break-all">
-                  {t.normalizedPayee ?? "—"}
-                </code>
-              </ExpandedField>
-              <ExpandedField label="Transaction ID">
-                <code className="text-[11px] break-all">{t.id}</code>
-              </ExpandedField>
-            </div>
-          </td>
-        </tr>
-      )}
+      {isExpanded && <ExpandedPanel t={t} refresh={refresh} />}
     </Fragment>
   );
 }

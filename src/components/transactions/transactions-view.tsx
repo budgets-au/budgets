@@ -130,9 +130,8 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
     ? displayPrefs.transactionsPageSize
     : DEFAULT_PAGE_SIZE;
   const setShowNotes = (v: boolean) => setPref("transactionsShowNotes", v);
-  // setShowLinkedDetails removed — toggle moved to Settings → General.
-  const setRowExpandable = (v: boolean) =>
-    setPref("transactionsRowExpandable", v);
+  // setShowLinkedDetails + setRowExpandable removed — those toggles
+  // moved to Settings → General → Display.
   const setPageSize = (n: number) => setPref("transactionsPageSize", n);
 
   const { data: categories = initialCategories, mutate: mutateCategories } =
@@ -599,14 +598,6 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                   checked={showNotes}
                   onCheckedChange={(v) => setShowNotes(v)}
                   aria-label="Show notes column"
-                />
-              </label>
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0">
-                <span>Row expand</span>
-                <Switch
-                  checked={rowExpandable}
-                  onCheckedChange={(v) => setRowExpandable(v)}
-                  aria-label="Enable click-to-expand on transaction rows"
                 />
               </label>
               {countData && (

@@ -85,6 +85,24 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
               aria-label="Toggle linked-transaction detail cells"
             />
           </label>
+          <label className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Row click-to-expand</p>
+              <p className="text-xs text-muted-foreground">
+                Clicking a transaction row opens an inline metadata
+                panel with an Edit affordance for the payee / amount /
+                date / description / bank fields. Off makes clicks
+                inert — useful when bulk-selecting rows in succession.
+              </p>
+            </div>
+            <Switch
+              checked={prefs.transactionsRowExpandable}
+              onCheckedChange={(v) =>
+                setPref("transactionsRowExpandable", v)
+              }
+              aria-label="Toggle click-to-expand on transaction rows"
+            />
+          </label>
         </div>
         <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">About</p>

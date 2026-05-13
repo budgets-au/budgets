@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.27.0 — 2026-05-13
+
+### Added
+- **Edit mode in the transaction-row expand panel.** A pencil
+  icon at the top-right switches the panel into edit mode where
+  Date, Payee, Amount and Description become inline inputs. Save
+  batches every changed field into one `PATCH /api/transactions/{id}`;
+  Cancel discards the draft. Notes (inline NotesCell) and
+  Reconciled (Switch) were already interactive — they stay
+  unchanged. Bank-derived fields (type, balance, FITID) and
+  system fields (timestamps, hashes, transaction ID) remain
+  read-only.
+
+### Changed
+- **Row click-to-expand toggle moved to Settings → General →
+  Display.** Was an inline switch in the transactions list header;
+  belongs with the other display preferences. Description on the
+  setting now mentions the new Edit affordance so the operator
+  knows what flipping it on enables.
+
 ## 0.26.0 — 2026-05-13
 
 ### Fixed (visibility)

@@ -16,12 +16,12 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import type { Account, Category } from "@/db/schema";
 import { colourForFrequency, freqLabel } from "@/lib/schedule-colours";
 
@@ -84,31 +84,8 @@ export function ScheduleButton({ transaction, accounts, categoriesProp, schedule
   const absAmount = Math.abs(parseFloat(transaction.amount)).toFixed(2);
   const dayOfMonth = parseInt(transaction.date.split("-")[2], 10);
 
-  const parents = categories
-    .filter((c) => !c.parentId)
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const childrenByParent = new Map<string, Category[]>();
-  for (const c of categories) {
-    if (c.parentId) {
-      const arr = childrenByParent.get(c.parentId) ?? [];
-      arr.push(c);
-      childrenByParent.set(c.parentId, arr);
-    }
-  }
-  // Full path label for the selected category
-  const categoryLabel = (() => {
-    if (!categoryId) return undefined;
-    const byId = new Map(categories.map((c) => [c.id, c]));
-    function getPath(id: string, visited = new Set<string>()): string[] {
-      if (visited.has(id)) return [];
-      visited.add(id);
-      const cat = byId.get(id);
-      if (!cat) return [];
-      if (!cat.parentId) return [cat.name];
-      return [...getPath(cat.parentId, visited), cat.name];
-    }
-    return getPath(categoryId).join(" / ") || undefined;
-  })();
+  // Category tree shaping, search and label resolution all live in the
+  // shared CategoryDropdown — nothing to precompute here.
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -243,42 +220,13 @@ export function ScheduleButton({ transaction, accounts, categoriesProp, schedule
           ) : (
             <div className="space-y-1">
               <Label>Category</Label>
-              <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
-                <SelectTrigger>
-                  <SelectValue>{categoryLabel ?? "Uncategorised"}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Uncategorised</SelectItem>
-                  {parents.map((parent) => {
-                    const depth1 = childrenByParent.get(parent.id) ?? [];
-                    if (depth1.length === 0) {
-                      return (
-                        <SelectItem key={parent.id} value={parent.id}>
-                          {parent.name}
-                        </SelectItem>
-                      );
-                    }
-                    return (
-                      <SelectGroup key={parent.id}>
-                        <SelectItem value={parent.id}>{parent.name}</SelectItem>
-                        {depth1.flatMap((child) => {
-                          const depth2 = childrenByParent.get(child.id) ?? [];
-                          return [
-                            <SelectItem key={child.id} value={child.id} className="pl-5">
-                              {child.name}
-                            </SelectItem>,
-                            ...depth2.map((gc) => (
-                              <SelectItem key={gc.id} value={gc.id} className="pl-9">
-                                {gc.name}
-                              </SelectItem>
-                            )),
-                          ];
-                        })}
-                      </SelectGroup>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <CategoryDropdown
+                value={categoryId || null}
+                onChange={(v) => setCategoryId(v ?? "")}
+                categories={categories}
+                typeFilter={isExpense ? "expense" : "income"}
+                popoverClassName="w-[var(--anchor-width)] p-0 gap-0 overflow-hidden min-w-72"
+              />
             </div>
           )}
 

@@ -9,6 +9,34 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.17.0 — 2026-05-13
+
+### Changed
+- **Unified category picker across the app.** The transactions
+  list's keyboard-nav-friendly Popover dropdown is now the canonical
+  category picker, extracted into a reusable
+  `<CategoryDropdown>` (`src/components/categories/category-dropdown.tsx`)
+  and adopted by:
+    - inline transactions-list cell (was already this widget)
+    - Scheduled-transaction edit form (was Base-UI `<Select>`)
+    - "Make recurring" dialog on a transaction row (was `<Select>`)
+    - Import preview per-row category (was `<Select>` with inline
+      padding style)
+    - Category-manager create form + edit dialog parent pickers
+      (was `<Select>` with hand-rolled depth indent)
+  Type-filtering (`typeFilter`), self/descendant exclusion
+  (`excludeIds` + `excludeDescendants`), maximum-depth caps
+  (`maxDepth`), and the "no category" sentinel label
+  (`uncategorisedLabel`) cover every per-call-site constraint that
+  used to live in the bespoke widgets.
+
+- **Hierarchy is now conveyed by indentation, not by a
+  "Grandparent / Parent / Child" prefix.** Every row in the dropdown
+  shows just the leaf name, indented `14px` per depth level. Same
+  search scoring (leaf-prefix beats ancestor-prefix beats
+  substring), so typing "Grocer" still surfaces "Groceries" even
+  though "Food / " is no longer rendered.
+
 ## 0.16.0 — 2026-05-13
 
 ### Changed

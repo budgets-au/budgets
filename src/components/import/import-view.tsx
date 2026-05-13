@@ -5,16 +5,8 @@ import { useDropzone } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Upload, FileText, ChevronDown, ChevronRight } from "lucide-react";
+import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { formatAUD, amountClass, cn } from "@/lib/utils";
@@ -1220,44 +1212,6 @@ function RuleCreator({
   onCreated: (cat: CategoryOption) => void;
 }) {
   const [saving, setSaving] = useState(false);
-  // Walk the full 3-level category tree (parent → child → grandchild),
-  // grouped by income vs expense so the dropdown is scannable. Each
-  // emitted item carries its depth (for indentation) and full path
-  // (for the trigger label lookup of the current value).
-  const { incomeItems, expenseItems, byId } = useMemo(() => {
-    const childrenOf = new Map<string, CategoryOption[]>();
-    for (const c of categories) {
-      if (!c.parentId) continue;
-      const arr = childrenOf.get(c.parentId) ?? [];
-      arr.push(c);
-      childrenOf.set(c.parentId, arr);
-    }
-    for (const arr of childrenOf.values()) {
-      arr.sort((a, b) => a.name.localeCompare(b.name));
-    }
-    const parents = categories
-      .filter((c) => !c.parentId)
-      .sort((a, b) => a.name.localeCompare(b.name));
-    type Entry = { cat: CategoryOption; depth: number; path: string };
-    const expense: Entry[] = [];
-    const income: Entry[] = [];
-    function walk(cat: CategoryOption, depth: number, parentPath: string, into: Entry[]) {
-      const path = parentPath ? `${parentPath} / ${cat.name}` : cat.name;
-      into.push({ cat, depth, path });
-      const kids = childrenOf.get(cat.id) ?? [];
-      for (const k of kids) walk(k, depth + 1, path, into);
-    }
-    for (const p of parents) {
-      walk(p, 0, "", p.type === "income" ? income : expense);
-    }
-    const idMap = new Map<string, Entry>();
-    for (const e of [...expense, ...income]) idMap.set(e.cat.id, e);
-    return { incomeItems: income, expenseItems: expense, byId: idMap };
-  }, [categories]);
-  // base-ui's <SelectValue> renders the raw value string by default; we
-  // pass the full category path as children so the trigger shows
-  // "Utilities / Electricity" instead of the UUID.
-  const currentLabel = currentCategoryId ? byId.get(currentCategoryId)?.path ?? null : null;
 
   async function handleChange(catId: string) {
     if (!catId) return;
@@ -1311,50 +1265,17 @@ function RuleCreator({
   }
 
   return (
-    <Select
-      value={currentCategoryId ?? ""}
-      onValueChange={(v) => handleChange(v ?? "")}
-      disabled={saving || categories.length === 0 || !normalizedPayee}
-    >
-      <SelectTrigger
-        className="h-7 text-xs px-2 py-0 min-w-[160px]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <SelectValue placeholder={saving ? "Saving…" : "Set category…"}>
-          {currentLabel}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {expenseItems.length > 0 && (
-          <SelectGroup>
-            <SelectLabel>Expense</SelectLabel>
-            {expenseItems.map(({ cat, depth }) => (
-              <SelectItem
-                key={cat.id}
-                value={cat.id}
-                style={{ paddingLeft: `${0.5 + depth * 0.875}rem` }}
-              >
-                {cat.name}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        )}
-        {incomeItems.length > 0 && (
-          <SelectGroup>
-            <SelectLabel>Income</SelectLabel>
-            {incomeItems.map(({ cat, depth }) => (
-              <SelectItem
-                key={cat.id}
-                value={cat.id}
-                style={{ paddingLeft: `${0.5 + depth * 0.875}rem` }}
-              >
-                {cat.name}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        )}
-      </SelectContent>
-    </Select>
+    <span onClick={(e) => e.stopPropagation()}>
+      <CategoryDropdown
+        value={currentCategoryId}
+        onChange={(v) => handleChange(v ?? "")}
+        categories={categories}
+        disabled={saving || categories.length === 0 || !normalizedPayee}
+        placeholder={saving ? "Saving…" : "Set category…"}
+        triggerClassName="h-7 text-xs px-2 py-0 min-w-[160px] gap-1 text-foreground hover:bg-muted bg-background border rounded inline-flex items-center justify-between disabled:opacity-50"
+        uncategorisedLabel={null}
+      />
+    </span>
   );
 }
 

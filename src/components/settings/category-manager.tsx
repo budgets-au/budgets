@@ -21,6 +21,7 @@ import { cn, formatAUD } from "@/lib/utils";
 import { Plus, Trash2, ChevronDown, ChevronRight, Pencil, GripVertical } from "lucide-react";
 import type { Category, TaxConfig } from "@/db/schema";
 import { buildCategoryMeta } from "@/lib/category-path";
+import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { classifyCategoryDefault } from "@/lib/tax/calc";
 
 const COLORS = [
@@ -516,39 +517,16 @@ export function CategoryManager({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Parent (optional)</Label>
-              <Select
-                value={form.parentId}
-                onValueChange={(v) => setForm((f) => f && { ...f, parentId: v ?? "" })}
-              >
-                <SelectTrigger>
-                  <SelectValue>
-                    {form.parentId
-                      ? (catMeta.get(form.parentId)?.path.join(" / ") ?? "Top-level")
-                      : "Top-level"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Top-level</SelectItem>
-                  {parents
-                    .filter((p) => p.type === form.type)
-                    .map((p) => {
-                      const depth1 = childrenOf(p.id);
-                      if (depth1.length === 0) {
-                        return <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>;
-                      }
-                      return (
-                        <SelectGroup key={p.id}>
-                          <SelectItem value={p.id}>{p.name}</SelectItem>
-                          {depth1.map((child) => (
-                            <SelectItem key={child.id} value={child.id} className="pl-5">
-                              {p.name} / {child.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      );
-                    })}
-                </SelectContent>
-              </Select>
+              <CategoryDropdown
+                value={form.parentId || null}
+                onChange={(v) => setForm((f) => f && { ...f, parentId: v ?? "" })}
+                categories={cats}
+                typeFilter={form.type === "income" ? "income" : "expense"}
+                maxDepth={1}
+                uncategorisedLabel="Top-level"
+                triggerClassName="h-9 text-sm px-3 gap-1 text-foreground hover:bg-muted bg-background border rounded-md inline-flex items-center justify-between min-w-0 w-full disabled:opacity-50"
+                popoverClassName="w-[var(--anchor-width)] p-0 gap-0 overflow-hidden min-w-72"
+              />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Colour</Label>
@@ -692,14 +670,11 @@ function CategoryEditDialog({
     return 1 + Math.max(...kids.map((k) => descendantDepth(k.id)));
   }
   const myDepth = descendantDepth(cat.id);
-  function isValidParent(candidate: Category): boolean {
-    if (candidate.type !== cat.type) return false;
-    if (candidate.id === cat.id) return false;
-    if (isDescendantOf(candidate.id, cat.id)) return false;
-    const targetDepth = catMeta.get(candidate.id)?.depth ?? 0;
-    return targetDepth + 1 + myDepth <= 2;
-  }
-  const parentOptions = cats.filter(isValidParent);
+  // The CategoryDropdown enforces the same-type, exclude-self,
+  // exclude-descendants and max-depth rules via its
+  // typeFilter / excludeIds / maxDepth props. No standalone helper
+  // needed; everything that consumed `parentOptions` / `isValidParent`
+  // is now in the dropdown.
 
   async function handleSave() {
     setSaving(true);
@@ -747,38 +722,23 @@ function CategoryEditDialog({
 
           <div className="space-y-1.5">
             <Label>Parent</Label>
-            <Select
-              value={parentId}
-              onValueChange={(v) => setParentId(v ?? "")}
-            >
-              <SelectTrigger>
-                <SelectValue>
-                  {parentId
-                    ? (catMeta.get(parentId)?.path.join(" / ") ?? "Top-level")
-                    : "Top-level"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Top-level</SelectItem>
-                {parents.filter((p) => p.type === cat.type && p.id !== cat.id).map((p) => {
-                  const validTop = isValidParent(p);
-                  const subOptions = childrenOf(p.id).filter(isValidParent);
-                  if (!validTop && subOptions.length === 0) return null;
-                  return (
-                    <SelectGroup key={p.id}>
-                      {validTop && (
-                        <SelectItem value={p.id}>{p.name}</SelectItem>
-                      )}
-                      {subOptions.map((child) => (
-                        <SelectItem key={child.id} value={child.id} className="pl-5">
-                          {p.name} / {child.name}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  );
-                })}
-              </SelectContent>
-            </Select>
+            <CategoryDropdown
+              value={parentId || null}
+              onChange={(v) => setParentId(v ?? "")}
+              categories={cats}
+              typeFilter={cat.type === "income" ? "income" : "expense"}
+              // Exclude the cat itself + its subtree; excludeDescendants
+              // covers the "candidate isn't a descendant of cat" rule.
+              excludeIds={[cat.id]}
+              // Tree-depth ceiling is 2 (three-level tree). Re-parenting
+              // a cat whose subtree depth is `myDepth` means the deepest
+              // descendant lands at `candidate.depth + 1 + myDepth`,
+              // which must stay ≤ 2 — so candidate.depth ≤ 1 - myDepth.
+              maxDepth={1 - myDepth}
+              uncategorisedLabel="Top-level"
+              triggerClassName="h-9 text-sm px-3 gap-1 text-foreground hover:bg-muted bg-background border rounded-md inline-flex items-center justify-between min-w-0 w-full disabled:opacity-50"
+              popoverClassName="w-[var(--anchor-width)] p-0 gap-0 overflow-hidden min-w-72"
+            />
             <p className="text-[11px] text-muted-foreground">
               {cat.type === "income" ? "Income" : "Expense"} category — only same-type parents are valid. Max nesting depth is 3.
             </p>

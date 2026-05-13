@@ -8,7 +8,6 @@ import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -16,7 +15,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CalendarClock, PiggyBank } from "lucide-react";
 import { toast } from "sonner";
-import { buildCategoryMeta } from "@/lib/category-path";
+import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import type { Account, Category } from "@/db/schema";
 
 export interface ScheduledFormRow {
@@ -136,20 +135,8 @@ export function ScheduledEditForm({
     }
   }
 
-  const { meta: catMeta } = buildCategoryMeta(allCategories);
-  const depth0 = allCategories.filter((c) => !c.parentId).sort((a, b) => a.name.localeCompare(b.name));
-  const childrenByParent = new Map<string, typeof allCategories>();
-  for (const c of allCategories) {
-    if (c.parentId) {
-      const arr = childrenByParent.get(c.parentId) ?? [];
-      arr.push(c);
-      childrenByParent.set(c.parentId, arr);
-    }
-  }
-  for (const arr of childrenByParent.values()) arr.sort((a, b) => a.name.localeCompare(b.name));
-  const categoryLabel = categoryId
-    ? (catMeta.get(categoryId)?.path.join(" / ") ?? "Uncategorised")
-    : "Uncategorised";
+  // The CategoryDropdown handles label resolution + tree shaping
+  // itself, so no need to pre-compute path / sibling groupings here.
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -309,38 +296,13 @@ export function ScheduledEditForm({
                   <span className="ml-1 text-[10px] text-muted-foreground font-normal">(optional)</span>
                 )}
               </Label>
-              <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
-                <SelectTrigger className={`${triggerCls} w-full`}>
-                  <SelectValue>{categoryLabel}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Uncategorised</SelectItem>
-                  {depth0.map((parent) => {
-                    const depth1 = childrenByParent.get(parent.id) ?? [];
-                    if (depth1.length === 0) {
-                      return <SelectItem key={parent.id} value={parent.id}>{parent.name}</SelectItem>;
-                    }
-                    return (
-                      <SelectGroup key={parent.id}>
-                        <SelectItem value={parent.id}>{parent.name}</SelectItem>
-                        {depth1.flatMap((child) => {
-                          const depth2 = childrenByParent.get(child.id) ?? [];
-                          return [
-                            <SelectItem key={child.id} value={child.id} className="pl-5">
-                              {child.name}
-                            </SelectItem>,
-                            ...depth2.map((gc) => (
-                              <SelectItem key={gc.id} value={gc.id} className="pl-9">
-                                {gc.name}
-                              </SelectItem>
-                            )),
-                          ];
-                        })}
-                      </SelectGroup>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+              <CategoryDropdown
+                value={categoryId || null}
+                onChange={(v) => setCategoryId(v ?? "")}
+                categories={allCategories}
+                triggerClassName={`${triggerCls} w-full justify-between`}
+                popoverClassName="w-[var(--anchor-width)] p-0 gap-0 overflow-hidden min-w-72"
+              />
             </div>
           )}
 

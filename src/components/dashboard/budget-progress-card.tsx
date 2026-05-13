@@ -52,22 +52,38 @@ export function BudgetProgressCard() {
   const schedById = new Map(scheduled.map((s) => [s.id, s]));
   const catById = new Map(cats.map((c) => [c.id, c]));
 
-  // Join, derive a friendly label per row, sort by % used (highest first
-  // so over-budget items lead).
-  const rows = progress
-    .map((p) => {
-      const s = schedById.get(p.scheduledId);
-      const label =
-        s?.payee ??
-        s?.description ??
-        (s?.categoryId ? catById.get(s.categoryId)?.name : null) ??
-        "Budget";
-      const cap = Math.abs(parseFloat(p.cap));
-      const spent = Math.abs(parseFloat(p.spent));
-      const pct = cap > 0 ? Math.min((spent / cap) * 100, 200) : 0;
-      return { label, cap, spent, pct };
-    })
+  // Join + dedupe. Multiple active budget schedules can target the
+  // same category (a paused-then-replaced budget, or layered
+  // parent/child entries). Without deduping, the same category would
+  // show as repeated rows in the card. Group by `categoryId ||
+  // scheduledId` (fallback for budgets with no category) and sum the
+  // caps + spent within each bucket so each category appears once.
+  type Row = { key: string; label: string; cap: number; spent: number };
+  const byKey = new Map<string, Row>();
+  for (const p of progress) {
+    const s = schedById.get(p.scheduledId);
+    const key = s?.categoryId ?? p.scheduledId;
+    const label =
+      s?.payee ??
+      s?.description ??
+      (s?.categoryId ? catById.get(s.categoryId)?.name : null) ??
+      "Budget";
+    const cap = Math.abs(parseFloat(p.cap));
+    const spent = Math.abs(parseFloat(p.spent));
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.cap += cap;
+      existing.spent += spent;
+    } else {
+      byKey.set(key, { key, label, cap, spent });
+    }
+  }
+  const rows = Array.from(byKey.values())
     .filter((r) => r.cap > 0)
+    .map((r) => ({
+      ...r,
+      pct: r.cap > 0 ? Math.min((r.spent / r.cap) * 100, 200) : 0,
+    }))
     .sort((a, b) => b.pct - a.pct)
     .slice(0, 5);
 
@@ -91,7 +107,7 @@ export function BudgetProgressCard() {
         {rows.map((r) => {
           const over = r.spent > r.cap;
           return (
-            <div key={r.label} className="space-y-0.5">
+            <div key={r.key} className="space-y-0.5">
               <div className="flex items-baseline justify-between text-xs gap-2">
                 <span className="truncate flex-1 min-w-0">{r.label}</span>
                 <span

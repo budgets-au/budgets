@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.24.0 — 2026-05-13
+
+### Fixed
+- **Budget progress card showed the same category twice.** When the
+  operator has multiple active budget schedules targeting one
+  category (e.g. a parent-level cap + a child-level cap, or a
+  paused-then-replaced budget still flagged active), the dashboard
+  card rendered each as a separate row. Now dedupes by
+  `categoryId` and sums cap + spent across colliding schedules so
+  each category contributes one bar. React key switched from the
+  derived label (which could collide) to a stable per-bucket key.
+
 ## 0.23.0 — 2026-05-13
 
 ### Added

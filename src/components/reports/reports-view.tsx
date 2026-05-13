@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import useSWR from "swr";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
@@ -18,8 +18,75 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ChevronDown } from "lucide-react";
 import { formatAUD } from "@/lib/utils";
-import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import {
+  format,
+  subMonths,
+  startOfMonth,
+  endOfMonth,
+  startOfQuarter,
+  endOfQuarter,
+  subQuarters,
+  startOfYear,
+  endOfYear,
+  subYears,
+} from "date-fns";
+
+/** Australian financial year runs 1 July – 30 June. Anchor depends
+ * on whether the supplied date is in the first or second half of
+ * the calendar year. */
+function startOfFinancialYear(d: Date): Date {
+  const y = d.getFullYear();
+  // getMonth: 0 = January, 6 = July.
+  return new Date(d.getMonth() >= 6 ? y : y - 1, 6, 1);
+}
+function endOfFinancialYear(d: Date): Date {
+  const start = startOfFinancialYear(d);
+  // June 30 of the following calendar year.
+  return new Date(start.getFullYear() + 1, 5, 30);
+}
+
+interface RangePreset {
+  key: string;
+  label: string;
+  from: string;
+  to: string;
+}
+
+/** Build the eight popover options. Returned as 4 pairs so the
+ * popover can render them in 2 columns (this / last) per row. */
+function buildRangePresets(now: Date): RangePreset[][] {
+  const iso = (d: Date) => format(d, "yyyy-MM-dd");
+  const prevMonth = subMonths(now, 1);
+  const prevQuarter = subQuarters(now, 1);
+  const prevYear = subYears(now, 1);
+  return [
+    [
+      { key: "thisMonth", label: "This month", from: iso(startOfMonth(now)), to: iso(endOfMonth(now)) },
+      { key: "lastMonth", label: "Last month", from: iso(startOfMonth(prevMonth)), to: iso(endOfMonth(prevMonth)) },
+    ],
+    [
+      { key: "thisQuarter", label: "This Quarter", from: iso(startOfQuarter(now)), to: iso(endOfQuarter(now)) },
+      { key: "lastQuarter", label: "Last Quarter", from: iso(startOfQuarter(prevQuarter)), to: iso(endOfQuarter(prevQuarter)) },
+    ],
+    [
+      { key: "thisYear", label: "This Year", from: iso(startOfYear(now)), to: iso(endOfYear(now)) },
+      { key: "lastYear", label: "Last Year", from: iso(startOfYear(prevYear)), to: iso(endOfYear(prevYear)) },
+    ],
+    [
+      { key: "thisFY", label: "This Financial", from: iso(startOfFinancialYear(now)), to: iso(endOfFinancialYear(now)) },
+      { key: "lastFY", label: "Last Financial", from: iso(startOfFinancialYear(prevYear)), to: iso(endOfFinancialYear(prevYear)) },
+    ],
+  ];
+}
+
+function formatRangeShort(from: string, to: string): string {
+  const a = format(new Date(from), "d MMM yy");
+  const b = format(new Date(to), "d MMM yy");
+  return `${a} – ${b}`;
+}
 import { CashflowReport } from "./cashflow-report";
 import { TaxDeductionsReport } from "./tax-deductions-report";
 import { ExpensesDrilldown } from "./expenses-drilldown";
@@ -143,34 +210,12 @@ export function ReportsView({
             className="text-sm border rounded-md px-3 py-2 bg-background"
           />
         </div>
-        {/* Quick ranges — the active range is the one whose computed
-            (from, to) matches the current state, so it stays highlighted
-            after manual edits land on a preset boundary too. */}
-        <div className="flex gap-2">
-          {[
-            { label: "This month", months: 0 },
-            { label: "3 months", months: 2 },
-            { label: "6 months", months: 5 },
-            { label: "12 months", months: 11 },
-          ].map(({ label, months }) => {
-            const optFrom = format(startOfMonth(subMonths(now, months)), "yyyy-MM-dd");
-            const optTo = format(endOfMonth(now), "yyyy-MM-dd");
-            const active = from === optFrom && to === optTo;
-            return (
-              <button
-                key={label}
-                onClick={() => applyRange(optFrom, optTo)}
-                className={`text-xs px-3 py-2 border rounded-md transition-colors ${
-                  active
-                    ? "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700"
-                    : "hover:bg-muted"
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Quick-range popover. The trigger labels itself with the
+            currently active preset (or "Custom range" when from/to
+            land between presets) and opens a 2-column grid: this
+            period on the left, last period on the right, one pair
+            per row (Month, Quarter, Year, Financial Year). */}
+        <RangePresetPopover from={from} to={to} now={now} onApply={applyRange} />
 
       </div>
 
@@ -327,5 +372,99 @@ export function ReportsView({
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+/** Pop-up date-range picker. Trigger button shows the active
+ * preset's label (or "Custom range" when from/to don't match any
+ * preset). Content is a 4×2 grid of one-click ranges. */
+function RangePresetPopover({
+  from,
+  to,
+  now,
+  onApply,
+}: {
+  from: string;
+  to: string;
+  now: Date;
+  onApply: (from: string, to: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const presetRows = buildRangePresets(now);
+  // Active preset = the one whose computed from/to matches the
+  // current state. Stable highlight after manual edits that happen
+  // to land on a preset boundary too.
+  const allPresets = presetRows.flat();
+  const active = allPresets.find((p) => p.from === from && p.to === to);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label="Pick a date range"
+            className="inline-flex items-center gap-1.5 text-sm border rounded-md px-3 py-2 bg-background hover:bg-muted transition-colors"
+          />
+        }
+      >
+        <span>{active ? active.label : "Custom range"}</span>
+        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-2">
+        <div className="grid grid-cols-2 gap-1.5">
+          {presetRows.map(([thisP, lastP]) => (
+            <Fragment key={thisP.key}>
+              <PresetButton
+                preset={thisP}
+                isActive={active?.key === thisP.key}
+                onPick={() => {
+                  onApply(thisP.from, thisP.to);
+                  setOpen(false);
+                }}
+              />
+              <PresetButton
+                preset={lastP}
+                isActive={active?.key === lastP.key}
+                onPick={() => {
+                  onApply(lastP.from, lastP.to);
+                  setOpen(false);
+                }}
+              />
+            </Fragment>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function PresetButton({
+  preset,
+  isActive,
+  onPick,
+}: {
+  preset: RangePreset;
+  isActive: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      className={`text-left rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+        isActive
+          ? "bg-indigo-600 text-white hover:bg-indigo-700"
+          : "hover:bg-muted"
+      }`}
+    >
+      <div className="font-medium">{preset.label}</div>
+      <div
+        className={`text-[10px] tabular-nums ${
+          isActive ? "text-white/80" : "text-muted-foreground"
+        }`}
+      >
+        {formatRangeShort(preset.from, preset.to)}
+      </div>
+    </button>
   );
 }

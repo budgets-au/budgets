@@ -4,6 +4,20 @@ All notable changes to this project are recorded here. The version policy
 is **bump minor on every shipped change** (per user directive); patch
 remains 0 until released hotfixes warrant it.
 
+## 0.8.0 — 2026-05-13
+
+### Changed
+- **Reports date-range filter is now a popover with eight one-click
+  presets.** Inline "3 months / 6 months / 12 months" buttons are
+  replaced by a single button that opens a 2-column grid:
+  `This Month / Last Month`, `This Quarter / Last Quarter`,
+  `This Year / Last Year`, `This Financial / Last Financial`.
+  Each tile shows the absolute from–to range underneath so the
+  operator can see exactly what they're picking. The trigger
+  reflects the active preset name (or "Custom range" when manual
+  date edits put `from`/`to` between presets). Financial-year
+  presets use the Australian 1-July anchor.
+
 ## 0.7.0 — 2026-05-13
 
 ### Removed

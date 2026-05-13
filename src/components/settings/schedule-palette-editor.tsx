@@ -17,8 +17,14 @@ import {
  * colour swatches (editable on custom rows), and a remove button on
  * custom rows. Fabulous sits at the top with no colour swatches —
  * the chart renders it with its own lineage palette + hatched fills.
- * "Add palette" seeds a new row with the Standard colours so the
- * operator only has to adjust the slots they want to change. */
+ *
+ * Note: rows are plain divs, NOT `<label>` elements. Wrapping a
+ * label around a radio AND interactive controls (color-swatch
+ * popover triggers, the delete button, the name input) caused click
+ * events on those controls to fight with the label's
+ * radio-activation default — pressing a swatch sometimes selected
+ * the radio instead of opening the colour picker. The radio is its
+ * own clickable element; the rest of the row is purely visual. */
 export function SchedulePaletteEditor() {
   const { prefs, setPref } = useDisplayPrefs();
   const custom = prefs.chartSchedulePalettes;
@@ -95,6 +101,7 @@ export function SchedulePaletteEditor() {
           />
         ))}
         <Button
+          type="button"
           variant="outline"
           size="sm"
           onClick={addPalette}
@@ -121,9 +128,9 @@ function ThemeRow({
   isFabulous?: boolean;
 }) {
   return (
-    <label
+    <div
       className={cn(
-        "flex cursor-pointer items-center gap-3 rounded-md border p-2 transition-colors",
+        "flex items-center gap-3 rounded-md border p-2 transition-colors",
         active ? "border-primary/60 bg-accent/50" : "hover:bg-accent/30",
       )}
     >
@@ -133,6 +140,7 @@ function ThemeRow({
         checked={active}
         onChange={onSelect}
         value={id}
+        aria-label={`Use ${name} theme`}
         className="h-4 w-4 cursor-pointer accent-indigo-500"
       />
       <span className="flex-1 text-sm font-medium">{name}</span>
@@ -141,7 +149,7 @@ function ThemeRow({
           lineage palette
         </span>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -165,7 +173,7 @@ function PaletteRow({
   const [name, setName] = useState(palette.name);
 
   return (
-    <label
+    <div
       className={cn(
         "flex flex-wrap items-center gap-3 rounded-md border p-2 transition-colors",
         active ? "border-primary/60 bg-accent/50" : "hover:bg-accent/30",
@@ -177,6 +185,7 @@ function PaletteRow({
         checked={active}
         onChange={onSelect}
         value={palette.id}
+        aria-label={`Use ${palette.name} palette`}
         className="h-4 w-4 cursor-pointer accent-indigo-500"
       />
       <input
@@ -190,7 +199,6 @@ function PaletteRow({
             setName(palette.name);
           }
         }}
-        onClick={(e) => e.preventDefault()}
         disabled={readOnly}
         aria-label={`Palette name for ${palette.name}`}
         className="min-w-0 flex-1 rounded border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:cursor-default disabled:border-transparent disabled:bg-transparent disabled:opacity-100"
@@ -222,17 +230,14 @@ function PaletteRow({
       {onDelete && !readOnly && (
         <button
           type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            onDelete();
-          }}
+          onClick={onDelete}
           aria-label={`Delete palette ${palette.name}`}
           className="rounded p-1 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
         >
           <Trash2 className="h-4 w-4" />
         </button>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -248,10 +253,7 @@ function PaletteSwatch({
   onChange: (next: string) => void;
 }) {
   return (
-    <div
-      className="flex flex-col items-center gap-0.5"
-      onClick={(e) => e.preventDefault()}
-    >
+    <div className="flex flex-col items-center gap-0.5">
       <ColorPicker
         value={value}
         onChange={onChange}

@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.36.0 — 2026-05-13
+
+### Fixed
+- **Schedule-chart palette rows: drop the wrapping `<label>`.** Each
+  row was a `<label>` element with the radio inside it (the
+  textbook "click the row to select the radio" pattern). But that
+  wraps a labelable element around interactive controls — the
+  colour-swatch popover triggers, the delete button, and the name
+  input — and on click, browsers fight between "activate the
+  control I'm on" and "activate the label's associated radio".
+  Result: clicking a colour swatch sometimes did nothing because
+  the radio absorbed the click. Rows are now plain `<div>`s; the
+  radio is its own clickable target. `Add palette` is unaffected
+  but gets an explicit `type="button"` for symmetry.
+
 ## 0.35.0 — 2026-05-13
 
 ### Changed

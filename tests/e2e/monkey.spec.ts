@@ -2,6 +2,7 @@ import { test, type Page } from "@playwright/test";
 import {
   clearFindings,
   isDestructiveLabel,
+  isNoiseMessage,
   recordFinding,
   type MonkeyFinding,
 } from "./_monkey-helpers";
@@ -49,16 +50,18 @@ test.describe("1000 monkeys exploratory crawl", () => {
       const errors: MonkeyFinding[] = [];
 
       page.on("console", (msg) => {
-        if (msg.type() === "error") {
-          errors.push({
-            page: p.path,
-            action: "(console)",
-            severity: "error",
-            message: msg.text(),
-          });
-        }
+        if (msg.type() !== "error") return;
+        const text = msg.text();
+        if (isNoiseMessage(text)) return;
+        errors.push({
+          page: p.path,
+          action: "(console)",
+          severity: "error",
+          message: text,
+        });
       });
       page.on("pageerror", (err) => {
+        if (isNoiseMessage(err.message)) return;
         errors.push({
           page: p.path,
           action: "(page error)",
@@ -90,6 +93,15 @@ test.describe("1000 monkeys exploratory crawl", () => {
           (await sw.getAttribute("aria-label").catch(() => null)) ??
           `switch #${i}`;
         if (isDestructiveLabel(label)) continue;
+        // Skip switches that live inside a form / dialog — they're
+        // typically tied to an unsaved form draft, not a persisted
+        // pref, so the reload-persistence assertion doesn't apply.
+        const inForm = await sw
+          .evaluate(
+            (el) => !!el.closest('form,[data-slot="dialog-content"]'),
+          )
+          .catch(() => false);
+        if (inForm) continue;
         try {
           const before = await sw
             .getAttribute("aria-checked")

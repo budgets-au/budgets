@@ -74,3 +74,18 @@ export function isDestructiveLabel(label: string | null | undefined): boolean {
   if (!label) return false;
   return DESTRUCTIVE_TEXT_PATTERNS.some((re) => re.test(label));
 }
+
+/** Noise the crawl gets fed by Playwright's own teardown — page
+ * navigation cancels in-flight `/api/auth/session` requests,
+ * NextAuth logs the abort as `Failed to fetch`. Not an app bug;
+ * filter it. */
+export const CONSOLE_NOISE_PATTERNS: ReadonlyArray<RegExp> = [
+  /Failed to fetch.*errors\.authjs\.dev/i,
+  /Failed to fetch.*\/api\/auth\/session/i,
+  /Download the React DevTools/i,
+  /Recharts.*The width\(.*\) and height\(.*\) of chart should be greater than 0/i,
+];
+
+export function isNoiseMessage(msg: string): boolean {
+  return CONSOLE_NOISE_PATTERNS.some((re) => re.test(msg));
+}

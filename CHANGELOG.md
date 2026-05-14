@@ -9,6 +9,13 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.59.0 — 2026-05-14
+
+### Changed
+- **Net Worth Trend widget defaults to 2×2** (was 3×2), matching
+  the other summary cards. Existing placements keep their saved
+  size.
+
 ## 0.58.0 — 2026-05-14
 
 ### Changed

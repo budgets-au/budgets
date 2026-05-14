@@ -114,7 +114,7 @@ export const WIDGETS: WidgetSpec[] = [
   {
     id: "net-worth-trend",
     title: "Net Worth Trend",
-    defaultLayout: { w: 3, h: 2 },
+    defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
     render: (props) => <NetWorthTrendCard editMode={props.editMode} />,
   },

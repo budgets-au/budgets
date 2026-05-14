@@ -9,6 +9,15 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.66.0 — 2026-05-14
+
+### Changed
+- **Upcoming + Recent-transactions widgets: account column moves
+  between day and payee.** Row order is now date / account /
+  payee / amount in both cards. Grid template
+  `90px auto minmax(0,1fr) auto` keeps the account badge sized to
+  content and the payee column expanding to fill whatever's left.
+
 ## 0.65.0 — 2026-05-14
 
 ### Changed

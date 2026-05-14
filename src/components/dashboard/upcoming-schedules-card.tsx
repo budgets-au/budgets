@@ -114,16 +114,13 @@ export function UpcomingSchedulesCard() {
                       className="grid items-center gap-3 pl-4 pr-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
                       style={{
                         gridTemplateColumns:
-                          "90px minmax(0, 1fr) auto auto",
+                          "90px auto minmax(0, 1fr) auto",
                       }}
                     >
                       <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                         {relativeWord(today, target)}
                       </span>
-                      <span className="font-medium truncate min-w-0">
-                        {row.payee ?? "—"}
-                      </span>
-                      <span className="hidden sm:flex justify-end min-w-0 shrink-0">
+                      <span className="hidden sm:flex justify-start min-w-0 shrink-0">
                         {row.accountName && (
                           <span
                             className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap truncate max-w-[8rem]"
@@ -134,6 +131,9 @@ export function UpcomingSchedulesCard() {
                             {row.accountName}
                           </span>
                         )}
+                      </span>
+                      <span className="font-medium truncate min-w-0">
+                        {row.payee ?? "—"}
                       </span>
                       <span
                         className={`tabular-nums font-medium whitespace-nowrap text-right shrink-0 ${amountClass(amt)}`}

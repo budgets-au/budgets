@@ -90,19 +90,16 @@ export function RecentTransactionsCard() {
                       className="grid items-center gap-3 px-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
                       style={{
                         gridTemplateColumns:
-                          "90px minmax(0, 1fr) 110px 90px",
+                          "90px auto minmax(0, 1fr) auto",
                       }}
                     >
                       <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                         {relativeWord(today, target)}
                       </span>
-                      <span className="font-medium truncate min-w-0">
-                        {row.payee ?? row.description ?? "—"}
-                      </span>
-                      <span className="hidden sm:flex justify-start min-w-0">
+                      <span className="hidden sm:flex justify-start min-w-0 shrink-0">
                         {row.accountName && (
                           <span
-                            className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap truncate max-w-full"
+                            className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap truncate max-w-[8rem]"
                             style={{
                               backgroundColor: row.accountColor ?? "#94a3b8",
                             }}
@@ -111,8 +108,11 @@ export function RecentTransactionsCard() {
                           </span>
                         )}
                       </span>
+                      <span className="font-medium truncate min-w-0">
+                        {row.payee ?? row.description ?? "—"}
+                      </span>
                       <span
-                        className={`tabular-nums font-medium whitespace-nowrap text-right ${amountClass(amt)}`}
+                        className={`tabular-nums font-medium whitespace-nowrap text-right shrink-0 ${amountClass(amt)}`}
                       >
                         {formatAUD(amt)}
                       </span>

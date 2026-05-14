@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.54.0 — 2026-05-14
+
+### Fixed
+- **Drawer widget-list still flashing during drag (0.52.0 regression
+  follow-up).** 0.52.0's guard early-returned `onLayoutChange` while
+  `draggedWidgetId` was non-null. That depended on React having
+  committed the `setDraggedWidgetId(...)` from the drawer pill's
+  `onDragStart` before RGL's first `onLayoutChange` fired — usually
+  true (separate tick), but not airtight under React 19 batching.
+  Replaced the flag check with an ID-set comparison: any emission
+  whose `i`s don't match the IDs in `draftLayout` is treated as a
+  transient (drop placeholder in flight, mid-compaction state) and
+  rejected. `onDrop` remains the only path that commits new
+  placements. No dependence on render order anymore.
+
 ## 0.53.0 — 2026-05-14
 
 ### Fixed

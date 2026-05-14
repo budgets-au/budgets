@@ -141,19 +141,35 @@ export function DashboardGrid() {
   }
   function onLayoutChange(newLayout: readonly RglItem[]) {
     if (!editMode) return;
-    // While a drawer pill is being dragged, RGL fires
-    // onLayoutChange many times per second — placeholder in,
-    // placeholder out as the cursor crosses the grid boundary.
-    // Each emission would have us rewrite draftLayout, which
-    // makes the available-widgets list flash the dragged pill
-    // in and out. onDrop is the only event that should actually
-    // commit a new placement; ignore the in-flight churn.
-    if (draggedWidgetId) return;
     setDraftLayout((cur) => {
       const c = cur ?? baseLayout;
-      const byId = new Map(c.map((l) => [l.widgetId, l] as const));
-      const next: LayoutEntry[] = newLayout.map((l) => {
-        const existing = byId.get(l.i);
+      // Reject any emission whose ID-set doesn't match our state.
+      // During a drag-from-drawer RGL fires onLayoutChange many
+      // times per second with a drop-placeholder cell whose `i`
+      // is the drawer pill's widgetId — that id isn't in our
+      // draftLayout yet, so the sets differ. Each acceptance of
+      // such an emission would shrink/expand the draft, flashing
+      // the available-widgets list in the drawer. onDrop is the
+      // only event that should commit a new placement; this
+      // guards against the in-flight churn without depending on
+      // React having committed `setDraggedWidgetId` before the
+      // first onLayoutChange fires.
+      if (newLayout.length !== c.length) return c;
+      const knownIds = new Set(c.map((l) => l.widgetId));
+      if (!newLayout.every((l) => knownIds.has(l.i))) return c;
+      // ID-sets match — this is a move/resize of existing tiles
+      // (or a post-drop compaction). Diff by widgetId, not array
+      // index, since RGL's compaction can emit the same cells in
+      // a different order and an index-by-index check would say
+      // "different" on every emit even when geometry is identical.
+      const byCurId = new Map(c.map((l) => [l.widgetId, l] as const));
+      const same = newLayout.every((l) => {
+        const o = byCurId.get(l.i)!;
+        return o.x === l.x && o.y === l.y && o.w === l.w && o.h === l.h;
+      });
+      if (same) return c;
+      return newLayout.map((l) => {
+        const existing = byCurId.get(l.i)!;
         const entry: LayoutEntry = {
           widgetId: l.i,
           x: l.x,
@@ -161,36 +177,9 @@ export function DashboardGrid() {
           w: l.w,
           h: l.h,
         };
-        if (existing?.config) entry.config = existing.config;
+        if (existing.config) entry.config = existing.config;
         return entry;
       });
-      // Return the existing reference if nothing structurally
-      // changed. Without this short-circuit, RGL re-fires
-      // onLayoutChange with the same content immediately after we
-      // set state — we hand back a new array, the layouts prop
-      // changes by reference, RGL fires again, and React eventually
-      // throws "Maximum update depth exceeded".
-      //
-      // Match by widgetId, not array index — after a drop RGL
-      // sometimes emits the same set of cells in a different
-      // order than our state (compaction reshuffles), and an
-      // index-by-index comparison would say "different" on every
-      // emit even though geometry is identical, producing the
-      // post-drop shake the user reported.
-      const byCurId = new Map(c.map((l) => [l.widgetId, l] as const));
-      const same =
-        next.length === c.length &&
-        next.every((n) => {
-          const o = byCurId.get(n.widgetId);
-          return (
-            !!o &&
-            o.x === n.x &&
-            o.y === n.y &&
-            o.w === n.w &&
-            o.h === n.h
-          );
-        });
-      return same ? c : next;
     });
   }
 

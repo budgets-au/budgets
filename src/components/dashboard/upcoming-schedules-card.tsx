@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { Repeat } from "lucide-react";
 import { parseISO } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { colourForFrequency, freqLabel } from "@/lib/schedule-colours";
@@ -93,32 +92,41 @@ export function UpcomingSchedulesCard() {
                 const target = parseISO(row.date);
                 const amt = parseFloat(row.amount);
                 return (
-                  <li key={`${row.scheduledId}-${row.date}-${i}`}>
+                  <li
+                    key={`${row.scheduledId}-${row.date}-${i}`}
+                    className="relative"
+                  >
+                    {/* Frequency colour now reads as a thin left-edge
+                    highlight rather than a full pill — that frees the
+                    payee column to span the rest of the row right up
+                    to the account + amount cluster, which was the
+                    point. Accessible name preserved on the bar so the
+                    frequency info isn't lost to sighted-only callers. */}
+                    <span
+                      aria-label={freqLabel(row.frequency, row.interval)}
+                      className="absolute left-0 inset-y-1 w-1 rounded-r-sm"
+                      style={{
+                        backgroundColor: colourForFrequency(row.frequency),
+                      }}
+                    />
                     <Link
                       href={`/scheduled?id=${row.scheduledId}`}
-                      className="grid items-center gap-3 px-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
+                      className="grid items-center gap-3 pl-4 pr-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
                       style={{
                         gridTemplateColumns:
-                          "90px 90px minmax(0, 1fr) 110px 90px",
+                          "90px minmax(0, 1fr) auto auto",
                       }}
                     >
-                      <span
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-[10px] font-medium whitespace-nowrap justify-self-start"
-                        style={{ backgroundColor: colourForFrequency(row.frequency) }}
-                      >
-                        <Repeat className="h-2.5 w-2.5" aria-hidden="true" />
-                        {freqLabel(row.frequency, row.interval)}
-                      </span>
                       <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                         {relativeWord(today, target)}
                       </span>
                       <span className="font-medium truncate min-w-0">
                         {row.payee ?? "—"}
                       </span>
-                      <span className="hidden sm:flex justify-start min-w-0">
+                      <span className="hidden sm:flex justify-end min-w-0 shrink-0">
                         {row.accountName && (
                           <span
-                            className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap truncate max-w-full"
+                            className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap truncate max-w-[8rem]"
                             style={{
                               backgroundColor: row.accountColor ?? "#94a3b8",
                             }}
@@ -128,7 +136,7 @@ export function UpcomingSchedulesCard() {
                         )}
                       </span>
                       <span
-                        className={`tabular-nums font-medium whitespace-nowrap text-right ${amountClass(amt)}`}
+                        className={`tabular-nums font-medium whitespace-nowrap text-right shrink-0 ${amountClass(amt)}`}
                       >
                         {formatAUD(amt)}
                       </span>

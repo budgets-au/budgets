@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.65.0 — 2026-05-14
+
+### Changed
+- **Upcoming widget rows: frequency badge → left-edge highlight,
+  payee column maximised.** The frequency pill at the start of
+  each row took a 90 px column it didn't need. Replaced with a
+  4 px coloured vertical bar against the row's left edge
+  (`aria-label` preserves the frequency name for assistive tech).
+  Grid template now `90px minmax(0,1fr) auto auto` so the
+  account badge + amount sit content-sized at the right edge and
+  the payee column expands to fill everything in between.
+
 ## 0.64.0 — 2026-05-14
 
 ### Added

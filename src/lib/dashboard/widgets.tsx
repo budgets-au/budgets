@@ -129,14 +129,18 @@ export const WIDGETS: WidgetSpec[] = [
     id: "upcoming-schedules",
     title: "Upcoming",
     defaultLayout: { w: 6, h: 4 },
-    minSize: { w: 3, h: 3 },
+    // minH=2 lets the tile shrink to ~172 px tall (2 grid rows + a
+    // margin); after the card header eats ~30 px the content area
+    // fits ~3-4 list rows. Default to h=4 so first-placement isn't
+    // already at the minimum.
+    minSize: { w: 3, h: 2 },
     render: () => <UpcomingSchedulesCard />,
   },
   {
     id: "recent-transactions",
     title: "Recent transactions",
     defaultLayout: { w: 6, h: 4 },
-    minSize: { w: 3, h: 3 },
+    minSize: { w: 3, h: 2 },
     render: () => <RecentTransactionsCard />,
   },
   {

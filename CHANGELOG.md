@@ -9,6 +9,16 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.57.0 — 2026-05-14
+
+### Changed
+- **Upcoming + Recent-transactions widgets can shrink to ~3 visible
+  rows.** Dropped `minSize.h` from 3 to 2 on both widgets. At the
+  new minimum the tile is ~172 px tall (2 grid rows + margin),
+  leaving ~3-4 list rows visible after the card header — down from
+  ~6-7 at the previous minimum. Default placement size unchanged
+  (`h: 4`).
+
 ## 0.56.0 — 2026-05-14
 
 ### Added

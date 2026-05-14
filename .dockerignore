@@ -6,6 +6,7 @@
 # fresh inside the deps + builder stages.
 node_modules
 .next
+.next-e2e
 out
 
 # Repo metadata
@@ -34,6 +35,13 @@ backups
 vitest.config.ts
 coverage
 .vitest
+
+# Playwright E2E artefacts
+/tests
+playwright.config.ts
+playwright-report
+test-results
+blob-report
 
 # Build/type cache
 tsconfig.tsbuildinfo

@@ -9,6 +9,16 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.50.0 — 2026-05-14
+
+### Changed
+- **Saved Filters pill now sits next to the toggles instead of
+  wrapping onto its own line.** Moved the `<SavedFilters />`
+  render from a sibling of `<TransactionFilters>` into the tail
+  of the same flex-wrap row, with `self-center shrink-0` so it
+  rides the toggle line on desktop and wraps cleanly below on
+  narrow viewports.
+
 ## 0.49.0 — 2026-05-14
 
 ### Fixed

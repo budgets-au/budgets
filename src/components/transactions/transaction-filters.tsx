@@ -8,6 +8,7 @@ import {
   SearchableCombobox,
   type ComboboxItem,
 } from "@/components/ui/searchable-combobox";
+import { SavedFilters } from "@/components/transactions/saved-filters";
 
 interface Props {
   accounts: { id: string; name: string }[];
@@ -258,6 +259,14 @@ export function TransactionFilters({ accounts, categories, current }: Props) {
             </button>
           );
         })}
+      </div>
+
+      {/* Sit Saved Filters to the right of the radio toggles when
+          there's room (it wraps below otherwise). Anchored here
+          rather than as a sibling in the parent flex wrap so it
+          rides the same line as the filter affordances. */}
+      <div className="self-center shrink-0">
+        <SavedFilters />
       </div>
     </div>
   );

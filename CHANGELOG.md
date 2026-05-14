@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.52.0 — 2026-05-14
+
+### Fixed
+- **Dockerfile compatibility with pnpm's strict node-linker.**
+  0.51.0's release build broke at `COPY /app/node_modules/bindings`
+  — under pnpm's isolated layout, transitive deps of
+  `@signalapp/better-sqlite3` (`bindings`, `file-uri-to-path`)
+  don't get hoisted to top-level `node_modules/`; they live in the
+  `.pnpm/<pkg>@<ver>/node_modules/` symlink farm. Builder now
+  stages the native driver + its two peers into
+  `/app/runtime-deps/` with `cp -RL` (follow-symlinks) so the
+  runner stage can COPY a stable, version-agnostic layout. The
+  in-place slim step still works through the symlinks.
+- **Dashboard edit drawer no longer flashes the dragged pill in
+  and out during a drag, and the dropped widget now lands on the
+  grid immediately.** While a drawer pill was being dragged, RGL
+  fired `onLayoutChange` many times per second (placeholder in,
+  placeholder out as the cursor crossed the grid boundary) —
+  each emission was rewriting `draftLayout`, which made the
+  drawer's `availableWidgets` filter flash the pill in and out
+  and caused the dropped widget not to commit until Save →
+  reload. `onLayoutChange` now early-returns while
+  `draggedWidgetId` is set; `onDrop` is the only path that
+  commits the placement.
+
 ## 0.51.0 — 2026-05-14
 
 ### Changed

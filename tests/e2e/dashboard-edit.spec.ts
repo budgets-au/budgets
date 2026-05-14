@@ -78,6 +78,37 @@ test.describe("dashboard edit-drawer drag-and-drop", () => {
     assertNoReactErrors(consoleErrors, pageErrors);
   });
 
+  test("dropped widget lands on the grid + drawer drops the pill", async ({
+    page,
+  }) => {
+    // Regression coverage for "drag widget, widgets-panel flashes
+    // it in/out, widget doesn't actually land until Save → reload."
+    // Root cause was RGL firing many onLayoutChange emissions during
+    // the drag (placeholder in, placeholder out as the cursor
+    // crosses the grid boundary) and my handler rewriting the layout
+    // each time. Fix gated onLayoutChange while `draggedWidgetId` is
+    // set so only onDrop commits the placement.
+    const { consoleErrors, pageErrors } = captureErrors(page);
+    await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: /Edit dashboard/i }).click();
+    const pill = page.locator(".droppable-element", {
+      hasText: "Tracked stock",
+    });
+    await expect(pill).toBeVisible({ timeout: 5_000 });
+    await pill.dragTo(page.locator(".react-grid-layout").first());
+    await page.waitForTimeout(500);
+    // The tracked-stock widget should now be on the grid …
+    await expect(
+      page.locator('.react-grid-layout [data-grid-key], .react-grid-item')
+        .filter({ hasText: /Tracked stock|Pick a stock/i }),
+    ).toBeVisible({ timeout: 3_000 });
+    // … and the drawer pill should be gone (since the widget is
+    // now placed, it's filtered out of `availableWidgets`).
+    await expect(pill).toHaveCount(0);
+    assertNoReactErrors(consoleErrors, pageErrors);
+  });
+
   test("multi-step slow drag fires many drag-over events without crashing", async ({
     page,
   }) => {

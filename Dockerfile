@@ -47,10 +47,15 @@ RUN corepack enable && pnpm build
 # `build/Release/better_sqlite3.node` is loaded via the require-
 # hook in lib/database.js.
 #
+# pnpm's strict node-linker makes ./node_modules/@signalapp/
+# better-sqlite3 a symlink into .pnpm/<pkg>@<ver>/node_modules/...;
+# `find` and `rm` walk through the symlink in the path argument so
+# the deletions still hit the real files under .pnpm/.
+#
 # Sharp ships per-libc prebuilt libvips bundles. The container's
 # Alpine base is musl, so the glibc variants are pure dead weight.
-# Slimmed in both ./node_modules (the explicit COPY path) and the
-# Next standalone bundle (the path that ships sharp at runtime).
+# Only the standalone bundle ships sharp at runtime, so that's the
+# only path we need to slim.
 RUN set -e \
  && find ./node_modules/@signalapp/better-sqlite3/build \
       -mindepth 1 -maxdepth 1 \
@@ -63,12 +68,27 @@ RUN set -e \
  && rm -rf ./node_modules/@signalapp/better-sqlite3/src \
            ./node_modules/@signalapp/better-sqlite3/deps \
            ./node_modules/@signalapp/better-sqlite3/binding.gyp \
- && rm -rf ./node_modules/@img/sharp-libvips-linux-x64 \
-           ./node_modules/@img/sharp-linux-x64 \
  && if [ -d ./.next/standalone/node_modules/@img ]; then \
       rm -rf ./.next/standalone/node_modules/@img/sharp-libvips-linux-x64 \
              ./.next/standalone/node_modules/@img/sharp-linux-x64; \
     fi
+
+# Stage the SQLCipher driver + its native-resolver deps into a flat
+# layout the runner can COPY without knowing pnpm's version-hashed
+# sub-dir name. Under the isolated linker, ./node_modules/@signalapp
+# is a symlink farm into .pnpm/@signalapp+better-sqlite3@<ver>/
+# node_modules/; that's also where the symlinked peers (bindings,
+# file-uri-to-path) live. realpath resolves the @signalapp symlink
+# to its real .pnpm/<pkg>@<ver>/node_modules/@signalapp location;
+# its parent is the peer dir. cp -RL dereferences each symlink so
+# the runner gets real files, not dangling links.
+RUN set -e \
+ && mkdir -p /app/runtime-deps/@signalapp \
+ && cp -RL ./node_modules/@signalapp/better-sqlite3 \
+           /app/runtime-deps/@signalapp/better-sqlite3 \
+ && PNPM_PEER_DIR="$(realpath ./node_modules/@signalapp/better-sqlite3)/../.." \
+ && cp -RL "$PNPM_PEER_DIR/bindings"         /app/runtime-deps/bindings \
+ && cp -RL "$PNPM_PEER_DIR/file-uri-to-path" /app/runtime-deps/file-uri-to-path
 
 # Stage 3: Runner
 FROM node:22-alpine AS runner
@@ -105,12 +125,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 # SQLCipher driver — Next's NFT skips it (next.config.ts marks
 # @signalapp/better-sqlite3 as a serverExternalPackage because
 # Turbopack can't bundle the .node binary), so it's NOT in the
-# standalone's traced node_modules. Copy explicitly along with its
-# `bindings` resolver. If any future serverExternalPackage gets
-# added in next.config.ts, it needs an equivalent COPY here too.
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@signalapp ./node_modules/@signalapp
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/bindings ./node_modules/bindings
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
+# standalone's traced node_modules. The builder staged @signalapp
+# + the two native-resolver peers (bindings, file-uri-to-path) into
+# /app/runtime-deps/ with symlinks already dereferenced. If a future
+# serverExternalPackage gets added in next.config.ts, extend the
+# builder's runtime-deps step rather than this COPY.
+COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps ./node_modules
 
 # Slim the image to just what `node server.js` actually reads. The
 # Next.js `output: "standalone"` bundle copies a chunk of the source

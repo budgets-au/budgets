@@ -141,6 +141,14 @@ export function DashboardGrid() {
   }
   function onLayoutChange(newLayout: readonly RglItem[]) {
     if (!editMode) return;
+    // While a drawer pill is being dragged, RGL fires
+    // onLayoutChange many times per second — placeholder in,
+    // placeholder out as the cursor crosses the grid boundary.
+    // Each emission would have us rewrite draftLayout, which
+    // makes the available-widgets list flash the dragged pill
+    // in and out. onDrop is the only event that should actually
+    // commit a new placement; ignore the in-flight churn.
+    if (draggedWidgetId) return;
     setDraftLayout((cur) => {
       const c = cur ?? baseLayout;
       const byId = new Map(c.map((l) => [l.widgetId, l] as const));

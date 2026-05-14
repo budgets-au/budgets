@@ -33,13 +33,16 @@ export function AccountSummaryCard({
   const accountId =
     typeof config?.accountId === "string" ? config.accountId : null;
 
-  // includeArchived=true: archived accounts should be pickable in
-  // edit mode (a closed CC the user still wants on the dashboard).
-  // The default /api/accounts response already returns all accounts;
-  // we filter visibility downstream.
-  const { data: accountsData } = useSWR<Account[]>("/api/accounts", fetcher, {
-    revalidateOnFocus: false,
-  });
+  // includeArchived=true so the dropdown can offer hidden accounts
+  // (the whole point of pinning is that an archived account stays
+  // visible) and so view-mode can still resolve a pinned-archived
+  // selection back to its row. The default /api/accounts response
+  // filters them out for sidebar / transaction-filter callers.
+  const { data: accountsData } = useSWR<Account[]>(
+    "/api/accounts?includeArchived=true",
+    fetcher,
+    { revalidateOnFocus: false },
+  );
   const accounts: Account[] = Array.isArray(accountsData) ? accountsData : [];
 
   // Split visible / hidden so the dropdown's <optgroup> reads top-down

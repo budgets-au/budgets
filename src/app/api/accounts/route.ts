@@ -16,14 +16,22 @@ const createSchema = z.object({
   color: z.string().optional(),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // `?includeArchived=true` returns archived accounts alongside
+  // visible ones. The dashboard Account widget uses it (the whole
+  // point of pinning is that a hidden account stays visible).
+  // Other callers (transactions filter, sidebar) want the
+  // visible-only default.
+  const { searchParams } = new URL(request.url);
+  const includeArchived = searchParams.get("includeArchived") === "true";
 
   const rows = await db
     .select()
     .from(accounts)
-    .where(eq(accounts.isArchived, false))
+    .where(includeArchived ? undefined : eq(accounts.isArchived, false))
     .orderBy(asc(accounts.name));
 
   return NextResponse.json(rows);

@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.62.0 — 2026-05-14
+
+### Fixed
+- **Account widget can pick archived accounts (0.60.0 follow-up).**
+  The widget's dropdown was empty of hidden accounts because
+  `/api/accounts` filtered them out for every caller. Added an
+  `?includeArchived=true` flag on the endpoint and have the
+  Account widget use it — pinning a hidden account now works (and
+  view-mode can resolve a pinned-archived selection back to its
+  row). Default behaviour for sidebar / transaction filters is
+  unchanged.
+
 ## 0.61.0 — 2026-05-14
 
 ### Changed

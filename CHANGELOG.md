@@ -9,6 +9,42 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.48.0 — 2026-05-14
+
+### Fixed
+- **Dashboard React error #185 ("Maximum update depth exceeded")
+  when adding any widget — confirmed root cause + fixed.** The
+  loop wasn't in dashboard-grid at all — it was inside recharts
+  3.x. Recharts now bundles `react-redux` for its internal store
+  and notifies subscribers every time a `ResponsiveContainer`
+  resizes. RGL resizes every cell on every drag-over event, so a
+  layout containing a chart widget (default layout has Net Worth
+  Trend) blew through React's update-depth ceiling within a
+  handful of drag-over frames.
+
+  The fix: while `editMode` is on, the chart widgets
+  (NetWorthTrendCard, TrackedStockCard) swap their
+  ResponsiveContainer for a static "Chart hidden while editing"
+  placeholder. The chart re-appears the moment Save / Cancel
+  flips editMode off. Any future chart-rendering widget must
+  follow the same pattern — captured in the architecture-notes
+  section of the new TODO.md.
+
+### Added
+- **Playwright E2E test suite under `tests/e2e/`.** Spins up a
+  dedicated next.js production server on :3003 with a fresh
+  SQLCipher DB and a separate `.next-e2e/` build artifact, so
+  the live `next dev` on :3002 is never touched. Three spec
+  files cover top-level pages, every dashboard widget rendered
+  solo + together, and the drag-from-drawer edit flow that
+  reproduces the recharts loop. Run with `npm run test:e2e`.
+- **`TODO.md`** — running scratchpad of ideas, bugs, and
+  follow-up work, with a `Done / dropped` section so context
+  isn't lost when items move off the list.
+- **`distDir` override in `next.config.ts`** — gated on
+  `E2E_TEST_BUILD=1` so the E2E rig can build to `.next-e2e/`
+  without colliding with the live dev server's `.next/`.
+
 ## 0.47.0 — 2026-05-13
 
 ### Fixed

@@ -223,6 +223,27 @@ export function DashboardGrid() {
     ? WIDGETS_BY_ID.get(draggedWidgetId)
     : null;
 
+  // Memoise `droppingItem`. RGL's drag-over code path reads this on
+  // every drag-over event (many per second) and uses it as a
+  // useEffect dep further down; passing a fresh object literal each
+  // render kept tripping the effect, which combined with my own
+  // setDraftLayout on each drag-over was enough to exceed React's
+  // depth ceiling once a child Recharts ResponsiveContainer joined
+  // the cascade.
+  const droppingItem = useMemo(
+    () =>
+      draggedSpec && draggedWidgetId
+        ? {
+            i: draggedWidgetId,
+            x: 0,
+            y: 0,
+            w: draggedSpec.defaultLayout.w,
+            h: draggedSpec.defaultLayout.h,
+          }
+        : undefined,
+    [draggedSpec, draggedWidgetId],
+  );
+
   return (
     <>
       <div className="flex justify-end px-3 pt-2 pb-1">
@@ -245,17 +266,7 @@ export function DashboardGrid() {
           isDroppable={editMode}
           onLayoutChange={onLayoutChange}
           onDrop={onDrop}
-          droppingItem={
-            draggedSpec && draggedWidgetId
-              ? {
-                  i: draggedWidgetId,
-                  x: 0,
-                  y: 0,
-                  w: draggedSpec.defaultLayout.w,
-                  h: draggedSpec.defaultLayout.h,
-                }
-              : undefined
-          }
+          droppingItem={droppingItem}
           draggableCancel=".widget-cancel-drag"
         >
           {rglLayout.map((l) => {

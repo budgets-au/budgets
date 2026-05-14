@@ -205,7 +205,18 @@ export function TrackedStockCard({
               )}
             </div>
             <div className="flex-1 min-h-0 mt-2 -mx-1">
-              {history.length >= 2 ? (
+              {editMode ? (
+                // Suspend recharts mid-edit — its internal redux
+                // store fires subscriber loops when the container
+                // resizes during a drag (RGL shifts cells as the
+                // dragged widget moves), which exceeds React's
+                // update-depth limit.
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Chart hidden while editing
+                  </p>
+                </div>
+              ) : history.length >= 2 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={history}>
                     <defs>

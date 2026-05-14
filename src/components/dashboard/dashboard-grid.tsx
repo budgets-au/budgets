@@ -10,8 +10,17 @@ import {
   WIDGETS_BY_ID,
   DEFAULT_DASHBOARD_LAYOUT,
 } from "@/lib/dashboard/widgets";
+import { newId } from "@/lib/new-id";
 import { WidgetTile } from "./widget-tile";
 import { WidgetDrawer } from "./widget-drawer";
+
+/** Sentinel `i` for RGL's drop-placeholder. Picking a literal that
+ * can never collide with a real placement key (registry id or UUID)
+ * means the ID-set check in onLayoutChange always rejects in-flight
+ * placeholder emissions, regardless of which widget is being
+ * dragged — including multiInstance widgets whose drag would
+ * otherwise share an `i` with an already-placed entry. */
+const DROP_PLACEHOLDER_ID = "__drop-placeholder__";
 
 /** react-grid-layout reaches into the DOM on mount (WidthProvider
  * measures the parent), so dynamic-import with ssr:false avoids any
@@ -27,12 +36,21 @@ const ResponsiveGridLayout = dynamic(
 
 type LayoutEntry = {
   widgetId: string;
+  /** Stable per-placement key. Required for multiInstance widgets
+   * (two tracked-stocks need distinct keys); optional on legacy
+   * single-instance entries, where `widgetId` is unique by
+   * construction and `keyOf` falls back to it. */
+  instanceId?: string;
   x: number;
   y: number;
   w: number;
   h: number;
   config?: Record<string, unknown>;
 };
+
+function keyOf(entry: { widgetId: string; instanceId?: string }): string {
+  return entry.instanceId ?? entry.widgetId;
+}
 
 type RglItem = {
   readonly i: string;
@@ -86,7 +104,7 @@ export function DashboardGrid() {
         .map((l) => {
           const widget = WIDGETS_BY_ID.get(l.widgetId)!;
           return {
-            i: l.widgetId,
+            i: keyOf(l),
             x: l.x,
             y: l.y,
             w: l.w,
@@ -95,6 +113,13 @@ export function DashboardGrid() {
             minH: widget.minSize?.h,
           };
         }),
+    [activeLayout],
+  );
+  // Map from RGL key → LayoutEntry so the tile renderer can resolve
+  // a placement back to its widget spec + config in O(1) without
+  // refiltering activeLayout each iteration.
+  const layoutByKey = useMemo(
+    () => new Map(activeLayout.map((l) => [keyOf(l), l] as const)),
     [activeLayout],
   );
   const layouts = useMemo(
@@ -108,8 +133,13 @@ export function DashboardGrid() {
     [rglLayout],
   );
 
-  const placedIds = new Set(activeLayout.map((l) => l.widgetId));
-  const availableWidgets = WIDGETS.filter((w) => !placedIds.has(w.id));
+  // For drawer filtering: single-instance widgets disappear once
+  // placed; multiInstance widgets stay so the operator can keep
+  // dropping more of the same kind (different config per placement).
+  const placedWidgetIds = new Set(activeLayout.map((l) => l.widgetId));
+  const availableWidgets = WIDGETS.filter(
+    (w) => w.multiInstance || !placedWidgetIds.has(w.id),
+  );
 
   function startEdit() {
     setDraftLayout(baseLayout);
@@ -134,9 +164,9 @@ export function DashboardGrid() {
     setEditMode(false);
     setDraggedWidgetId(null);
   }
-  function removeWidget(id: string) {
+  function removeWidget(key: string) {
     setDraftLayout((cur) =>
-      (cur ?? baseLayout).filter((l) => l.widgetId !== id),
+      (cur ?? baseLayout).filter((l) => keyOf(l) !== key),
     );
   }
   function onLayoutChange(newLayout: readonly RglItem[]) {
@@ -155,28 +185,29 @@ export function DashboardGrid() {
       // React having committed `setDraggedWidgetId` before the
       // first onLayoutChange fires.
       if (newLayout.length !== c.length) return c;
-      const knownIds = new Set(c.map((l) => l.widgetId));
-      if (!newLayout.every((l) => knownIds.has(l.i))) return c;
+      const knownKeys = new Set(c.map((l) => keyOf(l)));
+      if (!newLayout.every((l) => knownKeys.has(l.i))) return c;
       // ID-sets match — this is a move/resize of existing tiles
-      // (or a post-drop compaction). Diff by widgetId, not array
-      // index, since RGL's compaction can emit the same cells in
-      // a different order and an index-by-index check would say
+      // (or a post-drop compaction). Diff by key, not array index,
+      // since RGL's compaction can emit the same cells in a
+      // different order and an index-by-index check would say
       // "different" on every emit even when geometry is identical.
-      const byCurId = new Map(c.map((l) => [l.widgetId, l] as const));
+      const byCurKey = new Map(c.map((l) => [keyOf(l), l] as const));
       const same = newLayout.every((l) => {
-        const o = byCurId.get(l.i)!;
+        const o = byCurKey.get(l.i)!;
         return o.x === l.x && o.y === l.y && o.w === l.w && o.h === l.h;
       });
       if (same) return c;
       return newLayout.map((l) => {
-        const existing = byCurId.get(l.i)!;
+        const existing = byCurKey.get(l.i)!;
         const entry: LayoutEntry = {
-          widgetId: l.i,
+          widgetId: existing.widgetId,
           x: l.x,
           y: l.y,
           w: l.w,
           h: l.h,
         };
+        if (existing.instanceId) entry.instanceId = existing.instanceId;
         if (existing.config) entry.config = existing.config;
         return entry;
       });
@@ -184,17 +215,17 @@ export function DashboardGrid() {
   }
 
   function updateWidgetConfig(
-    widgetId: string,
+    key: string,
     config: Record<string, unknown>,
   ) {
     // Config edits write straight through to the persisted layout
     // — there's no Cancel-to-revert for a config picker the way
     // there is for x/y/w/h. The operator can just pick again to
-    // revert.
+    // revert. Match by key (instanceId for multiInstance widgets,
+    // widgetId otherwise) so two tracked-stock instances can hold
+    // distinct investmentIds.
     const cur = draftLayout ?? baseLayout;
-    const next = cur.map((l) =>
-      l.widgetId === widgetId ? { ...l, config } : l,
-    );
+    const next = cur.map((l) => (keyOf(l) === key ? { ...l, config } : l));
     if (editMode) {
       setDraftLayout(next);
     } else {
@@ -209,17 +240,22 @@ export function DashboardGrid() {
     if (!widget) return;
     setDraftLayout((cur) => {
       const c = cur ?? baseLayout;
-      if (c.some((l) => l.widgetId === widgetId)) return c;
-      return [
-        ...c,
-        {
-          widgetId,
-          x: item.x,
-          y: item.y,
-          w: widget.defaultLayout.w,
-          h: widget.defaultLayout.h,
-        },
-      ];
+      // Single-instance widgets are guarded against double-placement
+      // (the drawer hides them once placed; defence-in-depth here in
+      // case of a stale drag from a previous render). Multi-instance
+      // widgets always add a fresh placement with its own UUID.
+      if (!widget.multiInstance && c.some((l) => l.widgetId === widgetId)) {
+        return c;
+      }
+      const entry: LayoutEntry = {
+        widgetId,
+        x: item.x,
+        y: item.y,
+        w: widget.defaultLayout.w,
+        h: widget.defaultLayout.h,
+      };
+      if (widget.multiInstance) entry.instanceId = newId();
+      return [...c, entry];
     });
   }
 
@@ -234,11 +270,17 @@ export function DashboardGrid() {
   // setDraftLayout on each drag-over was enough to exceed React's
   // depth ceiling once a child Recharts ResponsiveContainer joined
   // the cascade.
+  //
+  // `i` is the sentinel rather than the widgetId so the in-flight
+  // placeholder can never share a key with a real placement — this
+  // keeps the ID-set check in onLayoutChange honest for
+  // multiInstance widgets too (dropping a second tracked-stock
+  // shouldn't look "known" just because a first one exists).
   const droppingItem = useMemo(
     () =>
       draggedSpec && draggedWidgetId
         ? {
-            i: draggedWidgetId,
+            i: DROP_PLACEHOLDER_ID,
             x: 0,
             y: 0,
             w: draggedSpec.defaultLayout.w,
@@ -274,15 +316,16 @@ export function DashboardGrid() {
           draggableCancel=".widget-cancel-drag"
         >
           {rglLayout.map((l) => {
-            const widget = WIDGETS_BY_ID.get(l.i);
+            const entry = layoutByKey.get(l.i);
+            if (!entry) return null;
+            const widget = WIDGETS_BY_ID.get(entry.widgetId);
             if (!widget) return null;
-            const entry = activeLayout.find((e) => e.widgetId === l.i);
             return (
               <div key={l.i}>
                 <WidgetTile
                   widget={widget}
                   editMode={editMode}
-                  config={entry?.config}
+                  config={entry.config}
                   onRemove={() => removeWidget(l.i)}
                   onConfigChange={(cfg) => updateWidgetConfig(l.i, cfg)}
                 />

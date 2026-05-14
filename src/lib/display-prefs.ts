@@ -120,7 +120,15 @@ export interface DisplayPrefs {
    * `unknown` so adding a new configurable widget doesn't require
    * a parser change. */
   dashboardLayout: Array<{
+    /** Registry id — points at a WidgetSpec. Multiple entries can
+     * share a widgetId if the widget opts in to `multiInstance`. */
     widgetId: string;
+    /** Stable per-placement identifier. Absent on entries written
+     * before multi-instance support landed; the renderer falls back
+     * to `widgetId` (safe because single-instance widgets can only
+     * appear once). Newly placed multiInstance widgets always get a
+     * fresh UUID here. */
+    instanceId?: string;
     x: number;
     y: number;
     w: number;
@@ -139,7 +147,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   transactionsSavedFilters: [],
   calendarViewMode: "month",
   calendarBillsOnly: false,
-  chartScheduleTheme: "fabulous",
+  chartScheduleTheme: "standard",
   chartSchedulePalettes: [],
   missedShowDismissed: false,
   cashflowTotalsLevel: "grandparent",
@@ -304,6 +312,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     key: keyof DisplayPrefs,
   ): Array<{
     widgetId: string;
+    instanceId?: string;
     x: number;
     y: number;
     w: number;
@@ -312,6 +321,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
   }> {
     type Entry = {
       widgetId: string;
+      instanceId?: string;
       x: number;
       y: number;
       w: number;
@@ -338,6 +348,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
         Number.isFinite((x as { h: number }).h)
       ) {
         const cfgRaw = (x as { config?: unknown }).config;
+        const instRaw = (x as { instanceId?: unknown }).instanceId;
         const entry: Entry = {
           widgetId: (x as { widgetId: string }).widgetId,
           x: (x as { x: number }).x,
@@ -345,6 +356,9 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
           w: (x as { w: number }).w,
           h: (x as { h: number }).h,
         };
+        if (typeof instRaw === "string" && instRaw.length > 0) {
+          entry.instanceId = instRaw;
+        }
         if (cfgRaw && typeof cfgRaw === "object" && !Array.isArray(cfgRaw)) {
           entry.config = cfgRaw as Record<string, unknown>;
         }

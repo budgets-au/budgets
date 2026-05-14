@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.55.0 — 2026-05-14
+
+### Added
+- **Multiple tracked-stock widgets per dashboard.** Marked
+  `tracked-stock` as `multiInstance` so the drawer keeps offering
+  the pill after one's placed and each placement gets a fresh
+  `instanceId` (UUID) in the saved layout. Per-instance `config`
+  (`{ investmentId }`) means each card can point at a different
+  symbol. Legacy single-tracked-stock entries (no `instanceId`)
+  keep working: the renderer falls back to `widgetId` as the RGL
+  key, which is unique by construction for single-instance widgets.
+
+### Changed
+- **Schedule chart Standard palette recoloured + promoted to
+  default.** Actual `#669C35`, Over `#B51A00`, Forecast `#FFFC41`,
+  Saved `#444444`. `DISPLAY_PREFS_DEFAULT.chartScheduleTheme`
+  flipped from `"fabulous"` to `"standard"`, and the
+  Settings → Schedule-chart-theme list now lists Standard first
+  with Fabulous second.
+
 ## 0.54.0 — 2026-05-14
 
 ### Fixed

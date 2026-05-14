@@ -38,6 +38,13 @@ export interface WidgetSpec {
   /** Minimum size — keeps the widget from being shrunk into
    * unreadability. */
   minSize?: { w: number; h: number };
+  /** If true, the drawer keeps offering this widget after one has
+   * been placed and each placement gets its own unique instanceId in
+   * the layout. The per-instance `config` bag (e.g. tracked-stock's
+   * `{ investmentId }`) means two instances can each point at a
+   * different underlying entity. Defaults to false: a single
+   * instance per dashboard, drawer hides the pill once placed. */
+  multiInstance?: boolean;
   render: (props: WidgetRenderProps) => ReactNode;
 }
 
@@ -58,6 +65,7 @@ export const WIDGETS: WidgetSpec[] = [
     title: "Tracked stock",
     defaultLayout: { w: 3, h: 3 },
     minSize: { w: 2, h: 2 },
+    multiInstance: true,
     render: (props) => <TrackedStockCard {...props} />,
   },
   {

@@ -112,17 +112,17 @@ export function SchedulePaletteEditor() {
 
       <div className="space-y-2 p-3">
         <ThemeRow
-          name="Fabulous"
-          subtitle="Lineage palette + hatched fills"
-          active={activeId === FABULOUS_THEME_ID}
-          onSelect={() => selectActive(FABULOUS_THEME_ID)}
-        />
-        <ThemeRow
           name={STANDARD_PALETTE.name}
           subtitle="Built-in solid palette"
           palette={STANDARD_PALETTE}
           active={activeId === STANDARD_PALETTE.id}
           onSelect={() => selectActive(STANDARD_PALETTE.id)}
+        />
+        <ThemeRow
+          name="Fabulous"
+          subtitle="Lineage palette + hatched fills"
+          active={activeId === FABULOUS_THEME_ID}
+          onSelect={() => selectActive(FABULOUS_THEME_ID)}
         />
         {custom.map((p) => (
           <ThemeRow

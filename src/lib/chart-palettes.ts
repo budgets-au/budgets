@@ -17,18 +17,18 @@ export interface SchedulePalette {
   forecast: string;
 }
 
-/** Built-in standard palette — muted Tailwind-300 shades. Saved
- * intentionally matches the forecast grey so a "money you didn't
- * have to spend" delta reads the same neutral tone as "the bar
- * hasn't fired yet". This is read-only; custom palettes live in
+/** Built-in standard palette — saturated traffic-light colours
+ * picked by the operator: forest-green actuals, deep-red over,
+ * yellow not-yet-fired forecast bars, dark-grey saved-vs-cap.
+ * This is read-only; custom palettes live in
  * `display_prefs.chartSchedulePalettes`. */
 export const STANDARD_PALETTE: SchedulePalette = {
   id: "standard",
   name: "Standard",
-  actual: "#86efac", // green-300
-  saved: "#cbd5e1", // slate-300
-  over: "#fca5a5", // red-300
-  forecast: "#cbd5e1", // slate-300
+  actual: "#669C35",
+  saved: "#444444",
+  over: "#B51A00",
+  forecast: "#FFFC41",
 };
 
 /** The Fabulous theme id — kept as a constant so the chart and the

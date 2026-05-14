@@ -3,11 +3,43 @@
 import useSWR from "swr";
 import Link from "next/link";
 import { Wallet } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  ChartTooltipCard,
+  ChartTooltipHeader,
+  ChartTooltipRow,
+} from "@/components/ui/chart-tooltip";
 import { cn, formatAUD, amountClass } from "@/lib/utils";
 import type { Account } from "@/db/schema";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+interface FlowResp {
+  series: { date: string; inflow: number; outflow: number }[];
+}
+
+const INFLOW_COLOR = "#10b981"; // emerald-500
+const OUTFLOW_COLOR = "#ef4444"; // red-500
+
+function FlowTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: { date: string; inflow: number; outflow: number } }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0]?.payload;
+  if (!p) return null;
+  return (
+    <ChartTooltipCard className="min-w-[9rem]">
+      <ChartTooltipHeader title={p.date} />
+      <ChartTooltipRow label="In" value={formatAUD(p.inflow)} />
+      <ChartTooltipRow label="Out" value={formatAUD(p.outflow)} />
+    </ChartTooltipCard>
+  );
+}
 
 /** Dashboard widget that pins a single user-picked account. The
  * active selection lives in the layout entry's `config.accountId`.
@@ -54,6 +86,20 @@ export function AccountSummaryCard({
   const selected = accountId
     ? accounts.find((a) => a.id === accountId) ?? null
     : null;
+
+  // 7-day in/out series for the selected account. SWR keyed by id
+  // so switching the picked account triggers a fresh fetch. Skipped
+  // (key=null) when nothing is selected, so an empty card doesn't
+  // ping the endpoint.
+  const { data: flowData } = useSWR<FlowResp>(
+    selected
+      ? `/api/dashboard/account-daily-flow?accountId=${selected.id}&days=7`
+      : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+  const flow = flowData?.series ?? [];
+  const hasFlow = flow.some((p) => p.inflow > 0 || p.outflow > 0);
 
   return (
     <Card data-size="sm" className="h-full flex flex-col">
@@ -119,24 +165,66 @@ export function AccountSummaryCard({
               : "No account configured. Enter edit mode to pick one."}
           </p>
         ) : (
-          <div className="flex items-stretch flex-1 min-h-0 gap-3">
-            <div
-              className="w-1.5 rounded-sm shrink-0"
-              style={{ backgroundColor: selected.color }}
-            />
-            <div className="min-w-0 flex flex-col justify-center">
-              <p
-                className={`text-2xl font-bold leading-tight ${amountClass(
-                  selected.currentBalance,
-                )}`}
-              >
-                {formatAUD(selected.currentBalance)}
-              </p>
-              {(selected.institution || selected.isArchived) && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {selected.institution ?? ""}
-                  {selected.institution && selected.isArchived ? " · " : ""}
-                  {selected.isArchived ? "hidden" : ""}
+          <div className="flex flex-col flex-1 min-h-0">
+            <div className="flex items-start gap-3 shrink-0">
+              <div
+                className="w-1.5 self-stretch rounded-sm shrink-0"
+                style={{ backgroundColor: selected.color }}
+              />
+              <div className="min-w-0 flex flex-col">
+                <p
+                  className={`text-xl font-bold leading-tight ${amountClass(
+                    selected.currentBalance,
+                  )}`}
+                >
+                  {formatAUD(selected.currentBalance)}
+                </p>
+                {(selected.institution || selected.isArchived) && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {selected.institution ?? ""}
+                    {selected.institution && selected.isArchived ? " · " : ""}
+                    {selected.isArchived ? "hidden" : ""}
+                  </p>
+                )}
+              </div>
+            </div>
+            {/* 7-day in/out bar chart. Suspended in edit mode for the
+            same reason tracked-stock's sparkline is — recharts'
+            ResponsiveContainer fires ResizeObserver updates as RGL
+            shifts cells during a drag, and recharts 3.x's internal
+            redux store can push the cascade past React's update-
+            depth ceiling. Also hidden when the window has no
+            activity at all, so a fresh / dormant account doesn't
+            show an empty axis. */}
+            <div className="flex-1 min-h-0 mt-1 -mx-1">
+              {editMode ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Chart hidden while editing
+                  </p>
+                </div>
+              ) : hasFlow ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={flow} barCategoryGap={2} barGap={1}>
+                    <Tooltip
+                      cursor={{ fill: "rgba(127,127,127,0.08)" }}
+                      content={<FlowTooltip />}
+                    />
+                    <Bar
+                      dataKey="inflow"
+                      fill={INFLOW_COLOR}
+                      isAnimationActive={false}
+                    />
+                    <Bar
+                      dataKey="outflow"
+                      fill={OUTFLOW_COLOR}
+                      isAnimationActive={false}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-[10px] text-muted-foreground text-center pt-1">
+                  No activity in 7 days.
                 </p>
               )}
             </div>

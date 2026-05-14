@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.64.0 — 2026-05-14
+
+### Added
+- **7-day in/out bar chart on the Account widget.** Below the
+  balance line, each of the past seven days renders as a paired
+  bar — emerald for inflows, red for outflows. Hover shows the
+  per-day in/out totals. Backed by new
+  `/api/dashboard/account-daily-flow?accountId=<id>&days=7` which
+  zero-fills quiet days so the strip is stable. Chart suspends in
+  edit mode (same recharts resize-observer rationale as the
+  tracked-stock sparkline) and hides entirely when the window
+  has no activity. Balance text dropped from `text-2xl` to
+  `text-xl` to fit the chart in the 2×2 tile.
+
 ## 0.63.0 — 2026-05-14
 
 ### Removed

@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.53.0 — 2026-05-14
+
+### Fixed
+- **Dockerfile pnpm-layout fix, take two.** 0.52.0's runtime-deps
+  staging step copied `bindings` correctly but failed on
+  `file-uri-to-path` — that package is a transitive of `bindings`,
+  not of `@signalapp/better-sqlite3`, so under pnpm's isolated
+  layout it lives in `.pnpm/bindings@<ver>/node_modules/`, a
+  different sub-dir from the one a single realpath walk lands on.
+  Replaced the shell chain with a tiny Node script that calls
+  `require.resolve(pkg + "/package.json", { paths: [...] })` —
+  Node's resolver already understands pnpm's symlink farm, so no
+  hand-walking. `fs.cpSync(..., { dereference: true })` flattens
+  the symlinks the same way `cp -RL` would.
+
 ## 0.52.0 — 2026-05-14
 
 ### Fixed

@@ -75,20 +75,31 @@ RUN set -e \
 
 # Stage the SQLCipher driver + its native-resolver deps into a flat
 # layout the runner can COPY without knowing pnpm's version-hashed
-# sub-dir name. Under the isolated linker, ./node_modules/@signalapp
-# is a symlink farm into .pnpm/@signalapp+better-sqlite3@<ver>/
-# node_modules/; that's also where the symlinked peers (bindings,
-# file-uri-to-path) live. realpath resolves the @signalapp symlink
-# to its real .pnpm/<pkg>@<ver>/node_modules/@signalapp location;
-# its parent is the peer dir. cp -RL dereferences each symlink so
-# the runner gets real files, not dangling links.
-RUN set -e \
- && mkdir -p /app/runtime-deps/@signalapp \
- && cp -RL ./node_modules/@signalapp/better-sqlite3 \
-           /app/runtime-deps/@signalapp/better-sqlite3 \
- && PNPM_PEER_DIR="$(realpath ./node_modules/@signalapp/better-sqlite3)/../.." \
- && cp -RL "$PNPM_PEER_DIR/bindings"         /app/runtime-deps/bindings \
- && cp -RL "$PNPM_PEER_DIR/file-uri-to-path" /app/runtime-deps/file-uri-to-path
+# sub-dir names. Under the isolated linker each package's
+# transitives live alongside it in .pnpm/<pkg>@<ver>/node_modules/,
+# NOT hoisted to the top-level node_modules. bindings is a peer of
+# @signalapp/better-sqlite3, and file-uri-to-path is a peer of
+# bindings (different sub-dir again) — hand-walking that chain
+# with realpath/dirname is fragile, so use Node's own resolver
+# (`require.resolve`) which already understands pnpm's layout.
+# `fs.cpSync` with `dereference:true` flattens the symlinks the
+# same way `cp -RL` would.
+RUN node -e ' \
+  const fs = require("fs"); \
+  const path = require("path"); \
+  const out = "/app/runtime-deps"; \
+  fs.mkdirSync(path.join(out, "@signalapp"), { recursive: true }); \
+  function stage(pkg, dest, fromPaths) { \
+    const opts = fromPaths ? { paths: fromPaths } : undefined; \
+    const pkgJson = require.resolve(pkg + "/package.json", opts); \
+    const srcDir = path.dirname(pkgJson); \
+    fs.cpSync(srcDir, path.join(out, dest), { recursive: true, dereference: true }); \
+    return srcDir; \
+  } \
+  const bs3      = stage("@signalapp/better-sqlite3", "@signalapp/better-sqlite3"); \
+  const bindings = stage("bindings",         "bindings",         [bs3]); \
+  /**/             stage("file-uri-to-path", "file-uri-to-path", [bindings]); \
+'
 
 # Stage 3: Runner
 FROM node:22-alpine AS runner

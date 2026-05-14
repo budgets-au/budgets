@@ -28,11 +28,12 @@ interface CategoryRow {
   name: string;
 }
 
-/** Approx per-budget row height in pixels (text-xs label + 1.5px
- * progress bar + space-y-0.5 between + space-y-2.5 between rows ≈
- * 38px). Slightly conservative so a row that almost fits never
- * gets clipped. */
-const ROW_HEIGHT_PX = 38;
+/** Approx per-budget row height in pixels (text-xs label +
+ * 1.5px progress bar + space-y-0.5 between label+bar +
+ * space-y-1.5 between rows ≈ 30 px). Tightened from the
+ * previous 38 px so the default h=2 cell fits three rows
+ * comfortably instead of clipping the third. */
+const ROW_HEIGHT_PX = 30;
 /** Hard cap — never compute more than this many rows even if the
  * card is enormous. Beyond ~10 the card stops being a summary. */
 const MAX_ROWS = 10;
@@ -129,7 +130,7 @@ export function BudgetProgressCard() {
         </Link>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 overflow-hidden">
-        <div ref={contentRef} className="h-full space-y-2.5 overflow-hidden">
+        <div ref={contentRef} className="h-full space-y-1.5 overflow-hidden">
           {visibleRows.map((r) => {
             const over = r.spent > r.cap;
             return (

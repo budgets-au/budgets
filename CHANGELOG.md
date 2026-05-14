@@ -9,6 +9,42 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.49.0 — 2026-05-14
+
+### Fixed
+- **Saved-filters Save button + chart-palette Add palette button:
+  the underlying bug was `crypto.randomUUID()` throwing in
+  non-secure contexts.** Every previous report of "Save current
+  filter does nothing", "Add palette doesn't work", and similar
+  silent-no-op-on-click failures was triggered by client code
+  calling `crypto.randomUUID()` from `http://<IP>:...`. The Web
+  Crypto API requires a secure context (HTTPS or localhost); on
+  bare HTTP it raises a TypeError mid-handler. The handler
+  aborts before reaching `setPref`, the popover stays open with
+  the typed value, and there's no obvious symptom for the
+  operator beyond "the click did nothing". Added a `newId()`
+  helper in `src/lib/new-id.ts` that prefers the native API
+  where it's available and falls back to a Math.random-based v4
+  polyfill where it isn't. Swapped both client usages.
+- **Dashboard "shake" after dropping a widget.** The
+  `onLayoutChange` short-circuit was comparing entries by array
+  index, but RGL's post-drop compaction often reorders the
+  array. Same content + different order ⇒ "different" ⇒ new
+  state ⇒ re-render ⇒ RGL re-fires onLayoutChange ⇒ thrash.
+  Now compares by `widgetId`-keyed lookup so reordering is a
+  no-op short-circuit.
+- **Budget Progress widget fits 3 rows at the default h=2.**
+  Tightened `space-y-2.5` → `space-y-1.5` between rows and the
+  per-row height constant from 38 → 30 px. The third row was
+  being clipped at the default height before.
+
+### Added
+- **`tests/e2e/saved-filters.spec.ts`** — scenario tests for the
+  Saved-Filters Save flow. Catches the regression class that
+  skipped past the monkey crawl (which only clicks buttons, never
+  types into inputs). Both "type + click Save" and "type + Enter"
+  paths now covered.
+
 ## 0.48.0 — 2026-05-14
 
 ### Fixed

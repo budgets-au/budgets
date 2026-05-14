@@ -162,13 +162,20 @@ export function DashboardGrid() {
       // set state — we hand back a new array, the layouts prop
       // changes by reference, RGL fires again, and React eventually
       // throws "Maximum update depth exceeded".
+      //
+      // Match by widgetId, not array index — after a drop RGL
+      // sometimes emits the same set of cells in a different
+      // order than our state (compaction reshuffles), and an
+      // index-by-index comparison would say "different" on every
+      // emit even though geometry is identical, producing the
+      // post-drop shake the user reported.
+      const byCurId = new Map(c.map((l) => [l.widgetId, l] as const));
       const same =
         next.length === c.length &&
-        next.every((n, i) => {
-          const o = c[i];
+        next.every((n) => {
+          const o = byCurId.get(n.widgetId);
           return (
-            o !== undefined &&
-            o.widgetId === n.widgetId &&
+            !!o &&
             o.x === n.x &&
             o.y === n.y &&
             o.w === n.w &&

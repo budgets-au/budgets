@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
+import { newId } from "@/lib/new-id";
 import { cn } from "@/lib/utils";
 import {
   FABULOUS_THEME_ID,
@@ -56,7 +57,7 @@ export function SchedulePaletteEditor() {
     setIsNew(true);
     setEditing({
       ...STANDARD_PALETTE,
-      id: crypto.randomUUID(),
+      id: newId(),
       name: `Custom ${custom.length + 1}`,
     });
   }

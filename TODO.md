@@ -17,37 +17,7 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-14T01:57:46.817Z · 11 findings._
-
-### /calendar
-- 🔴 **(console)** — a: Failed to fetch. Read more at https://errors.authjs.dev#autherror at s (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:1008) at async b (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:2220) at async d._getSession (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:2:1656)
-
-### /categories
-- 🔴 **(console)** — a: Failed to fetch. Read more at https://errors.authjs.dev#autherror at s (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:1008) at async b (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:2220) at async d._getSession (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:2:1656)
-
-### /dashboard
-- 🔴 **(console)** — a: Failed to fetch. Read more at https://errors.authjs.dev#autherror at s (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:1008) at async b (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:2220) at async d._getSession (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:2:1656)
-
-### /investments
-- 🔴 **(console)** — a: Failed to fetch. Read more at https://errors.authjs.dev#autherror at s (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:1008) at async b (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:2220) at async d._getSession (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:2:1656)
-
-### /reports
-- 🔴 **(console)** — a: Failed to fetch. Read more at https://errors.authjs.dev#autherror at s (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:1008) at async b (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:2220) at async d._getSession (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:2:1656)
-
-### /scheduled
-- 🔴 **(console)** — a: Failed to fetch. Read more at https://errors.authjs.dev#autherror at s (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:1008) at async b (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:2220) at async d._getSession (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:2:1656)
-- 🔴 **toggle "Use min/max amount range"** — Switch did not persist across reload (was true, became false).
-- 🔴 **toggle "Pause schedule"** — Switch did not persist across reload (was false, became true).
-
-### /settings
-- 🔴 **(console)** — a: Failed to fetch. Read more at https://errors.authjs.dev#autherror at s (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:1008) at async b (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:2220) at async d._getSession (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:2:1656)
-
-### /superannuation
-- 🔴 **(console)** — a: Failed to fetch. Read more at https://errors.authjs.dev#autherror at s (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:1008) at async b (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:2220) at async d._getSession (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:2:1656)
-
-### /transactions
-- 🔴 **(console)** — a: Failed to fetch. Read more at https://errors.authjs.dev#autherror at s (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:1008) at async b (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:1:2220) at async d._getSession (http://0.0.0.0:3003/_next/static/chunks/0jiypb2yyeh_v.js:2:1656)
-
+_No monkey-crawl findings on the last run._
 <!-- monkey:end -->
 
 - _none open_

@@ -9,6 +9,13 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.67.0 — 2026-05-14
+
+### Changed
+- **Account widget drops the account-colour vertical swatch.**
+  Balance text + institution line render flush-left now; the
+  colour stripe was visual noise at the 2×2 tile size.
+
 ## 0.66.0 — 2026-05-14
 
 ### Changed

@@ -166,27 +166,21 @@ export function AccountSummaryCard({
           </p>
         ) : (
           <div className="flex flex-col flex-1 min-h-0">
-            <div className="flex items-start gap-3 shrink-0">
-              <div
-                className="w-1.5 self-stretch rounded-sm shrink-0"
-                style={{ backgroundColor: selected.color }}
-              />
-              <div className="min-w-0 flex flex-col">
-                <p
-                  className={`text-xl font-bold leading-tight ${amountClass(
-                    selected.currentBalance,
-                  )}`}
-                >
-                  {formatAUD(selected.currentBalance)}
+            <div className="shrink-0">
+              <p
+                className={`text-xl font-bold leading-tight ${amountClass(
+                  selected.currentBalance,
+                )}`}
+              >
+                {formatAUD(selected.currentBalance)}
+              </p>
+              {(selected.institution || selected.isArchived) && (
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {selected.institution ?? ""}
+                  {selected.institution && selected.isArchived ? " · " : ""}
+                  {selected.isArchived ? "hidden" : ""}
                 </p>
-                {(selected.institution || selected.isArchived) && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {selected.institution ?? ""}
-                    {selected.institution && selected.isArchived ? " · " : ""}
-                    {selected.isArchived ? "hidden" : ""}
-                  </p>
-                )}
-              </div>
+              )}
             </div>
             {/* 7-day in/out bar chart. Suspended in edit mode for the
             same reason tracked-stock's sparkline is — recharts'

@@ -9,6 +9,7 @@ import { SuperSummaryCard } from "@/components/dashboard/super-summary-card";
 import { NetWorthTrendCard } from "@/components/dashboard/net-worth-trend-card";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress-card";
 import { UpcomingSchedulesCard } from "@/components/dashboard/upcoming-schedules-card";
+import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions-card";
 import { AccountsCard } from "@/components/dashboard/accounts-card";
 import { TrackedStockCard } from "@/components/dashboard/tracked-stock-card";
 
@@ -130,6 +131,13 @@ export const WIDGETS: WidgetSpec[] = [
     defaultLayout: { w: 6, h: 4 },
     minSize: { w: 3, h: 3 },
     render: () => <UpcomingSchedulesCard />,
+  },
+  {
+    id: "recent-transactions",
+    title: "Recent transactions",
+    defaultLayout: { w: 6, h: 4 },
+    minSize: { w: 3, h: 3 },
+    render: () => <RecentTransactionsCard />,
   },
   {
     id: "accounts",

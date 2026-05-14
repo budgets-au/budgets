@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.56.0 — 2026-05-14
+
+### Added
+- **"Recent transactions" dashboard widget.** Mirrors the Upcoming
+  card's pattern — SWR-fetched payload, ResizeObserver-driven
+  dynamic visible-row count, same 32 px row height + grid rhythm
+  so the two cards line up when placed side-by-side. Backed by
+  new `/api/dashboard/recent-transactions` (latest 50 posted
+  transactions across non-archived accounts, ordered by the same
+  date / posted-seq / posted-at / id lineage the transactions
+  page uses, so the widget agrees with the full view on ties).
+  Each row deep-links to `/transactions?accountId=…`.
+
 ## 0.55.0 — 2026-05-14
 
 ### Added

@@ -9,6 +9,14 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.58.0 — 2026-05-14
+
+### Changed
+- **Tracked-stock widget defaults to 2×2** (was 3×3), matching the
+  Options / Stocks / Net-Worth summary cards. Easier to drop several
+  next to each other along a row without immediately resizing.
+  Existing placed instances keep their saved size.
+
 ## 0.57.0 — 2026-05-14
 
 ### Changed

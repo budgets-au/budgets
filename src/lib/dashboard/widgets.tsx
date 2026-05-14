@@ -64,7 +64,7 @@ export const WIDGETS: WidgetSpec[] = [
   {
     id: "tracked-stock",
     title: "Tracked stock",
-    defaultLayout: { w: 3, h: 3 },
+    defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
     multiInstance: true,
     render: (props) => <TrackedStockCard {...props} />,

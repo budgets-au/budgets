@@ -6,8 +6,13 @@ WORKDIR /app
 # binary doesn't match. These are deps-stage-only; the runner image
 # stays small.
 RUN apk add --no-cache python3 make g++
-COPY package.json package-lock.json ./
-RUN npm ci
+# pnpm via Corepack — the `packageManager` field in package.json pins
+# the exact version. `corepack prepare` pre-fetches that version so the
+# subsequent `pnpm install` doesn't pause the build to download.
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN corepack prepare --activate \
+ && pnpm install --frozen-lockfile
 
 # Stage 2: Build
 FROM node:22-alpine AS builder
@@ -28,7 +33,7 @@ ENV NEXTAUTH_SECRET=build-time-placeholder
 # the unlock guard. The runner image overrides this with the real
 # key supplied by the operator.
 ENV SQLITE_KEY=build-time-placeholder
-RUN npm run build
+RUN corepack enable && pnpm build
 
 # Slim the dependencies the runner stage will copy. CRITICAL that
 # this happens here in the builder, not in the runner: a `rm` in a
@@ -124,7 +129,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules/file-uri-to-path ./n
 # config-schema chain (server.js → start-server → config-schema →
 # next-test → install-dependencies) loads it at boot.
 RUN set -e \
- && rm -f ./package-lock.json ./Dockerfile ./docker-compose.yml \
+ && rm -f ./package-lock.json ./pnpm-lock.yaml ./Dockerfile ./docker-compose.yml \
           ./components.json ./drizzle.config.ts ./eslint.config.mjs \
           ./next.config.ts ./postcss.config.mjs ./tsconfig.json \
  && rm -rf ./src ./scripts \

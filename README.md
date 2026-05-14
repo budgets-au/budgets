@@ -102,7 +102,7 @@ Snapshot as at 2026-05-08.
   the SQLite baseline, plus config / docs / assets
 - 17 app pages, 61 API route handlers, 72 React components
 - 19 DB tables on the SQLite baseline
-- 39 npm dependencies (24 runtime + 15 dev)
+- 39 pnpm dependencies (24 runtime + 15 dev)
 
 **Testing**
 
@@ -136,11 +136,12 @@ echo "SQLITE_KEY=$(openssl rand -hex 32)"    >> .env.local
 # (also copy the AUTH_SECRET / NEXTAUTH_SECRET lines from .env.example)
 
 # 2. Apply the schema to a fresh DB
-npm install
-npm run db:migrate
+corepack enable      # pins pnpm via the package.json packageManager field
+pnpm install
+pnpm db:migrate
 
 # 3. Run the app
-npm run dev      # http://0.0.0.0:3002
+pnpm dev         # http://0.0.0.0:3002
 ```
 
 Migrations also self-apply on the first successful `/unlock` after
@@ -163,7 +164,7 @@ docker login docker.io                       # Docker Hub
 # or:  docker login registry.example.lan     # private registry
 
 # 2. From a clean working tree, build + tag (× 3) + push
-DOCKER_REGISTRY=docker.io/<your-username> npm run docker:release
+DOCKER_REGISTRY=docker.io/<your-username> pnpm docker:release
 ```
 
 `DOCKER_REGISTRY` is required and tells the script where to push.
@@ -254,7 +255,7 @@ of it. Schema source of truth: `src/db/schema.ts`.
 
 ```bash
 # Apply pending migrations against the SQLite file at SQLITE_PATH
-SQLITE_KEY=… npm run db:migrate
+SQLITE_KEY=… pnpm db:migrate
 ```
 
 The migration runner keys the connection before issuing any DDL, so
@@ -283,8 +284,9 @@ public/
 ## Tests
 
 ```bash
-npm test           # run once
-npm run test:watch # vitest in watch mode
+pnpm test          # run once
+pnpm test:watch    # vitest in watch mode
+pnpm test:e2e      # Playwright (headless chromium against a separate dev server)
 ```
 
 Tests live next to the code they cover (`src/**/*.test.ts`); the

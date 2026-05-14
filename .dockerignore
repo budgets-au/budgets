@@ -47,6 +47,10 @@ blob-report
 tsconfig.tsbuildinfo
 .eslintcache
 
+# pnpm content-addressed store (lives outside the project by default,
+# but if it ever ends up here, it doesn't belong in the image)
+.pnpm-store
+
 # Secrets / per-environment config
 .env
 .env.*

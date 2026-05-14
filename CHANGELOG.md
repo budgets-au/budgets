@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.51.0 — 2026-05-14
+
+### Changed
+- **Package manager: npm → pnpm.** Workflow swap, no runtime
+  behaviour change. Faster installs (content-addressable cache),
+  stricter dep resolution that surfaces phantom transitives at
+  install rather than at runtime, and a smaller `node_modules` on
+  disk. Pinned via `"packageManager": "pnpm@9.15.9"` so
+  `corepack` activates the same version on every machine. The
+  Dockerfile deps-stage now runs `corepack enable && pnpm install
+  --frozen-lockfile`; the builder stage runs `corepack enable
+  && pnpm build`.
+- **`better-sqlite3` declared as an explicit alias for
+  `@signalapp/better-sqlite3`.** drizzle-orm imports the upstream
+  package name directly; under npm's flat hoisting that resolved
+  to whatever variant was present, but pnpm's strict resolution
+  refuses to silently swap. Aliased the dep in `package.json`
+  (`"better-sqlite3": "npm:@signalapp/better-sqlite3@^9.0.13"`)
+  so drizzle picks up the SQLCipher fork without code changes.
+
+### Added
+- `pnpm.onlyBuiltDependencies` allowlist for native modules
+  (`@signalapp/better-sqlite3`, `bcryptjs`, `esbuild`, `sharp`).
+  Newer pnpm versions disable install scripts by default; this
+  re-enables them just for the packages that need them.
+
 ## 0.50.0 — 2026-05-14
 
 ### Changed

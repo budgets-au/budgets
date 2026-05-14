@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Plus } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { ImportAccountsButton } from "@/components/accounts/import-accounts-button";
+import { cn } from "@/lib/utils";
 import type { Account } from "@/db/schema";
 
 export function AccountVisibility({ initialAccounts }: { initialAccounts: Account[] }) {
@@ -27,11 +31,27 @@ export function AccountVisibility({ initialAccounts }: { initialAccounts: Accoun
 
   return (
     <div className="rounded-xl border bg-card p-4 space-y-3">
-      <div>
-        <p className="font-medium text-sm">Accounts</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Hidden accounts are excluded from balances, reports, and the dashboard.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-sm">Accounts</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Hidden accounts are excluded from balances, reports, and the
+            dashboard. Pin one in a dashboard tile to keep it visible
+            anyway.
+          </p>
+        </div>
+        {/* Import + Add buttons used to live on the dashboard's
+        Accounts widget; they sit here now so the widget can stay
+        focused on viewing balances. */}
+        <div className="flex gap-2 shrink-0">
+          <ImportAccountsButton />
+          <Link
+            href="/accounts/new"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            <Plus className="h-4 w-4 mr-1" /> New
+          </Link>
+        </div>
       </div>
 
       <div className="space-y-1">

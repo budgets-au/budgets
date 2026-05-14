@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.60.0 — 2026-05-14
+
+### Added
+- **"Account" dashboard widget — pins a single user-picked
+  account.** 2×2, multiInstance, dropdown lists all accounts
+  including archived ones (a closed CC the user still wants
+  visibility on, a savings goal they don't want in balance sums,
+  etc.). Renders the account's colour stripe + balance + type
+  line out of edit mode, dropdown picker in edit mode.
+  Per-instance `config.accountId` so two tiles can pin different
+  accounts.
+
+### Changed
+- **Import + Add-account buttons moved from the Accounts widget to
+  Settings → Accounts.** The dashboard widget now focuses purely
+  on viewing balances; account-list management lives next to the
+  show/hide toggles in Settings.
+
 ## 0.59.0 — 2026-05-14
 
 ### Changed

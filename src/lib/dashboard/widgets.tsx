@@ -11,6 +11,7 @@ import { BudgetProgressCard } from "@/components/dashboard/budget-progress-card"
 import { UpcomingSchedulesCard } from "@/components/dashboard/upcoming-schedules-card";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions-card";
 import { AccountsCard } from "@/components/dashboard/accounts-card";
+import { AccountSummaryCard } from "@/components/dashboard/account-summary-card";
 import { TrackedStockCard } from "@/components/dashboard/tracked-stock-card";
 
 /** Props every widget renderer receives. `config` is the
@@ -149,6 +150,14 @@ export const WIDGETS: WidgetSpec[] = [
     defaultLayout: { w: 12, h: 6 },
     minSize: { w: 4, h: 4 },
     render: () => <AccountsCard />,
+  },
+  {
+    id: "account-summary",
+    title: "Account",
+    defaultLayout: { w: 2, h: 2 },
+    minSize: { w: 2, h: 2 },
+    multiInstance: true,
+    render: (props) => <AccountSummaryCard {...props} />,
   },
 ];
 

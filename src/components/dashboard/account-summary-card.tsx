@@ -129,14 +129,13 @@ export function AccountSummaryCard({
               >
                 {formatAUD(selected.currentBalance)}
               </p>
-              <p className="text-xs text-muted-foreground capitalize mt-1">
-                {selected.type}
-                {selected.institution ? ` · ${selected.institution}` : ""}
-                {selected.accountNumberLast4
-                  ? ` ····${selected.accountNumberLast4}`
-                  : ""}
-                {selected.isArchived ? " · hidden" : ""}
-              </p>
+              {(selected.institution || selected.isArchived) && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {selected.institution ?? ""}
+                  {selected.institution && selected.isArchived ? " · " : ""}
+                  {selected.isArchived ? "hidden" : ""}
+                </p>
+              )}
             </div>
           </div>
         )}

@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.61.0 — 2026-05-14
+
+### Changed
+- **Account dashboard widget drops the type + last-4 line.** The
+  tile now just shows balance + institution (and a "hidden"
+  flag when relevant); the type chip and `····NNNN` suffix took
+  more space than they were worth at 2×2.
+
+### Added
+- **Stocks widget now has a 1-month sparkline below the totals.**
+  New `/api/dashboard/stocks-trend` aggregates daily values across
+  every owned stock (cached closes × current quantity, summed
+  across symbols, forward-filled across gaps) and the card draws
+  a Recharts area sparkline tinted green/red by the first→last
+  delta. No FX conversion — the shape is the signal; the
+  per-currency totals above the sparkline remain the dollar
+  truth.
+
 ## 0.60.0 — 2026-05-14
 
 ### Added

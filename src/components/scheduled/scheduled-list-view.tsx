@@ -568,8 +568,22 @@ export function ScheduledListView({
     if (res.ok) {
       toast.success(ids.length === 1 ? "Scheduled deleted" : `Deleted ${ids.length} scheduled`);
       setConfirmDelete(null);
-      // If the currently-selected detail row was deleted, reset selection.
-      if (ids.includes(selectedId)) setSelectedId("");
+      // If the currently-selected detail row was deleted, try to
+      // pin selection onto another surviving member of the same
+      // lineage — staying inside the same group is far less
+      // jarring than getting punted back to an unselected list.
+      // Only fall back to clearing when nothing in the lineage
+      // survived.
+      if (ids.includes(selectedId)) {
+        const selectedRow = scheduled.find((s) => s.id === selectedId);
+        const fallback = selectedRow
+          ? scheduled.find(
+              (s) =>
+                s.lineageId === selectedRow.lineageId && !ids.includes(s.id),
+            )
+          : undefined;
+        setSelectedId(fallback?.id ?? "");
+      }
       router.refresh();
       invalidateCashflow();
     } else {
@@ -1394,16 +1408,30 @@ export function ScheduledListView({
                         : delta > 0
                         ? "text-rose-500"
                         : "text-emerald-600";
-                    const rowStyle: React.CSSProperties = {
-                      backgroundColor: `${lineageColour}1f`,
-                      boxShadow: `inset 3px 0 0 ${lineageColour}`,
-                    };
+                    // Selected row: stronger tint + a solid 4-px
+                    // inset ring so the operator can see at a glance
+                    // which member they're editing. The faint
+                    // `${lineageColour}1f` tint that decorates
+                    // unselected rows is invisible under the
+                    // previous 40 %-opacity indigo ring on dark
+                    // lineage colours.
+                    const rowStyle: React.CSSProperties = isEditing
+                      ? {
+                          backgroundColor: `${lineageColour}4d`,
+                          boxShadow: `inset 4px 0 0 ${lineageColour}, inset 0 0 0 2px var(--ring)`,
+                        }
+                      : {
+                          backgroundColor: `${lineageColour}1f`,
+                          boxShadow: `inset 3px 0 0 ${lineageColour}`,
+                        };
                     return (
                       <tr
                         key={m.id}
                         onClick={() => setSelectedId(m.id)}
                         className={`cursor-pointer ${
-                          isEditing ? "ring-2 ring-inset ring-indigo-500/40" : "hover:brightness-110"
+                          isEditing
+                            ? "font-medium"
+                            : "hover:brightness-110"
                         }`}
                         style={rowStyle}
                       >

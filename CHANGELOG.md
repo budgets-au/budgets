@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.63.0 — 2026-05-14
+
+### Removed
+- **The full-width "Accounts" dashboard widget.** Superseded by the
+  multi-instance "Account" widget (0.60.0): the operator pins
+  individual accounts as 2×2 tiles instead of dropping a
+  twelve-column block listing every visible one. Default
+  dashboard layout dropped the Accounts row; Upcoming moves up
+  into the slot. Existing saved layouts that reference
+  `widgetId: "accounts"` get filtered out by the
+  `WIDGETS_BY_ID.has(...)` guard on render, so nothing crashes —
+  the tile just disappears the next time the operator opens the
+  grid.
+
 ## 0.62.0 — 2026-05-14
 
 ### Fixed

@@ -10,7 +10,6 @@ import { NetWorthTrendCard } from "@/components/dashboard/net-worth-trend-card";
 import { BudgetProgressCard } from "@/components/dashboard/budget-progress-card";
 import { UpcomingSchedulesCard } from "@/components/dashboard/upcoming-schedules-card";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions-card";
-import { AccountsCard } from "@/components/dashboard/accounts-card";
 import { AccountSummaryCard } from "@/components/dashboard/account-summary-card";
 import { TrackedStockCard } from "@/components/dashboard/tracked-stock-card";
 
@@ -145,13 +144,6 @@ export const WIDGETS: WidgetSpec[] = [
     render: () => <RecentTransactionsCard />,
   },
   {
-    id: "accounts",
-    title: "Accounts",
-    defaultLayout: { w: 12, h: 6 },
-    minSize: { w: 4, h: 4 },
-    render: () => <AccountsCard />,
-  },
-  {
     id: "account-summary",
     title: "Account",
     defaultLayout: { w: 2, h: 2 },
@@ -186,8 +178,8 @@ export const DEFAULT_DASHBOARD_LAYOUT: Array<{
   // content; the chart + a few budget rows fit comfortably in 2)
   { widgetId: "net-worth-trend", x: 0, y: 2, w: 6, h: 2 },
   { widgetId: "budget-progress", x: 6, y: 2, w: 6, h: 2 },
-  // Row 3: accounts
-  { widgetId: "accounts", x: 0, y: 4, w: 12, h: 6 },
-  // Row 4: upcoming
-  { widgetId: "upcoming-schedules", x: 0, y: 10, w: 12, h: 4 },
+  // Row 3: upcoming (the wide-Accounts row moved out; the operator
+  // pins individual accounts via the 2×2 Account widget if they want
+  // them on the dashboard).
+  { widgetId: "upcoming-schedules", x: 0, y: 4, w: 12, h: 4 },
 ];

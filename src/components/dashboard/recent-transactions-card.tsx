@@ -79,31 +79,35 @@ export function RecentTransactionsCard() {
               No transactions yet.
             </p>
           ) : (
-            <ul className="divide-y">
+            // Single grid container (not per-row) so columns
+            // auto-size to the widest content across ALL rows. Each
+            // <li> + <Link> uses grid-cols-subgrid to inherit the
+            // parent's tracks — keeps <Link> semantics while giving
+            // table-style column alignment that per-row grids
+            // can't.
+            <ul
+              className="divide-y grid gap-x-3"
+              style={{
+                gridTemplateColumns:
+                  "auto auto minmax(0, 1fr) auto",
+              }}
+            >
               {visibleRows.map((row) => {
                 const target = parseISO(row.date);
                 const amt = parseFloat(row.amount);
                 return (
-                  <li key={row.id}>
+                  <li
+                    key={row.id}
+                    className="col-span-full grid grid-cols-subgrid items-center hover:bg-muted/60 transition-colors"
+                  >
                     <Link
                       href={`/transactions?accountId=${row.accountId}`}
-                      className="grid items-center gap-3 px-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
-                      // Fixed widths on date + account so columns
-                      // align across rows (each <Link> is its own
-                      // grid — `auto` would size per-row and stagger
-                      // the cluster). 5rem covers the widest
-                      // relative-date string the `relativeWord`
-                      // helper produces; 7rem covers most account
-                      // badges, longer ones truncate.
-                      style={{
-                        gridTemplateColumns:
-                          "5rem 7rem minmax(0, 1fr) auto",
-                      }}
+                      className="col-span-full grid grid-cols-subgrid items-center text-sm"
                     >
-                      <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                      <span className="pl-4 py-1.5 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                         {relativeWord(today, target)}
                       </span>
-                      <span className="hidden sm:flex justify-start min-w-0 shrink-0">
+                      <span className="py-1.5 hidden sm:flex justify-start min-w-0">
                         {row.accountName && (
                           <span
                             className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap truncate max-w-[8rem]"
@@ -115,11 +119,11 @@ export function RecentTransactionsCard() {
                           </span>
                         )}
                       </span>
-                      <span className="font-medium truncate min-w-0">
+                      <span className="py-1.5 font-medium truncate min-w-0">
                         {row.payee ?? row.description ?? "—"}
                       </span>
                       <span
-                        className={`tabular-nums font-medium whitespace-nowrap text-right shrink-0 ${amountClass(amt)}`}
+                        className={`pr-4 py-1.5 tabular-nums font-medium whitespace-nowrap text-right ${amountClass(amt)}`}
                       >
                         {formatAUD(amt)}
                       </span>

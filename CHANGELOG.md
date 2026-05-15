@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.75.0 — 2026-05-15
+
+### Changed
+- **Upcoming + Recent widgets switch to CSS subgrid for column
+  alignment.** Per-row grids couldn't share column widths across
+  rows — fixed-width columns gave alignment with dead space,
+  auto-widths gave tightness but staggered cells. The cards now
+  use a single grid container with `gridTemplateColumns:
+  "auto auto minmax(0,1fr) auto"`; each `<li>` and `<Link>` uses
+  `grid-cols-subgrid` to inherit the parent tracks, so date and
+  account columns auto-size to the widest content across the
+  whole list AND every row's cells line up. Visible result:
+  dates like "Today" / "2d ago" no longer leave 30-50 px of
+  whitespace before the account badge. `<Link>` semantics
+  preserved — middle-click open in new tab still works.
+
 ## 0.74.0 — 2026-05-15
 
 ### Fixed

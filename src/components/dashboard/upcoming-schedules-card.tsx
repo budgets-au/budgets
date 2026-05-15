@@ -87,21 +87,33 @@ export function UpcomingSchedulesCard() {
               Nothing due in the next {horizonDays} days.
             </p>
           ) : (
-            <ul className="divide-y">
+            // Single grid container (not per-row) so columns
+            // auto-size to the widest content across ALL rows. Each
+            // <li> + <Link> uses grid-cols-subgrid to inherit the
+            // parent's tracks — keeps the <Link> semantics
+            // (middle-click open in new tab, etc.) while still
+            // getting table-style column alignment. The trade-off
+            // vs the old per-row grid was either dead space inside
+            // a fixed-width column OR misaligned cells; subgrid is
+            // the only structure that gives both tight AND aligned.
+            <ul
+              className="divide-y grid gap-x-3"
+              style={{
+                gridTemplateColumns:
+                  "auto auto minmax(0, 1fr) auto",
+              }}
+            >
               {visibleRows.map((row, i) => {
                 const target = parseISO(row.date);
                 const amt = parseFloat(row.amount);
                 return (
                   <li
                     key={`${row.scheduledId}-${row.date}-${i}`}
-                    className="relative"
+                    className="relative col-span-full grid grid-cols-subgrid items-center hover:bg-muted/60 transition-colors"
                   >
-                    {/* Frequency colour now reads as a thin left-edge
-                    highlight rather than a full pill — that frees the
-                    payee column to span the rest of the row right up
-                    to the account + amount cluster, which was the
-                    point. Accessible name preserved on the bar so the
-                    frequency info isn't lost to sighted-only callers. */}
+                    {/* Frequency colour as a thin left-edge bar.
+                    Sits at li's left = ul's left = flush with the
+                    card content edge. */}
                     <span
                       aria-label={freqLabel(row.frequency, row.interval)}
                       className="absolute left-0 inset-y-1 w-1 rounded-r-sm"
@@ -111,24 +123,15 @@ export function UpcomingSchedulesCard() {
                     />
                     <Link
                       href={`/scheduled?id=${row.scheduledId}`}
-                      className="grid items-center gap-3 pl-4 pr-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
-                      // Fixed widths on date + account so columns
-                      // align across rows (each <Link> is its own
-                      // grid — `auto` widths would size per-row).
-                      // 5rem covers the longest relative-date string
-                      // ("In 4 weeks" ≈ 65 px) with a few px of
-                      // headroom; 7rem covers most account badges,
-                      // longer ones truncate at the badge's own
-                      // `max-w-[8rem]` cap.
-                      style={{
-                        gridTemplateColumns:
-                          "5rem 7rem minmax(0, 1fr) auto",
-                      }}
+                      className="col-span-full grid grid-cols-subgrid items-center text-sm"
                     >
-                      <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                      {/* First and last cells carry the row's
+                      horizontal padding so the bar can still sit
+                      flush at left-0. */}
+                      <span className="pl-4 py-1.5 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                         {relativeWord(today, target)}
                       </span>
-                      <span className="hidden sm:flex justify-start min-w-0 shrink-0">
+                      <span className="py-1.5 hidden sm:flex justify-start min-w-0">
                         {row.accountName && (
                           <span
                             className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap truncate max-w-[8rem]"
@@ -140,11 +143,11 @@ export function UpcomingSchedulesCard() {
                           </span>
                         )}
                       </span>
-                      <span className="font-medium truncate min-w-0">
+                      <span className="py-1.5 font-medium truncate min-w-0">
                         {row.payee ?? "—"}
                       </span>
                       <span
-                        className={`tabular-nums font-medium whitespace-nowrap text-right shrink-0 ${amountClass(amt)}`}
+                        className={`pr-4 py-1.5 tabular-nums font-medium whitespace-nowrap text-right ${amountClass(amt)}`}
                       >
                         {formatAUD(amt)}
                       </span>

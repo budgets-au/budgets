@@ -141,9 +141,12 @@ interface TestResultRow {
 }
 
 /**
- * Dry-run categorisation: parse the uploaded file, run each row through the
- * same pipeline /api/import/commit uses (explicit rule → trigram suggester →
- * AI fallback), and return rich per-row detail. Writes NOTHING to the DB.
+ * Dry-run categorisation: parse the uploaded file, score each row
+ * (explicit rule → trigram suggester), check it against the DB for
+ * exact / legacy-hash / heuristic duplicates, and surface per-row
+ * detail (resolved account, balance-chain check, posted_seq, …) so
+ * the import-view's review panel can let the operator audit before
+ * committing. Writes NOTHING to the DB.
  */
 export async function POST(request: Request) {
   const session = await auth();

@@ -39,17 +39,16 @@ const bodySchema = z.object({
 });
 
 /**
- * Multi-account commit: takes a flat list of pre-resolved rows (each with
- * its own `accountId`), groups by account, creates one `import_logs`
- * entry per account, and inserts transactions skipping importHash
- * duplicates. Used by the import view's "Commit to DB" action so the
- * user can commit a multi-account file in one go without going through
- * the wizard.
+ * Multi-account commit: takes a flat list of pre-resolved rows (each
+ * with its own `accountId`), groups by account, creates one
+ * `import_logs` entry per account, and inserts transactions skipping
+ * `importHash` duplicates. The only commit endpoint; the import view
+ * POSTs here from its "Commit to DB" action after the categorise pass.
  *
- * Doesn't re-run categorisation (the categorise route has already produced
- * categoryIds). Doesn't run transfer-pair matching here — caller can run
- * that separately. Aliases learned from each row's bankAccountId →
- * resolved accountId so future imports route automatically.
+ * Doesn't re-run categorisation (the categorise route already produced
+ * `categoryId`s). Doesn't run transfer-pair matching — that's a
+ * separate sweep. Aliases learned from each row's `bankAccountId` →
+ * resolved `accountId` so future imports auto-route.
  */
 export async function POST(request: Request) {
   const session = await auth();
@@ -198,10 +197,11 @@ async function runCommit(request: Request) {
   }
   const PAYEE_SIM_THRESHOLD = 0.5;
 
-  // Trust the importHash computed by the tester upstream — re-hashing
-  // here with a tester-fabricated rawId would produce a different hash
-  // and break dedup against existing DB rows. The tester's hash already
-  // came from the format-aware parser, which is what real imports use.
+  // Trust the importHash the categorise route computed — re-hashing
+  // here against a fresh rawId would diverge from what the DB stored
+  // on the first import and break dedupe. Categorise already routed
+  // each row through the same format-aware parser the user sees in
+  // the review panel; the hash that came back is authoritative.
   const tokenFreq = await loadTokenFreq();
   const insertsByAccount = new Map<string, typeof rows>();
   type DupeMatch = (typeof existing)[number] | HeurExisting;
@@ -332,8 +332,9 @@ async function runCommit(request: Request) {
     );
     imported += group.length;
 
-    // Refresh accounts.currentBalance the same way the wizard's commit
-    // route does so the dashboard tile stays in sync.
+    // Refresh accounts.currentBalance so the dashboard widget +
+    // sidebar pick up the new total without waiting for a SWR
+    // refetch round-trip.
     await db
       .update(accounts)
       .set({

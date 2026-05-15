@@ -111,27 +111,6 @@ export function pickMostSpecific(rules: RuleRow[]): string | null {
  * contains the amount are considered, with the narrowest range winning.
  * When omitted, the unbounded rule (if any) is preferred.
  */
-export async function lookupPayeeRule(
-  normalizedPayee: string,
-  amount?: number,
-): Promise<string | null> {
-  const rules = await db
-    .select({
-      categoryId: payeeRules.categoryId,
-      minAmount: payeeRules.minAmount,
-      maxAmount: payeeRules.maxAmount,
-    })
-    .from(payeeRules)
-    .where(eq(payeeRules.normalizedPayee, normalizedPayee));
-  if (rules.length === 0) return null;
-
-  if (amount === undefined) {
-    const unbounded = rules.find((r) => r.minAmount === null && r.maxAmount === null);
-    return unbounded?.categoryId ?? rules[0].categoryId ?? null;
-  }
-  return pickMostSpecific(rules.filter((r) => rangeContains(r, amount)));
-}
-
 /**
  * History-based category suggester. Given a normalised payee + amount,
  * find the dominant category from previously-categorised transactions
@@ -320,31 +299,10 @@ export async function suggestCategoryByHistory(
 }
 
 /**
- * Bulk variant of suggestCategoryByHistory for the import path. Each item
- * carries its own key, so the caller can map results back to its own
- * data. Issues per-item lookups in parallel.
- */
-export async function batchSuggestCategoryByHistory(
-  items: { key: string; normalizedPayee: string; amount: number }[],
-): Promise<Map<string, CategorySuggestion>> {
-  const result = new Map<string, CategorySuggestion>();
-  if (items.length === 0) return result;
-  // One token-freq fetch shared across the batch — the per-item suggester
-  // would otherwise hit the DB once per row to load the same map.
-  const freq = await loadTokenFreq();
-  await Promise.all(
-    items.map(async (it) => {
-      const suggestion = await suggestCategoryByHistory(it.normalizedPayee, it.amount, freq);
-      if (suggestion) result.set(it.key, suggestion);
-    }),
-  );
-  return result;
-}
-
-/**
  * Per-row batch lookup. Returns a map keyed by `item.key` so callers can
- * carry through their own row identifier (e.g. `importHash`). Same
- * (normalizedPayee, amount) → category resolution as `lookupPayeeRule`.
+ * carry through their own row identifier (e.g. `importHash`). Resolves
+ * each row's (normalizedPayee, amount) tuple against the payee_rules
+ * table, picking the most-specific overlapping rule per row.
  */
 export async function batchLookupPayeeRules(
   items: { key: string; normalizedPayee: string; amount: number }[],

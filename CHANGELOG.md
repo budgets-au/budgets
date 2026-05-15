@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.81.0 — 2026-05-15
+
+### Changed
+- **Edit dashboard button moved into the topbar.** Sits in the
+  Topbar's actions slot, immediately left of the profile
+  dropdown, instead of floating above the first row of widgets.
+  New `DashboardShell` client wrapper hoists `editMode` state up
+  out of `DashboardGrid` so the button can live in a sibling
+  (Topbar). Save / Cancel stay inside the widget drawer.
+
+### Removed
+- **Dead import endpoints:** `/api/import/parse/route.ts` and
+  `/api/import/commit/route.ts` had no client / test callers
+  since the import view moved fully to the batched endpoint.
+  Pulled out along with `src/lib/import/detect-account.ts` (only
+  used by the dead parse route) and two `src/lib/categorize.ts`
+  exports (`lookupPayeeRule`, `batchSuggestCategoryByHistory`)
+  whose only callers were the deleted routes.
+
+### Hygiene
+- Stale comments in `categorise/route.ts` and
+  `commit-batched/route.ts` (referring to the deleted "wizard"
+  commit endpoint and the no-longer-existing tester upstream)
+  rewritten to describe the actual flow.
+
 ## 0.80.0 — 2026-05-15
 
 ### Fixed

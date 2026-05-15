@@ -2,8 +2,6 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import {
   WIDGETS,
@@ -62,20 +60,28 @@ type RglItem = {
   readonly minH?: number;
 };
 
-/** Editable dashboard surface. Renders every widget the operator has
- * placed on a 12-column responsive grid. An "Edit dashboard" button
- * top-right opens a right-hand drawer with the remaining widgets;
- * the operator drags any pill onto the grid to place it, drags
- * placed tiles to rearrange, resizes from a corner, or clicks the
- * trash icon to remove. Save commits the layout to display-prefs;
- * Cancel reverts to the most-recently-saved arrangement.
+/** Editable dashboard surface. Renders every widget the operator
+ * placed on a 12-column responsive grid. Edit mode is toggled from
+ * the topbar's actions slot (see `DashboardShell`): entering edit
+ * opens a right-hand drawer with the remaining widgets, and the
+ * operator drags any pill onto the grid to place it, drags placed
+ * tiles to rearrange, resizes from a corner, or clicks the trash
+ * icon to remove. Save commits the layout to display-prefs; Cancel
+ * reverts to the most-recently-saved arrangement.
  *
  * The saved-vs-default distinction lives in display-prefs: empty
  * `dashboardLayout` means "show the registry's default arrangement"
  * so first-load matches the pre-widget dashboard verbatim. */
-export function DashboardGrid() {
+export function DashboardGrid({
+  editMode,
+  setEditMode,
+}: {
+  /** Controlled by the parent shell so the Edit button can live in
+   * the Topbar's actions slot (which is a sibling, not a child). */
+  editMode: boolean;
+  setEditMode: (next: boolean) => void;
+}) {
   const { prefs, setPref } = useDisplayPrefs();
-  const [editMode, setEditMode] = useState(false);
   // Uncommitted layout while in edit mode. `null` outside edit mode
   // (the grid renders from saved prefs). Save copies this into the
   // pref blob; Cancel just drops it on the floor.
@@ -292,14 +298,7 @@ export function DashboardGrid() {
 
   return (
     <>
-      <div className="flex justify-end px-3 pt-2 pb-1">
-        {!editMode && (
-          <Button size="xs" variant="outline" onClick={startEdit}>
-            <Pencil className="mr-1 h-3 w-3" /> Edit dashboard
-          </Button>
-        )}
-      </div>
-      <div className="px-3 pb-3">
+      <div className="px-3 pb-3 pt-2">
         <ResponsiveGridLayout
           className="layout"
           layouts={layouts}

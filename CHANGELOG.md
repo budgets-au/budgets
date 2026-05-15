@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.73.0 — 2026-05-15
+
+### Changed
+- **Upcoming + Recent row columns aligned again, tighter than
+  before.** 0.69.0 set the date column to `auto` to remove the
+  dead space inside the old 90 px column, but each `<Link>` is
+  its own grid so `auto` sized per-row and staggered the
+  cluster across rows. Switched to `5rem 7rem minmax(0,1fr) auto`
+  — fixed widths on date and account so columns align across
+  rows, but tighter than 90 px (5rem ≈ 80 px is just enough for
+  the longest `relativeWord` string).
+
 ## 0.72.0 — 2026-05-15
 
 ### Added

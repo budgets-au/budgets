@@ -112,9 +112,17 @@ export function UpcomingSchedulesCard() {
                     <Link
                       href={`/scheduled?id=${row.scheduledId}`}
                       className="grid items-center gap-3 pl-4 pr-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
+                      // Fixed widths on date + account so columns
+                      // align across rows (each <Link> is its own
+                      // grid — `auto` widths would size per-row).
+                      // 5rem covers the longest relative-date string
+                      // ("In 4 weeks" ≈ 65 px) with a few px of
+                      // headroom; 7rem covers most account badges,
+                      // longer ones truncate at the badge's own
+                      // `max-w-[8rem]` cap.
                       style={{
                         gridTemplateColumns:
-                          "auto auto minmax(0, 1fr) auto",
+                          "5rem 7rem minmax(0, 1fr) auto",
                       }}
                     >
                       <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">

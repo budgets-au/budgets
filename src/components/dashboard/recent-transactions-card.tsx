@@ -88,9 +88,16 @@ export function RecentTransactionsCard() {
                     <Link
                       href={`/transactions?accountId=${row.accountId}`}
                       className="grid items-center gap-3 px-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
+                      // Fixed widths on date + account so columns
+                      // align across rows (each <Link> is its own
+                      // grid — `auto` would size per-row and stagger
+                      // the cluster). 5rem covers the widest
+                      // relative-date string the `relativeWord`
+                      // helper produces; 7rem covers most account
+                      // badges, longer ones truncate.
                       style={{
                         gridTemplateColumns:
-                          "auto auto minmax(0, 1fr) auto",
+                          "5rem 7rem minmax(0, 1fr) auto",
                       }}
                     >
                       <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">

@@ -3,7 +3,7 @@
 import useSWR from "swr";
 import Link from "next/link";
 import { Wallet } from "lucide-react";
-import { ResponsiveContainer, BarChart, Bar, Tooltip } from "recharts";
+import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartTooltipCard,
@@ -15,19 +15,16 @@ import type { Account } from "@/db/schema";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-interface FlowResp {
-  series: { date: string; inflow: number; outflow: number }[];
+interface BalanceTrendResp {
+  series: { date: string; balance: number }[];
 }
 
-const INFLOW_COLOR = "#10b981"; // emerald-500
-const OUTFLOW_COLOR = "#ef4444"; // red-500
-
-function FlowTooltip({
+function BalanceTooltip({
   active,
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ payload?: { date: string; inflow: number; outflow: number } }>;
+  payload?: Array<{ payload?: { date: string; balance: number } }>;
 }) {
   if (!active || !payload || payload.length === 0) return null;
   const p = payload[0]?.payload;
@@ -35,8 +32,7 @@ function FlowTooltip({
   return (
     <ChartTooltipCard className="min-w-[9rem]">
       <ChartTooltipHeader title={p.date} />
-      <ChartTooltipRow label="In" value={formatAUD(p.inflow)} />
-      <ChartTooltipRow label="Out" value={formatAUD(p.outflow)} />
+      <ChartTooltipRow label="Balance" value={formatAUD(p.balance)} />
     </ChartTooltipCard>
   );
 }
@@ -48,8 +44,8 @@ function FlowTooltip({
  * dashboard — pinning a hidden account here is the whole point
  * (a closed CC the user still wants visibility on, a savings goal
  * they don't want polluting balance sums, etc.). Out of edit mode
- * it shows the account's colour stripe + name + balance + type
- * line, matching the AccountHeader visual rhythm but in a 2×2 tile.
+ * it shows the balance + institution line and a 7-day
+ * running-balance sparkline below it.
  *
  * Note: the dropdown carries `widget-cancel-drag` so RGL doesn't
  * swallow the click that opens the native picker. */
@@ -87,19 +83,22 @@ export function AccountSummaryCard({
     ? accounts.find((a) => a.id === accountId) ?? null
     : null;
 
-  // 7-day in/out series for the selected account. SWR keyed by id
-  // so switching the picked account triggers a fresh fetch. Skipped
-  // (key=null) when nothing is selected, so an empty card doesn't
-  // ping the endpoint.
-  const { data: flowData } = useSWR<FlowResp>(
+  // 7-day daily-end balance series. SWR keyed by id so switching
+  // the picked account triggers a fresh fetch; skipped when nothing
+  // is selected.
+  const { data: trendData } = useSWR<BalanceTrendResp>(
     selected
-      ? `/api/dashboard/account-daily-flow?accountId=${selected.id}&days=7`
+      ? `/api/dashboard/account-balance-trend?accountId=${selected.id}&days=7`
       : null,
     fetcher,
     { revalidateOnFocus: false },
   );
-  const flow = flowData?.series ?? [];
-  const hasFlow = flow.some((p) => p.inflow > 0 || p.outflow > 0);
+  const trend = trendData?.series ?? [];
+  const startBal = trend[0]?.balance;
+  const endBal = trend[trend.length - 1]?.balance;
+  const trendUp =
+    startBal != null && endBal != null ? endBal >= startBal : true;
+  const lineColor = trendUp ? "#10b981" : "#ef4444";
 
   return (
     <Card data-size="sm" className="h-full flex flex-col">
@@ -182,14 +181,14 @@ export function AccountSummaryCard({
                 </p>
               )}
             </div>
-            {/* 7-day in/out bar chart. Suspended in edit mode for the
-            same reason tracked-stock's sparkline is — recharts'
-            ResponsiveContainer fires ResizeObserver updates as RGL
-            shifts cells during a drag, and recharts 3.x's internal
-            redux store can push the cascade past React's update-
-            depth ceiling. Also hidden when the window has no
-            activity at all, so a fresh / dormant account doesn't
-            show an empty axis. */}
+            {/* 7-day running-balance sparkline. Suspended in edit
+            mode for the same reason tracked-stock's sparkline is —
+            recharts' ResponsiveContainer fires ResizeObserver
+            updates as RGL shifts cells during a drag, and recharts
+            3.x's internal redux store can push the cascade past
+            React's update-depth ceiling. Hidden when the cache has
+            fewer than 2 points so we don't draw a degenerate
+            horizontal line on a brand-new / dormant account. */}
             <div className="flex-1 min-h-0 mt-1 -mx-1">
               {editMode ? (
                 <div className="h-full flex items-center justify-center">
@@ -197,30 +196,41 @@ export function AccountSummaryCard({
                     Chart hidden while editing
                   </p>
                 </div>
-              ) : hasFlow ? (
+              ) : trend.length >= 2 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={flow} barCategoryGap={2} barGap={1}>
-                    <Tooltip
-                      cursor={{ fill: "rgba(127,127,127,0.08)" }}
-                      content={<FlowTooltip />}
-                    />
-                    <Bar
-                      dataKey="inflow"
-                      fill={INFLOW_COLOR}
+                  <AreaChart data={trend}>
+                    <defs>
+                      <linearGradient
+                        id={`balTrendGrad-${selected.id}`}
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor={lineColor}
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor={lineColor}
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <Tooltip content={<BalanceTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="balance"
+                      stroke={lineColor}
+                      strokeWidth={1.5}
+                      fill={`url(#balTrendGrad-${selected.id})`}
                       isAnimationActive={false}
                     />
-                    <Bar
-                      dataKey="outflow"
-                      fill={OUTFLOW_COLOR}
-                      isAnimationActive={false}
-                    />
-                  </BarChart>
+                  </AreaChart>
                 </ResponsiveContainer>
-              ) : (
-                <p className="text-[10px] text-muted-foreground text-center pt-1">
-                  No activity in 7 days.
-                </p>
-              )}
+              ) : null}
             </div>
           </div>
         )}

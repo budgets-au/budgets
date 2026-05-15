@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.68.0 — 2026-05-15
+
+### Changed
+- **Account widget: 7-day in/out paired bars → running-balance
+  area sparkline.** The bar chart packed 14 bars into ~70 px of
+  vertical space at 2×2 tile size and the colour ratio was
+  dominated by whichever direction had the larger day, burying
+  the trend signal. Replaced with a Recharts AreaChart of the
+  daily-end balance, tinted emerald/red by the first→last delta —
+  same visual rhythm as the tracked-stock and stocks-summary
+  sparklines. Tooltip shows date + balance on hover.
+- **Endpoint rename:** `/api/dashboard/account-daily-flow` →
+  `/api/dashboard/account-balance-trend`. Anchors the running
+  balance at `startingBalance + Σ(amounts before window-start)`
+  and walks forward through each day's net flow — independent of
+  `accounts.currentBalance` (which bakes in future-dated txns and
+  would mis-anchor a window that ends today).
+
 ## 0.67.0 — 2026-05-14
 
 ### Changed

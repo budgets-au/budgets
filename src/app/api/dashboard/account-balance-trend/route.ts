@@ -1,17 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
-import { getAccountDailyFlow } from "@/lib/dashboard/account-daily-flow";
+import { getAccountBalanceTrend } from "@/lib/dashboard/account-balance-trend";
 
 const querySchema = z.object({
   accountId: z.string().uuid(),
   days: z.coerce.number().int().min(1).max(60).default(7),
 });
 
-/** Per-day in/out totals for one account over the past N days
- * (default 7, capped at 60). Powers the dashboard Account widget's
- * mini bar chart. Days with no activity get zero-filled so the
- * client renders a stable strip. */
+/** Daily-end balance series for one account over the past N
+ * days (default 7, capped at 60). Powers the dashboard Account
+ * widget's running-balance sparkline. */
 export async function GET(request: Request) {
   const session = await auth();
   if (!session) {
@@ -29,6 +28,6 @@ export async function GET(request: Request) {
     );
   }
   return NextResponse.json(
-    await getAccountDailyFlow(parsed.data.accountId, parsed.data.days),
+    await getAccountBalanceTrend(parsed.data.accountId, parsed.data.days),
   );
 }

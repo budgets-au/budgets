@@ -1064,8 +1064,17 @@ function CommitToDb({
   const possibleCount = committableRows.filter(
     (r) => r.matchType === "possible",
   ).length;
+  // Rows whose existing DB balance disagrees with the chain-predicted
+  // value. Commit-batched re-derives intra-day order from stored
+  // balances for the affected (account, date) groups; even when
+  // there's nothing to insert and nothing to backfill, this count
+  // alone makes the commit worth running.
+  const chainMismatchCount = committableRows.filter(
+    (r) => r.balanceCheckVsDB && !r.balanceCheckVsDB.match,
+  ).length;
   const willChangeCount =
     newCount + exactBackfillCount + legacyCount + possibleCount;
+  const hasWork = willChangeCount > 0 || chainMismatchCount > 0;
 
   async function commit() {
     if (committableRows.length === 0 || !file) return;
@@ -1285,6 +1294,8 @@ function CommitToDb({
               to backfill
               {exactNoOpCount > 0 &&
                 ` · ${exactNoOpCount} identical (no change)`}
+              {chainMismatchCount > 0 &&
+                ` · ${chainMismatchCount} balance-chain mismatch${chainMismatchCount === 1 ? "" : "es"} to fix`}
               .
             </p>
             {unresolved > 0 && (
@@ -1300,23 +1311,25 @@ function CommitToDb({
               committing ||
               committableRows.length === 0 ||
               !file ||
-              willChangeCount === 0
+              !hasWork
             }
             title={
               committableRows.length === 0
                 ? "No committable rows"
-                : willChangeCount === 0
-                  ? "Every row is already in the DB — nothing to do."
+                : !hasWork
+                  ? "Every row is already in the DB and the balance chain is fine — nothing to do."
                   : undefined
             }
           >
             {committing
               ? "Committing…"
-              : willChangeCount === 0
+              : !hasWork
                 ? "Nothing to commit"
                 : newCount > 0
                   ? `Commit ${willChangeCount} row${willChangeCount === 1 ? "" : "s"}`
-                  : `Update ${willChangeCount}`}
+                  : willChangeCount > 0
+                    ? `Update ${willChangeCount}`
+                    : `Fix ${chainMismatchCount} balance mismatch${chainMismatchCount === 1 ? "" : "es"}`}
           </Button>
         </div>
       </CardContent>

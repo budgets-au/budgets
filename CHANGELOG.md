@@ -9,6 +9,40 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.77.0 — 2026-05-15
+
+### Added
+- **CSV Balance-column detector now matches more variants.**
+  Was strict equality on `"balance"` / `"running balance"` —
+  banks that name the column `"Bank Balance"`, `"Account
+  Balance"`, `"Balance After"`, `"Balance After Transaction"`,
+  or `"Closing Balance"` were silently treated as having no
+  balance column. All five variants now register; the importer
+  picks up the running balance and feeds it into the chain
+  check / posted_seq derivation.
+
+### Fixed
+- **Commit-batched now repairs broken intra-day posted_seq order
+  even when the file has no Balance column.** 0.74's per-row
+  correction required `row.balance != null` (file-supplied
+  balance), so a re-import of a CSV without one would detect the
+  mismatch via 0.76 but couldn't act on it — Commit button
+  greyed out as "Nothing to commit". Replaced with a date-level
+  repair pass that runs post-insert/backfill: walks the DB chain
+  in canonical tuple order, identifies any `(account, date)`
+  pair where stored bank balances disagree with the chain-
+  predicted values, and re-derives the bank's true intra-day
+  order via reconciliation (`prev + amount = next` is solvable
+  whenever every row on the date carries a stored balance). The
+  affected rows then get the SAME set of `posted_seq` values
+  they already had, just permuted into the correct order — no
+  new values minted, per-account uniqueness preserved.
+- **Commit button no longer says "Nothing to commit" when only
+  chain mismatches need fixing.** Includes `chainMismatchCount`
+  in the work-detection so a re-import whose sole effect is
+  re-ordering existing rows enables the button and labels it
+  "Fix N balance mismatches".
+
 ## 0.76.0 — 2026-05-15
 
 ### Fixed

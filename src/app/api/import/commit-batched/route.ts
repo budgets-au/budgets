@@ -343,59 +343,6 @@ async function runCommit(request: Request) {
       .where(eq(accounts.id, accountId));
   }
 
-  // Pre-insert DB chain check, per touched account. Walks the
-  // existing rows in `(date, posted_seq, posted_at|created_at, id)`
-  // order — same tuple the running-balance view uses — and predicts
-  // each row's balance as (starting + cumulative amounts). For any
-  // existing row whose stored bank balance disagrees with the
-  // chain-predicted value, the dupe-update loop is allowed to
-  // overwrite the existing posted_seq with the file's parser-
-  // assigned value (offset by per-account max so it stays unique).
-  // This is how prior posted_seq mistakes get corrected when the
-  // user re-imports a file the bank emits with balance data.
-  const expectedBalanceByDbRowId = new Map<string, number>();
-  {
-    const accountIdsForChain = Array.from(
-      new Set(dupeUpdates.map((u) => u.existingRow.accountId)),
-    );
-    if (accountIdsForChain.length > 0) {
-      const dbRows = await db
-        .select({
-          id: transactions.id,
-          accountId: transactions.accountId,
-          amount: transactions.amount,
-          balance: transactions.balance,
-        })
-        .from(transactions)
-        .where(inArray(transactions.accountId, accountIdsForChain))
-        .orderBy(
-          asc(transactions.date),
-          asc(sql`COALESCE(${transactions.postedSeq}, 0)`),
-          asc(
-            sql`COALESCE(${transactions.postedAt}, ${transactions.createdAt})`,
-          ),
-          asc(transactions.id),
-        );
-      const accountRows = await db
-        .select({ id: accounts.id, startingBalance: accounts.startingBalance })
-        .from(accounts)
-        .where(inArray(accounts.id, accountIdsForChain));
-      const startingByAccountId = new Map(
-        accountRows.map((a) => [a.id, parseFloat(a.startingBalance)]),
-      );
-      const running = new Map<string, number>();
-      for (const id of accountIdsForChain) {
-        running.set(id, startingByAccountId.get(id) ?? 0);
-      }
-      for (const t of dbRows) {
-        const prev = running.get(t.accountId) ?? 0;
-        const next = prev + parseFloat(t.amount);
-        expectedBalanceByDbRowId.set(t.id, +next.toFixed(2));
-        running.set(t.accountId, next);
-      }
-    }
-  }
-
   // Duplicate-row backfill: migrate legacy hashes forward to the
   // rawId-aware form and fill in missing type/balance/categoryId fields
   // from the new richer file. Categories are only filled when missing —
@@ -406,7 +353,6 @@ async function runCommit(request: Request) {
   let backfilledBalance = 0;
   let backfilledCategory = 0;
   let backfilledPostedSeq = 0;
-  let correctedPostedSeq = 0;
   for (const u of dupeUpdates) {
     const patch: Partial<typeof transactions.$inferInsert> = {};
     // Both legacy and heuristic matches need the stored hash migrated to
@@ -439,31 +385,6 @@ async function runCommit(request: Request) {
       const offset = (maxByAccount.get(u.existingRow.accountId) ?? -1) + 1;
       patch.postedSeq = u.row.postedSeq + offset;
       backfilledPostedSeq += 1;
-    } else if (
-      u.row.postedSeq != null &&
-      u.row.balance != null &&
-      u.existingRow.balance != null &&
-      u.existingRow.postedSeq != null
-    ) {
-      // Correction path: the existing row already had a posted_seq,
-      // but the DB chain disagrees with the bank-claimed balance on
-      // it. Trust the file's balance-aware posted_seq (offset to
-      // stay unique per account) and overwrite. The file's own
-      // chain consistency was already validated by the categorise
-      // endpoint; if the operator committed it then they accepted
-      // the diff.
-      const expected = expectedBalanceByDbRowId.get(u.existingRow.id);
-      const stored = parseFloat(u.existingRow.balance);
-      const dbChainBroken =
-        expected != null &&
-        Number.isFinite(stored) &&
-        Math.abs(stored - expected) >= 0.01;
-      if (dbChainBroken) {
-        const offset =
-          (maxByAccount.get(u.existingRow.accountId) ?? -1) + 1;
-        patch.postedSeq = u.row.postedSeq + offset;
-        correctedPostedSeq += 1;
-      }
     }
     if (Object.keys(patch).length === 0) continue;
     patch.updatedAt = new Date();
@@ -471,6 +392,157 @@ async function runCommit(request: Request) {
       .update(transactions)
       .set(patch)
       .where(eq(transactions.id, u.existingRow.id));
+  }
+
+  // Per-date repair pass. Walks the (now post-insert) chain in
+  // canonical tuple order and, for any date where the chain
+  // predicts a balance different from the stored bank value on
+  // ANY row, re-derives the bank's true intra-day order from
+  // stored balances via reconciliation (`prev + amount = next`
+  // resolves a unique order when stored balances are all set).
+  // The corrected order takes the SAME set of `posted_seq` values
+  // the affected rows already had, just permuted, so global
+  // per-account uniqueness is preserved without minting new
+  // values.
+  //
+  // This does NOT require the new file to carry a Balance column
+  // — only the DB's own stored balances. Surfaced separately
+  // from the `backfilledPostedSeq` (null→value) counter as
+  // `correctedPostedSeq` so the operator can see whether their
+  // re-import nudged the chain back into shape.
+  let correctedPostedSeq = 0;
+  {
+    const touchedAccountIds = Array.from(
+      new Set<string>([
+        ...insertsByAccount.keys(),
+        ...dupeUpdates.map((u) => u.existingRow.accountId),
+      ]),
+    );
+    if (touchedAccountIds.length > 0) {
+      const dbRows = await db
+        .select({
+          id: transactions.id,
+          accountId: transactions.accountId,
+          date: transactions.date,
+          amount: transactions.amount,
+          balance: transactions.balance,
+          postedSeq: transactions.postedSeq,
+        })
+        .from(transactions)
+        .where(inArray(transactions.accountId, touchedAccountIds))
+        .orderBy(
+          asc(transactions.date),
+          asc(sql`COALESCE(${transactions.postedSeq}, 0)`),
+          asc(
+            sql`COALESCE(${transactions.postedAt}, ${transactions.createdAt})`,
+          ),
+          asc(transactions.id),
+        );
+      const accountRows = await db
+        .select({ id: accounts.id, startingBalance: accounts.startingBalance })
+        .from(accounts)
+        .where(inArray(accounts.id, touchedAccountIds));
+      const startingByAccountId = new Map(
+        accountRows.map((a) => [a.id, parseFloat(a.startingBalance)]),
+      );
+      // Group rows by (accountId, date) preserving sort order
+      // within each group so each "slot" of posted_seq is kept
+      // available for the rearranged assignments.
+      const groupedRows = new Map<
+        string,
+        Map<string, typeof dbRows>
+      >();
+      for (const t of dbRows) {
+        let byAccount = groupedRows.get(t.accountId);
+        if (!byAccount) {
+          byAccount = new Map();
+          groupedRows.set(t.accountId, byAccount);
+        }
+        const arr = byAccount.get(t.date) ?? [];
+        arr.push(t);
+        byAccount.set(t.date, arr);
+      }
+      for (const accountId of touchedAccountIds) {
+        const byDate = groupedRows.get(accountId);
+        if (!byDate) continue;
+        const sortedDates = Array.from(byDate.keys()).sort();
+        let cumulative = startingByAccountId.get(accountId) ?? 0;
+        for (const date of sortedDates) {
+          const dayRows = byDate.get(date)!;
+          const dayStart = cumulative;
+          // End-of-day cumulative is just sum-of-amounts regardless
+          // of intra-day order, so advance unconditionally.
+          for (const t of dayRows) {
+            cumulative += parseFloat(t.amount);
+          }
+          // Detect mismatch in current intra-day order.
+          let chainPos = dayStart;
+          let needsRepair = false;
+          for (const t of dayRows) {
+            chainPos += parseFloat(t.amount);
+            if (t.balance == null) continue;
+            const stored = parseFloat(t.balance);
+            if (!Number.isFinite(stored)) continue;
+            if (Math.abs(stored - chainPos) >= 0.01) {
+              needsRepair = true;
+              break;
+            }
+          }
+          if (!needsRepair) continue;
+          // Reconciliation pass: greedy `prev + amount = next`.
+          // Requires every row on the date to have a stored
+          // balance; otherwise we can't resolve the order
+          // unambiguously and we skip.
+          if (!dayRows.every((t) => t.balance != null)) continue;
+          const remaining = dayRows.map((t) => ({
+            id: t.id,
+            amount: parseFloat(t.amount),
+            balance: parseFloat(t.balance ?? "NaN"),
+          }));
+          if (remaining.some((r) => !Number.isFinite(r.balance))) continue;
+          const orderedIds: string[] = [];
+          let prev = dayStart;
+          let ambiguous = false;
+          while (remaining.length > 0) {
+            const matches = remaining.filter(
+              (r) => Math.abs(r.balance - prev - r.amount) < 0.01,
+            );
+            if (matches.length !== 1) {
+              ambiguous = true;
+              break;
+            }
+            const next = matches[0];
+            orderedIds.push(next.id);
+            prev = next.balance;
+            const idx = remaining.indexOf(next);
+            remaining.splice(idx, 1);
+          }
+          if (ambiguous || orderedIds.length !== dayRows.length) continue;
+          // Existing `posted_seq` values on this date, in current
+          // order. The reconciliation tells us which row goes in
+          // which slot; we just permute the existing values so
+          // no new posted_seq is minted and the global per-account
+          // uniqueness invariant holds.
+          const slotValues = dayRows
+            .map((t) => t.postedSeq)
+            .filter((s): s is number => s != null);
+          if (slotValues.length !== dayRows.length) continue;
+          // Apply the permutation: orderedIds[i] gets slotValues[i].
+          for (let i = 0; i < orderedIds.length; i++) {
+            const id = orderedIds[i];
+            const newSeq = slotValues[i];
+            const current = dayRows.find((t) => t.id === id);
+            if (!current) continue;
+            if (current.postedSeq === newSeq) continue;
+            await db
+              .update(transactions)
+              .set({ postedSeq: newSeq, updatedAt: new Date() })
+              .where(eq(transactions.id, id));
+            correctedPostedSeq += 1;
+          }
+        }
+      }
+    }
   }
 
   // Auto-learn account_aliases from any non-empty bankAccountId we saw,

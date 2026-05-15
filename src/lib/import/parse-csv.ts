@@ -129,7 +129,22 @@ function detectExtras(headers: string[]): DetectedExtras {
     categoryKey: findHeader(headers, lower, "category", "categories"),
     refKey: findHeader(headers, lower, "reference", "serial", "serial #", "serial number", "ref"),
     typeKey: findHeader(headers, lower, "type", "transaction type"),
-    balanceKey: findHeader(headers, lower, "balance", "running balance"),
+    // Bank statements use a handful of variant headers for the
+    // post-transaction running balance. The strict equality check in
+    // `findHeader` means we need to spell each variant out — partial
+    // matches would catch starting/closing balances at the bottom of
+    // the file, which mean different things.
+    balanceKey: findHeader(
+      headers,
+      lower,
+      "balance",
+      "running balance",
+      "bank balance",
+      "account balance",
+      "balance after",
+      "balance after transaction",
+      "closing balance",
+    ),
   };
 }
 

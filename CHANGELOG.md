@@ -9,6 +9,50 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.71.0 — 2026-05-15
+
+### Changed
+- **CSV / OFX / QIF import review: declutter pass.** Stripped the
+  dev-era affordances that piled up during parser bring-up —
+  pipeline A/B toggles, method filter buttons, field-richness
+  stats grid, "show identical rows" toggle, and the OFX-metadata
+  card. OFX header info collapses to a single subtitle line
+  (`Macquarie · BSB 182-512 · ····3210 · ledger A$… (date)`). Row
+  count + new/duplicate breakdown collapses to one inline
+  caption.
+- **Import review table now mirrors the Transactions page.**
+  Same `<tr>` rhythm (`group cursor-pointer hover:…`, `px-3 py-2`
+  cells), same column order (date · account · category · payee ·
+  amount), same click-anywhere-to-expand interaction (single
+  row open at a time, keyed by `importHash`). Replaced the dual
+  `ComparisonRow` + `RowGroup` renderers with one `ImportRow` +
+  inline `ImportRowExpanded` panel.
+- **Row state colour-coded.** New rows render on a muted-yellow
+  background (`bg-yellow-50` / `dark:bg-yellow-950/30`),
+  duplicates (exact / legacy / possible) on a muted-emerald
+  background. Click any row to drop down the metadata panel: for
+  duplicates it shows the existing-vs-incoming diff with the
+  about-to-backfill cells tinted amber; for new rows it shows
+  the source-only fields (raw id, normalised payee, splits,
+  address, ref / check / trn type, running balance) plus the
+  trigram-neighbour diagnostic.
+
+### Fixed
+- **Running balance after multiple CSV imports.** The parser
+  assigned `posted_seq` per file (0..N-1), not per account, so two
+  CSV imports into the same account both produced rows with
+  `posted_seq=0` on overlapping dates. The running-balance tuple
+  comparison `(date, posted_seq, COALESCE(posted_at, created_at),
+  id) <=` then fell through to `created_at` — the insert
+  timestamp, not the bank's chronological intent — and reordered
+  intra-day rows when the newer file was imported first.
+  Commit-batched now offsets each file's parser-assigned values
+  by the account's current `MAX(posted_seq)` so values stay
+  unique per account; intra-file relative order is preserved
+  (constant offset) so bank intra-day order still wins the
+  tiebreaker. Existing colliding rows aren't migrated — fix is
+  forward-only on new imports.
+
 ## 0.70.0 — 2026-05-15
 
 ### Changed

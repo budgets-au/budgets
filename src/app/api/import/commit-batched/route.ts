@@ -256,6 +256,36 @@ async function runCommit(request: Request) {
     arr.push(r);
   }
 
+  // Pull the current max(posted_seq) per touched account so we can
+  // offset the parser-assigned 0..N-1 values forward. The parser
+  // numbers rows by file position only, so two CSV imports for the
+  // same account both produce postedSeq=0 on the first row — and
+  // when those rows share a date, the running-balance tuple compare
+  // `(date, posted_seq, COALESCE(posted_at, created_at), id)` falls
+  // through to created_at (= insert timestamp, NOT bank time),
+  // which reorders intra-day rows and breaks the running balance.
+  // Offsetting by per-account max keeps relative intra-file order
+  // (constant offset) while making postedSeq unique per account, so
+  // the tiebreaker always resolves before falling through. The map
+  // covers every account in the request (inserts AND dupe-backfill
+  // updates) since both paths offset against the same base.
+  const touchedAccountIds = Array.from(
+    new Set<string>([
+      ...insertsByAccount.keys(),
+      ...dupeUpdates.map((u) => u.existingRow.accountId),
+    ]),
+  );
+  const maxByAccount = new Map<string, number>();
+  for (const accountId of touchedAccountIds) {
+    const [maxRow] = await db
+      .select({
+        m: sql<number>`COALESCE(MAX(${transactions.postedSeq}), -1)`,
+      })
+      .from(transactions)
+      .where(eq(transactions.accountId, accountId));
+    maxByAccount.set(accountId, Number(maxRow?.m ?? -1));
+  }
+
   const importLogIds: string[] = [];
   let imported = 0;
   for (const [accountId, group] of insertsByAccount) {
@@ -274,6 +304,7 @@ async function runCommit(request: Request) {
     importLogIds.push(log.id);
 
     if (group.length === 0) continue;
+    const offset = (maxByAccount.get(accountId) ?? -1) + 1;
     await db.insert(transactions).values(
       group.map((r) => {
         const normalized = r.payee ? normalizePayee(r.payee) : null;
@@ -289,7 +320,11 @@ async function runCommit(request: Request) {
           importHash: r.importHash,
           importLogId: log.id,
           postedAt: r.postedAt ? new Date(r.postedAt) : null,
-          postedSeq: r.postedSeq ?? null,
+          // Offset the parser's per-file 0..N-1 by the account's
+          // current max+1 so postedSeq stays unique across imports.
+          // Relative order within the file is preserved (constant
+          // offset), so intra-day bank order still wins.
+          postedSeq: r.postedSeq != null ? r.postedSeq + offset : null,
           type: r.type ?? null,
           balance: r.balance ?? null,
         };
@@ -343,7 +378,12 @@ async function runCommit(request: Request) {
       backfilledCategory += 1;
     }
     if (u.row.postedSeq != null && u.existingRow.postedSeq == null) {
-      patch.postedSeq = u.row.postedSeq;
+      // Apply the same per-account offset as the inserts above so
+      // backfilled values don't collide with the (offset) insert
+      // space for the same import. existingRow.accountId is the
+      // account the row already lives in; same offset map.
+      const offset = (maxByAccount.get(u.existingRow.accountId) ?? -1) + 1;
+      patch.postedSeq = u.row.postedSeq + offset;
       backfilledPostedSeq += 1;
     }
     if (Object.keys(patch).length === 0) continue;

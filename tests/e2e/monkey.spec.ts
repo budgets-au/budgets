@@ -1,8 +1,12 @@
-import { test, type Page } from "@playwright/test";
+import { test, type Locator, type Page } from "@playwright/test";
 import {
   clearFindings,
+  describeOutcome,
+  fillInputSafely,
+  findSubmitButton,
   isDestructiveLabel,
   isNoiseMessage,
+  observeSubmitOutcome,
   recordFinding,
   type MonkeyFinding,
 } from "./_monkey-helpers";
@@ -160,6 +164,11 @@ test.describe("1000 monkeys exploratory crawl", () => {
       // Cycle each <select> through every option.
       await cycleSelects(page, p.path, errors);
 
+      // Fill every form / dialog on the page and submit it.
+      // Surfaces silent-no-op submits as questions — the bug class
+      // click-only crawling can't see.
+      await fillAndSubmitForms(page, p.path, errors);
+
       for (const f of errors) {
         await recordFinding(f);
       }
@@ -242,4 +251,105 @@ async function dismissOpenOverlay(page: Page): Promise<void> {
   await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(80);
   await page.keyboard.press("Escape").catch(() => {});
+}
+
+/** Walk every `<form>` and every visible dialog content block on
+ * the page, fill its inputs with safe defaults, submit, and
+ * record the outcome.
+ *
+ * Dialogs typically aren't open by default — we rely on the
+ * preceding click-safe-buttons phase to have opened (and not
+ * yet dismissed) any modal forms whose trigger buttons matched.
+ * Standalone `<form>` elements (e.g. the search bar) get the
+ * fill+submit treatment regardless.
+ *
+ * Each form gets a reload between submits so persistence isn't
+ * tested implicitly here — that's the switch sweep's job. */
+async function fillAndSubmitForms(
+  page: Page,
+  pagePath: string,
+  errors: MonkeyFinding[],
+): Promise<void> {
+  // Snapshot the form containers as DOM-stable handles. We
+  // recompute the count each iteration because submitting one
+  // form can re-render the page.
+  const FORM_SELECTOR =
+    'form, [data-slot="dialog-content"], [role="dialog"]';
+  let processed = 0;
+  const PROCESSED_CAP = 8; // per-page cap; keeps the time budget honest
+  while (processed < PROCESSED_CAP) {
+    const containers = page.locator(FORM_SELECTOR);
+    const count = await containers.count().catch(() => 0);
+    if (processed >= count) break;
+    const container = containers.nth(processed);
+    processed += 1;
+    if (!(await container.isVisible().catch(() => false))) continue;
+
+    const submit = await findSubmitButton(container);
+    if (!submit) continue;
+    const submitLabel =
+      (await submit.textContent().catch(() => null))?.trim() ??
+      "(unnamed submit)";
+
+    // Fill every visible input/textarea/select inside the form.
+    const filled = await fillContainerInputs(container);
+    if (filled === 0) continue; // nothing to drive — skip
+
+    const outcome = await observeSubmitOutcome(page, async () => {
+      await submit.click({ timeout: 2_000 }).catch(() => {});
+    });
+
+    if (outcome.kind === "silent") {
+      errors.push({
+        page: pagePath,
+        action: `submit "${submitLabel}"`,
+        severity: "info",
+        kind: "question",
+        message: `Filled ${filled} input${filled === 1 ? "" : "s"} and clicked **${submitLabel}** — no network call, toast, or navigation fired. Should it have?`,
+      });
+    } else if (outcome.kind === "error") {
+      errors.push({
+        page: pagePath,
+        action: `submit "${submitLabel}"`,
+        severity: "error",
+        kind: "issue",
+        message: `Console error during submit: ${outcome.message}`,
+      });
+    } else if (outcome.kind === "network" && outcome.status >= 500) {
+      errors.push({
+        page: pagePath,
+        action: `submit "${submitLabel}"`,
+        severity: "error",
+        kind: "issue",
+        message: describeOutcome(outcome),
+      });
+    }
+    // Non-error network / toast / nav are healthy — don't record.
+
+    // Reset for the next form. Dismiss any dialog the submit may
+    // have opened, then reload to a clean state. Reload is
+    // necessary because submitting one form might cause the
+    // others on the page to re-render in a different DOM order
+    // (or be replaced entirely by a thank-you screen).
+    await dismissOpenOverlay(page);
+    await page.goto(pagePath).catch(() => {});
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(200);
+  }
+}
+
+/** Fill every visible, enabled, non-destructive input/select/
+ * textarea inside the given container. Returns the count of
+ * inputs the helper actually touched — caller skips the submit
+ * if nothing was filled. */
+async function fillContainerInputs(container: Locator): Promise<number> {
+  const inputs = container.locator(
+    "input:visible, textarea:visible, select:visible",
+  );
+  const count = await inputs.count().catch(() => 0);
+  let filled = 0;
+  for (let i = 0; i < count; i++) {
+    if (await fillInputSafely(inputs.nth(i))) filled += 1;
+  }
+  return filled;
 }

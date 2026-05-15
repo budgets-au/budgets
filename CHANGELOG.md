@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.70.0 — 2026-05-15
+
+### Changed
+- **1000-monkey crawl now fills + submits forms, surfaces silent
+  submits as questions.** The click-only crawl skipped anything
+  inside a `<form>` or `[data-slot="dialog-content"]`, which is
+  exactly the surface that hid the 0.46.x saved-filters Save bug
+  (clicking Save without typing a name was a silent no-op).
+  Added a form-filling phase per page:
+  fill every visible input with safe defaults
+  (`monkey-test` / `42` / `2026-01-01`), click the submit-shaped
+  button, watch a one-shot observer (POST/PATCH/PUT/DELETE
+  requests, sonner toast, navigation, console errors) for
+  ~800 ms. Submits with no observable side-effect become
+  `kind: "question"` findings — possibly intentional, possibly
+  bugs, the operator decides.
+- **TODO.md monkey block split into "Issues" + "Questions for
+  review" subsections.** The teardown groups by kind so triage
+  reads top-down.
+
 ## 0.69.0 — 2026-05-15
 
 ### Changed

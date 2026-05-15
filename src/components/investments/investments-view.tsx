@@ -32,6 +32,7 @@ interface ListRow {
   currentPrice: number | null;
   priorClose: number | null;
   weekAgoClose: number | null;
+  monthAgoClose: number | null;
   costBasis: number;
   currentValue: number;
   totalReturnAbs: number;
@@ -188,6 +189,38 @@ export function InvestmentsView() {
   );
 }
 
+function GainRangePicker({
+  range,
+  onRange,
+}: {
+  range: GainRange;
+  onRange: (r: GainRange) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Gain range"
+      className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
+    >
+      {GAIN_RANGES.map((g) => (
+        <button
+          key={g.id}
+          role="tab"
+          aria-selected={range === g.id}
+          onClick={() => onRange(g.id)}
+          className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
+            range === g.id
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {g.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function GainCell({
   current,
   base,
@@ -269,6 +302,14 @@ function KindTotalsCard({
   );
 }
 
+type GainRange = "day" | "week" | "month" | "return";
+const GAIN_RANGES: { id: GainRange; label: string }[] = [
+  { id: "month", label: "Month" },
+  { id: "week", label: "Week" },
+  { id: "day", label: "Day" },
+  { id: "return", label: "Return" },
+];
+
 function InvestmentTable({
   label,
   Icon,
@@ -292,6 +333,14 @@ function InvestmentTable({
   const isStockLike = kind === "stock" || kind === "paper";
   const qtyLabel = isStockLike ? "Qty" : "Vested / Granted";
   const dateLabel = isStockLike ? "Bought" : "Granted";
+  // Single dynamic gain column for stock-like panels. Non-stock-like
+  // groups (RSUs, options) have no per-period closes so the picker is
+  // hidden and the column is always "Return". Defaults to Return —
+  // that's the highest-signal cell at a glance.
+  const [gainRange, setGainRange] = useState<GainRange>("return");
+  const effectiveRange: GainRange = isStockLike ? gainRange : "return";
+  const gainLabel =
+    GAIN_RANGES.find((g) => g.id === effectiveRange)?.label ?? "Return";
 
   const confirm = useConfirm();
   async function handleDelete(row: ListRow) {
@@ -314,9 +363,14 @@ function InvestmentTable({
     <>
       <Card>
         <CardContent className="p-0">
-          <div className="px-3 py-2 border-b flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            <Icon className="h-3 w-3" />
-            {label}
+          <div className="px-3 py-2 border-b flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <Icon className="h-3 w-3" />
+              {label}
+            </div>
+            {isStockLike && (
+              <GainRangePicker range={gainRange} onRange={setGainRange} />
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
@@ -332,13 +386,9 @@ function InvestmentTable({
                     </>
                   )}
                   <th className="text-right px-3 py-1.5 whitespace-nowrap">Value</th>
-                  {isStockLike && (
-                    <>
-                      <th className="text-right px-3 py-1.5 whitespace-nowrap">Day</th>
-                      <th className="text-right px-3 py-1.5 whitespace-nowrap">Week</th>
-                    </>
-                  )}
-                  <th className="text-right px-3 py-1.5 whitespace-nowrap">Return</th>
+                  <th className="text-right px-3 py-1.5 whitespace-nowrap">
+                    {gainLabel}
+                  </th>
                   <th className="w-px" />
                 </tr>
               </thead>
@@ -388,39 +438,41 @@ function InvestmentTable({
                       >
                         {r.currentPrice != null ? formatAUD(r.currentValue) : "—"}
                       </td>
-                      {isStockLike && (
-                        <>
-                          <GainCell
-                            current={r.currentPrice}
-                            base={r.priorClose}
-                            quantity={qty}
-                          />
-                          <GainCell
-                            current={r.currentPrice}
-                            base={r.weekAgoClose}
-                            quantity={qty}
-                          />
-                        </>
+                      {effectiveRange === "return" ? (
+                        <td
+                          className={`px-3 py-2 text-right tabular-nums whitespace-nowrap text-xs ${
+                            r.currentPrice != null
+                              ? amountClass(r.totalReturnAbs)
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {r.currentPrice != null ? (
+                            <>
+                              {r.totalReturnAbs >= 0 ? "+" : ""}
+                              {formatAUD(r.totalReturnAbs).replace("A$", "$")}
+                              {r.totalReturnPct != null && (
+                                <span className="ml-1 text-[10px]">
+                                  ({(r.totalReturnPct * 100).toFixed(1)}%)
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      ) : (
+                        <GainCell
+                          current={r.currentPrice}
+                          base={
+                            effectiveRange === "day"
+                              ? r.priorClose
+                              : effectiveRange === "week"
+                              ? r.weekAgoClose
+                              : r.monthAgoClose
+                          }
+                          quantity={qty}
+                        />
                       )}
-                      <td
-                        className={`px-3 py-2 text-right tabular-nums whitespace-nowrap text-xs ${
-                          r.currentPrice != null ? amountClass(r.totalReturnAbs) : "text-muted-foreground"
-                        }`}
-                      >
-                        {r.currentPrice != null ? (
-                          <>
-                            {r.totalReturnAbs >= 0 ? "+" : ""}
-                            {formatAUD(r.totalReturnAbs).replace("A$", "$")}
-                            {r.totalReturnPct != null && (
-                              <span className="ml-1 text-[10px]">
-                                ({(r.totalReturnPct * 100).toFixed(1)}%)
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
                       <td className="px-2 py-2 whitespace-nowrap text-right">
                         <div className="inline-flex gap-0.5">
                           <button

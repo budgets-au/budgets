@@ -47,6 +47,8 @@ interface ListRow {
   priorClose: number | null;
   /** Close from ~5 trading days ago; used for the week gain column. */
   weekAgoClose: number | null;
+  /** Close from ~22 trading days ago; used for the month gain column. */
+  monthAgoClose: number | null;
   costBasis: number;
   currentValue: number;
   totalReturnAbs: number;
@@ -74,33 +76,42 @@ export async function GET() {
     vestsById.set(v.investmentId, arr);
   }
 
-  // Fetch a 2-week window of closes per unique symbol so we can extract
-  // current / prior-day / week-ago prices for the gain columns. Tolerate
-  // failures so a single bad ticker doesn't tank the whole list.
+  // Fetch a ~6-week window of closes per unique symbol so we can extract
+  // current / prior-day / week-ago / month-ago prices for the gain
+  // columns. Tolerate failures so a single bad ticker doesn't tank the
+  // whole list.
   interface KeyPrices {
     current: number | null;
     prior: number | null;
     weekAgo: number | null;
+    monthAgo: number | null;
   }
   const symbols = Array.from(new Set(rows.map((r) => r.symbol)));
   const today = new Date();
-  const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const windowStart = new Date(today.getTime() - 42 * 24 * 60 * 60 * 1000);
   const priceEntries = await Promise.all(
     symbols.map(async (s): Promise<readonly [string, KeyPrices]> => {
+      const empty: KeyPrices = {
+        current: null,
+        prior: null,
+        weekAgo: null,
+        monthAgo: null,
+      };
       try {
-        const { closes } = await getDailyHistory(s, twoWeeksAgo, today);
-        if (closes.length === 0) {
-          return [s, { current: null, prior: null, weekAgo: null }] as const;
-        }
+        const { closes } = await getDailyHistory(s, windowStart, today);
+        if (closes.length === 0) return [s, empty] as const;
         const sorted = closes.slice().sort((a, b) => (a.date < b.date ? -1 : 1));
         const current = sorted.at(-1)?.close ?? null;
         const prior = sorted.length >= 2 ? sorted[sorted.length - 2].close : null;
         // 5 trading days back = 6th-from-last bar (today included).
         const weekAgo =
           sorted.length >= 6 ? sorted[sorted.length - 6].close : null;
-        return [s, { current, prior, weekAgo }] as const;
+        // ~22 trading days back ≈ one calendar month.
+        const monthAgo =
+          sorted.length >= 23 ? sorted[sorted.length - 23].close : null;
+        return [s, { current, prior, weekAgo, monthAgo }] as const;
       } catch {
-        return [s, { current: null, prior: null, weekAgo: null }] as const;
+        return [s, empty] as const;
       }
     }),
   );
@@ -113,6 +124,7 @@ export async function GET() {
       current: null,
       prior: null,
       weekAgo: null,
+      monthAgo: null,
     };
     const price = prices.current;
     const cb = costBasis(r);
@@ -146,6 +158,7 @@ export async function GET() {
       currentPrice: price,
       priorClose: prices.prior,
       weekAgoClose: prices.weekAgo,
+      monthAgoClose: prices.monthAgo,
       costBasis: cb,
       currentValue: cv,
       totalReturnAbs: ret.absolute,

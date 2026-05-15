@@ -9,6 +9,30 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.89.0 — 2026-05-15
+
+### Changed
+- **Investments tables: Day / Week / Return → one dynamic column.**
+  Stocks + Paper-trade panels used to render four right-side
+  columns (Value, Day, Week, Return). Day + Week + Return are now
+  collapsed into a single column whose header + content track a
+  per-panel **Month / Week / Day / Return** chip-group picker in
+  the panel's top-right corner. Default = Return (matches the cell
+  that previously dominated the right-most slot). Picker styling
+  mirrors the chart's `RangePicker` (`rounded-md border
+  bg-muted/30 p-0.5`; active pill `bg-background text-foreground
+  shadow-sm`). Each panel's picker is independent React state —
+  changing Stocks doesn't move Paper-trade and vice versa. RSU
+  and Options panels are unchanged — they only ever had Return.
+
+### Internal
+- **`/api/investments` returns `monthAgoClose`.** Price-fetch
+  window widened from 2 weeks → ~6 weeks (42 days) per symbol so
+  the response can surface a `monthAgoClose` field (close ~22
+  trading days back). Sparse-history symbols return `null` for
+  any baseline the cache can't reach, and the table cell falls
+  back to "—" the same way Day/Week already did.
+
 ## 0.88.0 — 2026-05-15
 
 ### Changed

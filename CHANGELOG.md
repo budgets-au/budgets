@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.84.0 — 2026-05-15
+
+### Docs
+- **README rewritten in plain English.** Dropped the
+  technical-stack / stats / project-layout / migrations sections;
+  kept the screenshot grid and added a short "What it does"
+  pitch in operator language (no Drizzle/Recharts/SQLCipher
+  mentions until you're already running it). Install collapsed
+  to a single `podman pull` + `podman run` snippet against
+  `ghcr.io/budgets-au/budgets:latest`. Dropped from 297 lines
+  to a focused product README.
+- **Screenshot regeneration is now a Playwright spec.**
+  `tests/e2e/screenshots.spec.ts` runs against the e2e dev
+  server, seeds a handful of investments / super snapshots /
+  paper-trade rows on top of the existing sample-data autoseed,
+  and writes both light + dark variants of every page the
+  README references into `screenshots/`. Run when the visuals
+  drift: `pnpm test:e2e tests/e2e/screenshots.spec.ts`.
+
 ## 0.83.0 — 2026-05-15
 
 ### Added

@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.105.0 — 2026-05-15
+
+### Security
+- **Default-password nag banner across the app shell.** When the
+  user's stored password still matches the `admin/admin` seed
+  (detected server-side at NextAuth `authorize` time via a
+  `compare("admin", user.passwordHash)` re-check after the
+  login compare succeeds), the JWT carries
+  `session.user.mustChangePassword = true`. A new amber strip
+  at the top of the (app) layout reads "Default admin/admin
+  password still in use. Change it before exposing this server
+  beyond your LAN." with a link to Settings → Security. The
+  banner stays until the user changes their password AND signs
+  back in (next login re-runs the compare and the flag clears).
+  Non-blocking: navigation still works, but the strip is
+  persistent on every route until resolved. No schema change,
+  no migration — pure runtime check on login (one extra ~80 ms
+  bcrypt compare).
+
 ## 0.104.0 — 2026-05-15
 
 ### Security / Added

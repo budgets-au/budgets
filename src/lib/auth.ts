@@ -27,7 +27,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const valid = await compare(credentials.password as string, user.passwordHash);
         if (!valid) return null;
 
-        return { id: user.id, name: user.name, username: user.username, role: user.role };
+        // Detect the default admin/admin seed and surface it via a
+        // session flag so the UI can nag the operator into rotating
+        // it. bcrypt hashes are non-deterministic so we have to
+        // re-compare the seed string against the stored hash rather
+        // than comparing hashes directly. One extra ~80 ms compare
+        // per login is acceptable cost.
+        const mustChangePassword = await compare("admin", user.passwordHash);
+
+        return {
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          role: user.role,
+          mustChangePassword,
+        };
       },
     }),
   ],
@@ -40,6 +54,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = (user as { role?: string }).role;
+        token.mustChangePassword = (user as { mustChangePassword?: boolean })
+          .mustChangePassword;
       }
       return token;
     },
@@ -47,6 +63,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         (session.user as { role?: string }).role = token.role as string;
+        (session.user as { mustChangePassword?: boolean }).mustChangePassword =
+          token.mustChangePassword as boolean | undefined;
       }
       return session;
     },

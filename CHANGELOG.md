@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.109.0 — 2026-05-15
+
+### Changed
+- **Import-review row style matches `/transactions` for new
+  rows.** Pre: new rows (will-INSERT) had a yellow tint, matched
+  rows had a green tint. Post: new rows render with the same
+  neutral `hover:bg-muted` the live transactions table uses, so
+  the import-review reads like the same surface the operator
+  will land on after commit. Matched rows keep their emerald
+  tint — that "already in the DB" state is the important visual
+  signal worth keeping a distinct colour.
+- **Stronger indigo on the import-review CategoryDropdown when a
+  row needs a category.** Bumped from `bg-indigo-500/15
+  border-indigo-500/40 text-indigo-700` (light) to
+  `bg-indigo-500/30 border-indigo-500/70 text-indigo-800`
+  (dark: `bg-indigo-500/40 border-indigo-400 text-indigo-100`).
+  Reads as "this needs your attention" rather than a hint.
+
 ## 0.108.0 — 2026-05-15
 
 ### Changed

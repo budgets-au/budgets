@@ -576,7 +576,13 @@ function ofxSubtitle(m: OFXMeta): string {
 }
 
 const ROW_STATE_CLASS = {
-  new: "bg-yellow-50 dark:bg-yellow-950/30 hover:bg-yellow-100/80 dark:hover:bg-yellow-950/50",
+  // "New" rows (will INSERT) get the same neutral treatment the
+  // live /transactions table uses — no fill, hover-muted — so the
+  // import-review reads like the same surface the operator will
+  // end up on after commit. "Duplicate" rows keep the green tint;
+  // their "already in the DB, nothing to add" state is the
+  // important visual signal that warrants a distinct colour.
+  new: "hover:bg-muted",
   duplicate:
     "bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100/80 dark:hover:bg-emerald-950/50",
 } as const;
@@ -1427,7 +1433,7 @@ function RuleCreator({
         triggerClassName={cn(
           "py-0 min-w-[160px]",
           needsAction &&
-            "bg-indigo-500/15 border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/25",
+            "bg-indigo-500/30 border-indigo-500/70 text-indigo-800 dark:text-indigo-100 hover:bg-indigo-500/40 dark:bg-indigo-500/40 dark:border-indigo-400",
         )}
         uncategorisedLabel={null}
       />

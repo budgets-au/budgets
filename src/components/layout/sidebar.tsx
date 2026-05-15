@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import useSWR from "swr";
 import { cn } from "@/lib/utils";
 import { compareSemver } from "@/lib/semver-compare";
@@ -23,7 +22,6 @@ import {
   X,
   Lock,
   Loader2,
-  LogOut,
 } from "lucide-react";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import { useAddCategory } from "@/hooks/use-add-category-dialog";
@@ -218,14 +216,6 @@ export function Sidebar() {
               <Lock className="h-4 w-4 shrink-0" />
             )}
             Lock database
-          </button>
-          <button
-            type="button"
-            onClick={() => signOut({ redirectTo: "/login" })}
-            className="flex w-full items-center gap-3 px-6 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <LogOut className="h-4 w-4 shrink-0" />
-            Sign out
           </button>
         </div>
       </aside>

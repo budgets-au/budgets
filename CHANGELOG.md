@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.106.0 — 2026-05-15
+
+### Changed
+- **Sidebar Sign-out button removed.** Wasn't carrying weight —
+  the operator can lock the database (still in the sidebar) or
+  let the session cookie expire. Reduces sidebar footer to a
+  single Lock-database action.
+- **Dashboard edit-mode Save layout button uses the indigo CTA
+  variant.** The Cancel + Save pair now reads as a proper
+  "primary commit, secondary cancel" pattern matching the
+  topbar CTAs (Import, New Scheduled, etc).
+
 ## 0.105.0 — 2026-05-15
 
 ### Security

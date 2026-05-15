@@ -105,7 +105,7 @@ export function WidgetDrawer({
         <Button size="sm" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" onClick={onSave}>
+        <Button size="sm" variant="indigo" onClick={onSave}>
           Save layout
         </Button>
       </div>

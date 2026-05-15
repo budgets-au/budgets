@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { auth, isAdmin } from "@/lib/auth";
 import { existsSync, statSync } from "node:fs";
 import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
@@ -10,8 +10,10 @@ import {
 } from "@/lib/backup/sqlite-backup";
 
 /** GET /api/backup/[filename]/download — stream the raw .sqlite
- * file to the browser. The file is already SQLCipher-encrypted; the
- * download is opaque without the user's passphrase. */
+ * file to the browser. Admin-only — the file is SQLCipher-encrypted
+ * but it still represents every household member's data and only
+ * the operator who owns the passphrase should be able to take it
+ * off the box. */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ filename: string }> },
@@ -19,6 +21,9 @@ export async function GET(
   const session = await auth();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!isAdmin(session)) {
+    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
   }
   const { filename } = await params;
   if (!isSafeBackupFilename(filename)) {

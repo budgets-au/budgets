@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, isAdmin } from "@/lib/auth";
 import { deleteBackup, isSafeBackupFilename } from "@/lib/backup/sqlite-backup";
 
-/** DELETE /api/backup/[filename] — drop a backup file. The filename
- * is validated against the allowlist regex before any fs operation,
+/** DELETE /api/backup/[filename] — drop a backup file. Admin-only:
+ * a backup is a full unencrypted snapshot of every household
+ * member's data and dropping one is destructive. The filename is
+ * validated against the allowlist regex before any fs operation,
  * so a path-traversal probe (`..%2F..%2Fetc%2Fpasswd`) gets a 400. */
 export async function DELETE(
   _request: Request,
@@ -12,6 +14,9 @@ export async function DELETE(
   const session = await auth();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!isAdmin(session)) {
+    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
   }
   const { filename } = await params;
   if (!isSafeBackupFilename(filename)) {

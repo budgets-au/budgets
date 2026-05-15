@@ -52,3 +52,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+/** True when the supplied session belongs to an `admin`-role user.
+ * Tolerates `null` / unauthenticated sessions (returns false). Used
+ * by privileged API routes (rekey, lock, backup management, user
+ * management) to gate the writes behind the admin role rather than
+ * just "any logged-in user". Member users can still read everything;
+ * they just can't perform shared-state destructive operations. */
+export function isAdmin(session: unknown): boolean {
+  const role = (session as { user?: { role?: string } } | null)?.user?.role;
+  return role === "admin";
+}

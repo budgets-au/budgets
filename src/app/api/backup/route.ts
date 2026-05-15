@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, isAdmin } from "@/lib/auth";
 import {
   diskUsage,
   listBackups,
@@ -8,12 +8,16 @@ import {
 } from "@/lib/backup/sqlite-backup";
 
 /** GET /api/backup — list backups newest-first plus the current
- * schedule config. The settings page hits this on every render to
- * keep the table fresh. */
+ * schedule config. Admin-only: the backup file is a full
+ * unencrypted snapshot of every household member's data, so even
+ * the filename listing is privileged. */
 export async function GET() {
   const session = await auth();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!isAdmin(session)) {
+    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
   }
   try {
     return NextResponse.json({
@@ -28,12 +32,16 @@ export async function GET() {
   }
 }
 
-/** POST /api/backup — take a manual backup right now. Returns the
- * created entry so the UI can prepend it without re-fetching. */
+/** POST /api/backup — take a manual backup right now. Admin-only;
+ * see GET. Returns the created entry so the UI can prepend it
+ * without re-fetching. */
 export async function POST() {
   const session = await auth();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!isAdmin(session)) {
+    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
   }
   try {
     const entry = await takeBackup("manual");

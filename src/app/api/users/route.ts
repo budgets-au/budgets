@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { hash } from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { auth, isAdmin } from "@/lib/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { validateUsername, validatePassword, validateRole } from "@/lib/user-rules";
-
-/** Admin-only. The user manager surfaces the password hash never;
- * everything else is fair game for the Settings UI. */
-function isAdmin(session: unknown): boolean {
-  const role = (session as { user?: { role?: string } } | null)?.user?.role;
-  return role === "admin";
-}
 
 export async function GET() {
   const session = await auth();

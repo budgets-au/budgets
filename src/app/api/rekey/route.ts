@@ -1,19 +1,23 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, isAdmin } from "@/lib/auth";
 import { rekey } from "@/db";
 
 /**
- * Rotate the SQLCipher passphrase. Auth-gated — only a logged-in user
- * can change the key. The endpoint validates the current passphrase
- * against the file (same path as /api/unlock) and then issues
- * PRAGMA rekey on the live connection. On success, future starts must
- * use the new passphrase; existing sessions keep working since the
- * connection is keyed with the new value in place.
+ * Rotate the SQLCipher passphrase. Admin-only — rotating the
+ * encryption key is a household-wide operation that should not be
+ * available to member users. The endpoint validates the current
+ * passphrase against the file (same path as /api/unlock) and then
+ * issues PRAGMA rekey on the live connection. On success, future
+ * starts must use the new passphrase; existing sessions keep
+ * working since the connection is keyed with the new value in place.
  */
 export async function POST(request: Request) {
   const session = await auth();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!isAdmin(session)) {
+    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
   }
   let body: unknown;
   try {

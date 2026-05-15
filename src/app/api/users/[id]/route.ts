@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hash } from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { auth, isAdmin } from "@/lib/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import {
@@ -10,11 +10,6 @@ import {
   validateRole,
   validateUsername,
 } from "@/lib/user-rules";
-
-function isAdmin(session: unknown): boolean {
-  const role = (session as { user?: { role?: string } } | null)?.user?.role;
-  return role === "admin";
-}
 
 function requesterId(session: unknown): string | null {
   const id = (session as { user?: { id?: string } } | null)?.user?.id;

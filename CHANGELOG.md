@@ -9,6 +9,27 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.95.0 — 2026-05-15
+
+### Security
+- **Admin-only gate on rekey / lock / backup endpoints.** Used to
+  check `session` only, which meant any logged-in member could
+  rotate the SQLCipher key, drop the in-memory key (bouncing every
+  device on the LAN to `/unlock`), or list / download / delete /
+  restore backups (each of which contains every household
+  member's data). All seven endpoints now also gate on
+  `session.user.role === "admin"` and return 403 to members:
+  - `POST /api/rekey`
+  - `POST /api/lock`
+  - `GET / POST /api/backup`
+  - `DELETE /api/backup/[filename]`
+  - `GET /api/backup/[filename]/download`
+  - `POST /api/backup/restore`
+  - `PATCH /api/backup/schedule`
+  Matches the existing posture on `/api/users/*`. The two duplicate
+  inline `isAdmin` helpers in users routes are folded into a single
+  exported `isAdmin(session)` in `src/lib/auth.ts`.
+
 ## 0.94.0 — 2026-05-15
 
 ### Fixed

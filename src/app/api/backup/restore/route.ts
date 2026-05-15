@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { auth } from "@/lib/auth";
+import { auth, isAdmin } from "@/lib/auth";
 import {
   backupDir,
   isSafeBackupFilename,
@@ -44,6 +44,9 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!isAdmin(session)) {
+    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
   }
 
   // Resolve the candidate file path on disk. Existing backups live in

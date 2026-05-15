@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.93.0 — 2026-05-15
+
+### Fixed
+- **Seed races on cold start (e2e + dev HMR).** Two concurrent
+  module evaluations could both pass the "is the DB seeded?"
+  check before either had committed, producing
+  `UNIQUE constraint failed: users.username` and
+  `SQLITE_BUSY` / `SQLITE_BUSY_SNAPSHOT` errors in the logs that
+  hid real problems. Two-part fix:
+  - `seedDefaultUserIfMissing` now uses
+    `INSERT … ON CONFLICT(username) DO NOTHING` so the losing
+    racer silently no-ops; the "Seeded default admin/admin"
+    log only fires when `changes > 0`.
+  - `seedSampleDataIfMissing` adds a fast-path flag check
+    outside the transaction, and the transaction itself is now
+    `behavior: "immediate"` so the second racer blocks on the
+    write lock (with the existing `busy_timeout = 5000`)
+    instead of erroring out.
+
 ## 0.92.0 — 2026-05-15
 
 ### Fixed

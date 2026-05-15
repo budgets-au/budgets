@@ -224,14 +224,21 @@ function seedDefaultUserIfMissing(): void {
       .get() as { n: number } | undefined;
     if ((row?.n ?? 0) > 0) return;
     const passwordHash = hashSync("admin", 12);
-    state.client
+    // `INSERT … ON CONFLICT(username) DO NOTHING` so concurrent
+    // module evaluations (Turbopack chunks during dev / e2e cold
+    // start can both pass the COUNT check before either has
+    // committed) don't trip a UNIQUE-constraint error and spam the
+    // logs. The first writer wins; later ones quietly no-op.
+    const result = state.client
       .prepare(
-        "INSERT INTO users (id, name, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO users (id, name, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(username) DO NOTHING",
       )
       .run(crypto.randomUUID(), "Admin", "admin", passwordHash, "admin", Date.now());
-    console.log(
-      "[db] Seeded default admin/admin user. Change the password in Settings → Users.",
-    );
+    if (result.changes > 0) {
+      console.log(
+        "[db] Seeded default admin/admin user. Change the password in Settings → Users.",
+      );
+    }
   } catch (e) {
     console.error("[db] Failed to seed default user:", e);
   }
@@ -278,12 +285,24 @@ export function seedSystemCategoriesIfMissing(): void {
 export function seedSampleDataIfMissing(): void {
   if (!state.drizzleDb || !state.client) return;
   try {
+    // Fast path: skip the transaction entirely when the flag is
+    // already set. Avoids the BEGIN IMMEDIATE write-lock on every
+    // unlock after the first.
+    const flagRow = state.drizzleDb
+      .select({ flag: appSettings.sampleDataSeeded })
+      .from(appSettings)
+      .where(eq(appSettings.id, 1))
+      .all();
+    if (flagRow[0]?.flag) return;
+
     // Wrap the entire flag-check / existing-data-gate / insert /
     // flag-write inside a single SQLite transaction so two
     // simultaneous unlocks can't both pass the gate before either
     // commits — without this, a fast double-unlock can double-seed.
-    // SQLite's connection-level write-lock serialises the transactions,
-    // so the second caller observes flag=true and short-circuits.
+    // `behavior: "immediate"` grabs the write lock on BEGIN so the
+    // second concurrent transaction blocks (`busy_timeout = 5000`
+    // gives it room) instead of erroring with SQLITE_BUSY when it
+    // first tries to write.
     state.drizzleDb.transaction((tx) => {
       const settingsRow = tx
         .select({ flag: appSettings.sampleDataSeeded })
@@ -343,7 +362,7 @@ export function seedSampleDataIfMissing(): void {
       console.log(
         `[db] Seeded sample data: ${payload.accounts.length} accounts, ${payload.transactions.length} transactions, ${payload.schedules.length} schedules.`,
       );
-    });
+    }, { behavior: "immediate" });
   } catch (e) {
     console.error("[db] Failed to seed sample data:", e);
   }

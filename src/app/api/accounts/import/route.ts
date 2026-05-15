@@ -81,6 +81,14 @@ export interface PreviewAccount {
   skip: boolean;
 }
 
+// Account-list CSVs are tiny — even hundreds of accounts fit in
+// well under a megabyte. The 5 MB cap is a defence-in-depth limit
+// against malicious / runaway uploads; legitimate files won't get
+// close. Mirrors the backup restore route's `MAX_UPLOAD_BYTES`
+// pattern (200 MB there, because backups can legitimately be
+// large).
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
 export async function POST(request: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -88,6 +96,12 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: `File exceeds ${MAX_UPLOAD_BYTES} byte cap` },
+      { status: 413 },
+    );
+  }
 
   const text = await file.text();
   const result = Papa.parse<Record<string, string>>(text, {

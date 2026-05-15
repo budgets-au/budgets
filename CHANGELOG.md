@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.94.0 — 2026-05-15
+
+### Fixed
+- **`/api/accounts/import` now caps uploads at 5 MB.** Defence
+  in depth — legitimate account-list CSVs are kilobytes, but
+  the route used to read the whole body via `formData()` with
+  no `Content-Length` check, so a malicious uploader could
+  starve the parser with a multi-gigabyte file. Mirrors the
+  backup-restore route's `MAX_UPLOAD_BYTES` pattern (the
+  cap there is 200 MB because backups can legitimately be
+  large; account CSVs can't).
+
 ## 0.93.0 — 2026-05-15
 
 ### Fixed

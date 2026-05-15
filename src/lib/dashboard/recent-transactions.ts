@@ -12,6 +12,7 @@ export interface RecentTransactionRow {
   date: string;
   payee: string | null;
   description: string | null;
+  notes: string | null;
   amount: string;
   accountId: string;
   accountName: string | null;
@@ -33,6 +34,7 @@ export async function getRecentTransactions(): Promise<{
       date: transactions.date,
       payee: transactions.payee,
       description: transactions.description,
+      notes: transactions.notes,
       amount: transactions.amount,
       accountId: transactions.accountId,
       accountName: accounts.name,

@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { parseISO } from "date-fns";
+import { StickyNote } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatAUD, amountClass, formatDate } from "@/lib/utils";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import type { RecentTransactionRow } from "@/lib/dashboard/recent-transactions";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -14,9 +16,12 @@ interface ApiPayload {
   rows: RecentTransactionRow[];
 }
 
-/** Same row height as the upcoming widget so the two cards visually
- * line up when placed side-by-side. */
+/** Same row height as the upcoming widget when notes are off so the
+ * two cards visually line up when placed side-by-side. When notes
+ * are on, rows extend to a two-line layout — ~48 px each — and the
+ * dynamic row-count calc widens to match. */
 const ROW_HEIGHT_PX = 32;
+const ROW_HEIGHT_WITH_NOTES_PX = 48;
 
 function relativeWord(today: Date, target: Date): string {
   const ms = today.getTime() - target.getTime();
@@ -35,6 +40,8 @@ function relativeWord(today: Date, target: Date): string {
  * row deep-links into the transactions page filtered to its account
  * so the operator can drill in. */
 export function RecentTransactionsCard() {
+  const { prefs, setPref } = useDisplayPrefs();
+  const showNotes = prefs.dashboardRecentShowNotes;
   const { data } = useSWR<ApiPayload>(
     "/api/dashboard/recent-transactions",
     fetcher,
@@ -46,31 +53,48 @@ export function RecentTransactionsCard() {
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [maxRows, setMaxRows] = useState<number>(rows.length);
 
+  const rowHeight = showNotes ? ROW_HEIGHT_WITH_NOTES_PX : ROW_HEIGHT_PX;
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       const h = entries[0]?.contentRect.height ?? 0;
-      setMaxRows(Math.max(0, Math.floor(h / ROW_HEIGHT_PX)));
+      setMaxRows(Math.max(0, Math.floor(h / rowHeight)));
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [rowHeight]);
 
   const visibleRows = rows.slice(0, maxRows);
 
   return (
     <Card data-size="sm" className="h-full flex flex-col overflow-hidden">
-      <CardHeader className="pb-1 flex flex-row items-center justify-between shrink-0">
+      <CardHeader className="pb-1 flex flex-row items-center justify-between shrink-0 gap-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           Recent transactions
         </CardTitle>
-        <Link
-          href="/transactions"
-          className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-        >
-          See all →
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPref("dashboardRecentShowNotes", !showNotes)}
+            aria-pressed={showNotes}
+            title={showNotes ? "Hide notes" : "Show notes"}
+            className={`inline-flex items-center gap-1 rounded text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 transition-colors ${
+              showNotes
+                ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <StickyNote className="h-3 w-3" />
+            Notes
+          </button>
+          <Link
+            href="/transactions"
+            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+          >
+            See all →
+          </Link>
+        </div>
       </CardHeader>
       <CardContent className="p-0 flex-1 min-h-0">
         <div ref={contentRef} className="h-full overflow-hidden">
@@ -119,8 +143,15 @@ export function RecentTransactionsCard() {
                           </span>
                         )}
                       </span>
-                      <span className="py-1.5 font-medium truncate min-w-0">
-                        {row.payee ?? row.description ?? "—"}
+                      <span className="py-1.5 min-w-0 flex flex-col leading-tight">
+                        <span className="font-medium truncate">
+                          {row.payee ?? row.description ?? "—"}
+                        </span>
+                        {showNotes && row.notes && (
+                          <span className="text-[10px] text-muted-foreground italic truncate">
+                            {row.notes}
+                          </span>
+                        )}
                       </span>
                       <span
                         className={`pr-4 py-1.5 tabular-nums font-medium whitespace-nowrap text-right ${amountClass(amt)}`}

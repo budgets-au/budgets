@@ -17,6 +17,10 @@ const AMOUNT_TOLERANCE = 1.0;
 
 export interface UpcomingScheduleRow {
   scheduledId: string;
+  /** Underlying schedule kind — `"budget"` rows render with a
+   * different affordance in the widget (cap, not planned outflow);
+   * everything else (income/expense/transfer) is a normal row. */
+  kind: string;
   date: string;
   frequency: string;
   interval: number;
@@ -29,8 +33,15 @@ export interface UpcomingScheduleRow {
 /** Compute the next-N-day upcoming schedule rows. Lifted out of the
  * dashboard widget so the API route and any future server-side
  * render can share the same expansion + already-paid skipping
- * logic. */
-export async function getUpcomingSchedules(): Promise<{
+ * logic.
+ *
+ * `includeBudgets` toggles whether `kind="budget"` schedules
+ * surface in the list. Off by default — budgets are spending caps,
+ * not planned outflows, so they'd add noise for the common case.
+ * The widget exposes the flag as a per-user pref. */
+export async function getUpcomingSchedules(options?: {
+  includeBudgets?: boolean;
+}): Promise<{
   rows: UpcomingScheduleRow[];
   horizonDays: number;
 }> {
@@ -38,6 +49,11 @@ export async function getUpcomingSchedules(): Promise<{
   today.setHours(0, 0, 0, 0);
   const horizon = addDays(today, HORIZON_DAYS);
 
+  const includeBudgets = options?.includeBudgets === true;
+  const baseConditions = [eq(scheduledTransactions.isActive, true)];
+  if (!includeBudgets) {
+    baseConditions.push(ne(scheduledTransactions.kind, "budget"));
+  }
   const schedules = await db
     .select({
       schedule: scheduledTransactions,
@@ -46,12 +62,7 @@ export async function getUpcomingSchedules(): Promise<{
     })
     .from(scheduledTransactions)
     .leftJoin(accounts, eq(scheduledTransactions.accountId, accounts.id))
-    .where(
-      and(
-        eq(scheduledTransactions.isActive, true),
-        ne(scheduledTransactions.kind, "budget"),
-      ),
-    );
+    .where(and(...baseConditions));
 
   const accountIds = Array.from(
     new Set(
@@ -105,15 +116,25 @@ export async function getUpcomingSchedules(): Promise<{
 
   const events: UpcomingScheduleRow[] = [];
   for (const r of schedules) {
-    const occurrences = expandRecurrence(r.schedule, today, horizon);
+    const occurrences = expandRecurrence(r.schedule, today, horizon, {
+      includeBudgets,
+    });
     for (const o of occurrences) {
       // Transfer schedules emit both a source (debit) and a
       // destination (credit) event. Show only the debit side.
       if (o.accountId !== r.schedule.accountId) continue;
       const amount = parseFloat(o.amount);
-      if (isAlreadyPaid(o.accountId, o.date, amount)) continue;
+      // "Already paid" only applies to one-to-one txn pairs; a
+      // budget cap can't be "paid" against a single transaction.
+      if (
+        r.schedule.kind !== "budget" &&
+        isAlreadyPaid(o.accountId, o.date, amount)
+      ) {
+        continue;
+      }
       events.push({
         scheduledId: r.schedule.id,
+        kind: r.schedule.kind,
         date: o.date,
         frequency: r.schedule.frequency,
         interval: r.schedule.interval,

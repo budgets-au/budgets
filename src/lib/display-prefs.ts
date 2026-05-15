@@ -125,6 +125,16 @@ export interface DisplayPrefs {
    * the /superannuation page + the super-summary widget. */
   featureSuper: boolean;
 
+  // ── Dashboard widgets ─────────────────────────────────────────
+  /** Show budget caps (kind="budget") in the Upcoming widget.
+   * Off by default so the list stays focused on planned outflows;
+   * the toggle at the top of the widget surfaces it. */
+  dashboardUpcomingShowBudgets: boolean;
+  /** Show inline transaction notes on the Recent transactions
+   * widget. Off by default so the rows stay one-line; toggle
+   * sits at the top of the widget. */
+  dashboardRecentShowNotes: boolean;
+
   // ── Dashboard ─────────────────────────────────────────────────
   /** Per-operator dashboard grid layout. Each entry positions a
    * widget (by registry id) at a cell on the 12-col grid. Empty
@@ -182,6 +192,8 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   scheduledMissedGraceDays: 4,
   featureInvestments: true,
   featureSuper: true,
+  dashboardUpcomingShowBudgets: false,
+  dashboardRecentShowNotes: false,
   dashboardLayout: [],
 };
 
@@ -450,6 +462,8 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     scheduledMissedGraceDays: num("scheduledMissedGraceDays"),
     featureInvestments: bool("featureInvestments"),
     featureSuper: bool("featureSuper"),
+    dashboardUpcomingShowBudgets: bool("dashboardUpcomingShowBudgets"),
+    dashboardRecentShowNotes: bool("dashboardRecentShowNotes"),
     dashboardLayout: layoutArray("dashboardLayout"),
   };
 }

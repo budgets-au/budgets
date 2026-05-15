@@ -9,6 +9,30 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.98.0 — 2026-05-15
+
+### Added
+- **Budgets toggle on the Upcoming dashboard widget.** Small
+  pill at the top right next to "See all →" — when active the
+  widget includes `kind="budget"` schedules in the next-30-days
+  list (defaults off, so the list stays focused on planned
+  outflows). Persisted via `dashboardUpcomingShowBudgets` in
+  display-prefs. `/api/dashboard/upcoming` now accepts
+  `?includeBudgets=true` and passes through to `expandRecurrence`'s
+  existing `includeBudgets` option; the "already paid" filter
+  is skipped for budget rows (caps don't match 1:1 against
+  transactions). `UpcomingScheduleRow` gains a `kind` field so the
+  widget could render budget rows with a different affordance in
+  the future.
+- **Notes toggle on the Recent transactions dashboard widget.**
+  Same pill pattern; when active, each row gets a second
+  text-[10px] italic line under the payee with the transaction
+  note (only when present). Dynamic-row-count accounting adjusts
+  from 32 px to 48 px per row so ResizeObserver still picks a
+  sensible visible count. Persisted via `dashboardRecentShowNotes`
+  in display-prefs. `/api/dashboard/recent-transactions` returns
+  the `notes` field; the prior payload didn't include it.
+
 ## 0.97.0 — 2026-05-15
 
 ### Fixed

@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { parseISO } from "date-fns";
+import { Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { colourForFrequency, freqLabel } from "@/lib/schedule-colours";
 import { formatAUD, amountClass, formatDate } from "@/lib/utils";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import type { UpcomingScheduleRow } from "@/lib/dashboard/upcoming-schedules";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -41,7 +43,12 @@ function relativeWord(today: Date, target: Date): string {
  * down to show fewer. The API hands back up to 50 rows so even a
  * generous resize doesn't run out of items. */
 export function UpcomingSchedulesCard() {
-  const { data } = useSWR<ApiPayload>("/api/dashboard/upcoming", fetcher);
+  const { prefs, setPref } = useDisplayPrefs();
+  const showBudgets = prefs.dashboardUpcomingShowBudgets;
+  const { data } = useSWR<ApiPayload>(
+    `/api/dashboard/upcoming?includeBudgets=${showBudgets}`,
+    fetcher,
+  );
   const rows = data?.rows ?? [];
   const horizonDays = data?.horizonDays ?? 30;
   const today = new Date();
@@ -69,16 +76,34 @@ export function UpcomingSchedulesCard() {
 
   return (
     <Card data-size="sm" className="h-full flex flex-col overflow-hidden">
-      <CardHeader className="pb-1 flex flex-row items-center justify-between shrink-0">
+      <CardHeader className="pb-1 flex flex-row items-center justify-between shrink-0 gap-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           Upcoming
         </CardTitle>
-        <Link
-          href="/scheduled"
-          className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-        >
-          See all →
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setPref("dashboardUpcomingShowBudgets", !showBudgets)
+            }
+            aria-pressed={showBudgets}
+            title={showBudgets ? "Hide budgets" : "Show budgets"}
+            className={`inline-flex items-center gap-1 rounded text-[10px] font-medium uppercase tracking-wider px-1.5 py-0.5 transition-colors ${
+              showBudgets
+                ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Wallet className="h-3 w-3" />
+            Budgets
+          </button>
+          <Link
+            href="/scheduled"
+            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+          >
+            See all →
+          </Link>
+        </div>
       </CardHeader>
       <CardContent className="p-0 flex-1 min-h-0">
         <div ref={contentRef} className="h-full overflow-hidden">

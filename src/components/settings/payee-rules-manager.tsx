@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
+import { useConfirm } from "@/hooks/use-confirm-dialog";
 
 interface PayeeRule {
   id: string;
@@ -17,6 +18,7 @@ interface PayeeRule {
 export function PayeeRulesManager() {
   const [rules, setRules] = useState<PayeeRule[]>([]);
   const [loading, setLoading] = useState(true);
+  const confirm = useConfirm();
 
   async function load() {
     const res = await fetch("/api/payee-rules");
@@ -26,10 +28,16 @@ export function PayeeRulesManager() {
 
   useEffect(() => { load(); }, []);
 
-  async function deleteRule(id: string) {
-    const res = await fetch(`/api/payee-rules/${id}`, { method: "DELETE" });
+  async function deleteRule(rule: PayeeRule) {
+    const ok = await confirm({
+      title: "Delete payee rule",
+      description: `Drop the auto-categorise rule for "${rule.normalizedPayee}"${rule.categoryName ? ` → ${rule.categoryName}` : ""}? Future imports won't auto-pick this category; existing transactions keep their current category.`,
+      confirmLabel: "Delete rule",
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/payee-rules/${rule.id}`, { method: "DELETE" });
     if (res.ok) {
-      setRules((prev) => prev.filter((r) => r.id !== id));
+      setRules((prev) => prev.filter((r) => r.id !== rule.id));
       toast.success("Rule deleted");
     } else {
       toast.error("Failed to delete rule");
@@ -84,9 +92,10 @@ export function PayeeRulesManager() {
                   </td>
                   <td className="px-3 py-2">
                     <button
-                      onClick={() => deleteRule(rule.id)}
+                      onClick={() => deleteRule(rule)}
                       className="text-muted-foreground hover:text-red-500 transition-colors"
                       title="Delete rule"
+                      aria-label={`Delete payee rule for ${rule.normalizedPayee}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>

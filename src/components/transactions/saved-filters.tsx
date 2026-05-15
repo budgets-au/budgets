@@ -179,19 +179,26 @@ export function SavedFilters() {
         ) : (
           <ul className="max-h-72 overflow-y-auto py-1">
             {presets.map((p) => (
+              // <li> wraps a real <button> for the apply action so
+              // keyboard users can Tab onto it and Enter to apply.
+              // The trash icon is a sibling <button> for delete —
+              // both nested in the same <li> so they share the
+              // hover-row treatment.
               <li
                 key={p.id}
-                className="group flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted cursor-pointer"
-                onClick={() => applyPreset(p.query)}
+                className="group flex items-stretch text-xs hover:bg-muted"
               >
-                <span className="truncate flex-1 min-w-0">{p.name}</span>
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removePreset(p.id);
-                  }}
-                  className="lg:opacity-0 lg:group-hover:opacity-60 hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-background"
+                  onClick={() => applyPreset(p.query)}
+                  className="flex-1 min-w-0 text-left px-3 py-1.5 truncate cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded"
+                >
+                  {p.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removePreset(p.id)}
+                  className="lg:opacity-0 lg:group-hover:opacity-60 hover:opacity-100 transition-opacity p-0.5 px-2 rounded hover:bg-background"
                   aria-label={`Delete filter ${p.name}`}
                   title="Delete preset"
                 >

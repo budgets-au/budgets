@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.100.0 — 2026-05-15
+
+### Fixed
+- **Saved-filter rows are keyboard-reachable.** Pre: each row in
+  the /transactions filter-preset popover was a `<li onClick>` —
+  the click worked, but Tab/Enter never landed on it. Now each
+  preset is a real `<button type="button">` for the apply action,
+  with the existing delete icon as a sibling `<button>`; both
+  share the hover-row treatment.
+- **Payee-rules delete asks for confirmation + has `aria-label`.**
+  Pre: clicking the trash icon next to a payee rule fired the
+  DELETE request immediately and the icon-only button had only a
+  `title` attribute. Post: deletion routes through `useConfirm()`
+  with a rule-specific message; the button gains
+  `aria-label="Delete payee rule for <normalizedPayee>"` so
+  screen readers announce what's being deleted.
+
 ## 0.99.0 — 2026-05-15
 
 ### Added

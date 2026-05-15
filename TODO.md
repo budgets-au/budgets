@@ -25,13 +25,6 @@ _No monkey-crawl findings on the last run._
 ## Ideas
 
 ### Dashboard / widgets
-- Multiple instances of the same widget type — right now `onDrop`
-  rejects a duplicate widget id. Tracked-stock is the only widget
-  where this matters; would need stable per-instance ids in the
-  saved layout (today the RGL `i` collides with the registry id).
-- Account-balance-trend widget (per-account, like net-worth-trend
-  but scoped). Needs per-instance config (`accountId`).
-- Category-spend widget (single category over a window).
 - Sticky widget order on mobile — the responsive grid wraps to
   one column; preserve a saved priority rather than reading off
   the `lg` layout.
@@ -79,6 +72,19 @@ _No monkey-crawl findings on the last run._
 
 ## Done / dropped
 
+- 2026-05-15: **Category-spend dashboard widget.** Shipped 0.79.0.
+  Single-category multiInstance tile; picks a category in edit
+  mode, renders total + count over the last 30 days, links into
+  the transactions list filtered to that category. Rolls up
+  descendants by default (matches cashflow report semantics).
+- 2026-05-15: **Per-account balance-trend widget.** Shipped 0.60
+  → 0.68 as the "Account" widget — multiInstance, picks an
+  account (including archived), shows balance + institution +
+  7-day running-balance area sparkline.
+- 2026-05-14: **Multiple instances of the same widget type.**
+  Shipped 0.55 as `WidgetSpec.multiInstance`. Tracked-stock was
+  the first opt-in; the saved layout now carries a UUID
+  `instanceId` per placement so RGL keys don't collide.
 - 2026-05-13: **React error #185 "Maximum update depth exceeded"
   when adding any dashboard widget.** Symptom: edit dashboard,
   drag any pill from the drawer, page crashes with the error

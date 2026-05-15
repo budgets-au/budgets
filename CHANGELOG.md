@@ -9,6 +9,17 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.79.0 — 2026-05-15
+
+### Added
+- **Category-spend dashboard widget.** New 2×2 multiInstance
+  tile — picks a single category in edit mode, renders the total
+  + transaction count over the last 30 days. Headline shows the
+  signed magnitude (tinted via `amountClass`), drilling into
+  `/transactions?categoryId=…&includeChildren=true` for audit.
+  Rolls up descendants by default (matches cashflow report).
+  Backed by new `/api/dashboard/category-spend?categoryId=<uuid>&days=30`.
+
 ## 0.78.0 — 2026-05-15
 
 ### Fixed

@@ -9,6 +9,15 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.92.0 — 2026-05-15
+
+### Fixed
+- **Sidebar "New release" link points at the GHCR package page.**
+  Previously linked to `releases/tag/<latest>` which 404s — the
+  repo doesn't publish GitHub Releases. Now opens
+  `github.com/budgets-au/budgets/pkgs/container/budgets`, where
+  the operator can actually see the tag list + pull URL.
+
 ## 0.91.0 — 2026-05-15
 
 ### Added

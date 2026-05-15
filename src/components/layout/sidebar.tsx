@@ -264,7 +264,7 @@ function VersionFooter() {
       <div>v{APP_VERSION}</div>
       {hasUpdate && (
         <Link
-          href={`https://github.com/budgets-au/budgets/releases/tag/${latest}`}
+          href="https://github.com/budgets-au/budgets/pkgs/container/budgets"
           target="_blank"
           rel="noopener noreferrer"
           className="block mt-0.5 text-emerald-600 hover:text-emerald-500 transition-colors"

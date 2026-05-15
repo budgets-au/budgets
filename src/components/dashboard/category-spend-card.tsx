@@ -3,9 +3,11 @@
 import useSWR from "swr";
 import Link from "next/link";
 import { Tag } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { cn, formatAUD, amountClass } from "@/lib/utils";
+import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -20,6 +22,7 @@ interface SpendResp {
   total: number;
   count: number;
   name: string | null;
+  series?: { date: string; value: number }[];
 }
 
 /** Dashboard widget that pins a single user-picked category and
@@ -109,7 +112,7 @@ export function CategorySpendCard({
         ) : !spendData ? (
           <p className="text-xs text-muted-foreground">Loading…</p>
         ) : (
-          <div className="flex flex-col">
+          <div className="flex flex-col flex-1 min-h-0">
             {/* Headline = magnitude of summed amounts in the window.
               An expense category sums to a negative number, an
               income category to positive; amountClass picks the
@@ -128,6 +131,31 @@ export function CategorySpendCard({
               {spendData.count.toLocaleString()} txn
               {spendData.count === 1 ? "" : "s"} · last 30 days
             </p>
+            {/* Daily bars over the same window. Bar height uses the
+                absolute value so an expense category (negative) and
+                an income category (positive) both render upward. The
+                fill tone follows the category's sign so the chart's
+                colour matches the headline. */}
+            {spendData.series && spendData.series.length > 0 && (
+              <div className="flex-1 min-h-0 -mx-1 mt-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={spendData.series.map((d) => ({
+                      date: d.date,
+                      value: Math.abs(d.value),
+                    }))}
+                    margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+                  >
+                    <Bar
+                      dataKey="value"
+                      fill={spendData.total >= 0 ? TREND_UP : TREND_DOWN}
+                      radius={[1, 1, 0, 0]}
+                      isAnimationActive={false}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

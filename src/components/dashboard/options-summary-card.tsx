@@ -1,10 +1,12 @@
 "use client";
 
 import useSWR from "swr";
+import { ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Crosshair } from "lucide-react";
 import Link from "next/link";
 import { formatAUD, amountClass } from "@/lib/utils";
+import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -17,6 +19,10 @@ interface InvestmentRow {
   expiryDate: string | null;
 }
 
+interface TrendResp {
+  series: { date: string; value: number }[];
+}
+
 /** Summary of every option-kind investment (stock options, LTI
  * performance rights, etc). Mirrors the StocksSummaryCard shape —
  * per-currency totals so AUD + USD don't FX-add silently — and adds
@@ -27,6 +33,12 @@ export function OptionsSummaryCard() {
     "/api/investments",
     fetcher,
   );
+  const { data: trend } = useSWR<TrendResp>(
+    "/api/dashboard/options-trend?range=1m",
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+  const history = trend?.series ?? [];
 
   const options = rows.filter((r) => r.kind === "option");
   const totals = new Map<string, { cost: number; value: number; ret: number }>();
@@ -49,9 +61,18 @@ export function OptionsSummaryCard() {
     return Number.isFinite(t) && t - now <= horizonMs && t - now >= 0;
   }).length;
 
+  // Sparkline tone follows the first-to-last delta of the aggregated
+  // option value. Same multi-currency-mixed caveat as Stocks: the
+  // sparkline is shape only, not an authoritative dollar number.
+  const trendStart = history[0]?.value;
+  const trendEnd = history[history.length - 1]?.value;
+  const trendUp =
+    trendStart != null && trendEnd != null ? trendEnd >= trendStart : true;
+  const lineColor = trendUp ? TREND_UP : TREND_DOWN;
+
   return (
-    <Card data-size="sm" className="h-full">
-      <CardHeader className="pb-1">
+    <Card data-size="sm" className="h-full flex flex-col">
+      <CardHeader className="pb-1 shrink-0">
         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
           <Crosshair className="h-3.5 w-3.5" />
           <Link
@@ -62,7 +83,7 @@ export function OptionsSummaryCard() {
           </Link>
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0 flex flex-col">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : entries.length === 0 ? (
@@ -123,6 +144,38 @@ export function OptionsSummaryCard() {
                 {expiringSoon} expiring ≤30d
               </p>
             )}
+          </div>
+        )}
+        {/* 1-month aggregated-value sparkline — shape indicator only,
+        same multi-currency caveat as Stocks. Axes / tooltip
+        deliberately omitted; the per-currency numbers above remain
+        the authoritative figure. */}
+        {history.length >= 2 && (
+          <div className="flex-1 min-h-0 -mx-1 mt-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={history}>
+                <defs>
+                  <linearGradient
+                    id="optionsTrendGrad"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="5%" stopColor={lineColor} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={lineColor} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="value"
+                  stroke={lineColor}
+                  strokeWidth={1.5}
+                  fill="url(#optionsTrendGrad)"
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         )}
       </CardContent>

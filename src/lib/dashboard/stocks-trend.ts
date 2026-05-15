@@ -13,11 +13,15 @@ interface TrendPoint {
   value: number;
 }
 
-/** Aggregate daily value of every owned stock position. Pulls
- * cached daily closes from `investment_prices` (populated by the
- * per-investment history endpoint and by the periodic refresher),
- * multiplies each close by the current held quantity, and sums
- * across stocks per day.
+/** Aggregate daily value of every owned investment position of the
+ * given kind. Pulls cached daily closes from `investment_prices`
+ * (populated by the per-investment history endpoint and by the
+ * periodic refresher), multiplies each close by the current held
+ * quantity, and sums per day.
+ *
+ * Used by the dashboard's Stocks + Options sparklines via thin
+ * wrapper routes — same logic for either kind, just a different
+ * `kind` filter on the investments table.
  *
  * No FX conversion: the AUD and USD positions get summed in
  * local-currency units. The sparkline is a *shape* indicator —
@@ -26,7 +30,8 @@ interface TrendPoint {
  * authoritative number for each currency. If we ever surface the
  * raw axis values (we don't right now), this assumption needs to
  * change. */
-export async function getStocksTrend(
+export async function getInvestmentTrend(
+  kind: "stock" | "option",
   range: string,
 ): Promise<{ series: TrendPoint[] }> {
   const days = RANGE_DAYS[range] ?? RANGE_DAYS["1m"];
@@ -41,7 +46,7 @@ export async function getStocksTrend(
     })
     .from(investments)
     .where(
-      and(eq(investments.kind, "stock"), eq(investments.isArchived, false)),
+      and(eq(investments.kind, kind), eq(investments.isArchived, false)),
     );
   if (stocks.length === 0) return { series: [] };
 

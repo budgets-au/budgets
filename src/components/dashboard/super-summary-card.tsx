@@ -1,10 +1,12 @@
 "use client";
 
 import useSWR from "swr";
+import { ResponsiveContainer, BarChart, Bar, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PiggyBank } from "lucide-react";
 import Link from "next/link";
 import { formatAUD, amountClass } from "@/lib/utils";
+import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -58,9 +60,24 @@ export function SuperSummaryCard() {
   const yoyPct =
     yoy != null && priorBalance && priorBalance > 0 ? yoy / priorBalance : null;
 
+  // Per-FY household totals (sum across persons) for the bar chart at
+  // the bottom of the tile. Bars are the natural shape here — one
+  // snapshot per FY makes ~3-6 discrete data points; a line would
+  // imply between-FY interpolation that doesn't exist in the data.
+  const householdByFy = new Map<number, number>();
+  for (const yearMap of byPerson.values()) {
+    for (const [year, value] of yearMap) {
+      householdByFy.set(year, (householdByFy.get(year) ?? 0) + value);
+    }
+  }
+  const history = Array.from(householdByFy.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([fyEndYear, value]) => ({ fyEndYear, value }));
+  const barColor = yoy != null && yoy < 0 ? TREND_DOWN : TREND_UP;
+
   return (
-    <Card data-size="sm">
-      <CardHeader className="pb-1">
+    <Card data-size="sm" className="h-full flex flex-col">
+      <CardHeader className="pb-1 shrink-0">
         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
           <PiggyBank className="h-3.5 w-3.5" />
           <Link
@@ -71,7 +88,7 @@ export function SuperSummaryCard() {
           </Link>
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0 flex flex-col">
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : !latest ? (
@@ -100,6 +117,31 @@ export function SuperSummaryCard() {
                 </>
               )}
             </p>
+            {/* Household-total bars, one per FY snapshot. Shape only —
+                tile is too short to host a useful axis. The tone
+                tracks the latest YoY delta (down = red, up/flat =
+                green) so the colour reinforces the headline change. */}
+            {history.length >= 2 && (
+              <div className="flex-1 min-h-0 -mx-1 mt-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={history}
+                    margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+                  >
+                    {/* Bars start from 0, but axis is hidden — `domain`
+                        keeps the smallest snapshot from collapsing into
+                        nothing when later years dominate. */}
+                    <YAxis hide domain={["dataMin * 0.95", "dataMax * 1.05"]} />
+                    <Bar
+                      dataKey="value"
+                      fill={barColor}
+                      radius={[2, 2, 0, 0]}
+                      isAnimationActive={false}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </>
         )}
       </CardContent>

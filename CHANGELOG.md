@@ -9,6 +9,33 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.87.0 — 2026-05-15
+
+### Added
+- **Sparkline on the Options dashboard widget.** Mirrors the Stocks
+  widget shipped in 0.61 — a 1-month aggregated-value AreaChart at
+  the bottom of the tile, tinted by first-to-last delta (`TREND_UP`
+  / `TREND_DOWN`). Backed by a new `/api/dashboard/options-trend`
+  route + a refactor of `getStocksTrend` → `getInvestmentTrend(kind,
+  range)` that the stocks-trend route now delegates to. Same
+  forward-fill semantics, same multi-currency-mixed shape-not-dollar
+  caveat. Reads cached closes from `investment_prices`; empty cache
+  → number-only fallback.
+- **FY bar chart on the Super dashboard widget.** Household totals
+  per FY rendered as a small `BarChart` at the bottom of the tile.
+  Bars (not a line) because each FY is one discrete snapshot — a
+  line would imply between-FY interpolation that doesn't exist in
+  the data. YAxis is hidden but domain-clamped to `dataMin*0.95 →
+  dataMax*1.05` so the smallest year doesn't collapse into nothing.
+  Tone follows the latest YoY delta. Data derived from the existing
+  `/api/super` payload — no new endpoint.
+- **Daily bar chart on the Category-spend dashboard widget.** Daily
+  signed totals (absolute value rendered upward, fill tone follows
+  the category sign) over the 30-day window. Backed by an additive
+  `series[]` field on `/api/dashboard/category-spend` — the existing
+  total/count fields stay unchanged. Zero-activity days are filled
+  in so the time axis is dense.
+
 ## 0.86.0 — 2026-05-15
 
 ### Changed

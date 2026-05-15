@@ -14,6 +14,10 @@ export interface CategorySpendResult {
   /** Category name for the title row (null when categoryId resolves
    * to an unknown / deleted category). */
   name: string | null;
+  /** Per-day signed totals across the window, oldest first. Days
+   * with zero activity are included so the dashboard chart's bars
+   * align with a uniform time axis. */
+  series: { date: string; value: number }[];
 }
 
 /** Aggregate total + count for a category over a recent window.
@@ -53,6 +57,30 @@ export async function getCategorySpend(
     .from(transactions)
     .where(and(...conditions));
 
+  // Per-day rollup for the chart. SUMs over (CAST AS REAL) so refunds
+  // (opposite-sign rows on an expense category) net out per day —
+  // matches the headline number's semantics.
+  const daily = await db
+    .select({
+      date: transactions.date,
+      value: sql<number>`COALESCE(SUM(CAST(${transactions.amount} AS REAL)), 0)`,
+    })
+    .from(transactions)
+    .where(and(...conditions))
+    .groupBy(transactions.date);
+
+  // Fill in zero-activity days so the chart's x-axis is dense and
+  // gaps don't visually shrink the window.
+  const dailyMap = new Map<string, number>();
+  for (const d of daily) dailyMap.set(d.date, Number(d.value));
+  const series: { date: string; value: number }[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today.getTime() - (days - 1 - i) * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    series.push({ date: d, value: dailyMap.get(d) ?? 0 });
+  }
+
   const [cat] = await db
     .select({ name: categories.name })
     .from(categories)
@@ -63,5 +91,6 @@ export async function getCategorySpend(
     total: Number(agg?.total ?? 0),
     count: Number(agg?.count ?? 0),
     name: cat?.name ?? null,
+    series,
   };
 }

@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.78.0 — 2026-05-15
+
+### Fixed
+- **assignPostedSeq's balance-aware tier was sorting by balance ASC
+  — wrong direction on mixed-sign days.** A day with net outflow
+  ends at a LOWER balance than it started, so the smallest balance
+  is the LATEST row, not the first; sort-asc reversed those rows.
+  Replaced the sort with the same balance-reconciliation algorithm
+  the commit-batched repair pass uses: walk the day, and at each
+  step pick the unique row whose `balance - amount` equals the
+  previous balance. Handles mixed signs correctly; for the file's
+  first date (no anchor) it tries each row as the potential start
+  and accepts only the unambiguous resolution. If reconciliation
+  can't resolve the day (round-trips, missing balances, NaN),
+  falls back to file position with the strict newest-first
+  detector from 0.74. Two new test cases pin the mixed-sign cases.
+
 ## 0.77.0 — 2026-05-15
 
 ### Added

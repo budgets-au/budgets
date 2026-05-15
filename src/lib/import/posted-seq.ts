@@ -5,31 +5,30 @@
  *
  * Two-tier strategy:
  *
- *   1. If every row carries a `runningBalance` AND those values form
- *      a strictly-monotonic order when sorted by (date asc, balance
- *      asc), use balance as the canonical signal. The bank's
- *      post-transaction balance uniquely orders every row across the
- *      whole file — that's a stronger signal than file position
- *      because it survives newest-first vs oldest-first files AND
- *      same-date files the file-position-only path can't disambiguate.
- *   2. Otherwise fall back to file position with a stricter
- *      newest-first detector: any date inversion anywhere along the
- *      file (rows[i].date > rows[i+1].date for some i) is taken as
- *      proof the file is newest-first, and the whole array is
- *      reversed. The first-vs-last comparison alone was a corner case
- *      bug — a same-date file the bank emits newest-first never
- *      tripped that strict-greater check, so intra-day order stayed
- *      reversed.
- *
- * The strict-monotonic check guards against ambiguity: if two rows
- * end at the same balance (a $5 in immediately matched by a $5 out,
- * or any zero-net round-trip), balance can't disambiguate them and
- * the parser falls back to file position rather than picking one
- * arbitrarily.
+ *   1. **Balance reconciliation.** If every row carries both a
+ *      runningBalance and an amount, the order is uniquely
+ *      determined by the chain `prev + amount = next` — i.e. at each
+ *      step we pick the row whose `balance - amount` matches the
+ *      previous row's balance. This works for mixed-sign days where
+ *      a naïve sort-by-balance gets the direction wrong (a day
+ *      that ends lower than it started would put the LATEST row at
+ *      the front when sorted by balance ASC). For the file's first
+ *      date we try each row as the potential start and accept the
+ *      unique resolution; for subsequent dates we anchor to the
+ *      previous date's last balance.
+ *   2. **File position with strict direction-flip.** If any row is
+ *      missing its balance, or if reconciliation can't resolve a
+ *      unique order, fall back to numbering rows by their file
+ *      position with a flip when ANY date inversion is detected
+ *      (rows[i].date > rows[i+1].date for some i). The first-vs-last
+ *      comparison the old code used silently no-op'd on same-date
+ *      files; checking inversions everywhere catches files the bank
+ *      emits newest-first.
  */
 export function assignPostedSeq<
   T extends {
     date: string;
+    amount: string;
     postedSeq?: number | null;
     runningBalance?: string | null;
   },
@@ -40,27 +39,12 @@ export function assignPostedSeq<
     return;
   }
 
-  // Tier 1: balance-derived order (if available + monotonic).
+  // Tier 1: balance reconciliation.
   if (rowsHaveCompleteBalance(rows)) {
-    const sorted = rows
-      .map((r, i) => ({
-        r,
-        i,
-        balance: parseFloat(r.runningBalance ?? "NaN"),
-      }))
-      .sort((a, b) => {
-        if (a.r.date !== b.r.date) return a.r.date < b.r.date ? -1 : 1;
-        if (a.balance !== b.balance) return a.balance - b.balance;
-        // Same date and same balance → can't disambiguate; preserve
-        // input order so we degrade gracefully into "file position".
-        return a.i - b.i;
-      });
-    // If after sorting every (date, balance) pair is unique, accept
-    // the balance-derived order. Otherwise (ties present) we can't
-    // trust it — drop to tier 2.
-    if (allPairsUnique(sorted)) {
-      sorted.forEach((entry, idx) => {
-        entry.r.postedSeq = idx;
+    const ordered = orderByReconciliation(rows);
+    if (ordered) {
+      ordered.forEach((r, i) => {
+        r.postedSeq = i;
       });
       return;
     }
@@ -77,25 +61,96 @@ export function assignPostedSeq<
   }
 }
 
-function rowsHaveCompleteBalance<T extends { runningBalance?: string | null }>(
-  rows: T[],
-): boolean {
+function rowsHaveCompleteBalance<
+  T extends { runningBalance?: string | null; amount: string },
+>(rows: T[]): boolean {
   for (const r of rows) {
     if (r.runningBalance == null) return false;
     if (!Number.isFinite(parseFloat(r.runningBalance))) return false;
+    if (!Number.isFinite(parseFloat(r.amount))) return false;
   }
   return true;
 }
 
-function allPairsUnique<T extends { r: { date: string }; balance: number }>(
-  sorted: T[],
-): boolean {
-  for (let i = 1; i < sorted.length; i++) {
-    const a = sorted[i - 1];
-    const b = sorted[i];
-    if (a.r.date === b.r.date && a.balance === b.balance) return false;
+/** Walk the file in date order, deriving each date's intra-day
+ * order via balance reconciliation. Returns null if any date can't
+ * be uniquely resolved — caller falls back to file position. */
+function orderByReconciliation<
+  T extends { date: string; amount: string; runningBalance?: string | null },
+>(rows: T[]): T[] | null {
+  const byDate = new Map<string, T[]>();
+  for (const r of rows) {
+    const arr = byDate.get(r.date) ?? [];
+    arr.push(r);
+    byDate.set(r.date, arr);
   }
-  return true;
+  const sortedDates = Array.from(byDate.keys()).sort();
+  const out: T[] = [];
+  let anchor: number | null = null;
+  for (const date of sortedDates) {
+    const dayRows = byDate.get(date)!;
+    const dayOrdered =
+      anchor != null
+        ? reconcileDay(dayRows, anchor)
+        : reconcileFirstDay(dayRows);
+    if (!dayOrdered) return null;
+    out.push(...dayOrdered);
+    anchor = parseFloat(dayOrdered[dayOrdered.length - 1].runningBalance!);
+  }
+  return out;
+}
+
+/** Greedy reconciliation from a known starting balance. At each
+ * step, the unique row whose `balance - amount === prev` is the
+ * next row in bank chronology. Returns null if at any step zero
+ * or more-than-one row matches. */
+function reconcileDay<
+  T extends { amount: string; runningBalance?: string | null },
+>(dayRows: T[], anchor: number): T[] | null {
+  const remaining = dayRows.slice();
+  const out: T[] = [];
+  let prev = anchor;
+  while (remaining.length > 0) {
+    let matchIdx = -1;
+    let matchCount = 0;
+    for (let i = 0; i < remaining.length; i++) {
+      const r = remaining[i];
+      const diff =
+        parseFloat(r.runningBalance!) - prev - parseFloat(r.amount);
+      if (Math.abs(diff) < 0.01) {
+        matchIdx = i;
+        matchCount += 1;
+        if (matchCount > 1) return null;
+      }
+    }
+    if (matchCount !== 1) return null;
+    const picked = remaining.splice(matchIdx, 1)[0];
+    out.push(picked);
+    prev = parseFloat(picked.runningBalance!);
+  }
+  return out;
+}
+
+/** First-date reconciliation: we don't know the pre-day starting
+ * balance, so try each row as the potential first row of the day.
+ * Each candidate implies a starting anchor of `balance - amount`;
+ * if exactly one anchor produces a valid full-day reconciliation,
+ * accept it. If multiple work (e.g. a $5-in / $5-out round-trip),
+ * the order is genuinely ambiguous — caller falls back to file
+ * position. */
+function reconcileFirstDay<
+  T extends { amount: string; runningBalance?: string | null },
+>(dayRows: T[]): T[] | null {
+  if (dayRows.length === 1) return dayRows.slice();
+  const valid: T[][] = [];
+  for (const start of dayRows) {
+    const candidateAnchor =
+      parseFloat(start.runningBalance!) - parseFloat(start.amount);
+    const tried = reconcileDay(dayRows, candidateAnchor);
+    if (tried) valid.push(tried);
+    if (valid.length > 1) return null;
+  }
+  return valid.length === 1 ? valid[0] : null;
 }
 
 function hasAnyDateInversion<T extends { date: string }>(rows: T[]): boolean {

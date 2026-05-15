@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.104.0 — 2026-05-15
+
+### Security / Added
+- **Password-change Dialog replaces `window.prompt`.** Settings →
+  Users → KeyRound now opens a proper `<Dialog>` with two
+  `<Input type="password">` fields (new + confirm), an 8-character
+  minimum, and a mismatch check. Replaces a native `window.prompt`
+  that was plaintext, single-field, unmaskable, and with no
+  confirm. Submits to the existing `PATCH /api/users/[id]`
+  endpoint. The KeyRound button gains an
+  `aria-label="Change password for <username>"` so screen
+  readers announce the target.
+
 ## 0.103.0 — 2026-05-15
 
 ### Added

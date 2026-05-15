@@ -5,6 +5,13 @@ import useSWR, { mutate } from "swr";
 import { useSession } from "next-auth/react";
 import { Loader2, Plus, Trash2, KeyRound, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
@@ -33,6 +40,9 @@ export function UserManager() {
   });
   const confirm = useConfirm();
   const [creating, setCreating] = useState(false);
+  const [changingPasswordFor, setChangingPasswordFor] = useState<User | null>(
+    null,
+  );
 
   async function deleteUser(u: User) {
     const isMe = u.id === meId;
@@ -56,20 +66,10 @@ export function UserManager() {
     mutate("/api/users");
   }
 
-  async function changePassword(u: User) {
-    const next = window.prompt(`New password for ${u.username}:`);
-    if (!next) return;
-    const res = await fetch(`/api/users/${u.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: next }),
-    });
-    if (!res.ok) {
-      toast.error((await res.json()).error ?? "Update failed");
-      return;
-    }
-    toast.success(`Password updated for ${u.username}`);
-  }
+  // changePassword opens a Dialog with two masked inputs (replaces
+  // the old window.prompt single-field, plaintext, unmaskable
+  // collection). The dialog itself owns the form state + submit;
+  // this row-level handler is just "show me that dialog for u".
 
   async function toggleRole(u: User) {
     const newRole = u.role === "admin" ? "member" : "admin";
@@ -157,9 +157,10 @@ export function UserManager() {
                   <div className="inline-flex gap-1">
                     <button
                       type="button"
-                      onClick={() => changePassword(u)}
+                      onClick={() => setChangingPasswordFor(u)}
                       className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                       title="Change password"
+                      aria-label={`Change password for ${u.username}`}
                     >
                       <KeyRound className="h-3 w-3" />
                     </button>
@@ -187,7 +188,127 @@ export function UserManager() {
           </tbody>
         </table>
       )}
+      <ChangePasswordDialog
+        user={changingPasswordFor}
+        onOpenChange={(open) => {
+          if (!open) setChangingPasswordFor(null);
+        }}
+      />
     </div>
+  );
+}
+
+function ChangePasswordDialog({
+  user,
+  onOpenChange,
+}: {
+  user: User | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset state every time the dialog opens for a different user
+  // so stale typed-but-not-submitted passwords don't leak across.
+  useEffect(() => {
+    if (user) {
+      setNext("");
+      setConfirm("");
+      setError(null);
+      setSaving(false);
+    }
+  }, [user]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user) return;
+    if (next.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (next !== confirm) {
+      setError("Passwords don't match.");
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: next }),
+    });
+    setSaving(false);
+    if (!res.ok) {
+      setError((await res.json()).error ?? "Update failed");
+      return;
+    }
+    toast.success(`Password updated for ${user.username}`);
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={!!user} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>
+            Change password{user ? ` for ${user.username}` : ""}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="new-password" className="text-xs">
+              New password
+            </Label>
+            <Input
+              id="new-password"
+              type="password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              autoComplete="new-password"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="confirm-password" className="text-xs">
+              Confirm new password
+            </Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+          </div>
+          {error && (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950 dark:text-red-300">
+              {error}
+            </p>
+          )}
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={saving || !next || !confirm}>
+              {saving ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : null}
+              Update password
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

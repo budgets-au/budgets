@@ -140,5 +140,82 @@ describe.skipIf(!fixtureAvailable)(
       const b = parseCSV(SAMPLE_CSV);
       expect(a.map((r) => r.importHash)).toEqual(b.map((r) => r.importHash));
     });
+
+    it("computed running balance (startingBalance + chain) matches every row's stored bank balance", () => {
+      // The actual transactions-list ✗ alert is computed in SQL:
+      //   computed = accounts.startingBalance
+      //            + SUM(amount WHERE (date, posted_seq, posted_at|created_at, id) <= this row's tuple)
+      // vs the stored `transactions.balance` (= bank's claimed
+      // running balance at this row).
+      //
+      // This test simulates the subquery in JS so we exercise the
+      // FULL end-to-end behaviour the parser feeds into. If parser-
+      // assigned posted_seq is off, this walk diverges from the
+      // stored balances and the user sees ✗ on the transactions
+      // page — exactly the bug we've been chasing.
+      const rows = parseCSV(SAMPLE_CSV);
+      const ordered = rows
+        .slice()
+        .sort((a, b) => (a.postedSeq ?? 0) - (b.postedSeq ?? 0));
+      // Derive the implied startingBalance from the chain:
+      //   first ordered row's bank balance - that row's amount
+      //   = balance BEFORE the first row posted
+      //   = account.startingBalance + sum-of-prior-rows (which is 0)
+      //   = account.startingBalance.
+      const startingBalance =
+        parseFloat(ordered[0].runningBalance!) -
+        parseFloat(ordered[0].amount);
+      // Walk the chain the same way the SQL subquery does.
+      let computed = startingBalance;
+      for (const r of ordered) {
+        computed += parseFloat(r.amount);
+        const stored = parseFloat(r.runningBalance!);
+        // The transactions-list alert fires when |computed -
+        // stored| >= 0.01. Pass test → no ✗ would appear.
+        expect(Math.abs(computed - stored)).toBeLessThan(0.01);
+      }
+    });
+
+    it("reorders correctly even when only the same-date rows are pre-shuffled (worst case for the old sort-by-balance bug)", () => {
+      // The failure mode the 0.74 sort-by-balance had: same-date
+      // mixed-sign rows ended up reversed. Pre-shuffle only the
+      // same-date rows in the file BEFORE parsing to push the
+      // parser into the worst case, then re-walk the chain. The
+      // 0.78 reconciliation path should still produce a chain
+      // that reconciles against startingBalance.
+      const lines = SAMPLE_CSV.trim().split(/\r?\n/);
+      const header = lines[0];
+      const body = lines.slice(1);
+      // Group by date column (index 1 in the CSV row).
+      const byDate = new Map<string, string[]>();
+      for (const line of body) {
+        // Quick CSV parse — date is the 2nd field, no quotes
+        // around it in this sample.
+        const date = line.split(",")[1] ?? "";
+        const arr = byDate.get(date) ?? [];
+        arr.push(line);
+        byDate.set(date, arr);
+      }
+      // Reverse rows within each date and emit dates in their
+      // original order.
+      const orderedDates = Array.from(byDate.keys());
+      const shuffled = [
+        header,
+        ...orderedDates.flatMap((d) => (byDate.get(d) ?? []).reverse()),
+      ].join("\n");
+      const rows = parseCSV(shuffled);
+      const ordered = rows
+        .slice()
+        .sort((a, b) => (a.postedSeq ?? 0) - (b.postedSeq ?? 0));
+      const startingBalance =
+        parseFloat(ordered[0].runningBalance!) -
+        parseFloat(ordered[0].amount);
+      let computed = startingBalance;
+      for (const r of ordered) {
+        computed += parseFloat(r.amount);
+        const stored = parseFloat(r.runningBalance!);
+        expect(Math.abs(computed - stored)).toBeLessThan(0.01);
+      }
+    });
   },
 );

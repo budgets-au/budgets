@@ -339,7 +339,7 @@ function EditableHeading({
       className="group inline-flex items-center gap-2 text-xl font-semibold hover:text-foreground"
     >
       {heading}
-      <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+      <Pencil className="h-3.5 w-3.5 text-muted-foreground lg:opacity-0 lg:group-hover:opacity-100 transition-opacity" />
     </button>
   );
 }

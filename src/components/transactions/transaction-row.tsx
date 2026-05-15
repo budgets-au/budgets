@@ -818,7 +818,7 @@ export function TransactionRow({
                             e.stopPropagation();
                             onUnpair(t.id);
                           }}
-                          className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                          className="ml-auto lg:opacity-0 lg:group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                           title="Unlink transfer"
                         >
                           <Unlink className="h-3 w-3" />

@@ -152,7 +152,7 @@ export function ScheduleButton({ transaction, accounts, categoriesProp, schedule
     <>
       <button
         onClick={() => setOpen(true)}
-        className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-violet-600 transition-all p-0.5 rounded"
+        className="shrink-0 lg:opacity-0 lg:group-hover:opacity-100 text-muted-foreground hover:text-violet-600 transition-all p-0.5 rounded"
         title="Create scheduled transaction"
       >
         <Repeat className="h-3.5 w-3.5" />

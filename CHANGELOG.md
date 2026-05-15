@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.97.0 — 2026-05-15
+
+### Fixed
+- **`lg:` prefix on every hover-only `opacity-0 group-hover:*`.**
+  Five affordances were invisible on touch devices because their
+  `opacity-0` started fully transparent and only un-hid on
+  `:hover`, which mobile never gets. Sweep across:
+  - `super-view.tsx` heading edit pencil
+  - `transaction-row.tsx` transfer-unlink button
+  - `transactions/schedule-button.tsx` "+ schedule" affordance
+  - `envelope-report.tsx` per-row exclude eye
+  - `transactions/saved-filters.tsx` per-preset delete
+  All now `lg:opacity-0 lg:group-hover:*`, so mobile shows them
+  fully and `lg+` keeps the hover-reveal behaviour. Matches the
+  `feedback_mobile_hover.md` convention.
+
 ## 0.96.0 — 2026-05-15
 
 ### Changed

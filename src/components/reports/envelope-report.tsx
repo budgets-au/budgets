@@ -470,7 +470,7 @@ export function EnvelopeReport({
                             className={`p-0.5 rounded hover:bg-muted print:hidden transition-opacity ${
                               directlyExcluded
                                 ? "opacity-100"
-                                : "opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                : "lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100"
                             }`}
                             title={
                               directlyExcluded

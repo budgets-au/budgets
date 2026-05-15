@@ -191,7 +191,7 @@ export function SavedFilters() {
                     e.stopPropagation();
                     removePreset(p.id);
                   }}
-                  className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-background"
+                  className="lg:opacity-0 lg:group-hover:opacity-60 hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-background"
                   aria-label={`Delete filter ${p.name}`}
                   title="Delete preset"
                 >

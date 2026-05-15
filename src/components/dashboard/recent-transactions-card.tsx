@@ -90,7 +90,7 @@ export function RecentTransactionsCard() {
                       className="grid items-center gap-3 px-4 py-1.5 text-sm hover:bg-muted/60 transition-colors"
                       style={{
                         gridTemplateColumns:
-                          "90px auto minmax(0, 1fr) auto",
+                          "auto auto minmax(0, 1fr) auto",
                       }}
                     >
                       <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">

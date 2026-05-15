@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.69.0 — 2026-05-15
+
+### Changed
+- **Upcoming + Recent rows: tighten the gap between day and
+  account.** Date column was a fixed 90 px — wider than every
+  actual string ("Today" ≈ 40 px, "Yesterday" ≈ 63 px), leaving
+  20-50 px of dead space inside the column before the
+  `gap-3` to the account badge. Dropped to `auto`; the badge
+  now snaps right after the date (each row sizes its date column
+  independently, which trades cross-row alignment for the
+  tighter cluster the operator wanted).
+
 ## 0.68.0 — 2026-05-15
 
 ### Changed

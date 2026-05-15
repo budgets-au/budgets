@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.88.0 — 2026-05-15
+
+### Changed
+- **Lineage members table: drop per-rank background tints.** The
+  editor stack's lineage members table used to paint each row with
+  `${lineageColour}1f` (12% tint) and the selected row with `4d`
+  (30% tint) + a coloured inset stripe, all keyed off the
+  per-rank palette (rose / indigo / amber / teal / purple). The
+  tints fought every other coloured affordance in the editor and
+  the matching back to the chart's predecessor segments was
+  visual noise once the matched-transactions stripes went away in
+  0.86. Rows are now plain (`hover:bg-muted/40` only); the
+  selected row gets `bg-muted` + a 2-px inset `var(--ring)` for a
+  neutral selection indicator that matches the rest of the app.
+  `colourForLineageRank` stays in use for chart bar segments,
+  where the palette still does distinguishing work.
+
 ## 0.87.0 — 2026-05-15
 
 ### Added

@@ -1385,7 +1385,6 @@ export function ScheduledListView({
                       : isSuperseded(m)
                       ? "text-muted-foreground italic"
                       : "text-muted-foreground";
-                    const lineageColour = colourForLineageRank(idx, selectedGroup.primary.frequency);
                     const myPayee = (m.payee ?? "").trim();
                     let previousMember: ScheduledRow | undefined;
                     for (let j = idx + 1; j < selectedGroup.members.length; j++) {
@@ -1409,32 +1408,26 @@ export function ScheduledListView({
                         : delta > 0
                         ? "text-rose-500"
                         : "text-emerald-600";
-                    // Selected row: stronger tint + a solid 4-px
-                    // inset ring so the operator can see at a glance
-                    // which member they're editing. The faint
-                    // `${lineageColour}1f` tint that decorates
-                    // unselected rows is invisible under the
-                    // previous 40 %-opacity indigo ring on dark
-                    // lineage colours.
-                    const rowStyle: React.CSSProperties = isEditing
-                      ? {
-                          backgroundColor: `${lineageColour}4d`,
-                          boxShadow: `inset 4px 0 0 ${lineageColour}, inset 0 0 0 2px var(--ring)`,
-                        }
-                      : {
-                          backgroundColor: `${lineageColour}1f`,
-                          boxShadow: `inset 3px 0 0 ${lineageColour}`,
-                        };
+                    // Selected row gets a neutral muted background +
+                    // a 2-px inset ring so the operator can see at a
+                    // glance which member they're editing. The
+                    // unselected rows are plain — no per-lineage tint,
+                    // which used to fight every other coloured
+                    // affordance in the editor stack.
                     return (
                       <tr
                         key={m.id}
                         onClick={() => setSelectedId(m.id)}
                         className={`cursor-pointer ${
                           isEditing
-                            ? "font-medium"
-                            : "hover:brightness-110"
+                            ? "font-medium bg-muted"
+                            : "hover:bg-muted/40"
                         }`}
-                        style={rowStyle}
+                        style={
+                          isEditing
+                            ? { boxShadow: "inset 0 0 0 2px var(--ring)" }
+                            : undefined
+                        }
                       >
                         <td className="px-2 py-1 tabular-nums whitespace-nowrap">{formatDate(m.startDate)}</td>
                         <td className="px-2 py-1 tabular-nums whitespace-nowrap text-muted-foreground">

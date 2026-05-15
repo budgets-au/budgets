@@ -254,6 +254,32 @@ export function DashboardGrid({
       setPref("dashboardLayout", next);
     }
   }
+  /** Append a widget at the bottom of the grid via the "+" button
+   * in the drawer. Mirrors onDrop's placement logic but picks
+   * `y = maxY + 1` instead of taking coordinates from a drag — used
+   * by keyboard users who can't drag, and as a faster path for
+   * touch users. */
+  function addWidget(widgetId: string) {
+    const widget = WIDGETS_BY_ID.get(widgetId);
+    if (!widget) return;
+    setDraftLayout((cur) => {
+      const c = cur ?? baseLayout;
+      if (!widget.multiInstance && c.some((l) => l.widgetId === widgetId)) {
+        return c;
+      }
+      const maxY = c.reduce((m, l) => Math.max(m, l.y + l.h), 0);
+      const entry: LayoutEntry = {
+        widgetId,
+        x: 0,
+        y: maxY,
+        w: widget.defaultLayout.w,
+        h: widget.defaultLayout.h,
+      };
+      if (widget.multiInstance) entry.instanceId = newId();
+      return [...c, entry];
+    });
+  }
+
   function onDrop(_layout: readonly RglItem[], item: RglItem | undefined) {
     const widgetId = draggedWidgetId;
     setDraggedWidgetId(null);
@@ -354,6 +380,7 @@ export function DashboardGrid({
         widgets={availableWidgets}
         onPickStart={setDraggedWidgetId}
         onPickEnd={() => setDraggedWidgetId(null)}
+        onAdd={addWidget}
         onSave={saveEdit}
         onCancel={cancelEdit}
       />

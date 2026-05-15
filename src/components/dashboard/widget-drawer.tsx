@@ -1,13 +1,16 @@
 "use client";
 
-import { GripVertical } from "lucide-react";
+import { GripVertical, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { WidgetSpec } from "@/lib/dashboard/widgets";
 
 /** Edit-mode side panel listing every widget not currently on the
  * grid. Each pill is HTML5-draggable; the grid receives the drop via
- * react-grid-layout's `isDroppable` mechanism. The drawer is just a
+ * react-grid-layout's `isDroppable` mechanism. Drag-and-drop alone
+ * isn't keyboard-reachable, so each pill also carries a "+" button
+ * that calls `onAdd` to append the widget at the bottom of the grid
+ * — same effect as a drop, no pointer needed. The drawer is just a
  * fixed-position panel so it can sit next to a non-modal grid (Sheet
  * primitive would steal focus and dim the page). */
 export function WidgetDrawer({
@@ -15,6 +18,7 @@ export function WidgetDrawer({
   widgets,
   onPickStart,
   onPickEnd,
+  onAdd,
   onSave,
   onCancel,
 }: {
@@ -22,6 +26,7 @@ export function WidgetDrawer({
   widgets: WidgetSpec[];
   onPickStart: (id: string) => void;
   onPickEnd: () => void;
+  onAdd: (id: string) => void;
   onSave: () => void;
   onCancel: () => void;
 }) {
@@ -74,8 +79,24 @@ export function WidgetDrawer({
               onDragEnd={onPickEnd}
               className="droppable-element flex cursor-grab items-center gap-2 rounded-md border bg-card p-2 text-sm hover:bg-accent active:cursor-grabbing"
             >
-              <GripVertical className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{w.title}</span>
+              <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="font-medium flex-1 min-w-0 truncate">{w.title}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  // The grip-area of the pill is draggable; the +
+                  // button stops the event so a click here doesn't
+                  // start a phantom drag.
+                  e.stopPropagation();
+                  onAdd(w.id);
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                aria-label={`Add ${w.title} to dashboard`}
+                title={`Add ${w.title}`}
+                className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
             </div>
           ))
         )}

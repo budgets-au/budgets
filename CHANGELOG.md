@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.102.0 — 2026-05-15
+
+### Added
+- **"+" button on each widget-drawer pill.** Drag-and-drop placement
+  isn't keyboard-reachable (HTML5 `draggable` doesn't have an Enter
+  equivalent), so each pill in the dashboard's edit-mode drawer now
+  carries a `<button aria-label="Add … to dashboard">` that appends
+  the widget at the bottom of the grid (y = current max y, x = 0).
+  Same flow as a drop — `multiInstance` widgets get a fresh
+  `instanceId`, single-instance widgets are guarded against
+  double-placement — but no pointer needed. Keyboard users can Tab
+  to the pill, Tab to the +, Enter to place.
+
 ## 0.101.0 — 2026-05-15
 
 ### Removed

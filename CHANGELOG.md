@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.80.0 — 2026-05-15
+
+### Fixed
+- **Import client was dropping `postedSeq` in the commit payload.**
+  The parser computed bank-chronological order via balance
+  reconciliation (0.78), but the request body the client sent to
+  `/api/import/commit-batched` omitted the `postedSeq` field
+  entirely. Commit-batched then inserted `NULL`, the
+  running-balance subquery's `COALESCE(posted_seq, 0)` tied every
+  row, and the tuple compare fell through to `created_at` / `id`
+  — i.e. file insertion order. On a newest-first CSV, same-day
+  rows ended up reversed in the DB even though the parser had the
+  right answer all along; the transactions list then flagged
+  every affected row with a ✗ balance mismatch.
+  One-line fix: `postedSeq: r.postedSeq ?? null` in the commit
+  payload mapper. The previous releases that tried to detect /
+  repair this state (0.74-0.78) were band-aiding the symptom of
+  this dropped field.
+
 ## 0.79.0 — 2026-05-15
 
 ### Added

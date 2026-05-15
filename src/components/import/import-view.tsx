@@ -1139,6 +1139,13 @@ function CommitToDb({
           categoryId: r.categoryId ?? null,
           type: r.resolvedType ?? null,
           balance: r.runningBalance ?? null,
+          // Send the parser-computed posted_seq through to the
+          // commit endpoint — without this, commit-batched inserts
+          // NULL, the running-balance SQL falls through to
+          // created_at|id ordering (= file insert order), and
+          // newest-first CSVs end up with same-day rows reversed
+          // in the DB even though the parser had the right answer.
+          postedSeq: r.postedSeq ?? null,
           bankAccountId: r.qifAccount?.name ?? null,
         })),
       };

@@ -9,6 +9,16 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.72.0 — 2026-05-15
+
+### Added
+- **Import review: show / hide identical-match rows.** Restored a
+  toggle next to the header's "N identical hidden" caption — click
+  **show** to reveal the exact-match rows whose DB row already has
+  every user-visible field set (commit is a no-op for them). Off
+  by default since most operators don't want to scroll past 40
+  unchanged rows; the diagnostic case wants them visible.
+
 ## 0.71.0 — 2026-05-15
 
 ### Changed

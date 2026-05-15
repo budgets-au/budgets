@@ -137,6 +137,12 @@ export function ImportView() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TestResponse | null>(null);
   const [accountFilter, setAccountFilter] = useState<string | "all">("all");
+  /** Show the exact-match rows whose DB row already has every
+   * user-visible field set — by default these are hidden because
+   * commit is a no-op for them. Off matches the cleaner default
+   * the operator usually wants; on for "show me everything in
+   * the file" diagnostics. */
+  const [showIdentical, setShowIdentical] = useState(false);
   /** Which row is expanded. Single-row-open-at-a-time matches the
    * Transactions page (transactions-view.tsx → `expandedId`). */
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -272,7 +278,7 @@ export function ImportView() {
   const filteredRows = effectiveRows.filter((r) => {
     if (accountFilter !== "all" && (r.qifAccount?.name ?? "") !== accountFilter)
       return false;
-    if (isExactNoOp(r)) return false;
+    if (!showIdentical && isExactNoOp(r)) return false;
     return true;
   });
 
@@ -375,7 +381,14 @@ export function ImportView() {
                         <span className="tabular-nums">
                           {hiddenIdenticalCount}
                         </span>{" "}
-                        identical hidden
+                        identical{" "}
+                        <button
+                          type="button"
+                          onClick={() => setShowIdentical((v) => !v)}
+                          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                        >
+                          {showIdentical ? "hide" : "show"}
+                        </button>
                       </span>
                     )}
                   </p>

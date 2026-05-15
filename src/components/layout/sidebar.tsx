@@ -28,6 +28,7 @@ import {
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import { useAddCategory } from "@/hooks/use-add-category-dialog";
 import { useAddScheduled } from "@/hooks/use-add-scheduled-dialog";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useLockDatabase } from "@/hooks/use-lock-database";
 import { SidebarAccounts } from "./sidebar-accounts";
 import { APP_VERSION } from "@/lib/version";
@@ -59,6 +60,15 @@ export function Sidebar() {
   const { open: openAddCategory } = useAddCategory();
   const { open: openAddScheduled } = useAddScheduled();
   const { lock: lockDb, locking } = useLockDatabase();
+  const { prefs } = useDisplayPrefs();
+
+  // Hide /investments and /superannuation links when the matching
+  // feature flag is off. Settings → Features owns the toggle.
+  const visibleNav = NAV.filter((item) => {
+    if (item.href === "/investments") return prefs.featureInvestments;
+    if (item.href === "/superannuation") return prefs.featureSuper;
+    return true;
+  });
 
   // Carry the global account filter across navigation so clicking a nav link
   // doesn't drop the selection. The hook also restores from localStorage on
@@ -111,7 +121,7 @@ export function Sidebar() {
           </button>
         </div>
         <nav className="flex-1 py-4 overflow-y-auto">
-          {NAV.map(({ href, label, icon: Icon }) => {
+          {visibleNav.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <div

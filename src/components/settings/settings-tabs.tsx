@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { KeyRound, Lock, Loader2 } from "lucide-react";
 import type { Account } from "@/db/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,12 +19,36 @@ import { OrphanCategoriesPanel } from "@/components/settings/orphan-categories-p
 import { ResetBrowserData } from "@/components/settings/reset-browser-data";
 import { SchedulePaletteEditor } from "@/components/settings/schedule-palette-editor";
 
+const SETTINGS_TABS = ["general", "accounts", "rules", "backups", "security"] as const;
+type SettingsTab = (typeof SETTINGS_TABS)[number];
+
+function isSettingsTab(value: string | null): value is SettingsTab {
+  return value !== null && (SETTINGS_TABS as readonly string[]).includes(value);
+}
+
 export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }) {
   const { lock: lockNow, locking } = useLockDatabase();
   const { prefs, setPref } = useDisplayPrefs();
 
+  // Mirror the active tab in the URL so /settings?tab=backups is
+  // deep-linkable and screen-reader nav by URL works. Same pattern as
+  // reports-view.tsx.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const activeTab: SettingsTab = isSettingsTab(urlTab) ? urlTab : "general";
+  function setActiveTab(next: string) {
+    if (!isSettingsTab(next)) return;
+    const p = new URLSearchParams(searchParams.toString());
+    if (next === "general") p.delete("tab");
+    else p.set("tab", next);
+    const qs = p.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
+  }
+
   return (
-    <Tabs defaultValue="general">
+    <Tabs value={activeTab} onValueChange={setActiveTab}>
       <TabsList variant="line">
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="accounts">Accounts</TabsTrigger>
@@ -103,6 +128,46 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
                 setPref("transactionsRowExpandable", v)
               }
               aria-label="Toggle click-to-expand on transaction rows"
+            />
+          </label>
+        </div>
+        <div className="rounded-xl border bg-card divide-y">
+          <div className="px-4 py-3">
+            <h2 className="font-medium">Features</h2>
+            <p className="text-xs text-muted-foreground">
+              Turn off pages you don&apos;t use. Their nav link, page,
+              and any related dashboard widgets disappear; saved
+              dashboard placements are preserved and reappear when
+              you turn the feature back on.
+            </p>
+          </div>
+          <label className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Investments</p>
+              <p className="text-xs text-muted-foreground">
+                The Investments page (stocks, options, paper trades,
+                watchlist) plus the Tracked-stock, Stocks, Options,
+                and Paper-trade dashboard widgets.
+              </p>
+            </div>
+            <Switch
+              checked={prefs.featureInvestments}
+              onCheckedChange={(v) => setPref("featureInvestments", v)}
+              aria-label="Toggle Investments feature"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Superannuation</p>
+              <p className="text-xs text-muted-foreground">
+                The Superannuation page (self + partner balance
+                snapshots) plus the Superannuation dashboard widget.
+              </p>
+            </div>
+            <Switch
+              checked={prefs.featureSuper}
+              onCheckedChange={(v) => setPref("featureSuper", v)}
+              aria-label="Toggle Superannuation feature"
             />
           </label>
         </div>

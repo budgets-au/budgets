@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
@@ -153,6 +154,22 @@ interface MonthRow {
   net: string;
 }
 
+const REPORT_TABS = [
+  "cashflow",
+  "monthly",
+  "yoy",
+  "expenses",
+  "income",
+  "envelope",
+  "sankey",
+  "tax",
+] as const;
+type ReportTab = (typeof REPORT_TABS)[number];
+
+function isReportTab(value: string | null): value is ReportTab {
+  return value !== null && (REPORT_TABS as readonly string[]).includes(value);
+}
+
 export function ReportsView({
   accounts,
 }: {
@@ -161,7 +178,24 @@ export function ReportsView({
   const now = new Date();
   const [from, setFrom] = useState(format(startOfMonth(now), "yyyy-MM-dd"));
   const [to, setTo] = useState(format(endOfMonth(now), "yyyy-MM-dd"));
-  const [activeTab, setActiveTab] = useState("cashflow");
+
+  // Tab state lives in the URL so the eight reports are deep-linkable
+  // (share `/reports?tab=sankey`, hit Back to return to the previous
+  // tab, etc.). Same convention as the account filter — see
+  // hooks/use-account-filter.ts.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("tab");
+  const activeTab: ReportTab = isReportTab(urlTab) ? urlTab : "cashflow";
+  function setActiveTab(next: string) {
+    if (!isReportTab(next)) return;
+    const p = new URLSearchParams(searchParams.toString());
+    if (next === "cashflow") p.delete("tab");
+    else p.set("tab", next);
+    const qs = p.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
+  }
 
   // Per-tab period persistence lives in the DB-backed displayPrefs
   // blob so the operator's choices follow them across devices.

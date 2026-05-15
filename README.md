@@ -48,8 +48,7 @@ what's due in the next 30 days.
 
 **Budget per category, per period.** Set a cap on Groceries per
 fortnight or Eating Out per month and watch progress in the
-dashboard widget. Refunds reduce spent rather than count as
-fresh expense.
+dashboard widget.
 
 **See where money goes.** Cashflow chart, monthly breakdown,
 category subtree drill-down, Sankey diagram of where dollars
@@ -78,7 +77,7 @@ botched import is one click.
 app boots locked: nothing reads or writes the database until
 someone supplies the passphrase, either via the `/unlock` form
 or an environment variable for headless boots. Lose the
-passphrase, lose the data — there's no recovery path. Stash it
+passphrase, lose the data — there's no recovery. Stash it
 in a password manager before you start.
 
 ## Installation

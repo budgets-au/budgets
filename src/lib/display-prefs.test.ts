@@ -65,6 +65,24 @@ describe("parseDisplayPrefs", () => {
     ).toEqual(DISPLAY_PREFS_DEFAULT);
   });
 
+  it("defaults feature flags to enabled and accepts an off-toggle", () => {
+    // Both features start ON for new installs; only an explicit
+    // false should switch them off. Missing/malformed entries land
+    // back on the default — never silently disabled.
+    expect(DISPLAY_PREFS_DEFAULT.featureInvestments).toBe(true);
+    expect(DISPLAY_PREFS_DEFAULT.featureSuper).toBe(true);
+    expect(
+      parseDisplayPrefs(`{"featureInvestments":false,"featureSuper":false}`),
+    ).toEqual({
+      ...DISPLAY_PREFS_DEFAULT,
+      featureInvestments: false,
+      featureSuper: false,
+    });
+    expect(parseDisplayPrefs(`{"featureSuper":"nope"}`)).toEqual(
+      DISPLAY_PREFS_DEFAULT,
+    );
+  });
+
   it("falls back to the default for individual keys whose stored value isn't a boolean", () => {
     // A field stored as a string ('false') would silently change semantics
     // if we coerced; instead we discard it and use the default.

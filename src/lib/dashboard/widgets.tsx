@@ -47,6 +47,11 @@ export interface WidgetSpec {
    * different underlying entity. Defaults to false: a single
    * instance per dashboard, drawer hides the pill once placed. */
   multiInstance?: boolean;
+  /** Optional feature flag this widget belongs to. When the matching
+   * `featureInvestments` / `featureSuper` pref is off, the widget
+   * drops out of the drawer + the rendered grid. Used by Settings →
+   * Features to hide investment / super affordances entirely. */
+  feature?: "investments" | "super";
   render: (props: WidgetRenderProps) => ReactNode;
 }
 
@@ -68,6 +73,7 @@ export const WIDGETS: WidgetSpec[] = [
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
     multiInstance: true,
+    feature: "investments",
     render: (props) => <TrackedStockCard {...props} />,
   },
   {
@@ -89,6 +95,7 @@ export const WIDGETS: WidgetSpec[] = [
     title: "Stocks",
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
+    feature: "investments",
     render: () => <StocksSummaryCard />,
   },
   {
@@ -96,6 +103,7 @@ export const WIDGETS: WidgetSpec[] = [
     title: "Options",
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
+    feature: "investments",
     render: () => <OptionsSummaryCard />,
   },
   {
@@ -103,6 +111,7 @@ export const WIDGETS: WidgetSpec[] = [
     title: "Paper trades",
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
+    feature: "investments",
     render: () => <PaperTradeSummaryCard />,
   },
   {
@@ -110,6 +119,7 @@ export const WIDGETS: WidgetSpec[] = [
     title: "Superannuation",
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
+    feature: "super",
     render: () => <SuperSummaryCard />,
   },
   {

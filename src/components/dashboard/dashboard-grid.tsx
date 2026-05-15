@@ -91,10 +91,24 @@ export function DashboardGrid({
   // react-grid-layout's own `item.i` defaults to a placeholder.
   const [draggedWidgetId, setDraggedWidgetId] = useState<string | null>(null);
 
-  const baseLayout: LayoutEntry[] =
+  // Feature gating: hide widgets whose feature flag is off so the
+  // operator never sees a tile they can't drill into. Saved layout
+  // entries are preserved in storage — re-enabling restores them
+  // — unless the operator saves a dashboard edit while the feature
+  // is off, which prunes the now-invisible entries.
+  function isFeatureEnabled(widgetId: string): boolean {
+    const spec = WIDGETS_BY_ID.get(widgetId);
+    if (!spec?.feature) return true;
+    if (spec.feature === "investments") return prefs.featureInvestments;
+    if (spec.feature === "super") return prefs.featureSuper;
+    return true;
+  }
+
+  const rawBaseLayout: LayoutEntry[] =
     prefs.dashboardLayout.length > 0
       ? prefs.dashboardLayout
       : DEFAULT_DASHBOARD_LAYOUT;
+  const baseLayout = rawBaseLayout.filter((l) => isFeatureEnabled(l.widgetId));
   const activeLayout = draftLayout ?? baseLayout;
 
   // Memoise the derived RGL layout + the layouts prop object so RGL
@@ -144,7 +158,9 @@ export function DashboardGrid({
   // dropping more of the same kind (different config per placement).
   const placedWidgetIds = new Set(activeLayout.map((l) => l.widgetId));
   const availableWidgets = WIDGETS.filter(
-    (w) => w.multiInstance || !placedWidgetIds.has(w.id),
+    (w) =>
+      isFeatureEnabled(w.id) &&
+      (w.multiInstance || !placedWidgetIds.has(w.id)),
   );
 
   function startEdit() {

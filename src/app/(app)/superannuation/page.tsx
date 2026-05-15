@@ -1,7 +1,11 @@
+import { redirect } from "next/navigation";
 import { Topbar } from "@/components/layout/topbar";
 import { SuperView } from "@/components/super/super-view";
+import { getDisplayPrefs } from "@/lib/display-prefs-server";
 
 export default async function SuperannuationPage() {
+  const prefs = await getDisplayPrefs();
+  if (!prefs.featureSuper) redirect("/dashboard");
   return (
     <div>
       <Topbar title="Superannuation" />

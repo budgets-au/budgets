@@ -9,6 +9,60 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.85.0 — 2026-05-15
+
+### Added
+- **Settings → General → Features panel.** New toggles for
+  Investments and Superannuation under General. When off, the
+  matching sidebar link disappears, the page itself becomes
+  unreachable (server-side `redirect("/dashboard")` in the route
+  handler reading `getDisplayPrefs()`), and the related dashboard
+  widgets drop out of both the edit-mode drawer and the rendered
+  grid — `tracked-stock` / `stocks-summary` / `options-summary` /
+  `paper-trade-summary` for Investments, `super-summary` for
+  Super. Saved layout entries are preserved in
+  `display_prefs.dashboardLayout`, so re-enabling restores them
+  in place. Saving a dashboard edit while a feature is off does
+  prune those now-invisible entries (the filtered draft is what
+  persists). Defaults stay ON for new installs.
+- **URL-backed Reports + Settings tabs.** The eight reports tabs
+  (Cash Flow / Monthly / YoY / Expenses / Income / Envelope /
+  Sankey / Tax) and the five settings tabs (General / Accounts /
+  Rules / Backups / Security) now mirror their active tab as a
+  `?tab=` query param. Side effects:
+  `/reports?tab=sankey` is deep-linkable, the browser Back button
+  walks between tabs as expected, and screen-reader nav by URL
+  works the same as for any other view. Default tabs are
+  stripped from the URL to keep clean addresses. Follows the
+  existing `useAccountFilter` convention (`useSearchParams` read,
+  `router.replace` write).
+- **WidgetSpec.feature.** New optional `"investments" | "super"`
+  field on `WidgetSpec`; tagged the five affected widgets. The
+  drawer + grid renderer call `isFeatureEnabled(widgetId)` to
+  decide whether to surface them. Mechanism extends cleanly to
+  future feature flags — add the field, add the prefs toggle,
+  done.
+
+### Internal
+- **Server-side display-prefs reader.** New
+  `src/lib/display-prefs-server.ts` exports `getDisplayPrefs()`
+  — the SSR equivalent of the `useDisplayPrefs` hook. Reads
+  `app_settings.display_prefs` directly via Drizzle and merges
+  with defaults via `parseDisplayPrefs`. Used by the
+  `/investments` and `/superannuation` page routes for the
+  feature-flag redirect; available to any other server component
+  that needs to consult prefs.
+
+### Tooling
+- **Screenshot regeneration captures every page in both
+  themes.** `tests/e2e/screenshots.spec.ts` now runs 24 captures
+  (12 pages × light + dark) instead of cherry-picking one theme
+  per page. The PAGES list dropped its per-entry `themes`
+  override; the test loops a fixed `["light", "dark"]` instead.
+  Reports + settings tabs are reached via URL now that the tabs
+  are URL-backed, so the `getByRole("tab", …)` click-by-name
+  step is gone — simpler and immune to a future re-label.
+
 ## 0.84.0 — 2026-05-15
 
 ### Docs

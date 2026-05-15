@@ -2,68 +2,81 @@ import { test, type Page, type BrowserContext } from "@playwright/test";
 import { resolve } from "node:path";
 import { signInAsAdmin } from "./_helpers";
 
-/** Refreshes every PNG referenced by the project README. Runs
- * against the e2e dev server (port 3003 with a fresh SQLCipher
- * DB), which auto-seeds the sample-data set on first unlock — see
- * src/db/index.ts `seedSampleDataIfMissing`. We additionally seed
- * a couple of investment / super / paper-trade rows here since
- * the sample-data builder doesn't cover those tables yet.
+/** Refreshes every PNG referenced by the project README.
  *
- * Output lands directly in `screenshots/` at the repo root.
+ * Theme is stored as a server-side `theme=light|dark` cookie (see
+ * `src/app/layout.tsx`), not localStorage — so we set it via
+ * `context.addCookies` before each navigation. Reports + settings
+ * tabs are URL-backed (`?tab=sankey` etc.), so we just navigate to
+ * the right URL — no click-by-accessible-name dance.
+ *
+ * Sample data autoseeds on the fresh e2e DB; we add a few
+ * investment / super / paper-trade rows on top via the public API
+ * since the autoseed doesn't cover those tables yet.
+ *
+ * Capture resolution matches the prior in-repo screenshots
+ * (≈ 2700 × 1400 at 2× DPR for retina-quality assets).
  *
  * Usage:
  *   pnpm test:e2e tests/e2e/screenshots.spec.ts
- *
- * Captures both light and dark variants of each page; the names
- * match what the README already references so the doc and the
- * regenerated artifacts stay in sync. */
+ */
 
 const SHOTS_DIR = resolve(process.cwd(), "screenshots");
 
-const PAGES: ReadonlyArray<{
+const VIEWPORT = { width: 1349, height: 800 };
+const DEVICE_SCALE = 2;
+
+interface PageCfg {
+  /** URL path (including query string) to navigate to. */
   path: string;
+  /** File-name stem; `${name}-${theme}.png` is what lands in screenshots/. */
   name: string;
-  themes?: ReadonlyArray<"light" | "dark">;
-  /** Optional extra settle time once the page reports networkidle —
-   * pages with Recharts / RGL render after a beat. */
+  /** Extra wait after networkidle (Recharts / RGL mount on a delay). */
   settleMs?: number;
-}> = [
-  { path: "/dashboard", name: "dashboard", themes: ["light"], settleMs: 1500 },
-  { path: "/transactions", name: "transactions", themes: ["light", "dark"], settleMs: 600 },
-  { path: "/scheduled", name: "scheduled", themes: ["light", "dark"], settleMs: 1200 },
-  { path: "/calendar", name: "calendar", themes: ["light"], settleMs: 800 },
-  { path: "/reports?tab=cashflow", name: "reports-cashflow", themes: ["light", "dark"], settleMs: 1500 },
-  { path: "/reports?tab=sankey", name: "reports-sankey", themes: ["light"], settleMs: 1500 },
-  { path: "/reports?tab=envelope", name: "reports-envelope", themes: ["light"], settleMs: 1500 },
-  { path: "/reports?tab=tax-deductions", name: "reports-tax-deductions", themes: ["light"], settleMs: 1500 },
-  { path: "/investments", name: "investments", themes: ["light"], settleMs: 800 },
-  { path: "/superannuation", name: "super", themes: ["light"], settleMs: 800 },
-  { path: "/settings?tab=backups", name: "settings-backups", themes: ["dark"], settleMs: 600 },
-  { path: "/settings?tab=security", name: "settings-security", themes: ["dark"], settleMs: 600 },
+}
+
+const THEMES = ["light", "dark"] as const;
+
+const PAGES: ReadonlyArray<PageCfg> = [
+  { path: "/dashboard", name: "dashboard", settleMs: 2000 },
+  { path: "/transactions", name: "transactions", settleMs: 800 },
+  { path: "/scheduled", name: "scheduled", settleMs: 1500 },
+  { path: "/calendar", name: "calendar", settleMs: 1200 },
+  { path: "/reports", name: "reports-cashflow", settleMs: 1500 },
+  { path: "/reports?tab=sankey", name: "reports-sankey", settleMs: 1500 },
+  { path: "/reports?tab=envelope", name: "reports-envelope", settleMs: 1500 },
+  { path: "/reports?tab=tax", name: "reports-tax-deductions", settleMs: 1500 },
+  { path: "/investments", name: "investments", settleMs: 1000 },
+  { path: "/superannuation", name: "super", settleMs: 1000 },
+  { path: "/settings?tab=backups", name: "settings-backups", settleMs: 600 },
+  { path: "/settings?tab=security", name: "settings-security", settleMs: 600 },
 ];
 
+test.use({ viewport: VIEWPORT, deviceScaleFactor: DEVICE_SCALE });
 test.describe.configure({ mode: "serial" });
 
 test.describe("screenshot regeneration", () => {
   test.beforeAll(async ({ browser }) => {
-    // Seed a handful of investments / super / paper-trade rows so
-    // those pages have something interesting to render — the
-    // default sample-data builder doesn't touch those tables.
-    const page = await browser.newPage();
+    const ctx = await browser.newContext({
+      viewport: VIEWPORT,
+      deviceScaleFactor: DEVICE_SCALE,
+    });
+    const page = await ctx.newPage();
     try {
       await signInAsAdmin(page);
-      await seedShowcaseInvestments(page.context());
+      await seedShowcaseInvestments(ctx);
     } finally {
       await page.close();
+      await ctx.close();
     }
   });
 
   for (const cfg of PAGES) {
-    for (const theme of cfg.themes ?? ["light"]) {
-      test(`${cfg.name} (${theme})`, async ({ page }) => {
+    for (const theme of THEMES) {
+      test(`${cfg.name} (${theme})`, async ({ page, context }) => {
         test.setTimeout(120_000);
+        await setTheme(context, theme);
         await signInAsAdmin(page);
-        await setTheme(page, theme);
         await page.goto(cfg.path);
         await page.waitForLoadState("networkidle");
         if (cfg.settleMs) {
@@ -78,23 +91,33 @@ test.describe("screenshot regeneration", () => {
   }
 });
 
-/** next-themes stores the active theme in localStorage and toggles
- * a class on <html>. Setting the storage key before navigating
- * (and a hard reload after) gets the right class applied before
- * any component mounts. */
-async function setTheme(page: Page, theme: "light" | "dark"): Promise<void> {
-  await page.goto("/dashboard"); // any authed page to attach localStorage
-  await page.evaluate((t) => {
-    localStorage.setItem("theme", t);
-    document.documentElement.classList.toggle("dark", t === "dark");
-  }, theme);
+/** Theme is server-driven: layout.tsx reads the `theme` cookie and
+ * renders `<html class="dark">` on the SSR pass. Set the cookie at
+ * the context level so it persists across the whole test's
+ * navigations. */
+async function setTheme(
+  context: BrowserContext,
+  theme: "light" | "dark",
+): Promise<void> {
+  // Clear any prior theme cookie so the toggle isn't a no-op on
+  // serial-test runs where the previous test left it set.
+  const existing = await context.cookies();
+  const filtered = existing.filter((c) => c.name !== "theme");
+  await context.clearCookies();
+  if (filtered.length > 0) await context.addCookies(filtered);
+  await context.addCookies([
+    {
+      name: "theme",
+      value: theme,
+      url: "http://0.0.0.0:3003",
+      sameSite: "Lax",
+    },
+  ]);
 }
 
 async function seedShowcaseInvestments(
   context: BrowserContext,
 ): Promise<void> {
-  // Idempotent-ish: if these already exist, the POSTs will 400 on
-  // uniqueness and we swallow.
   const stocks = [
     { symbol: "CBA", exchange: "ASX", currency: "AUD", quantity: "120", purchasePrice: "98.50", purchaseDate: "2023-08-12" },
     { symbol: "BHP", exchange: "ASX", currency: "AUD", quantity: "300", purchasePrice: "44.20", purchaseDate: "2024-02-04" },
@@ -107,7 +130,6 @@ async function seedShowcaseInvestments(
       })
       .catch(() => {});
   }
-  // A paper-trade what-if.
   await context.request
     .post("/api/investments", {
       data: {
@@ -121,14 +143,11 @@ async function seedShowcaseInvestments(
       },
     })
     .catch(() => {});
-  // Watchlist entry.
   await context.request
     .post("/api/watchlist", {
       data: { symbol: "WBC", exchange: "ASX", currency: "AUD" },
     })
     .catch(() => {});
-  // Two super snapshots (self, partner) spanning two FYs so the
-  // YoY column renders something other than a dash.
   for (const snap of [
     { person: "self",    fyEndYear: 2025, balance: "182400.00", fundName: "AustralianSuper" },
     { person: "self",    fyEndYear: 2026, balance: "199870.00", fundName: "AustralianSuper" },

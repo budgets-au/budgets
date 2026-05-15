@@ -1,8 +1,12 @@
+import { redirect } from "next/navigation";
 import { Topbar } from "@/components/layout/topbar";
 import { InvestmentsView } from "@/components/investments/investments-view";
 import { AddInvestmentButton } from "@/components/investments/add-investment-dialog";
+import { getDisplayPrefs } from "@/lib/display-prefs-server";
 
 export default async function InvestmentsPage() {
+  const prefs = await getDisplayPrefs();
+  if (!prefs.featureInvestments) redirect("/dashboard");
   return (
     <div className="lg:h-screen lg:flex lg:flex-col">
       <Topbar title="Investments" actions={<AddInvestmentButton />} />

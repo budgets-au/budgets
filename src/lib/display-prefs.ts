@@ -110,6 +110,21 @@ export interface DisplayPrefs {
    * to post via the bank feed before the panel flags it. */
   scheduledMissedGraceDays: number;
 
+  // ── Features ──────────────────────────────────────────────────
+  /** Investments feature flag. When false, the /investments page
+   * is unreachable (server-side redirect to /dashboard), the nav
+   * link is hidden, and the investment-related dashboard widgets
+   * (tracked-stock, stocks-summary, options-summary, paper-trade-
+   * summary) drop out of the widget drawer + the rendered grid.
+   * The saved layout entries are preserved so re-enabling restores
+   * them — unless the operator saves a dashboard edit while the
+   * feature is off, in which case the now-invisible entries get
+   * pruned. */
+  featureInvestments: boolean;
+  /** Superannuation feature flag. Mirrors `featureInvestments` for
+   * the /superannuation page + the super-summary widget. */
+  featureSuper: boolean;
+
   // ── Dashboard ─────────────────────────────────────────────────
   /** Per-operator dashboard grid layout. Each entry positions a
    * widget (by registry id) at a cell on the 12-col grid. Empty
@@ -165,6 +180,8 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   globalAccountIds: [],
   scheduledMatchWindowMonths: 6,
   scheduledMissedGraceDays: 4,
+  featureInvestments: true,
+  featureSuper: true,
   dashboardLayout: [],
 };
 
@@ -431,6 +448,8 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     globalAccountIds: stringArray("globalAccountIds"),
     scheduledMatchWindowMonths: num("scheduledMatchWindowMonths"),
     scheduledMissedGraceDays: num("scheduledMissedGraceDays"),
+    featureInvestments: bool("featureInvestments"),
+    featureSuper: bool("featureSuper"),
     dashboardLayout: layoutArray("dashboardLayout"),
   };
 }

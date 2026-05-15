@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.91.0 — 2026-05-15
+
+### Added
+- **Edit + Reconcile affordances on Settings → Accounts.** Each
+  account row now has Pencil (open `EditAccountDialog` — name,
+  type, colour, institution, last-4) and CheckSquare (open
+  `ReconcileDialog` — adjust the current balance to match a
+  statement) buttons in addition to the existing Eye/EyeOff
+  archive toggle. Hover-revealed on `lg+`, always visible on
+  mobile (the standard hover-fallback). Restores the editor
+  functionality the deleted Accounts dashboard widget used to
+  carry — the operator can now manage account details without
+  leaving Settings. Both dialogs call `router.refresh()` on
+  close so the server-rendered list picks up any saves.
+
 ## 0.90.0 — 2026-05-15
 
 ### Changed

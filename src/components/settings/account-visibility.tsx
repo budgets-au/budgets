@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Eye, EyeOff, Plus } from "lucide-react";
+import { CheckSquare, Eye, EyeOff, Pencil, Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { ImportAccountsButton } from "@/components/accounts/import-accounts-button";
+import { EditAccountDialog } from "@/components/accounts/edit-account-dialog";
+import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
 import { cn } from "@/lib/utils";
 import type { Account } from "@/db/schema";
 
@@ -83,27 +86,74 @@ function Row({
   account: Account;
   onToggle: (id: string, archived: boolean) => void;
 }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
   return (
-    <div className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 group">
-      <div className="flex items-center gap-2 min-w-0">
-        <span
-          className="w-2.5 h-2.5 rounded-full shrink-0"
-          style={{ backgroundColor: account.color }}
-        />
-        <span className={`text-sm truncate ${account.isArchived ? "text-muted-foreground line-through" : ""}`}>
-          {account.name}
-        </span>
-        {account.institution && (
-          <span className="text-xs text-muted-foreground hidden sm:inline">{account.institution}</span>
-        )}
+    <>
+      <div className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 group">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="w-2.5 h-2.5 rounded-full shrink-0"
+            style={{ backgroundColor: account.color }}
+          />
+          <span className={`text-sm truncate ${account.isArchived ? "text-muted-foreground line-through" : ""}`}>
+            {account.name}
+          </span>
+          {account.institution && (
+            <span className="text-xs text-muted-foreground hidden sm:inline">{account.institution}</span>
+          )}
+        </div>
+        {/* Edit + Reconcile + Hide affordances. Hover-revealed on
+            lg+, always visible on mobile (no hover) to stay
+            discoverable. Mirrors the deleted dashboard Accounts
+            widget — the operator can now manage names / colours /
+            balances without leaving Settings → Accounts. */}
+        <div className="flex items-center gap-0.5 shrink-0 ml-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => setEditing(true)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Edit account"
+            aria-label="Edit account"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setReconciling(true)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title="Reconcile account"
+            aria-label="Reconcile account"
+          >
+            <CheckSquare className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onToggle(account.id, !account.isArchived)}
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            title={account.isArchived ? "Show account" : "Hide account"}
+            aria-label={account.isArchived ? "Show account" : "Hide account"}
+          >
+            {account.isArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
-      <button
-        onClick={() => onToggle(account.id, !account.isArchived)}
-        className="text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100 shrink-0 ml-2"
-        title={account.isArchived ? "Show account" : "Hide account"}
-      >
-        {account.isArchived ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-      </button>
-    </div>
+      <EditAccountDialog
+        account={account}
+        open={editing}
+        onOpenChange={(o) => {
+          setEditing(o);
+          // Refresh the server-rendered initialAccounts after a
+          // save so the row reflects new name/color/etc.
+          if (!o) router.refresh();
+        }}
+      />
+      <ReconcileDialog
+        accountId={account.id}
+        open={reconciling}
+        onOpenChange={(o) => {
+          setReconciling(o);
+          if (!o) router.refresh();
+        }}
+      />
+    </>
   );
 }

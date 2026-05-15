@@ -52,6 +52,13 @@ next-env.d.ts
 backups/*.dump
 backups/*.sql
 
+# CSV / OFX / QIF samples that drive the import regression tests —
+# kept locally on dev machines but never committed since they're
+# real-world bank exports (even anonymised, the financial pattern
+# is operator-specific). Tests skip the suite when the fixture is
+# missing.
+/tests/fixtures/
+
 # SQLite live data — the file is too big to track and contains PII; the
 # host should keep its own copy mounted at SQLITE_PATH (./data in dev,
 # /data inside the container).

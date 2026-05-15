@@ -380,10 +380,7 @@ function InvestmentTable({
                   <th className="text-right px-3 py-1.5 whitespace-nowrap">{qtyLabel}</th>
                   <th className="text-left px-3 py-1.5 whitespace-nowrap">{dateLabel}</th>
                   {isOption && (
-                    <>
-                      <th className="text-left px-3 py-1.5 whitespace-nowrap">Service</th>
-                      <th className="text-left px-3 py-1.5 whitespace-nowrap">Maturation</th>
-                    </>
+                    <th className="text-left px-3 py-1.5 whitespace-nowrap">Maturation</th>
                   )}
                   <th className="text-right px-3 py-1.5 whitespace-nowrap">Value</th>
                   <th className="text-right px-3 py-1.5 whitespace-nowrap">
@@ -422,14 +419,9 @@ function InvestmentTable({
                         {formatDate(r.purchaseDate)}
                       </td>
                       {isOption && (
-                        <>
-                          <td className="px-3 py-2 text-left text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-                            {r.serviceDate ? formatDate(r.serviceDate) : "—"}
-                          </td>
-                          <td className="px-3 py-2 text-left text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-                            {r.maturationDate ? formatDate(r.maturationDate) : "—"}
-                          </td>
-                        </>
+                        <td className="px-3 py-2 text-left text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                          {r.maturationDate ? formatDate(r.maturationDate) : "—"}
+                        </td>
                       )}
                       <td
                         className={`px-3 py-2 text-right tabular-nums whitespace-nowrap font-medium ${

@@ -9,6 +9,29 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.90.0 — 2026-05-15
+
+### Changed
+- **Scheduled view: drop the per-group subtotal row from the matched-
+  transactions list.** Each group's `{n} txns · ${avg} avg` /
+  `{total}` subtotal `<li>` is gone — the numbers weren't pulling
+  their weight given the operator reads the list top-down by date.
+  Inter-group gap bumped from `mt-[5px]` → `mt-7` (28 px) so the
+  visual breathing room between groups stays roughly the same as
+  when the subtotal row occupied that slot. Removed the now-unused
+  `groupTotals` map, `subtotalSign`, `nextRow` / `nextKey` /
+  `isLastInGroup` declarations.
+- **Scheduled view: schedule editor wrapper drops the slate dark-
+  mode override.** Was `bg-muted/40 dark:bg-slate-800/60`; now just
+  `bg-muted/40` so the editor panel uses the same surface tone as
+  the lineage table header + the rest of the muted surfaces (no
+  one-off slate that didn't appear anywhere else in the app).
+- **Investments → Options: drop the Service column.** Options
+  tables now show Symbol · Vested/Granted · Granted · Maturation ·
+  Value · Return — Service date was rarely the cell the operator
+  was checking and Maturation already conveys "when does this
+  vest". One column lighter.
+
 ## 0.89.0 — 2026-05-15
 
 ### Changed

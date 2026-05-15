@@ -1318,7 +1318,7 @@ export function ScheduledListView({
             table to pick a member, the compact form, and the upcoming forecast
             section. The schedule list below scrolls independently. */}
         {editing && selectedGroup && (
-          <div className="rounded-lg border bg-muted/40 dark:bg-slate-800/60 shadow-sm p-3 space-y-3 lg:shrink-0">
+          <div className="rounded-lg border bg-muted/40 shadow-sm p-3 space-y-3 lg:shrink-0">
             <ScheduledEditForm
               key={editing.id}
               row={{
@@ -1802,45 +1802,21 @@ export function ScheduledListView({
                               : isBudgetSelected
                               ? `period#${r.periodIndex ?? "none"}`
                               : `seg#${r.segmentId ?? "none"}`;
-                          const groupTotals = new Map<
-                            string,
-                            { sum: number; count: number }
-                          >();
-                          // Net amount in the schedule's direction so refunds
-                          // (positive amount on an expense schedule, or a
-                          // negative on an income schedule) REDUCE the
-                          // subtotal instead of inflating it via |amount|.
-                          const subtotalSign =
-                            parseFloat(selected.amount) >= 0 ? 1 : -1;
-                          for (const r of categoryListRows) {
-                            const raw =
-                              r.kind === "missed"
-                                ? r.amount
-                                : parseFloat(r.txn.amount);
-                            const amount = subtotalSign * raw;
-                            const k = keyOf(r);
-                            const cur = groupTotals.get(k) ?? { sum: 0, count: 0 };
-                            cur.sum += amount;
-                            cur.count += 1;
-                            groupTotals.set(k, cur);
-                          }
                           return categoryListRows.flatMap((row, i) => {
-                          // Group key changes between adjacent rows trigger a
-                          // 1px gap — for budgets the group is the period; for
-                          // non-budget rows it's the lineage segment that
-                          // claimed the row (or "missed" for unmatched).
+                          // Group key changes between adjacent rows insert a
+                          // breathing-room gap so distinct lineage segments
+                          // (or budget periods) read as separate clusters
+                          // even without a divider — for budgets the group
+                          // is the period; for non-budget rows it's the
+                          // lineage segment that claimed the row (or
+                          // "missed" for unmatched). The gap (~28 px)
+                          // replaces a per-group subtotal row that used to
+                          // sit here.
                           const groupKey = keyOf(row);
                           const prevRow = i > 0 ? categoryListRows[i - 1] : null;
-                          const nextRow =
-                            i < categoryListRows.length - 1
-                              ? categoryListRows[i + 1]
-                              : null;
                           const prevKey = prevRow ? keyOf(prevRow) : null;
-                          const nextKey = nextRow ? keyOf(nextRow) : null;
                           const groupBreakCls =
-                            prevKey !== null && prevKey !== groupKey ? "mt-[5px]" : "";
-                          const isLastInGroup = nextKey !== groupKey;
-                          const groupTotal = groupTotals.get(groupKey);
+                            prevKey !== null && prevKey !== groupKey ? "mt-7" : "";
                           if (row.kind === "missed") {
                             const acct = accountById.get(row.accountId);
                             const items: React.ReactNode[] = [
@@ -1871,23 +1847,6 @@ export function ScheduledListView({
                                 </span>
                               </li>,
                             ];
-                            if (isLastInGroup && groupTotal) {
-                              items.push(
-                                <li
-                                  key={`subtotal#${groupKey}#${i}`}
-                                  className="flex justify-between items-center py-1 px-2 -mx-2 gap-3 rounded text-[11px] text-muted-foreground bg-muted/40"
-                                  style={{ boxShadow: `inset 3px 0 0 ${MISSED_ROW_COLOUR}` }}
-                                >
-                                  <span>
-                                    {groupTotal.count} expected ·{" "}
-                                    {formatAUD(groupTotal.sum / groupTotal.count).replace("A$", "$")} avg
-                                  </span>
-                                  <span className="tabular-nums">
-                                    {formatAUD(groupTotal.sum).replace("A$", "$")}
-                                  </span>
-                                </li>,
-                              );
-                            }
                             return items;
                           }
                           const t = row.txn;
@@ -1972,22 +1931,6 @@ export function ScheduledListView({
                               </div>
                             </li>,
                           );
-                          if (isLastInGroup && groupTotal && groupTotal.count > 0) {
-                            items.push(
-                              <li
-                                key={`subtotal#${groupKey}#${i}`}
-                                className="flex justify-between items-center py-1 px-2 -mx-2 gap-3 rounded text-[11px] text-muted-foreground bg-muted/40"
-                              >
-                                <span>
-                                  {groupTotal.count} txn{groupTotal.count === 1 ? "" : "s"} ·{" "}
-                                  {formatAUD(groupTotal.sum / groupTotal.count).replace("A$", "$")} avg
-                                </span>
-                                <span className="tabular-nums font-medium">
-                                  {formatAUD(groupTotal.sum).replace("A$", "$")}
-                                </span>
-                              </li>,
-                            );
-                          }
                           return items;
                           });
                         })()}

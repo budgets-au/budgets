@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.83.0 — 2026-05-15
+
+### Added
+- **In-app release check from GHCR.** New
+  `/api/version-check` endpoint polls
+  `ghcr.io/budgets-au/budgets`'s `tags/list` (anonymous Bearer
+  token for public packages; falls back to `GITHUB_TOKEN` env
+  for private), filters semver tags, returns the highest one.
+  Sidebar footer renders a tinted "New release" line directly
+  under the existing `v0.X.Y` label when the upstream tag is
+  newer than `APP_VERSION` — links to
+  `github.com/budgets-au/budgets/releases/tag/<latest>`. SWR
+  polls hourly; Next route segment is `revalidate: 3600` so
+  multiple browser tabs / nodes de-dupe to one upstream call
+  per hour. Indicator stays hidden when on the latest, when
+  upstream errored, or when the package is private without a
+  configured token. Comes with 6 new tests for
+  `compareSemver` (catches the classic "0.10.0 vs 0.2.0"
+  string-sort bug).
+
 ## 0.82.0 — 2026-05-15
 
 ### Changed

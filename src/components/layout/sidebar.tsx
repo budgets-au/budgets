@@ -4,7 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import useSWR from "swr";
 import { cn } from "@/lib/utils";
+import { compareSemver } from "@/lib/semver-compare";
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -183,10 +185,11 @@ export function Sidebar() {
 
         {/* Release tag above the footer actions so the operator can
             see what build they're on (matches the image / GitHub tag
-            we cut). Subtle styling — it's reference info, not a CTA. */}
-        <div className="border-t px-6 pt-3 pb-1 text-center text-[10px] uppercase tracking-wider text-muted-foreground/60 tabular-nums">
-          v{APP_VERSION}
-        </div>
+            we cut). Subtle styling — it's reference info, not a CTA.
+            When /api/version-check finds a newer tag on GHCR, the
+            "New release" line slips in underneath, tinted so it
+            draws the eye but doesn't shout. */}
+        <VersionFooter />
 
         {/* Footer actions: drop the SQLCipher key (everyone bounces to
             /unlock) and sign out (clears the auth cookie). Kept at the
@@ -217,5 +220,48 @@ export function Sidebar() {
         </div>
       </aside>
     </>
+  );
+}
+
+const versionFetcher = (url: string) => fetch(url).then((r) => r.json());
+
+/** Sidebar footer block: current version, plus a tinted "New
+ * release" line when /api/version-check reports a higher tag on
+ * GHCR. Hidden entirely when on the latest, errored, or the
+ * upstream couldn't be queried — keeps the footer quiet for the
+ * common case. */
+function VersionFooter() {
+  const { data } = useSWR<{ latest?: string; error?: string }>(
+    "/api/version-check",
+    versionFetcher,
+    {
+      // Hourly refresh — the endpoint itself caches with
+      // revalidate:3600, so this is just SWR's wake-up cadence on
+      // the client.
+      refreshInterval: 60 * 60 * 1000,
+      revalidateOnFocus: false,
+      // Don't surface upstream failures as console errors; the
+      // endpoint already returns `{ error }` rather than HTTP 5xx
+      // for the "couldn't query" case.
+      shouldRetryOnError: false,
+    },
+  );
+  const latest = data?.latest ?? null;
+  const hasUpdate =
+    !!latest && compareSemver(APP_VERSION, latest) < 0;
+  return (
+    <div className="border-t px-6 pt-3 pb-1 text-center text-[10px] uppercase tracking-wider text-muted-foreground/60 tabular-nums">
+      <div>v{APP_VERSION}</div>
+      {hasUpdate && (
+        <Link
+          href={`https://github.com/budgets-au/budgets/releases/tag/${latest}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block mt-0.5 text-emerald-600 hover:text-emerald-500 transition-colors"
+        >
+          New release
+        </Link>
+      )}
+    </div>
   );
 }

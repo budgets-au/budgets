@@ -15,7 +15,7 @@ export function ImportTransactionsButton() {
   return (
     <Link
       href="/import"
-      className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+      className={cn(buttonVariants({ variant: "indigo", size: "sm" }))}
     >
       <Upload className="h-4 w-4 mr-1" /> Import
     </Link>

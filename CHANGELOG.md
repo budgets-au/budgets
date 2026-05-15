@@ -9,6 +9,42 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.99.0 — 2026-05-15
+
+### Added
+- **New `indigo` button variant + four headline CTAs migrated to
+  it.** `Button` / `buttonVariants` gain a brand-accent solid
+  variant: `bg-indigo-600 hover:bg-indigo-700 text-white` (dark:
+  `bg-indigo-500 hover:bg-indigo-400`). Migrated:
+  - Import — `ImportTransactionsButton`
+  - New Scheduled — `NewScheduledButton`
+  - Edit dashboard — `DashboardShell`
+  - Add Investment — `AddInvestmentButton`
+  Per-page primary actions now stand out from the neutral
+  Primary buttons that live inside forms.
+
+### Changed
+- **Import commit redirects to `/transactions` + Undo moves to
+  the topbar.** Pre: the import-review page replaced its Commit
+  button with a red Undo card and left the operator stranded on
+  `/import`. Post: a successful commit stashes `importLogIds`
+  in `sessionStorage` and immediately routes to `/transactions`
+  where a new `UndoLastImportButton` sits next to the Import
+  affordance in the topbar. The operator sees the rows they just
+  landed and can roll back if anything looks wrong; a × button
+  next to Undo dismisses the affordance once they're happy. The
+  inline post-commit card in `import-view.tsx` is gone (~90 lines
+  removed). `src/lib/import-undo.ts` carries the shared
+  sessionStorage interface.
+- **Import-review CategoryDropdown tints indigo when the row
+  needs a category.** Per-row CategoryDropdown trigger picks up
+  `bg-indigo-500/15 border-indigo-500/40 text-indigo-700` (light)
+  / `text-indigo-300` (dark) when `currentCategoryId` is empty
+  and the row has a normalised payee. Once a category is picked
+  the tint clears. Scope is the dropdown trigger only — the row
+  background stays its existing yellow/emerald state colour so
+  the new/duplicate distinction remains obvious.
+
 ## 0.98.0 — 2026-05-15
 
 ### Added

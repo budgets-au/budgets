@@ -85,7 +85,7 @@ export function NewScheduledButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>
+      <Button variant="indigo" size="sm" onClick={() => setOpen(true)}>
         <Plus className="h-4 w-4 mr-1" /> New Scheduled
       </Button>
       <NewScheduledDialog open={open} onOpenChange={setOpen} />

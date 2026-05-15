@@ -27,7 +27,7 @@ export function DashboardShell() {
           !editMode ? (
             <Button
               size="sm"
-              variant="outline"
+              variant="indigo"
               onClick={() => setEditMode(true)}
             >
               <Pencil className="mr-1 h-3 w-3" /> Edit dashboard

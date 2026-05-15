@@ -9,6 +9,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        // Solid indigo brand-accent variant — used for the
+        // "headline" topbar CTAs (Import, New scheduled, Edit
+        // dashboard, Add investment) so the primary actions on
+        // each page stand out from the neutral primary buttons
+        // sprinkled through forms.
+        indigo:
+          "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:border-indigo-500 dark:hover:bg-indigo-400 aria-expanded:bg-indigo-700 dark:aria-expanded:bg-indigo-400",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:

@@ -5,6 +5,7 @@ import { eq, asc } from "drizzle-orm";
 import { Topbar } from "@/components/layout/topbar";
 import { TransactionsView } from "@/components/transactions/transactions-view";
 import { ImportTransactionsButton } from "@/components/import/import-transactions-button";
+import { UndoLastImportButton } from "@/components/transactions/undo-last-import-button";
 
 export default async function TransactionsPage() {
   const [allAccounts, allCategories] = await Promise.all([
@@ -17,7 +18,15 @@ export default async function TransactionsPage() {
 
   return (
     <div>
-      <Topbar title="Transactions" actions={<ImportTransactionsButton />} />
+      <Topbar
+        title="Transactions"
+        actions={
+          <div className="flex items-center gap-2">
+            <UndoLastImportButton />
+            <ImportTransactionsButton />
+          </div>
+        }
+      />
       <div className="p-4 lg:p-6 space-y-4">
         <Suspense fallback={null}>
           <TransactionsView accounts={allAccounts} initialCategories={allCategories} />

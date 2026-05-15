@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { formatAUD, amountClass, cn } from "@/lib/utils";
+import { stashPendingUndoImport } from "@/lib/import-undo";
 
 interface CategoryOption {
   id: string;
@@ -1026,21 +1028,8 @@ function CommitToDb({
   effectiveRows: TestResultRow[];
   file: File | null;
 }) {
+  const router = useRouter();
   const [committing, setCommitting] = useState(false);
-  const [committed, setCommitted] = useState<{
-    imported: number;
-    skippedDuplicate: number;
-    migratedHashes: number;
-    backfilledType: number;
-    backfilledBalance: number;
-    backfilledCategory: number;
-    backfilledPostedSeq: number;
-    correctedPostedSeq: number;
-    accountsTouched: number;
-    aliasesLearned: number;
-    importLogIds: string[];
-  } | null>(null);
-  const [undoing, setUndoing] = useState(false);
   const confirm = useConfirm();
 
   const committableRows = useMemo(
@@ -1162,7 +1151,6 @@ function CommitToDb({
         return;
       }
       const result = await res.json();
-      setCommitted(result);
       const updatePieces: string[] = [];
       if (result.migratedHashes)
         updatePieces.push(`${result.migratedHashes} hashes migrated`);
@@ -1189,101 +1177,23 @@ function CommitToDb({
           `Nothing to update — ${result.skippedDuplicate} duplicate${result.skippedDuplicate === 1 ? "" : "s"} already in sync.`,
         );
       }
+      // Hand the just-committed importLogIds to the transactions
+      // page so an Undo affordance can sit in its topbar (next to
+      // the Import button). Then redirect — the import-review page
+      // has done its job; the operator wants to see the rows they
+      // just landed.
+      if (result.imported > 0 && Array.isArray(result.importLogIds)) {
+        stashPendingUndoImport({
+          importLogIds: result.importLogIds,
+          imported: result.imported,
+          accountsTouched: result.accountsTouched ?? 0,
+          committedAt: Date.now(),
+        });
+      }
+      router.push("/transactions");
     } finally {
       setCommitting(false);
     }
-  }
-
-  if (committed) {
-    const backfilledBits = [
-      committed.migratedHashes > 0 &&
-        `${committed.migratedHashes} hashes migrated`,
-      committed.backfilledType > 0 &&
-        `${committed.backfilledType} type fields`,
-      committed.backfilledBalance > 0 &&
-        `${committed.backfilledBalance} balance fields`,
-      committed.backfilledCategory > 0 &&
-        `${committed.backfilledCategory} category fields`,
-      committed.backfilledPostedSeq > 0 &&
-        `${committed.backfilledPostedSeq} sequence fields`,
-      committed.correctedPostedSeq > 0 &&
-        `${committed.correctedPostedSeq} sequences re-ordered`,
-    ].filter((s): s is string => !!s);
-
-    async function undo() {
-      if (!committed) return;
-      if (committed.importLogIds.length === 0) {
-        toast.info("Nothing to undo — no transactions were inserted.");
-        return;
-      }
-      const ok = await confirm({
-        title: "Undo last commit",
-        description: `Delete ${committed.imported} just-inserted transaction${committed.imported === 1 ? "" : "s"}? This won't reverse type/balance backfills on existing rows.`,
-        confirmLabel: "Undo commit",
-      });
-      if (!ok) return;
-      setUndoing(true);
-      try {
-        const res = await fetch("/api/import/undo-commit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ importLogIds: committed.importLogIds }),
-        });
-        if (!res.ok) {
-          const { error } = await res
-            .json()
-            .catch(() => ({ error: "Undo failed" }));
-          toast.error(error ?? "Undo failed");
-          return;
-        }
-        const result = await res.json();
-        toast.success(
-          `Deleted ${result.deletedTransactions} transaction${result.deletedTransactions === 1 ? "" : "s"} and ${result.deletedImportLogs} import log${result.deletedImportLogs === 1 ? "" : "s"}.`,
-        );
-        setCommitted(null);
-      } finally {
-        setUndoing(false);
-      }
-    }
-
-    return (
-      <Card>
-        <CardContent className="pt-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <p className="text-sm font-medium">Committed.</p>
-              <p className="text-xs text-muted-foreground">
-                Imported {committed.imported} transactions across{" "}
-                {committed.accountsTouched} account
-                {committed.accountsTouched === 1 ? "" : "s"} ·{" "}
-                {committed.skippedDuplicate} duplicates skipped
-                {committed.aliasesLearned > 0 &&
-                  ` · ${committed.aliasesLearned} alias${committed.aliasesLearned === 1 ? "" : "es"} learned`}
-                .
-              </p>
-              {backfilledBits.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Backfilled: {backfilledBits.join(" · ")}.
-                </p>
-              )}
-            </div>
-            {committed.imported > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={undo}
-                disabled={undoing}
-                className="border-red-500/40 text-red-600 hover:bg-red-500/10"
-              >
-                {undoing
-                  ? "Undoing…"
-                  : `Undo (delete ${committed.imported})`}
-              </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
   }
 
   return (
@@ -1501,6 +1411,11 @@ function RuleCreator({
     }
   }
 
+  // No category picked + the row is fillable (has a normalised
+  // payee) ⇒ tint the dropdown trigger indigo so the operator's
+  // eye lands on the rows that still need attention. Once a
+  // category is picked the tint clears.
+  const needsAction = !currentCategoryId && !!normalizedPayee && !saving;
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <CategoryDropdown
@@ -1509,7 +1424,11 @@ function RuleCreator({
         categories={categories}
         disabled={saving || categories.length === 0 || !normalizedPayee}
         placeholder={saving ? "Saving…" : "Set category…"}
-        triggerClassName="py-0 min-w-[160px]"
+        triggerClassName={cn(
+          "py-0 min-w-[160px]",
+          needsAction &&
+            "bg-indigo-500/15 border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/25",
+        )}
         uncategorisedLabel={null}
       />
     </span>

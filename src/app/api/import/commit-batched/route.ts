@@ -3,7 +3,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, importLogs, transactions } from "@/db/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { oldImportHash } from "@/lib/import/hash";
 import {
   normalizePayee,
@@ -343,6 +343,59 @@ async function runCommit(request: Request) {
       .where(eq(accounts.id, accountId));
   }
 
+  // Pre-insert DB chain check, per touched account. Walks the
+  // existing rows in `(date, posted_seq, posted_at|created_at, id)`
+  // order — same tuple the running-balance view uses — and predicts
+  // each row's balance as (starting + cumulative amounts). For any
+  // existing row whose stored bank balance disagrees with the
+  // chain-predicted value, the dupe-update loop is allowed to
+  // overwrite the existing posted_seq with the file's parser-
+  // assigned value (offset by per-account max so it stays unique).
+  // This is how prior posted_seq mistakes get corrected when the
+  // user re-imports a file the bank emits with balance data.
+  const expectedBalanceByDbRowId = new Map<string, number>();
+  {
+    const accountIdsForChain = Array.from(
+      new Set(dupeUpdates.map((u) => u.existingRow.accountId)),
+    );
+    if (accountIdsForChain.length > 0) {
+      const dbRows = await db
+        .select({
+          id: transactions.id,
+          accountId: transactions.accountId,
+          amount: transactions.amount,
+          balance: transactions.balance,
+        })
+        .from(transactions)
+        .where(inArray(transactions.accountId, accountIdsForChain))
+        .orderBy(
+          asc(transactions.date),
+          asc(sql`COALESCE(${transactions.postedSeq}, 0)`),
+          asc(
+            sql`COALESCE(${transactions.postedAt}, ${transactions.createdAt})`,
+          ),
+          asc(transactions.id),
+        );
+      const accountRows = await db
+        .select({ id: accounts.id, startingBalance: accounts.startingBalance })
+        .from(accounts)
+        .where(inArray(accounts.id, accountIdsForChain));
+      const startingByAccountId = new Map(
+        accountRows.map((a) => [a.id, parseFloat(a.startingBalance)]),
+      );
+      const running = new Map<string, number>();
+      for (const id of accountIdsForChain) {
+        running.set(id, startingByAccountId.get(id) ?? 0);
+      }
+      for (const t of dbRows) {
+        const prev = running.get(t.accountId) ?? 0;
+        const next = prev + parseFloat(t.amount);
+        expectedBalanceByDbRowId.set(t.id, +next.toFixed(2));
+        running.set(t.accountId, next);
+      }
+    }
+  }
+
   // Duplicate-row backfill: migrate legacy hashes forward to the
   // rawId-aware form and fill in missing type/balance/categoryId fields
   // from the new richer file. Categories are only filled when missing —
@@ -353,6 +406,7 @@ async function runCommit(request: Request) {
   let backfilledBalance = 0;
   let backfilledCategory = 0;
   let backfilledPostedSeq = 0;
+  let correctedPostedSeq = 0;
   for (const u of dupeUpdates) {
     const patch: Partial<typeof transactions.$inferInsert> = {};
     // Both legacy and heuristic matches need the stored hash migrated to
@@ -385,6 +439,31 @@ async function runCommit(request: Request) {
       const offset = (maxByAccount.get(u.existingRow.accountId) ?? -1) + 1;
       patch.postedSeq = u.row.postedSeq + offset;
       backfilledPostedSeq += 1;
+    } else if (
+      u.row.postedSeq != null &&
+      u.row.balance != null &&
+      u.existingRow.balance != null &&
+      u.existingRow.postedSeq != null
+    ) {
+      // Correction path: the existing row already had a posted_seq,
+      // but the DB chain disagrees with the bank-claimed balance on
+      // it. Trust the file's balance-aware posted_seq (offset to
+      // stay unique per account) and overwrite. The file's own
+      // chain consistency was already validated by the categorise
+      // endpoint; if the operator committed it then they accepted
+      // the diff.
+      const expected = expectedBalanceByDbRowId.get(u.existingRow.id);
+      const stored = parseFloat(u.existingRow.balance);
+      const dbChainBroken =
+        expected != null &&
+        Number.isFinite(stored) &&
+        Math.abs(stored - expected) >= 0.01;
+      if (dbChainBroken) {
+        const offset =
+          (maxByAccount.get(u.existingRow.accountId) ?? -1) + 1;
+        patch.postedSeq = u.row.postedSeq + offset;
+        correctedPostedSeq += 1;
+      }
     }
     if (Object.keys(patch).length === 0) continue;
     patch.updatedAt = new Date();
@@ -414,6 +493,7 @@ async function runCommit(request: Request) {
     backfilledBalance,
     backfilledCategory,
     backfilledPostedSeq,
+    correctedPostedSeq,
     importLogIds,
     accountsTouched: insertsByAccount.size,
     aliasesLearned: aliasesToLearn.size,

@@ -9,6 +9,49 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.74.0 — 2026-05-15
+
+### Fixed
+- **posted_seq is now derived from supplied running balance when
+  the file carries one.** Was per-file 0..N-1 with a direction
+  flip only when `rows[0].date > rows[N-1].date` — so a same-date
+  file the bank emitted newest-first never tripped the strict
+  greater check and kept reversed intra-day order. New rule in
+  `assignPostedSeq`: if every row carries a strictly-monotonic
+  `runningBalance`, sort by (date, balance) and use that as the
+  canonical order. Otherwise fall back to file position with a
+  stricter newest-first detector (any date inversion anywhere in
+  the sequence triggers the flip, not just first-vs-last).
+  Covered by 11 new tests in `src/lib/import/posted-seq.test.ts`.
+- **Existing posted_seq gets corrected on re-import when the file's
+  balance proves the stored order is wrong.** `commit-batched`
+  walks the existing DB chain (same `(date, posted_seq,
+  posted_at|created_at, id)` tuple the running-balance view
+  uses), predicts each row's balance, and when a duplicate-matched
+  row's stored bank balance disagrees with the chain, overwrites
+  the existing posted_seq with the file's balance-aware value.
+  New `correctedPostedSeq` counter is surfaced in the post-commit
+  toast ("N sequences re-ordered") so the operator sees how many
+  rows got their intra-day order fixed.
+
+### Added
+- **`balanceCheckVsDB` on the import review.** Categorise
+  endpoint cross-checks every duplicate-matched row's existing
+  DB-chain-predicted balance against what the file (and the bank)
+  claims. The import-view expand panel for a matched row now
+  shows either a green "✓ DB balance chain agrees with the file"
+  or a red "✗ DB balance chain says X here, file says Y" with
+  the prediction. The red case explicitly notes that committing
+  will rewrite posted_seq for that row.
+
+### Answer to "do imported rows' sequence ever change?"
+With this release, **yes — on re-import of a file that proves the
+existing DB chain is wrong**. New imports still get the offset
+treatment from 0.71.0 to stay unique per account; duplicates with
+a wrong stored order now also get corrected. Existing data
+without a re-importable CSV stays as-is — fix is forward-only on
+data the operator has files for.
+
 ## 0.73.0 — 2026-05-15
 
 ### Changed

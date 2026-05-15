@@ -92,6 +92,12 @@ interface TestResultRow {
     delta: number;
     mode: "chain" | "anchor";
   };
+  balanceCheckVsDB?: {
+    match: boolean;
+    expected: number;
+    claimed: number;
+    delta: number;
+  };
   resolvedType?: string | null;
   resolvedAccountId?: string | null;
   resolvedAccountName?: string | null;
@@ -877,6 +883,26 @@ function ImportRowExpanded({ row }: { row: TestResultRow }) {
               Highlighted cells will be backfilled on commit. Other
               cells stay as-is.
             </p>
+            {row.balanceCheckVsDB && !row.balanceCheckVsDB.match && (
+              <p className="text-[10px] text-red-600 dark:text-red-400 mt-1">
+                ✗ DB balance chain says{" "}
+                <span className="tabular-nums font-medium">
+                  {formatAUD(row.balanceCheckVsDB.expected)}
+                </span>{" "}
+                here, file says{" "}
+                <span className="tabular-nums font-medium">
+                  {formatAUD(row.balanceCheckVsDB.claimed)}
+                </span>{" "}
+                (Δ {formatAUD(row.balanceCheckVsDB.delta)}). The
+                existing posted_seq order is wrong; committing will
+                rewrite it.
+              </p>
+            )}
+            {row.balanceCheckVsDB && row.balanceCheckVsDB.match && (
+              <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1">
+                ✓ DB balance chain agrees with the file at this row.
+              </p>
+            )}
           </>
         ) : (
           <>
@@ -1009,6 +1035,7 @@ function CommitToDb({
     backfilledBalance: number;
     backfilledCategory: number;
     backfilledPostedSeq: number;
+    correctedPostedSeq: number;
     accountsTouched: number;
     aliasesLearned: number;
     importLogIds: string[];
@@ -1131,6 +1158,8 @@ function CommitToDb({
         updatePieces.push(`${result.backfilledCategory} categories filled`);
       if (result.backfilledPostedSeq)
         updatePieces.push(`${result.backfilledPostedSeq} sequences filled`);
+      if (result.correctedPostedSeq)
+        updatePieces.push(`${result.correctedPostedSeq} sequences re-ordered`);
       const updateText =
         updatePieces.length > 0 ? ` · ${updatePieces.join(" · ")}` : "";
       if (result.imported > 0) {
@@ -1161,6 +1190,8 @@ function CommitToDb({
         `${committed.backfilledCategory} category fields`,
       committed.backfilledPostedSeq > 0 &&
         `${committed.backfilledPostedSeq} sequence fields`,
+      committed.correctedPostedSeq > 0 &&
+        `${committed.correctedPostedSeq} sequences re-ordered`,
     ].filter((s): s is string => !!s);
 
     async function undo() {

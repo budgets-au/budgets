@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, categories, transactions } from "@/db/schema";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { detectFormat } from "@/lib/import/detect-format";
 import { parseCSV } from "@/lib/import/parse-csv";
 import { parseOFX, type OFXMeta } from "@/lib/import/parse-ofx";
@@ -83,6 +83,20 @@ interface TestResultRow {
      *             this date (only used for the first chronological row in
      *             an account, when its date has no DB rows on it). */
     mode: "chain" | "anchor";
+  };
+  /** DB-side chain check for duplicate-matched rows. Walks the
+   * existing DB rows in `(date, posted_seq, posted_at|created_at,
+   * id)` order — same tuple the running-balance view uses — and
+   * compares each row's stored bank balance to the chain-predicted
+   * value. `match=false` here means the existing `posted_seq` order
+   * doesn't reproduce the bank's claimed balance, i.e. intra-day
+   * sequencing in the DB is wrong. Only computed for matched rows
+   * whose file row carries a `runningBalance`. */
+  balanceCheckVsDB?: {
+    match: boolean;
+    expected: number;
+    claimed: number;
+    delta: number;
   };
   /** Bank-supplied transaction type the importer would write to
    * `transactions.type` — derived from QIF L / OFX TRNTYPE / CSV
@@ -177,6 +191,7 @@ export async function POST(request: Request) {
   const existing = lookupHashes.length
     ? await db
         .select({
+          id: transactions.id,
           importHash: transactions.importHash,
           date: transactions.date,
           amount: transactions.amount,
@@ -212,6 +227,7 @@ export async function POST(request: Request) {
     );
     const dbRows = await db
       .select({
+        id: transactions.id,
         date: transactions.date,
         amount: transactions.amount,
         payee: transactions.payee,
@@ -231,6 +247,7 @@ export async function POST(request: Request) {
         wantedKeys.has(`${r.date}|${parseFloat(r.amount).toFixed(2)}`),
       )
       .map((r) => ({
+        id: r.id,
         date: r.date,
         amount: r.amount,
         payee: r.payee,
@@ -247,6 +264,7 @@ export async function POST(request: Request) {
   // per row when multiple exist (e.g. two unrelated $35 transactions on
   // the same day in the same account).
   type HeurCandidate = {
+    id: string;
     date: string;
     amount: string;
     payee: string | null;
@@ -270,6 +288,7 @@ export async function POST(request: Request) {
       heuristicByKey.set(k, arr);
     }
     arr.push({
+      id: h.id,
       date: h.date,
       amount: canonicalAmount,
       payee: h.payee,
@@ -301,6 +320,10 @@ export async function POST(request: Request) {
 
   type Match = {
     type: "exact" | "legacy" | "possible";
+    /** transactions.id of the matched DB row. Needed for the
+     * DB-side chain check that surfaces wrong intra-day posted_seq
+     * order to the import-review UI. */
+    id: string;
     date: string | null;
     amount: string | null;
     payee: string | null;
@@ -318,6 +341,7 @@ export async function POST(request: Request) {
     if (direct) {
       matchByImportHash.set(r.importHash, {
         type: "exact",
+        id: direct.id,
         date: direct.date,
         amount: direct.amount,
         payee: direct.payee,
@@ -337,6 +361,7 @@ export async function POST(request: Request) {
         claimedOldHashes.add(oh);
         matchByImportHash.set(r.importHash, {
           type: "legacy",
+          id: legacy.id,
           date: legacy.date,
           amount: legacy.amount,
           payee: legacy.payee,
@@ -370,6 +395,7 @@ export async function POST(request: Request) {
       if (best && bestSim >= PAYEE_SIM_THRESHOLD) {
         matchByImportHash.set(r.importHash, {
           type: "possible",
+          id: best.id,
           date: best.date,
           amount: best.amount,
           payee: best.payee,
@@ -724,6 +750,97 @@ export async function POST(request: Request) {
     }
   }
 
+  // DB-side chain check. For every duplicate-matched row we walk the
+  // EXISTING DB chain in `(date, posted_seq, posted_at|created_at,
+  // id)` order — same tuple the running-balance subquery in
+  // /api/transactions uses — and compare each DB row's stored bank
+  // balance to the chain-predicted value. A mismatch on a row that
+  // does have a stored balance means the existing `posted_seq`
+  // ordering doesn't reproduce what the bank claimed — i.e. the
+  // intra-day order is wrong even though the file's own chain check
+  // passes. Only computed for accounts that actually have at least
+  // one duplicate-matched row with a balance, so files into fresh
+  // accounts skip the DB pull entirely.
+  const dbChainCheckByImportHash = new Map<
+    string,
+    { match: boolean; expected: number; claimed: number; delta: number }
+  >();
+  {
+    const accountIdsForChain = new Set<string>();
+    for (const r of rows) {
+      if (!r.runningBalance) continue;
+      const m = matchByImportHash.get(r.importHash);
+      if (m?.accountId) accountIdsForChain.add(m.accountId);
+    }
+    if (accountIdsForChain.size > 0) {
+      const accountIdList = Array.from(accountIdsForChain);
+      const dbRows = await db
+        .select({
+          id: transactions.id,
+          accountId: transactions.accountId,
+          amount: transactions.amount,
+          balance: transactions.balance,
+        })
+        .from(transactions)
+        .where(inArray(transactions.accountId, accountIdList))
+        .orderBy(
+          asc(transactions.date),
+          asc(sql`COALESCE(${transactions.postedSeq}, 0)`),
+          asc(
+            sql`COALESCE(${transactions.postedAt}, ${transactions.createdAt})`,
+          ),
+          asc(transactions.id),
+        );
+      const accountRows = await db
+        .select({ id: accounts.id, startingBalance: accounts.startingBalance })
+        .from(accounts)
+        .where(inArray(accounts.id, accountIdList));
+      const startingByAccountId = new Map(
+        accountRows.map((a) => [a.id, parseFloat(a.startingBalance)]),
+      );
+      // dbRowId → {expected, stored} after the chain walk.
+      const chainByDbRowId = new Map<
+        string,
+        { expected: number; claimed: number }
+      >();
+      const running = new Map<string, number>();
+      for (const id of accountIdList) {
+        running.set(id, startingByAccountId.get(id) ?? 0);
+      }
+      for (const t of dbRows) {
+        const prev = running.get(t.accountId) ?? 0;
+        const next = prev + parseFloat(t.amount);
+        if (t.balance != null) {
+          const claimed = parseFloat(t.balance);
+          if (Number.isFinite(claimed)) {
+            chainByDbRowId.set(t.id, {
+              expected: +next.toFixed(2),
+              claimed: +claimed.toFixed(2),
+            });
+          }
+        }
+        running.set(t.accountId, next);
+      }
+      // Project DB-row chain results onto the file rows via the
+      // matched id. Only emit when the file row itself carries a
+      // runningBalance — same gate as the file-chain balanceCheck.
+      for (const r of rows) {
+        if (!r.runningBalance) continue;
+        const m = matchByImportHash.get(r.importHash);
+        if (!m) continue;
+        const c = chainByDbRowId.get(m.id);
+        if (!c) continue;
+        const delta = +(c.claimed - c.expected).toFixed(2);
+        dbChainCheckByImportHash.set(r.importHash, {
+          match: Math.abs(delta) < 0.01,
+          expected: c.expected,
+          claimed: c.claimed,
+          delta,
+        });
+      }
+    }
+  }
+
   const out: TestResultRow[] = rows.map((r) => {
     const normalized = r.payee ? normalizePayee(r.payee) : "";
     const ruleCat = ruleHits.get(r.importHash) ?? null;
@@ -781,6 +898,7 @@ export async function POST(request: Request) {
       existingBalance: match?.balance ?? null,
       existingPostedSeq: match?.postedSeq ?? null,
       balanceCheck: balanceCheckByImportHash.get(r.importHash),
+      balanceCheckVsDB: dbChainCheckByImportHash.get(r.importHash),
       resolvedType,
       resolvedAccountId: resolution.accountId,
       resolvedAccountName: resolution.accountName,

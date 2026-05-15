@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.76.0 — 2026-05-15
+
+### Fixed
+- **Import balance-vs-DB check now runs even when the new file has
+  no Balance column.** 0.74.0 gated the DB-chain check on
+  `r.runningBalance` (the file's column), which meant a re-import
+  of a CSV that lacked the column couldn't surface a wrong
+  posted_seq order — even though the transactions list was
+  flagging the same row with a ✗ from the DB-stored balance alone.
+  The chain check only needs the *DB's* stored balance to compare
+  against (importHash is just the link to find which DB row); the
+  file's runningBalance is now optional for the detection path.
+  Auto-correction in commit-batched still requires the file to
+  supply a balance (otherwise the parser's posted_seq isn't
+  balance-aware and isn't trustworthy as a fix).
+
 ## 0.75.0 — 2026-05-15
 
 ### Changed

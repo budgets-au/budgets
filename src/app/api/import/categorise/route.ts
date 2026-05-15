@@ -757,10 +757,14 @@ export async function POST(request: Request) {
   // balance to the chain-predicted value. A mismatch on a row that
   // does have a stored balance means the existing `posted_seq`
   // ordering doesn't reproduce what the bank claimed — i.e. the
-  // intra-day order is wrong even though the file's own chain check
-  // passes. Only computed for accounts that actually have at least
-  // one duplicate-matched row with a balance, so files into fresh
-  // accounts skip the DB pull entirely.
+  // intra-day order is wrong.
+  //
+  // The check intentionally does NOT gate on the new file's
+  // runningBalance: even a CSV without a Balance column still
+  // identifies WHICH DB row to flag via importHash, and the DB's
+  // own stored balance (from whatever import originally set it)
+  // is enough to detect the mismatch. Only the auto-correction
+  // path in commit-batched needs a file-supplied balance.
   const dbChainCheckByImportHash = new Map<
     string,
     { match: boolean; expected: number; claimed: number; delta: number }
@@ -768,7 +772,6 @@ export async function POST(request: Request) {
   {
     const accountIdsForChain = new Set<string>();
     for (const r of rows) {
-      if (!r.runningBalance) continue;
       const m = matchByImportHash.get(r.importHash);
       if (m?.accountId) accountIdsForChain.add(m.accountId);
     }
@@ -822,10 +825,11 @@ export async function POST(request: Request) {
         running.set(t.accountId, next);
       }
       // Project DB-row chain results onto the file rows via the
-      // matched id. Only emit when the file row itself carries a
-      // runningBalance — same gate as the file-chain balanceCheck.
+      // matched id. Emit for any duplicate-matched row whose DB
+      // record has a stored balance — the new file's runningBalance
+      // isn't required since `claimed` here is the DB's stored
+      // balance, not the file's.
       for (const r of rows) {
-        if (!r.runningBalance) continue;
         const m = matchByImportHash.get(r.importHash);
         if (!m) continue;
         const c = chainByDbRowId.get(m.id);

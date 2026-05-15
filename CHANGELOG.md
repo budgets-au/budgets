@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.96.0 — 2026-05-15
+
+### Changed
+- **`/scheduled` no longer auto-selects the top row on naked cold
+  load.** The eager auto-pick used to fire a ~10 k-row
+  `/api/transactions` fetch for the right panel on every cold
+  navigation, which is wasted work for users arriving without a
+  specific schedule in mind. URLs that carry `?id=` are still
+  honoured (deep-links from the transactions list still land on
+  the named row). On a naked `/scheduled` the user clicks a row
+  to populate the panel.
+
 ## 0.95.0 — 2026-05-15
 
 ### Security

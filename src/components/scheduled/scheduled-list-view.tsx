@@ -452,33 +452,14 @@ export function ScheduledListView({
       didHonourUrlIdRef.current = true;
     }
   }, [urlSelectedId, scheduled]);
-  // Auto-select the first row on initial load so the details panel
-  // populates immediately — saves the user a click and avoids the
-  // jarring "Pick a scheduled entry" placeholder flashing in.
-  // Runs once: if the user later deselects (clicks the selected row),
-  // we don't re-auto-pick.
-  const didAutoSelectRef = useRef(false);
-  useEffect(() => {
-    if (didAutoSelectRef.current || selectedId) return;
-    // Defer to the URL-id effect when one is present — without this guard
-    // we'd pick the first row before the schedules array hydrates and
-    // never honour the deep-link.
-    if (urlSelectedId && !didHonourUrlIdRef.current) return;
-    // Prefer the first active group (the user's likely focus), fall
-    // back to inactive when there are none. Sort with the current
-    // column/dir so the auto-pick matches what's visually on top.
-    const firstActive = sortGroups(activeGroups)[0]?.primary.id;
-    const firstInactive = sortGroups(inactiveGroups)[0]?.primary.id;
-    const pick = firstActive ?? firstInactive;
-    if (pick) {
-      setSelectedId(pick);
-      didAutoSelectRef.current = true;
-    }
-    // sortGroups is recreated each render but the only inputs that
-    // matter are activeGroups/inactiveGroups. The ref guard means this
-    // is a one-shot effect regardless of how many times it re-runs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeGroups, inactiveGroups, urlSelectedId]);
+  // No auto-select on cold load when the URL has no `?id=`. The
+  // eager auto-pick used to fire a ~10 k-row `/api/transactions`
+  // fetch for the right panel on every naked `/scheduled` nav,
+  // which is wasted work for users arriving without a specific
+  // schedule in mind. They click a row and the panel populates one
+  // tick later. (The `urlSelectedId` effect above still honours
+  // `?id=` deep-links.)
+
   // Auto-toggle showAll when the user picks a different schedule. Multi-member
   // lineages default to the unified view (almost always what the user wants);
   // single-member ones default off (the toggle is hidden anyway).

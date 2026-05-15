@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.107.0 — 2026-05-15
+
+### Changed
+- **Selected lineage member background matches selected-schedule
+  background.** Pre: the schedule list row used
+  `bg-indigo-500/30 dark:bg-indigo-500/40`, the lineage members
+  table used `bg-muted` — same selection role, two different
+  treatments. Both now use the indigo-500/30 palette so the
+  visual rhyme is consistent across the two CTAs.
+- **Scheduled editor: Delete moves top-right, Save moves to where
+  Delete was + uses indigo.** Pre: Save (default variant) lived
+  on the left of the action row; Delete (destructive) at the
+  right. Post: Delete moves to the top-right of the form (next
+  to the Schedule/Budget kind toggle) as a small ghost Trash
+  icon, removing the risk of a misclick on a destructive op
+  while the cursor's on Save. Save sits at the right-end of the
+  action row with the indigo CTA variant — the primary commit
+  reads as the primary action.
+
 ## 0.106.0 — 2026-05-15
 
 ### Changed

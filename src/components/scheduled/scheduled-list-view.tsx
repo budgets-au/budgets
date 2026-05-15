@@ -1400,14 +1400,9 @@ export function ScheduledListView({
                         onClick={() => setSelectedId(m.id)}
                         className={`cursor-pointer ${
                           isEditing
-                            ? "font-medium bg-muted"
+                            ? "font-medium bg-indigo-500/30 dark:bg-indigo-500/40 hover:bg-indigo-500/35 dark:hover:bg-indigo-500/45"
                             : "hover:bg-muted/40"
                         }`}
-                        style={
-                          isEditing
-                            ? { boxShadow: "inset 0 0 0 2px var(--ring)" }
-                            : undefined
-                        }
                       >
                         <td className="px-2 py-1 tabular-nums whitespace-nowrap">{formatDate(m.startDate)}</td>
                         <td className="px-2 py-1 tabular-nums whitespace-nowrap text-muted-foreground">

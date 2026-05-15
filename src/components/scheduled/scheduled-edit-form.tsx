@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CalendarClock, PiggyBank } from "lucide-react";
+import { CalendarClock, PiggyBank, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import type { Account, Category } from "@/db/schema";
@@ -228,6 +228,23 @@ export function ScheduledEditForm({
             ? "Period spending cap, summed across the category subtree"
             : "Single recurring occurrence matched to one transaction"}
         </span>
+        {/* Top-right Delete affordance. Kept separate from the
+            bottom action row so it doesn't sit next to Save and
+            risk a misclick on a destructive op while the operator's
+            mouse is on the primary CTA. */}
+        {mode === "edit" && onDelete && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            aria-label="Delete schedule"
+            title="Delete schedule"
+            className="ml-auto text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         <div className="sm:col-span-2 lg:col-span-3 flex flex-wrap gap-2">
@@ -475,13 +492,6 @@ export function ScheduledEditForm({
       </div>
 
       <div className="flex items-center gap-2 pt-1">
-        <Button
-          type="submit"
-          size="sm"
-          disabled={loading || (!isBudget && !accountId) || (type === "transfer" && !transferToAccountId)}
-        >
-          {loading ? (mode === "create" ? "Creating…" : "Saving…") : (mode === "create" ? "Create" : "Save")}
-        </Button>
         {mode === "edit" && canReplace && !isBudget && (
           <Button
             type="button"
@@ -518,11 +528,20 @@ export function ScheduledEditForm({
             <span className="text-muted-foreground">{isActive ? "Active" : "Inactive"}</span>
           </label>
         )}
-        {mode === "edit" && onDelete && (
-          <Button type="button" size="sm" variant="destructive" onClick={onDelete}>
-            Delete
-          </Button>
-        )}
+        {/* Save sits at the right-end of the row (where Delete used
+            to live) and uses the indigo CTA variant — primary commit
+            action of the form. Edit-mode falls back to ml-auto via
+            the Active toggle's label above; create-mode (no Active
+            toggle) needs its own ml-auto so Save still right-aligns. */}
+        <Button
+          type="submit"
+          size="sm"
+          variant="indigo"
+          disabled={loading || (!isBudget && !accountId) || (type === "transfer" && !transferToAccountId)}
+          className={mode === "create" ? "ml-auto" : ""}
+        >
+          {loading ? (mode === "create" ? "Creating…" : "Saving…") : (mode === "create" ? "Create" : "Save")}
+        </Button>
       </div>
 
       <Dialog open={replaceOpen} onOpenChange={setReplaceOpen}>

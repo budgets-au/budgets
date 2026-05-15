@@ -44,7 +44,6 @@ export function ScheduledEditForm({
   allAccounts,
   allCategories,
   onSaved,
-  onCancel,
   onDelete,
   canReplace = true,
   latestMatchDate = null,
@@ -56,7 +55,6 @@ export function ScheduledEditForm({
   allAccounts: Pick<Account, "id" | "name">[];
   allCategories: Pick<Category, "id" | "name" | "parentId">[];
   onSaved: () => void;
-  onCancel: () => void;
   onDelete?: () => void;
   /** When "create", submit POSTs a new schedule and the edit-only controls
    * (Replace, Add to group, Active toggle, Delete) are hidden. */
@@ -484,7 +482,6 @@ export function ScheduledEditForm({
         >
           {loading ? (mode === "create" ? "Creating…" : "Saving…") : (mode === "create" ? "Create" : "Save")}
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={onCancel}>Cancel</Button>
         {mode === "edit" && canReplace && !isBudget && (
           <Button
             type="button"

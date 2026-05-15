@@ -137,7 +137,6 @@ export function ScheduledDetail({ row: initial, allAccounts, allCategories }: {
             router.refresh();
             invalidateCashflow();
           }}
-          onCancel={() => setEditing(false)}
         />
       </CardContent>
     </Card>

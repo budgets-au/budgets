@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.101.0 — 2026-05-15
+
+### Removed
+- **Cancel button on the scheduled-transaction editor.** It wasn't
+  carrying weight — the form had no unsaved-changes warning and
+  the user could already dismiss by clicking another row,
+  navigating away, or closing the page. Dropped from the
+  `ScheduledEditForm` action row + the `onCancel` prop on the
+  component and its three callers (`scheduled-detail.tsx`,
+  `scheduled-list-view.tsx`, `new-scheduled-dialog.tsx`). The
+  Cancel button inside the Replace sub-dialog stays — that one
+  is a real modal exit.
+
 ## 0.100.0 — 2026-05-15
 
 ### Fixed

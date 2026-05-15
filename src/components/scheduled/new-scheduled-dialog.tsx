@@ -74,7 +74,6 @@ export function NewScheduledDialog({
             router.refresh();
             invalidateCashflow();
           }}
-          onCancel={() => onOpenChange(false)}
         />
       </DialogContent>
     </Dialog>

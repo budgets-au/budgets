@@ -1330,7 +1330,6 @@ export function ScheduledListView({
                 router.refresh();
                 invalidateCashflow();
               }}
-              onCancel={() => setSelectedId("")}
               onDelete={() =>
                 setConfirmDelete({
                   ids: [editing.id],

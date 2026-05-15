@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.103.0 — 2026-05-15
+
+### Added
+- **Undo on the /transactions bulk-delete toast.** Pre: deleting
+  a batch popped a "Deleted N transactions" toast with no
+  recovery path. Post: bulk-delete now snapshots the rows before
+  the DELETE fires and sonner's toast carries an `action: {
+  label: "Undo" }` that re-POSTs each row to `/api/transactions`
+  via `Promise.allSettled`. ~10 s window before the toast
+  auto-dismisses. Caveat documented in the snapshot comment:
+  transfer-pair links don't survive an undo cycle — POST doesn't
+  carry `transferPairId`, so a previously-paired row gets
+  recreated as a standalone transaction and needs manual re-pair.
+  Pragmatic trade-off vs. a full soft-delete schema change.
+
 ## 0.102.0 — 2026-05-15
 
 ### Added

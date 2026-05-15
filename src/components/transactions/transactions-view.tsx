@@ -400,12 +400,33 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
     if (selectedIds.size === 0) return;
     const ok = await confirmDialog({
       title: "Delete transactions",
-      description: `Delete ${selectedIds.size} transaction${selectedIds.size === 1 ? "" : "s"}? This can't be undone.`,
+      description: `Delete ${selectedIds.size} transaction${selectedIds.size === 1 ? "" : "s"}? An Undo button will surface in the toast for ~10 seconds.`,
       confirmLabel: "Delete",
     });
     if (!ok) return;
     setBulkDeleting(true);
     const ids = Array.from(selectedIds);
+    // Snapshot the row payloads BEFORE the DELETE fires so the
+    // Undo handler has what it needs to re-POST. POST accepts a
+    // narrower set of fields than the row carries (createSchema:
+    // accountId/date/amount/payee/description/categoryId/notes/
+    // isTransfer) — anything not in that list (balance, type,
+    // posted_seq, transferPairId, importHash) is reconstructed on
+    // insert or simply absent. Caveat: transfer-pair links don't
+    // survive an undo cycle; if the operator deleted a paired
+    // row, they'll need to re-pair it manually.
+    const snapshot = txnsRaw
+      .filter((t) => selectedIds.has(t.id))
+      .map((t) => ({
+        accountId: t.accountId,
+        date: t.date,
+        amount: t.amount,
+        payee: t.payee ?? "",
+        description: t.description ?? "",
+        categoryId: t.categoryId,
+        notes: t.notes ?? "",
+        isTransfer: t.isTransfer,
+      }));
     const res = await fetch("/api/transactions/bulk", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -414,11 +435,45 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
     setBulkDeleting(false);
     if (res.ok) {
       const data = await res.json().catch(() => ({ deleted: ids.length }));
-      toast.success(
-        `Deleted ${data.deleted} transaction${data.deleted === 1 ? "" : "s"}`,
-      );
       clearSelection();
       mutateTxns();
+      toast.success(
+        `Deleted ${data.deleted} transaction${data.deleted === 1 ? "" : "s"}`,
+        {
+          // Sonner's action prop renders a button inside the toast.
+          // Fires once, dismisses the toast on click. The 10 s
+          // window is sonner's default; we don't override it so
+          // the message follows the user's display-prefs.
+          action: {
+            label: "Undo",
+            onClick: async () => {
+              const results = await Promise.allSettled(
+                snapshot.map((row) =>
+                  fetch("/api/transactions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(row),
+                  }).then((r) => {
+                    if (!r.ok) throw new Error(`POST ${r.status}`);
+                    return r;
+                  }),
+                ),
+              );
+              const restored = results.filter(
+                (r) => r.status === "fulfilled",
+              ).length;
+              if (restored === snapshot.length) {
+                toast.success(`Restored ${restored} transaction${restored === 1 ? "" : "s"}`);
+              } else {
+                toast.error(
+                  `Restored ${restored} of ${snapshot.length} — some inserts failed`,
+                );
+              }
+              mutateTxns();
+            },
+          },
+        },
+      );
     } else {
       toast.error("Failed to delete");
     }

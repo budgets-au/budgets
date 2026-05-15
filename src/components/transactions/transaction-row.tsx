@@ -561,7 +561,7 @@ export function TransactionRow({
         )}
         {showDate && (
           <td
-            className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap"
+            className="px-2 py-1.5 text-xs text-muted-foreground whitespace-nowrap"
             style={
               !showCheckbox && stripeColour
                 ? { boxShadow: `inset 3px 0 0 ${stripeColour}` }
@@ -581,7 +581,7 @@ export function TransactionRow({
           </td>
         )}
         <td
-          className="px-3 py-2"
+          className="px-2 py-1.5"
           style={
             !showCheckbox && !showDate && stripeColour
               ? { boxShadow: `inset 3px 0 0 ${stripeColour}` }
@@ -597,7 +597,7 @@ export function TransactionRow({
             </span>
           )}
         </td>
-        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+        <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
           <CategoryPicker
             transactionId={t.id}
             categoryId={t.categoryId ?? null}
@@ -638,7 +638,7 @@ export function TransactionRow({
             );
           })()}
         </td>
-        <td className="px-3 py-2 w-full max-w-0">
+        <td className="px-2 py-1.5 w-full max-w-0">
           <div className="flex items-center justify-between gap-2 min-w-0">
             <span className="font-medium flex items-center gap-1.5 min-w-0">
               {/* Desktop only — on mobile the full payee is rendered
@@ -735,7 +735,7 @@ export function TransactionRow({
             </span>
           )}
         </td>
-        <td className="px-3 py-2 text-right whitespace-nowrap">
+        <td className="px-2 py-1.5 text-right whitespace-nowrap">
           <span className={cn("font-semibold", amountClass(t.amount))}>
             {formatAUD(t.amount)}
           </span>
@@ -743,7 +743,7 @@ export function TransactionRow({
         {showBalance && (
           <td
             className={cn(
-              "px-3 py-2 text-right whitespace-nowrap tabular-nums",
+              "px-2 py-1.5 text-right whitespace-nowrap tabular-nums",
               t.balance != null
                 ? amountClass(t.balance)
                 : "text-muted-foreground",
@@ -787,7 +787,7 @@ export function TransactionRow({
                 </span>
               )}
             </td>
-            <td className="hidden lg:table-cell px-3 py-2 whitespace-nowrap">
+            <td className="hidden lg:table-cell px-2 py-1.5 whitespace-nowrap">
               {linked && t.pairAccountName ? (
                 <Link
                   href={`/transactions?accountId=${t.pairAccountId}`}
@@ -805,7 +805,7 @@ export function TransactionRow({
             </td>
             {showLinkedDetails && (
               <>
-                <td className="hidden lg:table-cell px-3 py-2 max-w-[220px]">
+                <td className="hidden lg:table-cell px-2 py-1.5 max-w-[220px]">
                   {linked ? (
                     <div className="flex items-center gap-1">
                       <span className="truncate text-xs text-muted-foreground">
@@ -827,7 +827,7 @@ export function TransactionRow({
                     </div>
                   ) : null}
                 </td>
-                <td className="hidden lg:table-cell px-3 py-2 text-right whitespace-nowrap">
+                <td className="hidden lg:table-cell px-2 py-1.5 text-right whitespace-nowrap">
                   {linked && t.pairAmount ? (
                     <span
                       className={cn(
@@ -967,20 +967,20 @@ export function TransactionsTableHeader({
         {showDate && (
           <th
             aria-sort={ariaSort("date")}
-            className="text-left px-3 py-2 whitespace-nowrap w-[100px]"
+            className="text-left px-2 py-1.5 whitespace-nowrap"
           >
             {sortable("Date", "date")}
           </th>
         )}
         <th
           aria-sort={ariaSort("account")}
-          className="text-left px-3 py-2 whitespace-nowrap w-[120px]"
+          className="text-left px-2 py-1.5 whitespace-nowrap"
         >
           {sortable("Account", "account")}
         </th>
         <th
           aria-sort={ariaSort("category")}
-          className="text-left px-3 py-2 w-[160px]"
+          className="text-left px-2 py-1.5"
         >
           {sortable("Category", "category")}
         </th>
@@ -992,13 +992,13 @@ export function TransactionsTableHeader({
         </th>
         <th
           aria-sort={ariaSort("payee")}
-          className="text-left px-3 py-2 w-full max-w-0"
+          className="text-left px-2 py-1.5 w-full max-w-0"
         >
           {sortable("Payee", "payee")}
         </th>
         <th
           aria-sort={ariaSort("value")}
-          className="text-right px-3 py-2 whitespace-nowrap"
+          className="text-right px-2 py-1.5 whitespace-nowrap"
         >
           {onSort ? (
             <button
@@ -1013,22 +1013,22 @@ export function TransactionsTableHeader({
           )}
         </th>
         {showBalance && (
-          <th className="text-right px-3 py-2 whitespace-nowrap">Balance</th>
+          <th className="text-right px-2 py-1.5 whitespace-nowrap">Balance</th>
         )}
         {showLinkedPanel && (
           <>
             <th className="hidden lg:table-cell border-l-2 border-border bg-muted/30 p-1 align-middle">
               {directionFilter}
             </th>
-            <th className="hidden lg:table-cell text-left px-3 py-2 whitespace-nowrap w-[140px]">
+            <th className="hidden lg:table-cell text-left px-2 py-1.5 whitespace-nowrap">
               Linked account
             </th>
             {showLinkedDetails && (
               <>
-                <th className="hidden lg:table-cell text-left px-3 py-2 max-w-[220px]">
+                <th className="hidden lg:table-cell text-left px-2 py-1.5 max-w-[220px]">
                   Linked payee
                 </th>
-                <th className="hidden lg:table-cell text-right px-3 py-2 whitespace-nowrap">
+                <th className="hidden lg:table-cell text-right px-2 py-1.5 whitespace-nowrap">
                   Linked value
                 </th>
               </>
@@ -1122,7 +1122,7 @@ export function ScheduledTransactionRow({
       {showCheckbox && <td className="px-2 py-2 w-[32px]" />}
       {showDate && (
         <td
-          className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap"
+          className="px-2 py-1.5 text-xs text-muted-foreground whitespace-nowrap"
           title={
             date
               ? format(parseISO(date), "EEEE, d MMMM yyyy")
@@ -1132,7 +1132,7 @@ export function ScheduledTransactionRow({
           {date ? formatDate(date) : "—"}
         </td>
       )}
-      <td className="px-3 py-2">
+      <td className="px-2 py-1.5">
         {acct && (
           <span
             className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap"
@@ -1142,7 +1142,7 @@ export function ScheduledTransactionRow({
           </span>
         )}
       </td>
-      <td className="px-3 py-2 text-xs text-indigo-500 italic whitespace-nowrap">
+      <td className="px-2 py-1.5 text-xs text-indigo-500 italic whitespace-nowrap">
         Scheduled
       </td>
       <td
@@ -1151,17 +1151,17 @@ export function ScheduledTransactionRow({
       >
         <Repeat className="h-3.5 w-3.5" aria-label="Scheduled" />
       </td>
-      <td className="px-3 py-2 w-full max-w-0">
+      <td className="px-2 py-1.5 w-full max-w-0">
         <span className="text-muted-foreground truncate inline-block max-w-full">
           {event.payee || event.description || "—"}
         </span>
       </td>
-      <td className="px-3 py-2 text-right whitespace-nowrap">
+      <td className="px-2 py-1.5 text-right whitespace-nowrap">
         <span className={cn("font-semibold", amountClass(event.amount))}>
           {formatAUD(event.amount)}
         </span>
       </td>
-      {showBalance && <td className="px-3 py-2 text-right" />}
+      {showBalance && <td className="px-2 py-1.5 text-right" />}
       {showLinkedPanel && (
         <>
           <td className="hidden lg:table-cell" />

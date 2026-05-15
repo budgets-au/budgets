@@ -618,39 +618,45 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                         className="cursor-pointer accent-indigo-600"
                       />
                     </th>
-                    <th aria-sort={sortAria("date")} className="text-left px-3 py-2 whitespace-nowrap w-[100px]">
+                    {/* Columns auto-size to their widest content (HTML
+                    table-layout default) so short cells like "Bills"
+                    / "Loan" don't leave 60-80 px of dead space the
+                    way the previous fixed widths did. Payee keeps
+                    `w-full max-w-0` so it absorbs whatever space the
+                    other columns don't claim. */}
+                    <th aria-sort={sortAria("date")} className="text-left px-2 py-1.5 whitespace-nowrap">
                       <button onClick={() => handleSort("date")} className="hover:text-foreground transition-colors flex items-center">
                         Date{sortIndicator("date")}
                       </button>
                     </th>
-                    <th aria-sort={sortAria("account")} className="text-left px-3 py-2 whitespace-nowrap w-[120px]">
+                    <th aria-sort={sortAria("account")} className="text-left px-2 py-1.5 whitespace-nowrap">
                       <button onClick={() => handleSort("account")} className="hover:text-foreground transition-colors flex items-center">
                         Account{sortIndicator("account")}
                       </button>
                     </th>
-                    <th aria-sort={sortAria("category")} className="text-left px-3 py-2 w-[160px]">
+                    <th aria-sort={sortAria("category")} className="text-left px-2 py-1.5">
                       <button onClick={() => handleSort("category")} className="hover:text-foreground transition-colors flex items-center">
                         Category{sortIndicator("category")}
                       </button>
                     </th>
                     <th
-                      className="px-2 py-2 w-[28px]"
+                      className="px-1 py-1.5 w-[28px]"
                       title="Bank-supplied transaction type (OFX TRNTYPE / QIF L / CSV Categories)"
                     >
                       <span className="sr-only">Type</span>
                     </th>
-                    <th aria-sort={sortAria("payee")} className="text-left px-3 py-2 w-full max-w-0">
+                    <th aria-sort={sortAria("payee")} className="text-left px-2 py-1.5 w-full max-w-0">
                       <button onClick={() => handleSort("payee")} className="hover:text-foreground transition-colors flex items-center">
                         Payee{sortIndicator("payee")}
                       </button>
                     </th>
-                    <th aria-sort={sortAria("value")} className="text-right px-3 py-2 whitespace-nowrap">
+                    <th aria-sort={sortAria("value")} className="text-right px-2 py-1.5 whitespace-nowrap">
                       <button onClick={() => handleSort("value")} className="hover:text-foreground transition-colors flex items-center ml-auto">
                         Value{sortIndicator("value")}
                       </button>
                     </th>
                     {hasBalance && (
-                      <th className="text-right px-3 py-2 whitespace-nowrap">Balance</th>
+                      <th className="text-right px-2 py-1.5 whitespace-nowrap">Balance</th>
                     )}
                     {/* Direction filter + counterpart pane — only meaningful
                         when paired rows can appear, so we hide the whole right
@@ -691,13 +697,13 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                         })}
                       </div>
                     </th>
-                    <th className="hidden lg:table-cell text-left px-3 py-2 whitespace-nowrap w-[140px]">
+                    <th className="hidden lg:table-cell text-left px-2 py-1.5 whitespace-nowrap">
                       Linked account
                     </th>
                     {showLinkedDetails && (
                       <>
-                        <th className="hidden lg:table-cell text-left px-3 py-2 max-w-[220px]">Linked payee</th>
-                        <th className="hidden lg:table-cell text-right px-3 py-2 whitespace-nowrap">Linked value</th>
+                        <th className="hidden lg:table-cell text-left px-2 py-1.5 max-w-[220px]">Linked payee</th>
+                        <th className="hidden lg:table-cell text-right px-2 py-1.5 whitespace-nowrap">Linked value</th>
                       </>
                     )}
                     </>

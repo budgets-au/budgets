@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.82.0 — 2026-05-15
+
+### Changed
+- **Transactions table: tighter columns + denser rows.** Date /
+  Account / Category / Linked-account headers no longer carry
+  explicit `w-[…px]` widths — columns auto-size to their widest
+  content the way HTML tables already do by default, so short
+  cells like "Bills" or "Loan" stop leaving 60-80 px of dead
+  space inside an oversized column. Cell padding tightened from
+  `px-3 py-2` to `px-2 py-1.5` across every header and body cell
+  in both `TransactionRow` and `ScheduledTransactionRow`. Payee
+  still `w-full max-w-0` so it absorbs whatever's left.
+
 ## 0.81.0 — 2026-05-15
 
 ### Changed

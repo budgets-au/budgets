@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CalendarClock, PiggyBank, Trash2 } from "lucide-react";
+import { CalendarClock, PiggyBank } from "lucide-react";
 import { toast } from "sonner";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import type { Account, Category } from "@/db/schema";
@@ -44,7 +44,6 @@ export function ScheduledEditForm({
   allAccounts,
   allCategories,
   onSaved,
-  onDelete,
   canReplace = true,
   latestMatchDate = null,
   onAddToGroup,
@@ -55,7 +54,6 @@ export function ScheduledEditForm({
   allAccounts: Pick<Account, "id" | "name">[];
   allCategories: Pick<Category, "id" | "name" | "parentId">[];
   onSaved: () => void;
-  onDelete?: () => void;
   /** When "create", submit POSTs a new schedule and the edit-only controls
    * (Replace, Add to group, Active toggle, Delete) are hidden. */
   mode?: "create" | "edit";
@@ -228,23 +226,6 @@ export function ScheduledEditForm({
             ? "Period spending cap, summed across the category subtree"
             : "Single recurring occurrence matched to one transaction"}
         </span>
-        {/* Top-right Delete affordance. Kept separate from the
-            bottom action row so it doesn't sit next to Save and
-            risk a misclick on a destructive op while the operator's
-            mouse is on the primary CTA. */}
-        {mode === "edit" && onDelete && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={onDelete}
-            aria-label="Delete schedule"
-            title="Delete schedule"
-            className="ml-auto text-muted-foreground hover:text-red-600 hover:bg-red-500/10"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        )}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         <div className="sm:col-span-2 lg:col-span-3 flex flex-wrap gap-2">

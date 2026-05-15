@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.108.0 — 2026-05-15
+
+### Changed
+- **Schedule editor: Delete moves to per-row trash in the
+  lineage members table.** 0.107 put the Delete affordance at
+  the form's top-right which conflated "the form's commit axis"
+  with "this lineage member" — destructive on something the
+  cursor wasn't necessarily on. Trash icon now sits next to the
+  GitBranch (migrate) button in each lineage member row's last
+  column. Click → existing `setConfirmDelete` dialog (handles
+  single-member-lineage cleanup) → `performDelete`. The
+  `onDelete` prop on `ScheduledEditForm` is removed entirely.
+
 ## 0.107.0 — 2026-05-15
 
 ### Changed

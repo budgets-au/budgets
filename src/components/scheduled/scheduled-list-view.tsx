@@ -1330,12 +1330,6 @@ export function ScheduledListView({
                 router.refresh();
                 invalidateCashflow();
               }}
-              onDelete={() =>
-                setConfirmDelete({
-                  ids: [editing.id],
-                  label: editing.payee || editing.description || "this entry",
-                })
-              }
             />
 
             <div className="overflow-x-auto rounded-md border bg-background">
@@ -1432,21 +1426,48 @@ export function ScheduledListView({
                           {deltaText}
                         </td>
                         <td className={`px-2 py-1 ${statusClass}`}>{status}</td>
-                        <td className="px-1 py-1 text-right">
-                          {selectedGroup.members.length > 1 && (
+                        <td className="px-1 py-1 text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-0.5">
+                            {selectedGroup.members.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMigrating(m);
+                                }}
+                                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                title="Migrate this member out of the lineage as its own schedule"
+                                aria-label="Migrate to a new lineage"
+                              >
+                                <GitBranch className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={(e) => {
+                                // Per-row delete. Reuses the
+                                // bulk-delete-aware confirmation
+                                // dialog the list view already owns
+                                // (setConfirmDelete → performDelete);
+                                // when this member is the last in
+                                // its lineage the dialog warns
+                                // accordingly.
                                 e.stopPropagation();
-                                setMigrating(m);
+                                setConfirmDelete({
+                                  ids: [m.id],
+                                  label:
+                                    m.payee ||
+                                    m.description ||
+                                    "this entry",
+                                });
                               }}
-                              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
-                              title="Migrate this member out of the lineage as its own schedule"
-                              aria-label="Migrate to a new lineage"
+                              className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-600"
+                              title="Delete this schedule entry"
+                              aria-label={`Delete schedule entry${m.payee ? ` for ${m.payee}` : ""}`}
                             >
-                              <GitBranch className="h-3.5 w-3.5" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     );

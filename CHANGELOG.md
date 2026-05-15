@@ -9,6 +9,65 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.110.0 — 2026-05-15
+
+### Added
+- **Five new reports tabs** — Treemap, Heatmap, Scatter, Boxplot,
+  Payees. The previous 8 tabs were all aggregated views; these
+  five surface different axes the existing reports couldn't:
+  - **Treemap** (`?tab=treemap`) — Recharts `<Treemap>`,
+    rectangles sized by absolute spend, nested by category
+    hierarchy (grandparent → parent → leaf), colour from
+    `CATEGORICAL_PALETTE`. Click a non-leaf rectangle to drill
+    in; "← Back" returns. Reuses
+    `/api/reports/cashflow` — no new endpoint. Expense / income
+    toggle.
+  - **Daily heatmap** (`?tab=heatmap`) — GitHub-contributions-
+    style 7-row × N-week grid, cell colour intensity =
+    sqrt-scaled day-total absolute spend, hovered cells show
+    date + total + transaction count, clicked cells navigate to
+    `/transactions?from=<day>&to=<day>`. Backed by a new
+    `/api/reports/daily-spend` route.
+  - **Transaction scatter** (`?tab=scatter`) — `<ComposedChart>`
+    with `<Scatter>` per transaction (X = date, Y = absolute
+    amount, colour = category) plus a white 14-day rolling-mean
+    `<Line>` overlay. Linear / log Y toggle; expense / income /
+    all toggle. Capped at 5 000 rows; the cap surfaces a warning.
+    New endpoint `/api/reports/transactions-points` + new
+    `src/lib/reports/rolling-mean.ts` pure helper (vitest
+    coverage).
+  - **Per-category boxplot** (`?tab=boxplot`) — inline-SVG row
+    per category showing whiskers (min..max), Q1..Q3 box,
+    median tick, outliers (Tukey's 1.5·IQR) as dots. Recharts
+    has no native boxplot so it's rendered as absolutely-
+    positioned tinted divs against a shared 0..globalMax scale
+    so categories are visually comparable. New endpoint
+    `/api/reports/category-quartiles` (SQLite has no
+    `PERCENTILE_CONT`; quartiles computed in Node via the new
+    `src/lib/reports/quartiles.ts` helper).
+  - **Payee Pareto** (`?tab=payees`) — top-25 payees by absolute
+    spend, `<ComposedChart>` with `<Bar>`s + a cumulative-%
+    `<Line>` on a right Y axis. `<ReferenceLine>`s at 80% and
+    95% anchor the eye on the 20/80 boundary. Bar click →
+    `/transactions?q=<payee>` so the operator can drill into the
+    raw rows. A trailing "(other N)" bar accounts for the
+    long-tail rows past the 25 cap. New endpoint
+    `/api/reports/payee-totals`.
+
+### Changed
+- **Sidebar "Lock database" button is centered.** Was
+  left-aligned with the icon hugging the left padding; now
+  uses `justify-center` so the icon + label sit in the middle
+  of the row, matching the visual weight of the version footer
+  above.
+
+### Internal
+- `src/lib/reports/rolling-mean.ts` — pure sliding-mean helper
+  with vitest coverage (`rolling-mean.test.ts`).
+- `src/lib/reports/quartiles.ts` — type-7 quantile + Tukey
+  five-number summary with vitest coverage
+  (`quartiles.test.ts`).
+
 ## 0.109.0 — 2026-05-15
 
 ### Changed

@@ -136,6 +136,11 @@ import { ExpensesDrilldown } from "./expenses-drilldown";
 import { EnvelopeReport } from "./envelope-report";
 import { SankeyReport } from "./sankey-report";
 import { YoYReport } from "./yoy-report";
+import { TreemapReport } from "./treemap-report";
+import { DailyHeatmapReport } from "./daily-heatmap-report";
+import { ScatterReport } from "./scatter-report";
+import { BoxplotReport } from "./boxplot-report";
+import { PayeeParetoReport } from "./payee-pareto-report";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -163,6 +168,11 @@ const REPORT_TABS = [
   "income",
   "envelope",
   "sankey",
+  "treemap",
+  "heatmap",
+  "scatter",
+  "boxplot",
+  "payees",
   "tax",
 ] as const;
 type ReportTab = (typeof REPORT_TABS)[number];
@@ -219,12 +229,23 @@ export function ReportsView({
       setFrom(stored.from);
       setTo(stored.to);
     } else {
-      // Envelope and Tree only really make sense over a long window —
-      // a weekly-envelope figure derived from one month of activity is
-      // misleading. Other tabs default to "this month".
+      // Long-window tabs need ≥ 11 months to be meaningful — a
+      // weekly-envelope figure from one month of data is misleading,
+      // a heatmap of 30 days is empty most of the time, a boxplot
+      // from a single month's transactions has too few samples to
+      // pick up a sensible distribution. Other tabs default to
+      // "this month".
       const today = new Date();
-      const defaultMonths =
-        activeTab === "envelope" || activeTab === "sankey" ? 11 : 0;
+      const longWindowTabs: ReportTab[] = [
+        "envelope",
+        "sankey",
+        "treemap",
+        "heatmap",
+        "scatter",
+        "boxplot",
+        "payees",
+      ];
+      const defaultMonths = longWindowTabs.includes(activeTab) ? 11 : 0;
       setFrom(
         format(startOfMonth(subMonths(today, defaultMonths)), "yyyy-MM-dd"),
       );
@@ -307,6 +328,11 @@ export function ReportsView({
           <TabsTrigger value="income">Income by Category</TabsTrigger>
           <TabsTrigger value="envelope">Envelope</TabsTrigger>
           <TabsTrigger value="sankey">Sankey</TabsTrigger>
+          <TabsTrigger value="treemap">Treemap</TabsTrigger>
+          <TabsTrigger value="heatmap">Heatmap</TabsTrigger>
+          <TabsTrigger value="scatter">Scatter</TabsTrigger>
+          <TabsTrigger value="boxplot">Boxplot</TabsTrigger>
+          <TabsTrigger value="payees">Payees</TabsTrigger>
           <TabsTrigger value="tax">Tax Deductions</TabsTrigger>
         </TabsList>
 
@@ -341,6 +367,62 @@ export function ReportsView({
             a Saved / Savings node on whichever side balances the period. */}
         <TabsContent value="sankey">
           <SankeyReport
+            from={from}
+            to={to}
+            accountIds={accountIds}
+            hideTransfers={hideTransfers}
+          />
+        </TabsContent>
+
+        {/* Treemap — category hierarchy at a glance, rectangles sized
+            by absolute spend; drills via click on a sub-rectangle. */}
+        <TabsContent value="treemap">
+          <TreemapReport
+            from={from}
+            to={to}
+            accountIds={accountIds}
+            hideTransfers={hideTransfers}
+          />
+        </TabsContent>
+
+        {/* Daily-spend heatmap — GitHub-contributions-style grid;
+            cell colour intensity tracks day-total absolute spend. */}
+        <TabsContent value="heatmap">
+          <DailyHeatmapReport
+            from={from}
+            to={to}
+            accountIds={accountIds}
+            hideTransfers={hideTransfers}
+          />
+        </TabsContent>
+
+        {/* Scatter — every transaction as a dot (date × amount),
+            colour by category, smoothing line on top. */}
+        <TabsContent value="scatter">
+          <ScatterReport
+            from={from}
+            to={to}
+            accountIds={accountIds}
+            hideTransfers={hideTransfers}
+          />
+        </TabsContent>
+
+        {/* Boxplot — per-category amount distribution (min, Q1,
+            median, Q3, max, outliers) so the operator can spot
+            categories with wide variance. */}
+        <TabsContent value="boxplot">
+          <BoxplotReport
+            from={from}
+            to={to}
+            accountIds={accountIds}
+            hideTransfers={hideTransfers}
+          />
+        </TabsContent>
+
+        {/* Pareto — top-25 payees by absolute spend with cumulative
+            % overlay; surfaces the 20/80. */}
+        <TabsContent value="payees">
+          <PayeeParetoReport
             from={from}
             to={to}
             accountIds={accountIds}

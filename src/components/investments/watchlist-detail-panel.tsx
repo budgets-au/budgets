@@ -18,6 +18,7 @@ import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { chartGridStroke } from "@/lib/colours";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ShoppingCart, Trash2 } from "lucide-react";
@@ -270,7 +271,7 @@ function PriceChart({
     <div style={{ width: "100%", height: 220 }}>
       <ResponsiveContainer>
         <LineChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#334155" : "#e2e8f0"} />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke(isDark)} />
           <XAxis
             dataKey="date"
             tick={{ fontSize: 10 }}

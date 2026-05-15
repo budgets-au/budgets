@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { formatAUD } from "@/lib/utils";
+import { chartGridStroke, TREND_UP } from "@/lib/colours";
 import {
   ChartTooltipCard,
   ChartTooltipHeader,
@@ -114,7 +115,7 @@ export function InvestmentHistoryChart({
     <div style={{ width: "100%", height: 220 }}>
       <ResponsiveContainer>
         <LineChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={isDark ? "#334155" : "#e2e8f0"} />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke(isDark)} />
           <XAxis
             dataKey="date"
             tick={{ fontSize: 10 }}
@@ -164,13 +165,13 @@ export function InvestmentHistoryChart({
             <ReferenceLine
               key={`vest-${v.date}`}
               x={v.date}
-              stroke="#10b981"
+              stroke={TREND_UP}
               strokeDasharray="2 2"
               strokeWidth={1}
               label={{
                 value: v.label,
                 position: "top",
-                fill: "#10b981",
+                fill: TREND_UP,
                 fontSize: 9,
               }}
             />
@@ -178,7 +179,7 @@ export function InvestmentHistoryChart({
           {dividends.map((d) => {
             const point = series.find((p) => p.date === d.date) ?? series[series.length - 1];
             const received = purchaseDate ? d.date >= purchaseDate : false;
-            const colour = received ? "#10b981" : "#f59e0b";
+            const colour = received ? TREND_UP : "#f59e0b";
             return (
               <ReferenceDot
                 key={`div-${d.date}`}

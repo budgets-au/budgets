@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { CATEGORICAL_PALETTE } from "@/lib/colours";
 import type { Account } from "@/db/schema";
 
 const ACCOUNT_TYPES = [
@@ -18,10 +19,7 @@ const ACCOUNT_TYPES = [
   { value: "cash", label: "Cash" },
 ];
 
-const COLORS = [
-  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
-  "#eab308", "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6",
-];
+const COLORS = CATEGORICAL_PALETTE;
 
 export function EditAccountDialog({
   account,

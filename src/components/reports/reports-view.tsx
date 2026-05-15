@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
+import { TREND_DOWN } from "@/lib/colours";
 import {
   BarChart,
   Bar,
@@ -259,11 +260,6 @@ export function ReportsView({
     .filter((r) => parseFloat(r.total) > 0)
     .slice(0, 10);
 
-  const PIE_COLORS = [
-    "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
-    "#eab308", "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6",
-  ];
-
   return (
     <div className="space-y-6">
       {/* Date range filter */}
@@ -371,7 +367,7 @@ export function ReportsView({
                   <Tooltip content={<ReportsBarTooltip />} />
                   <Legend />
                   <Bar dataKey="Income" fill="#22c55e" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Expenses" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="Expenses" fill={TREND_DOWN} radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
 

@@ -18,6 +18,7 @@ import {
   ChartTooltipHeader,
   ChartTooltipRow,
 } from "@/components/ui/chart-tooltip";
+import { CATEGORICAL_PALETTE } from "@/lib/colours";
 
 function ExpensesPieTooltip({
   active,
@@ -77,20 +78,11 @@ interface TxnRow {
   categoryName: string | null;
 }
 
-const PIE_COLORS = [
-  "#6366f1",
-  "#8b5cf6",
-  "#ec4899",
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#22c55e",
-  "#14b8a6",
-  "#06b6d4",
-  "#3b82f6",
-  "#a855f7",
-  "#f43f5e",
-];
+// Drilldown pie has more potential slices than a 10-colour palette
+// covers (up to 12 categories ranked before the rest fold into
+// "Other"), so we extend the standard categorical palette with two
+// extra hues at the end.
+const PIE_COLORS = [...CATEGORICAL_PALETTE, "#a855f7", "#f43f5e"];
 
 const UNCAT_ID = "__uncat__";
 

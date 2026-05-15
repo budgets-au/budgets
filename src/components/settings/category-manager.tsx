@@ -23,12 +23,12 @@ import type { Category, TaxConfig } from "@/db/schema";
 import { buildCategoryMeta } from "@/lib/category-path";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { classifyCategoryDefault } from "@/lib/tax/calc";
+import { CATEGORICAL_PALETTE } from "@/lib/colours";
 
-const COLORS = [
-  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
-  "#eab308", "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6",
-  "#94a3b8", "#64748b", "#475569",
-];
+// Categories get the standard categorical palette plus three slate
+// shades so users can pick a neutral grey for "miscellaneous" /
+// transfer-shaped categories without a colour fighting for attention.
+const COLORS = [...CATEGORICAL_PALETTE, "#94a3b8", "#64748b", "#475569"];
 
 type FormState = {
   name: string;

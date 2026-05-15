@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { formatAUD, amountClass } from "@/lib/utils";
+import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -53,7 +54,7 @@ export function StocksSummaryCard() {
   const trendEnd = history[history.length - 1]?.value;
   const trendUp =
     trendStart != null && trendEnd != null ? trendEnd >= trendStart : true;
-  const lineColor = trendUp ? "#10b981" : "#ef4444";
+  const lineColor = trendUp ? TREND_UP : TREND_DOWN;
 
   return (
     <Card data-size="sm" className="h-full flex flex-col">

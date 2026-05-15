@@ -10,6 +10,7 @@ import {
   ChartTooltipRow,
 } from "@/components/ui/chart-tooltip";
 import { formatAUD } from "@/lib/utils";
+import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
 function NetWorthTooltip({
   active,
@@ -76,6 +77,7 @@ export function NetWorthTrendCard({ editMode }: { editMode?: boolean } = {}) {
   const pctDelta = first !== 0 ? (delta / Math.abs(first)) * 100 : 0;
   const trendUp = delta > 0;
   const flat = Math.abs(delta) < 1;
+  const trendColor = trendUp ? TREND_UP : TREND_DOWN;
   const Icon = flat ? Minus : trendUp ? TrendingUp : TrendingDown;
   const tone = flat
     ? "text-muted-foreground"
@@ -118,23 +120,15 @@ export function NetWorthTrendCard({ editMode }: { editMode?: boolean } = {}) {
             <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="nwGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor={trendUp ? "#10b981" : "#ef4444"}
-                    stopOpacity={0.3}
-                  />
-                  <stop
-                    offset="95%"
-                    stopColor={trendUp ? "#10b981" : "#ef4444"}
-                    stopOpacity={0}
-                  />
+                  <stop offset="5%" stopColor={trendColor} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={trendColor} stopOpacity={0} />
                 </linearGradient>
               </defs>
               <Tooltip content={<NetWorthTooltip />} />
               <Area
                 type="monotone"
                 dataKey="netWorth"
-                stroke={trendUp ? "#10b981" : "#ef4444"}
+                stroke={trendColor}
                 strokeWidth={1.5}
                 fill="url(#nwGrad)"
               />

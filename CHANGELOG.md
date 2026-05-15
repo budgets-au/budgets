@@ -9,6 +9,53 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.86.0 — 2026-05-15
+
+### Changed
+- **Scheduled view: drop the per-lineage colour stripe on the
+  matched-transactions list.** Each row + subtotal in the right-hand
+  category transactions list used to carry an `inset 3px 0 0 <rowColour>`
+  ribbon matched to the lineage member that claimed it (or to the budget
+  period for budget rows). The visual matching to the lineage members
+  panel wasn't carrying its weight — operators read the list top-down
+  by date, not by ribbon — so the stripes are gone. The red `MISSED_ROW_COLOUR`
+  stripe stays on missed rows + missed subtotals because that signals
+  status (expected, no match) rather than lineage identity.
+- **Scheduled view: subtotal background matches the lineage table
+  header.** Group subtotals dropped their `dark:bg-slate-800/60`
+  override; both light and dark modes now use the same `bg-muted/40`
+  the lineage `<thead>` uses. The list reads as one consistent
+  surface instead of switching greys at every group break.
+
+### Internal
+- **Colour-constant module + cross-file dedup.** New
+  `src/lib/colours.ts` exports `CATEGORICAL_PALETTE` (the 10-hex
+  picker wheel — indigo / violet / pink / red / orange / yellow /
+  green / teal / cyan / blue), `TREND_UP` / `TREND_DOWN` (`#10b981`
+  / `#ef4444` — emerald-500 / red-500), and `chartGridStroke(isDark)`
+  (Recharts `CartesianGrid` stroke). Replaced four copies of the
+  10-colour palette (accounts/new, accounts/import/commit,
+  edit-account-dialog, category-manager — the last inline-extends
+  with three slate slots), four copies of the trend up/down
+  ternary, four copies of the `isDark ? "#334155" : "#e2e8f0"` grid
+  stroke (and fixed scheduled-occurrences-chart which was missing
+  its dark variant entirely). Semantic green/red usages in
+  sankey/scheduled/investment/report code now reference the
+  constants. Removed the dead `PIE_COLORS` declaration in
+  reports-view.tsx. `expenses-drilldown.tsx` builds its 12-slot
+  pie palette from `[...CATEGORICAL_PALETTE, "#a855f7", "#f43f5e"]`.
+
+### Docs
+- **`theme.md` — UI chrome colour matrix.** New top-level doc with
+  every theme token grouped by *distinct value* (so the eight tokens
+  that resolve to `#f5f5f5` in light or to `#fafafa` in dark show as
+  one row each). Covers surfaces, foregrounds, primary, borders,
+  brand indigo accent, status text (positive / negative / warning),
+  and the scrollbar — explicitly excludes data-viz / picker palettes,
+  which live in their own modules. Includes an "Adding a new colour"
+  guide so future hex literals have a clear home. Sample swatches
+  via placehold.co render on GitHub + VS Code preview.
+
 ## 0.85.0 — 2026-05-15
 
 ### Added

@@ -16,6 +16,7 @@ import { expandRecurrence } from "@/lib/recurrence";
 import { FORECAST_HORIZON } from "@/lib/forecast";
 import { colourForFrequency, colourForLineageRank, colourForBudgetPeriod, dimColour, freqLabel } from "@/lib/schedule-colours";
 import { invalidateCashflow } from "@/lib/invalidate-cashflow";
+import { TREND_DOWN } from "@/lib/colours";
 import { currentBudgetPeriod, pastBudgetPeriods } from "@/lib/budget-period";
 import { ScheduledEditForm, type ScheduledFormRow } from "@/components/scheduled/scheduled-edit-form";
 import { NewScheduledDialog } from "@/components/scheduled/new-scheduled-dialog";
@@ -41,7 +42,7 @@ const MATCH_WINDOW_OPTIONS: { label: string; months: number }[] = [
   { label: "12m", months: 12 },
 ];
 const DEFAULT_MATCH_WINDOW_MONTHS = 6;
-const MISSED_ROW_COLOUR = "#ef4444"; // red-500, mirrors the chart's missed-bar fill
+const MISSED_ROW_COLOUR = TREND_DOWN; // red-500, mirrors the chart's missed-bar fill
 
 interface ScheduledRow {
   id: string;
@@ -1881,7 +1882,7 @@ export function ScheduledListView({
                               items.push(
                                 <li
                                   key={`subtotal#${groupKey}#${i}`}
-                                  className="flex justify-between items-center py-1 px-2 -mx-2 gap-3 rounded text-[11px] text-muted-foreground bg-muted/40 dark:bg-slate-800/60"
+                                  className="flex justify-between items-center py-1 px-2 -mx-2 gap-3 rounded text-[11px] text-muted-foreground bg-muted/40"
                                   style={{ boxShadow: `inset 3px 0 0 ${MISSED_ROW_COLOUR}` }}
                                 >
                                   <span>
@@ -1909,25 +1910,8 @@ export function ScheduledListView({
                             segment && selected?.kind !== "budget"
                               ? rangeGap(amt, segment)
                               : null;
-                          // Budget rows: colour each row by the period it falls
-                          // in (using the same lineage-rank palette the chart
-                          // uses for predecessor segments). Falls back to the
-                          // segment colour for non-budget rows.
                           const isBudgetRow =
                             selected?.kind === "budget" && row.periodIndex != null;
-                          const totalBudgetPeriods = isBudgetRow
-                            ? pastBudgetPeriods(
-                                selected!.startDate,
-                                selected!.frequency,
-                                new Date(),
-                                fromISO,
-                              ).length
-                            : 0;
-                          const rowColour = isBudgetRow
-                            ? colourForBudgetPeriod(
-                                totalBudgetPeriods - 1 - (row.periodIndex ?? 0),
-                              )
-                            : segment?.color;
                           // For chart-bar click navigation: budget rows scroll
                           // to their period's start date (matching the bar's
                           // `date`); non-budget rows scroll to the txn date.
@@ -1940,11 +1924,6 @@ export function ScheduledListView({
                               key={t.id}
                               data-bar-date={barDate}
                               className={`py-2 px-2 -mx-2 rounded ${groupBreakCls}`}
-                              style={
-                                rowColour
-                                  ? { boxShadow: `inset 3px 0 0 ${rowColour}` }
-                                  : undefined
-                              }
                             >
                               <div className="flex justify-between items-center gap-3">
                                 <div className="min-w-0 flex items-center gap-2">
@@ -2004,12 +1983,7 @@ export function ScheduledListView({
                             items.push(
                               <li
                                 key={`subtotal#${groupKey}#${i}`}
-                                className="flex justify-between items-center py-1 px-2 -mx-2 gap-3 rounded text-[11px] text-muted-foreground bg-muted/40 dark:bg-slate-800/60"
-                                style={
-                                  rowColour
-                                    ? { boxShadow: `inset 3px 0 0 ${rowColour}` }
-                                    : undefined
-                                }
+                                className="flex justify-between items-center py-1 px-2 -mx-2 gap-3 rounded text-[11px] text-muted-foreground bg-muted/40"
                               >
                                 <span>
                                   {groupTotal.count} txn{groupTotal.count === 1 ? "" : "s"} ·{" "}

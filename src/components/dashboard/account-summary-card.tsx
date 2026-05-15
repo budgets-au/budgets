@@ -11,6 +11,7 @@ import {
   ChartTooltipRow,
 } from "@/components/ui/chart-tooltip";
 import { cn, formatAUD, amountClass } from "@/lib/utils";
+import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 import type { Account } from "@/db/schema";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -98,7 +99,7 @@ export function AccountSummaryCard({
   const endBal = trend[trend.length - 1]?.balance;
   const trendUp =
     startBal != null && endBal != null ? endBal >= startBal : true;
-  const lineColor = trendUp ? "#10b981" : "#ef4444";
+  const lineColor = trendUp ? TREND_UP : TREND_DOWN;
 
   return (
     <Card data-size="sm" className="h-full flex flex-col">

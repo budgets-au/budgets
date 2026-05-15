@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useDarkMode } from "@/hooks/use-dark-mode";
+import { TREND_DOWN, chartGridStroke } from "@/lib/colours";
 import {
   ComposedChart,
   Bar,
@@ -54,12 +55,12 @@ export interface ChartSegment {
 
 const FORECAST_COLOUR_LIGHT = "#94a3b8"; // slate-400 — light theme
 const FORECAST_COLOUR_DARK = "#475569"; // slate-600 — needs to be darker to recede on the dark plot background
-const MISSED_COLOUR = "#ef4444"; // red-500, rendered at ~40% opacity for "muted"
+const MISSED_COLOUR = TREND_DOWN; // red-500, rendered at ~40% opacity for "muted"
 // Mid-tone hues so the bar frame + hatch read on both light and dark plot
 // backgrounds. Pattern strokes (below) get an additional `stroke-opacity`
 // so the diagonal lines composite onto the background instead of laying
 // down a solid colour that vanishes on whichever theme is too close to it.
-const OVER_COLOUR = "#ef4444"; // red-500
+const OVER_COLOUR = TREND_DOWN; // red-500
 const UNDER_COLOUR = "#94a3b8"; // slate-400
 const GAP_COLOUR = "#94a3b8";   // slate-400 — unused-budget portion, hatched like under
 const HATCH_STROKE_OPACITY = 0.55;
@@ -401,7 +402,7 @@ export function ScheduledOccurrencesChart({
                 />
               </pattern>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke(isDark)} />
             <XAxis
               dataKey="date"
               tick={{ fontSize: 10 }}

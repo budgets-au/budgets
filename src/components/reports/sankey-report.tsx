@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD } from "@/lib/utils";
+import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 import {
   ChartTooltipCard,
   ChartTooltipHeader,
@@ -412,10 +413,10 @@ export function SankeyReport({
   for (const c of allCategories) colorById.set(c.id, c.color);
 
   const HUB_TOTAL_INCOME = "#6366f1";
-  const HUB_SAVED = "#10b981";
+  const HUB_SAVED = TREND_UP;
   const HUB_SAVINGS_DRAWN = "#f59e0b";
   const FALLBACK_INCOME = "#22c55e";
-  const FALLBACK_EXPENSE = "#ef4444";
+  const FALLBACK_EXPENSE = TREND_DOWN;
 
   const showIncome = scope === "all" || scope === "income";
   const showExpenses = scope === "all" || scope === "expenses";

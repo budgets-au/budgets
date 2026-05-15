@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { formatAUD } from "@/lib/utils";
+import { chartGridStroke } from "@/lib/colours";
 import { formatFy } from "@/lib/tax/fy";
 import {
   ChartTooltipCard,
@@ -127,10 +128,7 @@ export function SuperHistoryChart({
               <stop offset="100%" stopColor={INCREASE_COLOUR} stopOpacity={0.05} />
             </linearGradient>
           </defs>
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke={isDark ? "#334155" : "#e2e8f0"}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke(isDark)} />
           <XAxis
             dataKey="year"
             tick={{ fontSize: 10 }}

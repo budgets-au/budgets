@@ -11,6 +11,7 @@ import {
   ChartTooltipRow,
 } from "@/components/ui/chart-tooltip";
 import { cn } from "@/lib/utils";
+import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
 /** Fetcher that throws on non-2xx so SWR returns `undefined` instead
  * of an error-shaped JSON body that consumers would try to
@@ -130,7 +131,7 @@ export function TrackedStockCard({
     : up
       ? "text-emerald-600"
       : "text-red-500";
-  const lineColor = flat ? "#94a3b8" : up ? "#10b981" : "#ef4444";
+  const lineColor = flat ? "#94a3b8" : up ? TREND_UP : TREND_DOWN;
 
   return (
     <Card data-size="sm" className="h-full flex flex-col">

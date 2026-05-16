@@ -9,6 +9,28 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.124.1 — 2026-05-16
+
+### Security
+- **Next.js 16.2.4 → 16.2.6** (closes GitHub issue #1 / Dependabot
+  advisory bundle). The patch release contains 7 high-severity
+  fixes:
+  - GHSA-8h8q-6873-q5fj — DoS via Server Components
+  - GHSA-267c-6grr-h53f / GHSA-26hh-7cqf-hhc6 — App-Router
+    middleware/proxy bypass via segment-prefetch routes (and the
+    incomplete-fix follow-up)
+  - GHSA-mg66-mrh9-m8jx — DoS via connection exhaustion in
+    Cache-Components apps
+  - GHSA-492v-c6pp-mqqv — middleware/proxy bypass via dynamic
+    route parameter injection
+  - GHSA-c4j6-fc7j-m34r — SSRF via WebSocket upgrades
+  - GHSA-36qx-fr4f-26g5 — Pages-Router middleware bypass under i18n
+
+  Plus 4 moderate fixes (CSP-nonce XSS, beforeInteractive XSS,
+  Image-Optimization DoS, RSC cache poisoning) and 2 low (RSC
+  cache-busting collisions, redirect cache-poisoning). `eslint-
+  config-next` bumped in lockstep to match.
+
 ## 0.124.0 — 2026-05-16
 
 ### Added

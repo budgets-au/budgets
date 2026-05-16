@@ -343,7 +343,21 @@ export function EnvelopeReport({
     .filter((r) => r.depth === 0 && !r.isExcluded)
     .reduce((s, r) => s + r.total, 0);
   const netTotal = incomeTotal - expenseTotal;
-  const hiddenCount = excludedIds.size;
+  // "X hidden" must reflect what's actually being suppressed in
+  // *this* view — counting the raw preference (`excludedIds.size`)
+  // surfaces a misleading non-zero when the operator narrows the
+  // period and the hidden categories simply aren't present anymore.
+  // A category counts as hidden here only if it's excluded AND has
+  // non-zero rolled spend/income in the current trees.
+  const hiddenCount = (() => {
+    let n = 0;
+    for (const id of excludedIds) {
+      const incomeRolled = incomeTree.rolled.get(id) ?? 0;
+      const expenseRolled = expenseTree.rolled.get(id) ?? 0;
+      if (incomeRolled > 0 || expenseRolled > 0) n++;
+    }
+    return n;
+  })();
 
   // Single source of truth for one envelope row — duplicated between
   // the income and expense sections, so the closure-captured state

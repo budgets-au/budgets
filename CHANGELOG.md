@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.116.0 — 2026-05-16
+
+### Fixed
+- **Envelope "X hidden" badge now counts only categories actually
+  present in the current view.** Previously it reported the raw size
+  of the excluded-category preference. If you hid a category on a
+  multi-year window and then narrowed to a period where that
+  category had no activity, the badge still said "1 hidden" with
+  nothing visibly suppressed — confusing. The count now ignores
+  excluded categories whose rolled total is zero in both the income
+  and expense trees for the active period, so the badge only shows
+  up (and only ticks up) when there's something the operator could
+  reveal by toggling it.
+
 ## 0.115.0 — 2026-05-16
 
 ### Added

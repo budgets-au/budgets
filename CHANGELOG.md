@@ -9,6 +9,15 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.124.0 — 2026-05-16
+
+### Added
+- **Sidebar: "Buy me a coffee" link** above the version footer,
+  pointing at <https://buymeacoffee.com/budgets>. Small coffee icon,
+  amber hover tint, muted at rest — discoverable but not noisy.
+- **`.github/FUNDING.yml`** so the repo's "Sponsor this project"
+  button on GitHub points at the same Buy Me a Coffee page.
+
 ## 0.123.1 — 2026-05-16
 
 ### Fixed

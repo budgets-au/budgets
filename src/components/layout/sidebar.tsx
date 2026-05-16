@@ -12,6 +12,7 @@ import {
   CalendarClock,
   Calendar,
   BarChart3,
+  Coffee,
   Tag,
   Settings,
   TrendingUp,
@@ -190,6 +191,22 @@ export function Sidebar() {
           <div className="mx-3 my-3 border-t" />
           <SidebarAccounts onPick={() => setOpen(false)} />
         </nav>
+
+        {/* Support link. The project is free, self-hostable, and
+            developed in spare time; the Buy Me a Coffee link is the
+            only ask. Sat above the version footer so it's discoverable
+            but doesn't crowd the primary nav. */}
+        <div className="px-6 pt-3 pb-1">
+          <Link
+            href="https://buymeacoffee.com/budgets"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+          >
+            <Coffee className="h-3.5 w-3.5" />
+            <span>Buy me a coffee</span>
+          </Link>
+        </div>
 
         {/* Release tag above the footer actions so the operator can
             see what build they're on (matches the image / GitHub tag

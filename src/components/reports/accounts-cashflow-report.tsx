@@ -15,7 +15,13 @@ function monthLabel(m: string): string {
   return format(parseISO(`${m}-01`), "MMM ''yy");
 }
 
-type CellMode = "credit" | "debit" | "balance";
+type CellMode =
+  | "credit"
+  | "debit"
+  | "net"
+  | "transferIn"
+  | "transferOut"
+  | "balance";
 
 function formatCell(value: number | undefined, mode: CellMode): {
   text: string;
@@ -36,10 +42,36 @@ function formatCell(value: number | undefined, mode: CellMode): {
       className: "text-foreground",
     };
   }
+  if (mode === "net") {
+    // Net (credits − debits) can be either sign; parenthesise negative
+    // and tint by direction so a deficit pops at a glance.
+    if (value < 0) {
+      return {
+        text: `(${numFmt.format(Math.abs(value))})`,
+        className: "text-rose-600 dark:text-rose-400",
+      };
+    }
+    return {
+      text: numFmt.format(value),
+      className: "text-emerald-600 dark:text-emerald-400",
+    };
+  }
   if (mode === "credit") {
     return {
       text: numFmt.format(value),
       className: "text-emerald-600 dark:text-emerald-400",
+    };
+  }
+  if (mode === "transferIn") {
+    return {
+      text: numFmt.format(value),
+      className: "text-sky-600 dark:text-sky-400",
+    };
+  }
+  if (mode === "transferOut") {
+    return {
+      text: numFmt.format(value),
+      className: "text-amber-600 dark:text-amber-400",
     };
   }
   // debit — always positive here (server sends abs)
@@ -47,6 +79,20 @@ function formatCell(value: number | undefined, mode: CellMode): {
     text: numFmt.format(value),
     className: "text-rose-600 dark:text-rose-400",
   };
+}
+
+/** Cheap per-month derivation so the UI doesn't have to thread a "net"
+ * series through state — credits and debits are already in hand. */
+function netSeries(
+  credit: Record<string, number>,
+  debit: Record<string, number>,
+  months: string[],
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of months) {
+    out[m] = (credit[m] ?? 0) - (debit[m] ?? 0);
+  }
+  return out;
 }
 
 export function AccountsCashflowReport({
@@ -214,6 +260,27 @@ export function AccountsCashflowReport({
                           total={a.totalDebit}
                         />
                         <MetricRow
+                          label="Net (credits − debits)"
+                          mode="net"
+                          months={months}
+                          values={netSeries(a.creditByMonth, a.debitByMonth, months)}
+                          total={a.totalCredit - a.totalDebit}
+                        />
+                        <MetricRow
+                          label="Transfer in"
+                          mode="transferIn"
+                          months={months}
+                          values={a.transferInByMonth}
+                          total={a.totalTransferIn}
+                        />
+                        <MetricRow
+                          label="Transfer out"
+                          mode="transferOut"
+                          months={months}
+                          values={a.transferOutByMonth}
+                          total={a.totalTransferOut}
+                        />
+                        <MetricRow
                           label="Balance"
                           mode="balance"
                           months={months}
@@ -258,6 +325,30 @@ export function AccountsCashflowReport({
                 months={months}
                 values={totals.debitByMonth}
                 total={totals.totalDebit}
+                tfoot
+              />
+              <MetricRow
+                label="Net (credits − debits)"
+                mode="net"
+                months={months}
+                values={netSeries(totals.creditByMonth, totals.debitByMonth, months)}
+                total={totals.totalCredit - totals.totalDebit}
+                tfoot
+              />
+              <MetricRow
+                label="Transfer in"
+                mode="transferIn"
+                months={months}
+                values={totals.transferInByMonth}
+                total={totals.totalTransferIn}
+                tfoot
+              />
+              <MetricRow
+                label="Transfer out"
+                mode="transferOut"
+                months={months}
+                values={totals.transferOutByMonth}
+                total={totals.totalTransferOut}
                 tfoot
               />
               <MetricRow

@@ -9,6 +9,27 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.119.0 — 2026-05-16
+
+### Added
+- **Accounts report: three new per-account sub-rows.** Between
+  Debits and Balance every account (and the all-accounts footer)
+  now renders:
+  - **Net (credits − debits)** — signed monthly net, emerald when
+    positive, rose-parenthesised when negative; Total column is the
+    period net so the operator sees at a glance whether the
+    account ran a surplus over the window.
+  - **Transfer in** — the subset of credits whose category has
+    `transferKind` in {internal, external}; tinted sky so it reads
+    as a different signal from regular income.
+  - **Transfer out** — the subset of debits with the same category
+    filter; tinted amber.
+  Transfers stay included in the existing Credits / Debits rows
+  (they're real cashflow on a single-account view); the new rows
+  decompose those totals into transfer vs non-transfer so the
+  operator can see how much movement is just shuffle between own
+  accounts vs genuinely entering or leaving the household.
+
 ## 0.118.0 — 2026-05-16
 
 ### Added

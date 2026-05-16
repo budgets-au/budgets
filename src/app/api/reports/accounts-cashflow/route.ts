@@ -16,10 +16,19 @@ export interface AccountsCashflowAccount {
   creditByMonth: Record<string, number>;
   /** Absolute (positive) sum of money-out transactions per month. */
   debitByMonth: Record<string, number>;
+  /** Positive (signed) sum of money-in transactions whose category has
+   *  transferKind in {'internal','external'} — i.e. transfers received
+   *  into this account. Always a subset of `creditByMonth`. */
+  transferInByMonth: Record<string, number>;
+  /** Absolute sum of money-out transfer transactions per month
+   *  (categories with transferKind != 'none'). Subset of debits. */
+  transferOutByMonth: Record<string, number>;
   /** Closing balance at the end of each month in the window. */
   balanceByMonth: Record<string, number>;
   totalCredit: number;
   totalDebit: number;
+  totalTransferIn: number;
+  totalTransferOut: number;
   /** Balance at the end of `to`. */
   closingBalance: number;
 }
@@ -30,9 +39,13 @@ export interface AccountsCashflowReport {
   totals: {
     creditByMonth: Record<string, number>;
     debitByMonth: Record<string, number>;
+    transferInByMonth: Record<string, number>;
+    transferOutByMonth: Record<string, number>;
     balanceByMonth: Record<string, number>;
     totalCredit: number;
     totalDebit: number;
+    totalTransferIn: number;
+    totalTransferOut: number;
     closingBalance: number;
   };
 }
@@ -111,9 +124,13 @@ export async function GET(request: Request) {
       totals: {
         creditByMonth: Object.fromEntries(months.map((m) => [m, 0])),
         debitByMonth: Object.fromEntries(months.map((m) => [m, 0])),
+        transferInByMonth: Object.fromEntries(months.map((m) => [m, 0])),
+        transferOutByMonth: Object.fromEntries(months.map((m) => [m, 0])),
         balanceByMonth: Object.fromEntries(months.map((m) => [m, 0])),
         totalCredit: 0,
         totalDebit: 0,
+        totalTransferIn: 0,
+        totalTransferOut: 0,
         closingBalance: 0,
       },
     } satisfies AccountsCashflowReport);
@@ -143,42 +160,70 @@ export async function GET(request: Request) {
   );
 
   // Per-account × month: split into credits (amount > 0) and debits
-  // (amount < 0). Transfers are intentionally included — from a
-  // single-account perspective every transfer is real cashflow on
-  // both legs; netting only makes sense at the all-accounts level
-  // and isn't what this report is meant to surface.
+  // (amount < 0), plus the transfer subset of each (categorised
+  // 'internal' or 'external'). Transfers are intentionally included
+  // in the overall credit/debit totals — from a single-account
+  // perspective every transfer is real cashflow on both legs; the
+  // separate transfer rows let the operator see which slice of the
+  // credit/debit came from moving money between own accounts.
   const monthRows = (await db.all(sql`
     SELECT
-      account_id                                                    AS account_id,
-      substr(date, 1, 7)                                            AS month,
-      CAST(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS REAL) AS credit,
-      CAST(SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END) AS REAL) AS debit
-    FROM transactions
-    WHERE date >= ${from} AND date <= ${to}
-      AND account_id IN (${idList})
-    GROUP BY account_id, substr(date, 1, 7)
-  `)) as Array<{ account_id: string; month: string; credit: number; debit: number }>;
+      t.account_id                                                                                                        AS account_id,
+      substr(t.date, 1, 7)                                                                                                 AS month,
+      CAST(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END) AS REAL)                                                   AS credit,
+      CAST(SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END) AS REAL)                                                   AS debit,
+      CAST(SUM(CASE WHEN t.amount > 0 AND c.transfer_kind IN ('internal','external') THEN t.amount ELSE 0 END) AS REAL)    AS transfer_in,
+      CAST(SUM(CASE WHEN t.amount < 0 AND c.transfer_kind IN ('internal','external') THEN t.amount ELSE 0 END) AS REAL)    AS transfer_out
+    FROM transactions t
+    LEFT JOIN categories c ON c.id = t.category_id
+    WHERE t.date >= ${from} AND t.date <= ${to}
+      AND t.account_id IN (${idList})
+    GROUP BY t.account_id, substr(t.date, 1, 7)
+  `)) as Array<{
+    account_id: string;
+    month: string;
+    credit: number;
+    debit: number;
+    transfer_in: number;
+    transfer_out: number;
+  }>;
 
   const byAccount = new Map<
     string,
-    { credit: Map<string, number>; debit: Map<string, number> }
+    {
+      credit: Map<string, number>;
+      debit: Map<string, number>;
+      transferIn: Map<string, number>;
+      transferOut: Map<string, number>;
+    }
   >();
   for (const id of accountIds) {
-    byAccount.set(id, { credit: new Map(), debit: new Map() });
+    byAccount.set(id, {
+      credit: new Map(),
+      debit: new Map(),
+      transferIn: new Map(),
+      transferOut: new Map(),
+    });
   }
   for (const r of monthRows) {
     const slot = byAccount.get(r.account_id);
     if (!slot) continue;
     slot.credit.set(r.month, Number(r.credit) || 0);
     slot.debit.set(r.month, Math.abs(Number(r.debit) || 0));
+    slot.transferIn.set(r.month, Number(r.transfer_in) || 0);
+    slot.transferOut.set(r.month, Math.abs(Number(r.transfer_out) || 0));
   }
 
   const totals = {
     creditByMonth: Object.fromEntries(months.map((m) => [m, 0])),
     debitByMonth: Object.fromEntries(months.map((m) => [m, 0])),
+    transferInByMonth: Object.fromEntries(months.map((m) => [m, 0])),
+    transferOutByMonth: Object.fromEntries(months.map((m) => [m, 0])),
     balanceByMonth: Object.fromEntries(months.map((m) => [m, 0])),
     totalCredit: 0,
     totalDebit: 0,
+    totalTransferIn: 0,
+    totalTransferOut: 0,
     closingBalance: 0,
   };
 
@@ -188,26 +233,40 @@ export async function GET(request: Request) {
       Number(a.starting_balance || 0) + (openingByAccount.get(a.id) ?? 0);
     const creditByMonth: Record<string, number> = {};
     const debitByMonth: Record<string, number> = {};
+    const transferInByMonth: Record<string, number> = {};
+    const transferOutByMonth: Record<string, number> = {};
     const balanceByMonth: Record<string, number> = {};
     let running = startingBalance;
     let totalCredit = 0;
     let totalDebit = 0;
+    let totalTransferIn = 0;
+    let totalTransferOut = 0;
     for (const m of months) {
       const cr = slot?.credit.get(m) ?? 0;
       const dr = slot?.debit.get(m) ?? 0;
+      const ti = slot?.transferIn.get(m) ?? 0;
+      const to_ = slot?.transferOut.get(m) ?? 0;
       creditByMonth[m] = cr;
       debitByMonth[m] = dr;
+      transferInByMonth[m] = ti;
+      transferOutByMonth[m] = to_;
       running = running + cr - dr;
       balanceByMonth[m] = Math.round(running * 100) / 100;
       totalCredit += cr;
       totalDebit += dr;
+      totalTransferIn += ti;
+      totalTransferOut += to_;
       totals.creditByMonth[m] = (totals.creditByMonth[m] ?? 0) + cr;
       totals.debitByMonth[m] = (totals.debitByMonth[m] ?? 0) + dr;
+      totals.transferInByMonth[m] = (totals.transferInByMonth[m] ?? 0) + ti;
+      totals.transferOutByMonth[m] = (totals.transferOutByMonth[m] ?? 0) + to_;
       totals.balanceByMonth[m] = (totals.balanceByMonth[m] ?? 0) + balanceByMonth[m];
     }
     const closingBalance = balanceByMonth[months[months.length - 1]] ?? startingBalance;
     totals.totalCredit += totalCredit;
     totals.totalDebit += totalDebit;
+    totals.totalTransferIn += totalTransferIn;
+    totals.totalTransferOut += totalTransferOut;
     totals.closingBalance += closingBalance;
     return {
       id: a.id,
@@ -217,9 +276,13 @@ export async function GET(request: Request) {
       startingBalance: Math.round(startingBalance * 100) / 100,
       creditByMonth,
       debitByMonth,
+      transferInByMonth,
+      transferOutByMonth,
       balanceByMonth,
       totalCredit: Math.round(totalCredit * 100) / 100,
       totalDebit: Math.round(totalDebit * 100) / 100,
+      totalTransferIn: Math.round(totalTransferIn * 100) / 100,
+      totalTransferOut: Math.round(totalTransferOut * 100) / 100,
       closingBalance,
     };
   });

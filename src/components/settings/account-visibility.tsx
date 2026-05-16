@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { mutate } from "swr";
 import { toast } from "sonner";
 import { CheckSquare, Eye, EyeOff, Pencil, Plus } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
@@ -26,6 +27,10 @@ export function AccountVisibility({ initialAccounts }: { initialAccounts: Accoun
       return;
     }
     setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, isArchived } : a)));
+    // The left-nav sidebar lists active accounts via SWR(/api/accounts);
+    // without this invalidate it would still display archived accounts
+    // (or omit just-unarchived ones) until a hard refresh.
+    void mutate("/api/accounts");
     toast.success(isArchived ? "Account hidden" : "Account visible");
   }
 

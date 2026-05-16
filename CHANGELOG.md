@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.117.0 — 2026-05-16
+
+### Fixed
+- **Left-nav sidebar now reflects account archive / edit changes
+  without a page refresh.** Settings → Accounts toggled archived
+  state via `PATCH /api/accounts/:id` and the edit dialog saved
+  name/colour/type the same way, but both only called
+  `router.refresh()` (or nothing). The sidebar's account list is a
+  client component subscribed to SWR(/api/accounts), which a server
+  refresh doesn't touch — the rail kept showing the pre-change
+  state until a full reload. Added `mutate("/api/accounts")` to the
+  archive toggle and edit-dialog success paths so the SWR cache
+  invalidates alongside the server-tree refresh.
+
 ## 0.116.0 — 2026-05-16
 
 ### Fixed

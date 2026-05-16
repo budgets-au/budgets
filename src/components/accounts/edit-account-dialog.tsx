@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { mutate } from "swr";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,10 @@ export function EditAccountDialog({
     if (res.ok) {
       toast.success("Saved");
       onOpenChange(false);
+      // Client-side SWR consumers (left-nav sidebar, account filter
+      // dropdowns) won't pick up name/colour/type changes from a
+      // server tree refresh alone.
+      void mutate("/api/accounts");
       router.refresh();
     } else {
       const body = await res.json().catch(() => ({}));

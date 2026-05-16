@@ -46,7 +46,7 @@ const body = match[2].trim();
 // context — GitHub renders this above the auto-collapsed commit
 // list when `generate_release_notes` is also on.
 const installLink =
-  `**Windows installer:** [budgets-${version}-setup.exe](https://github.com/budgets-au/budgets/releases/download/v${version}/budgets-${version}-setup.exe) · ` +
+  `**Windows portable:** [budgets-${version}-portable.exe](https://github.com/budgets-au/budgets/releases/download/v${version}/budgets-${version}-portable.exe) (double-click, no install) · ` +
   `**Linux container:** \`ghcr.io/budgets-au/budgets:${version}\``;
 
 process.stdout.write(`${installLink}\n\n${body}\n`);

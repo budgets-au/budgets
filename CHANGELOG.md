@@ -9,6 +9,58 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.120.8 — 2026-05-16
+
+### Changed
+- **Windows release is now a single portable .exe — no installer.**
+  Replaced the NSIS installer (`budgets-X.Y.Z-setup.exe`) with a
+  self-extracting portable build (`budgets-X.Y.Z-portable.exe`).
+  Double-click the .exe; the app opens. No wizard, no admin
+  prompt, no Start-menu shortcuts, no registry entries. Drop the
+  .exe wherever you keep your apps; "uninstalling" is deleting
+  that file. Data location (`%APPDATA%\Budgets\data\budget.db`)
+  is unchanged, so users upgrading from the v0.120.7 NSIS install
+  can uninstall it and run the portable .exe with their data
+  intact.
+
+### Added
+- **CI now smoke-tests the standalone server before packaging.**
+  After `next build` + `electron-prepare` but before
+  `electron-builder`, the Windows CI boots `.next/standalone/
+  server.js` and hits `/api/version-check`. If any module is
+  still missing, the workflow fails *before* producing a .exe —
+  no more shipping broken binaries the user has to install before
+  finding out.
+
+### Fixed
+- **Windows boot crash: `MODULE_NOT_FOUND @next/env`.** Added
+  `stagePackage("@next/env", nextDir)` to the
+  `scripts/electron-prepare.mjs` chain, sibling to the existing
+  `@swc/helpers` stage.
+- **Stop the missing-module whack-a-mole entirely.** The Windows
+  CI workflow now writes a `.npmrc` with `node-linker=hoisted`
+  before `pnpm install`, switching the install layout to the flat
+  `node_modules/` Next's standalone tracer was designed for.
+  Transitive deps now get traced + copied automatically; the
+  manual `stagePackage` calls stay as defence-in-depth. The
+  Linux container build is untouched (it doesn't run this
+  workflow).
+
+### Reduced
+- **Installer size: ~356 MB → ~170 MB (target).** Three coordinated
+  cuts in the Electron build pipeline:
+  - `electron-builder.yml`: `compression: maximum` (LZMA-2),
+    `electronLanguages: [en-US]` (English-only Chromium .pak
+    files), expanded `files` exclusion list (`*.ts`, `*.tsx`,
+    `*.md`, `tsconfig*.json`, lock files, etc.).
+  - `scripts/electron-prepare.mjs`: trims
+    `@signalapp/better-sqlite3`'s build artefacts (source tree,
+    intermediate object files, vendored
+    `tar`/`minipass`/`minizlib`) after staging — mirrors the
+    Linux Dockerfile's pattern at lines 60-70 and 155-160. Keeps
+    only `build/Release/better_sqlite3.node` (the binary the
+    runtime actually loads).
+
 ## 0.120.7 — 2026-05-16
 
 ### Fixed

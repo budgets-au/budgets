@@ -92,8 +92,8 @@ Two release artifacts, same app, different shapes:
   from GHCR, run with podman/docker, point a volume at a folder
   for the database.
 - **Windows desktop** — single-user app for one Windows machine.
-  Download the .exe from the [latest GitHub Release](https://github.com/budgets-au/budgets/releases/latest)
-  and install. No server to manage.
+  Download the portable .exe from the [latest GitHub Release](https://github.com/budgets-au/budgets/releases/latest)
+  and double-click. No installer, no server to manage.
 
 ### Linux container (LAN deployment)
 
@@ -129,19 +129,21 @@ Set `NEXTAUTH_URL` to the URL you'll actually use (e.g.
 
 ### Windows desktop (single machine)
 
-Grab `budgets-X.Y.Z-setup.exe` from the
+Grab `budgets-X.Y.Z-portable.exe` from the
 [latest GitHub Release](https://github.com/budgets-au/budgets/releases/latest)
-and run it. Click through the installer (you can change the
-install dir). A shortcut lands on the Desktop and in the Start
-menu.
+and double-click it. The app opens — no installer wizard, no
+admin prompt, no Start-menu shortcuts. Drop the .exe wherever
+you keep your apps; "uninstalling" is deleting that file.
 
 On first launch the app opens a single window pointing at its
 bundled web server. You'll see the unlock screen — type a
 passphrase. The encrypted database file gets created at
 `%APPDATA%\Budgets\data\budget.db`; the passphrase is yours to
-keep (and lose at your own risk).
+keep (and lose at your own risk). Newer versions overwrite the
+.exe in place; the data folder is untouched, so upgrades preserve
+everything.
 
-Migrating from an existing Linux deployment? Install the desktop
+Migrating from an existing Linux deployment? Run the desktop
 app, then **Settings → Backup → Restore** a `.sqlite` snapshot
 from your container's `$HOME/budgets-data/backups/` folder. Same
 encryption format, the app handles the swap.
@@ -166,9 +168,9 @@ podman rm -f budgets
 
 Your `.env` and `$HOME/budgets-data` carry over.
 
-**Windows desktop:** download the newer setup .exe from the
+**Windows desktop:** download the newer portable .exe from the
 [latest Release](https://github.com/budgets-au/budgets/releases/latest)
-and run it — it replaces the install in place. Your
+and replace the old one — no uninstall step needed. Your
 `%APPDATA%\Budgets\data\budget.db` is untouched by the upgrade.
 
 ## Development

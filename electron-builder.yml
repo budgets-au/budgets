@@ -1,23 +1,28 @@
-# electron-builder config — produces the Windows installer.
+# electron-builder config — produces the Windows portable .exe.
 #
 # Run via `pnpm electron:build:win` (which chains `electron:prepare`
 # first to build Next + rebuild the native SQLite addon for the
 # Electron Node ABI + copy `.next/static` and `public/` into the
 # standalone tree where the server.js expects them).
 #
-# Note on bundling: Next's `output: "standalone"` produces a
-# self-contained tree at `.next/standalone/` with its own trimmed
-# `node_modules`. We ship that tree as `extraResources` (lives at
-# `resources/app/...` next to the asar) and keep electron-builder's
-# default node_modules sweep skipped — the main process inside
-# `electron/main.cjs` doesn't import any third-party packages, so
-# the asar payload is tiny.
+# Distribution model: single self-extracting .exe. The user
+# double-clicks `budgets-X.Y.Z-portable.exe`; electron-builder's
+# portable target unpacks to a cached `%TEMP%\<random>` dir on
+# first launch and runs the app from there. No installer wizard,
+# no Start-menu shortcuts, no registry entries. Subsequent
+# launches reuse the unpack cache unless the .exe changed.
 #
-# The SQLite addon lives inside the standalone tree's node_modules.
-# It MUST be rebuilt for Electron's Node ABI before packaging or the
-# child process will crash on `require('@signalapp/better-sqlite3')`
-# with NODE_MODULE_VERSION mismatch. `electron:prepare` runs
-# `electron-rebuild` for exactly this reason.
+# Bundling: Next's `output: "standalone"` produces a self-contained
+# tree at `.next/standalone/` with its own trimmed `node_modules`.
+# We ship that tree as `extraResources` (lives at `resources/app/…`
+# next to the asar). The SQLite addon inside MUST be rebuilt for
+# Electron's Node ABI before packaging (handled by `electron:rebuild`
+# in package.json scripts).
+#
+# Compression: `maximum` switches NSIS from default Deflate to
+# LZMA-2, cutting payload size by ~30-40%. Decompression is
+# CPU-bound but the smaller download dominates total time-to-run
+# on typical user hardware.
 
 appId: au.budgets.desktop
 productName: Budgets
@@ -27,10 +32,22 @@ directories:
   output: dist-electron
   buildResources: electron/build
 
+# Asar payload (just the electron/ wrapper code). The Next
+# standalone tree comes in via `extraResources` below.
 files:
   - electron/**/*
   - "!**/.DS_Store"
   - "!**/*.map"
+  - "!**/*.ts"
+  - "!**/*.tsx"
+  - "!**/*.md"
+  - "!**/tsconfig*.json"
+  - "!**/eslint.config.*"
+  - "!**/drizzle.config.*"
+  - "!**/postcss.config.*"
+  - "!**/next.config.*"
+  - "!**/package-lock.json"
+  - "!**/pnpm-lock.yaml"
 
 extraResources:
   - from: .next/standalone
@@ -44,21 +61,25 @@ extraResources:
     filter: ["**/*"]
 
 asar: true
+compression: maximum
+
+# Chromium ships ~50 .pak locale files (~5-10 MB). The app is
+# English-only — every other locale is dead weight in the .exe.
+electronLanguages:
+  - en-US
 
 win:
   target:
-    - target: nsis
+    - target: portable
       arch:
         - x64
-  artifactName: budgets-${version}-setup.${ext}
+  artifactName: budgets-${version}-portable.${ext}
   # No code-signing for v1; the user sees a SmartScreen warning on
   # first launch. Add `certificateFile` + `certificatePassword` env
   # (or sign in CI via `signtool`) once you have a cert.
 
-nsis:
-  oneClick: false
-  perMachine: false
-  allowToChangeInstallationDirectory: true
-  createDesktopShortcut: true
-  createStartMenuShortcut: true
-  shortcutName: Budgets
+# Override the default extracted-app name the portable .exe shows
+# in its self-extract banner. (No NSIS section because we don't
+# ship an installer.)
+portable:
+  artifactName: budgets-${version}-portable.${ext}

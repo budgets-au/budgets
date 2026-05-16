@@ -17,7 +17,7 @@
  *   node electron-prepare # this script: static-asset copy only
  *   pnpm electron-builder # packages everything
  */
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 
@@ -99,10 +99,13 @@ function stagePackage(pkgName, fromDir) {
   return srcDir;
 }
 
-// Resolve `next` first so we can find @swc/helpers via it (a
-// transitive that pnpm hides from top-level resolves).
+// Resolve `next` first so we can find its transitive deps that
+// pnpm hides from top-level resolves. Even with the CI's hoisted
+// linker the staging stays as defence-in-depth — `node_modules`
+// layout can shift between pnpm versions.
 const nextDir = dirname(require_.resolve("next/package.json"));
 stagePackage("@swc/helpers", nextDir);
+stagePackage("@next/env", nextDir);
 
 // serverExternalPackages chain: each peer's directory is the
 // lookup root for the next hop. Same shape as the Dockerfile's
@@ -110,6 +113,50 @@ stagePackage("@swc/helpers", nextDir);
 const bs3Dir = stagePackage("@signalapp/better-sqlite3");
 const bindingsDir = stagePackage("bindings", bs3Dir);
 stagePackage("file-uri-to-path", bindingsDir);
+
+// @signalapp/better-sqlite3 ships ~62 MB of node-gyp build
+// artifacts (source tree + intermediate object files + the vendored
+// SQLite C sources used to compile the addon). Only the compiled
+// `build/Release/better_sqlite3.node` (~3.6 MB) is loaded at
+// runtime. The Linux Dockerfile trims this at lines 60-70; mirror
+// that pattern here so the Windows .exe doesn't carry ~58 MB of
+// unreachable build artifacts.
+console.log("\n▶ Trimming @signalapp/better-sqlite3 build artifacts…");
+const stagedBs3 = resolve(standaloneNodeModules, "@signalapp", "better-sqlite3");
+if (existsSync(stagedBs3)) {
+  // Keep only build/Release/, drop every other build/ subdir.
+  const buildDir = resolve(stagedBs3, "build");
+  if (existsSync(buildDir)) {
+    for (const entry of ["intermediate", "obj", "obj.target", "deps"]) {
+      rmSync(resolve(buildDir, entry), { recursive: true, force: true });
+    }
+  }
+  // Inside build/Release/, keep ONLY the .node binary. (gyp leaves
+  // .pdb / .obj / Makefile / cache files behind that aren't needed
+  // at load time.)
+  const releaseDir = resolve(buildDir, "Release");
+  if (existsSync(releaseDir)) {
+    for (const name of readdirSync(releaseDir)) {
+      if (name === "better_sqlite3.node") continue;
+      rmSync(resolve(releaseDir, name), { recursive: true, force: true });
+    }
+  }
+  // The C source + binding spec are only used by node-gyp at
+  // compile time; nothing at runtime reads them.
+  rmSync(resolve(stagedBs3, "src"), { recursive: true, force: true });
+  rmSync(resolve(stagedBs3, "deps"), { recursive: true, force: true });
+  rmSync(resolve(stagedBs3, "binding.gyp"), { force: true });
+  // Vendored postinstall-only deps (the prebuild fetcher uses them
+  // to download the .node binary on `npm install`; at app runtime
+  // they're dead weight). Dockerfile lines 155-160.
+  for (const name of ["tar", "minipass", "minizlib"]) {
+    rmSync(resolve(stagedBs3, "node_modules", name), {
+      recursive: true,
+      force: true,
+    });
+  }
+  console.log(`  trimmed: ${stagedBs3}`);
+}
 
 // Drizzle migrations are read at runtime by `runPendingMigrations()`
 // in src/db/index.ts whenever the DB unlocks. Without them the

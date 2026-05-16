@@ -1,15 +1,22 @@
-# Builds the Windows desktop installer for the budgets app.
+# Builds the Windows desktop portable .exe for the budgets app.
 #
 # Triggers:
 #   • Tag push matching v*.*.* → cuts a GitHub Release and attaches
 #     the .exe.
-#   • Manual dispatch → builds the installer and uploads it as a
+#   • Manual dispatch → builds the .exe and uploads it as a
 #     workflow artifact (no release created).
 #
 # The .exe is unsigned for v1. Windows SmartScreen will warn first-
 # time users; click "More info → Run anyway" to bypass. Add a code-
 # signing cert + the corresponding env vars to enable proper
 # signing later — electron-builder picks them up automatically.
+#
+# Distribution model: portable .exe (no installer). Users double-
+# click `budgets-X.Y.Z-portable.exe`; on first launch electron-
+# builder's portable wrapper self-extracts to %TEMP%\<random> and
+# runs the app from there. Subsequent launches reuse the cache.
+# Data lives at %APPDATA%\Budgets\data\budget.db (set by
+# `electron/main.cjs` via `app.getPath("userData")`).
 
 name: Windows desktop build
 
@@ -54,32 +61,82 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/AppData/Local/pnpm/store/v3
-          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          key: pnpm-${{ runner.os }}-hoisted-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            pnpm-${{ runner.os }}-
+            pnpm-${{ runner.os }}-hoisted-
+
+      - name: Configure pnpm hoisted linker for Windows build
+        # pnpm's default strict-isolated linker hides transitive deps
+        # under `.pnpm/<name>@<ver>/node_modules/<name>/`, which
+        # breaks Next's standalone tracer (`@vercel/nft`) — we've had
+        # to manually stage `@swc/helpers`, `@next/env`, and the
+        # sqlcipher chain in `scripts/electron-prepare.mjs` to work
+        # around the resulting missing-module crashes. Hoisted
+        # produces a flat `node_modules/` layout NFT was designed
+        # for, so transitives get traced + copied without
+        # hand-listing. CI-only: the Linux container build keeps
+        # the isolated default (its Dockerfile handles its own
+        # staging via runtime-deps).
+        shell: bash
+        run: echo "node-linker=hoisted" > .npmrc
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Windows installer
-        # `electron:build:win` chains:
-        #   electron:rebuild → next build → electron-prepare → electron-builder
-        # so root node_modules is rebuilt against the Electron Node ABI
-        # before `next build` copies it into `.next/standalone/`.
+      - name: Build Next standalone + stage runtime deps
+        # Two-phase so we can smoke-test the standalone server
+        # before electron-builder packages it. Step 1: rebuild
+        # native modules for Electron ABI + `next build` +
+        # `electron-prepare` (static copy, dep staging, sqlite trim).
         env:
-          # Build-time DB placeholders — `next build` evaluates
-          # src/db/index.ts and the unlock guard, which needs an
-          # in-memory DB + dummy key (matches the Dockerfile).
           SQLITE_PATH: ":memory:"
           SQLITE_KEY: build-time-placeholder
           AUTH_SECRET: build-time-placeholder
           NEXTAUTH_SECRET: build-time-placeholder
-        run: pnpm electron:build:win
+        run: |
+          pnpm electron:rebuild
+          pnpm electron:prepare
 
-      - name: Upload installer as workflow artifact
+      - name: Smoke-test standalone server
+        # Boot the just-built standalone server and curl a health
+        # endpoint. If any module is still missing (the failure
+        # mode that previously shipped as a broken .exe), the build
+        # fails HERE rather than the user finding out post-install.
+        shell: bash
+        env:
+          SQLITE_PATH: ":memory:"
+          SQLITE_KEY: build-time-placeholder
+          AUTH_SECRET: smoke-test-secret-32bytes-aaaaaaaa
+          NEXTAUTH_SECRET: smoke-test-secret-32bytes-aaaaaaaa
+          PORT: "3099"
+          HOSTNAME: "127.0.0.1"
+        run: |
+          set -euo pipefail
+          node .next/standalone/server.js > smoke-server.log 2>&1 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID 2>/dev/null || true" EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3099/api/version-check > /dev/null 2>&1; then
+              echo "✓ standalone server booted and responded"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "✗ standalone server did not respond after 30s. Log:"
+          cat smoke-server.log
+          exit 1
+
+      - name: Package portable .exe
+        # Step 2 (post-smoke): electron-builder. The build:win
+        # wrapper handles the APP_VERSION injection so the artifact
+        # is named budgets-X.Y.Z-portable.exe instead of
+        # budgets-0.9.0-portable.exe.
+        run: node scripts/electron-build-win.mjs
+
+      - name: Upload portable .exe as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: budgets-windows-installer
+          name: budgets-windows-portable
           path: dist-electron/*.exe
           if-no-files-found: error
 
@@ -88,7 +145,7 @@ jobs:
         shell: bash
         run: node scripts/release-notes.mjs > release-body.md
 
-      - name: Attach installer to GitHub Release
+      - name: Attach portable .exe to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:

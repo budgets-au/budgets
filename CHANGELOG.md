@@ -9,6 +9,37 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.124.3 — 2026-05-16
+
+### Added
+- **LICENSE — PolyForm Noncommercial 1.0.0.** Personal /
+  household use, hobby projects, charities, education, public
+  research, and government use are all permitted. Commercial
+  use is **not** granted. The licence is the canonical PolyForm
+  text plus a "Required Notice" line at the bottom referencing
+  this repo. README's Licence section summarises the practical
+  scope.
+
+### Security
+- **CodeQL: path-injection sanitisers on every backup function.**
+  Added `assertWithinBackupDir(path)` to
+  [src/lib/backup/sqlite-backup.ts](src/lib/backup/sqlite-backup.ts)
+  — resolves the candidate path and throws if it isn't rooted in
+  `backupDir()`. Called at the top of `verifyBackup`,
+  `looksLikeSqlcipher`, and `swapLive`. The existing
+  `isSafeBackupFilename` validator on the routes was already
+  blocking traversal; this is belt-and-braces so any future caller
+  that skips the filename check can't pass an arbitrary path. The
+  pattern (resolve → assert startsWith root+sep) is the canonical
+  one CodeQL recognises as a sanitiser, so it also closes the 5
+  open `js/path-injection` alerts.
+- **CodeQL: URL-encode interpolated values in cashflow-report
+  hrefs.** The two `<Link href={...}>` interpolations in
+  [src/components/reports/cashflow-report.tsx](src/components/reports/cashflow-report.tsx)
+  wrap every value (categoryId, from, to, uncatDirection) in
+  `encodeURIComponent` even though they're DB-controlled (UUIDs +
+  ISO dates). Closes the 2 open `js/xss-through-dom` alerts.
+
 ## 0.124.2 — 2026-05-16
 
 ### Security

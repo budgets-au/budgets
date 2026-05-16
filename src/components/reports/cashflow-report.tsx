@@ -617,7 +617,13 @@ function SubParentHeaderRow({
   isHidden?: boolean;
 }) {
   const display = (v: number | undefined) => (negate && v !== undefined ? -v : v);
-  const href = sub.parentCat ? `/transactions?categoryId=${sub.parentCat.id}&from=${from}&to=${to}` : undefined;
+  // URL-encode every interpolated value even though they're DB-
+  // controlled (UUIDs and ISO dates). Keeps the href provably safe
+  // for the React `<Link>` href dataflow that CodeQL's
+  // js/xss-through-dom checker walks.
+  const href = sub.parentCat
+    ? `/transactions?categoryId=${encodeURIComponent(sub.parentCat.id)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+    : undefined;
   const Chevron = isCollapsed ? ChevronRight : ChevronDown;
   const nameColor = sub.parentCat ? "text-rose-500/70" : "text-muted-foreground";
   const open = useCellOpener();
@@ -717,9 +723,11 @@ function LeafRow({
       ? "out"
       : null;
   const cellCategoryId = isUncategorised ? "__uncat__" : cat.id;
+  // URL-encode the interpolated values (see the matching comment in
+  // the parent-row href above).
   const href = isUncategorised
-    ? `/transactions?categoryId=__uncat__&from=${from}&to=${to}${uncatDirection ? `&direction=${uncatDirection}` : ""}`
-    : `/transactions?categoryId=${cat.id}&from=${from}&to=${to}`;
+    ? `/transactions?categoryId=__uncat__&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${uncatDirection ? `&direction=${encodeURIComponent(uncatDirection)}` : ""}`
+    : `/transactions?categoryId=${encodeURIComponent(cat.id)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
   const nameEl = isUncategorised
     ? <Link href={href} className="text-muted-foreground hover:underline hover:text-foreground transition-colors">{cat.name}</Link>
     : <Link href={href} className="hover:underline hover:text-indigo-600 transition-colors">{cat.name}</Link>;

@@ -143,6 +143,16 @@ contributor conventions; the rest is straightforward Next.js 16 +
 Drizzle + Tailwind. `pnpm dev` runs locally on
 `http://0.0.0.0:3002` after `pnpm install && pnpm db:migrate`.
 
+## Licence
+
+[PolyForm Noncommercial 1.0.0](LICENSE) — free for personal
+and household use. Charities, education, public research,
+hobby and amateur projects are all fine. **Commercial use is
+not granted**: do not run this as part of a paid service, do
+not bundle it into a product you sell, do not use it to
+process other people's money in a business context. If you
+want a commercial licence, open a discussion on GitHub.
+
 ## Disclaimer
 
 This is a personal-use household tool, not a regulated financial

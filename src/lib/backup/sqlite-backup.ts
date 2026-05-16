@@ -18,7 +18,7 @@ import {
   statSync,
 } from "node:fs";
 import { statfs } from "node:fs/promises";
-import { dirname, join, resolve, basename } from "node:path";
+import { dirname, join, resolve, basename, sep } from "node:path";
 import Database from "@signalapp/better-sqlite3";
 import { db, getClient, livePath, lock } from "@/db";
 import { appSettings, type BackupSchedule } from "@/db/schema";
@@ -97,6 +97,24 @@ const FILENAME_RE = /^budgets_(manual|scheduled|pre-restore)_[0-9TZ.\-]+\.sqlite
 export function isSafeBackupFilename(name: string): boolean {
   if (basename(name) !== name) return false;
   return FILENAME_RE.test(name);
+}
+
+/** Belt-and-braces guard for any function that takes a full path
+ * (verifyBackup, looksLikeSqlcipher, swapLive). The API routes
+ * already validate filenames via `isSafeBackupFilename` before
+ * joining with `backupDir()`, but this re-checks the resolved path
+ * is rooted in `backupDir()` so a future caller that skipped the
+ * filename validator can't pass an arbitrary path through. Throws
+ * — these functions have no useful behaviour on an out-of-dir
+ * path, fail fast. Recognised by CodeQL as a path-traversal
+ * sanitiser, so it also silences the dataflow alerts on each
+ * function entry. */
+export function assertWithinBackupDir(p: string): void {
+  const root = resolve(backupDir());
+  const candidate = resolve(p);
+  if (candidate !== root && !candidate.startsWith(root + sep)) {
+    throw new Error(`Path is not inside the backup dir: ${p}`);
+  }
 }
 
 function timestampForFilename(): string {
@@ -254,6 +272,7 @@ export function verifyBackup(
   path: string,
   passphrase: string,
 ): { ok: true; size: number } | { ok: false; error: string } {
+  assertWithinBackupDir(path);
   if (!existsSync(path)) return { ok: false, error: "Backup file not found" };
   let probe: ReturnType<typeof Database> | undefined;
   try {
@@ -279,6 +298,7 @@ export function verifyBackup(
  * Used on uploaded files to bail out before attempting to key them.
  */
 export function looksLikeSqlcipher(path: string): boolean {
+  assertWithinBackupDir(path);
   if (!existsSync(path)) return false;
   const head = Buffer.alloc(16);
   const fd = openSync(path, "r");
@@ -305,6 +325,7 @@ export function looksLikeSqlcipher(path: string): boolean {
  * trigger the proxy's lock-redirect to /unlock.
  */
 export function swapLive(newDbPath: string): void {
+  assertWithinBackupDir(newDbPath);
   lock();
   // Remove WAL + SHM siblings of the live DB — they belong to the
   // pre-restore connection and will be regenerated when the next

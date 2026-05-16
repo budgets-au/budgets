@@ -20,7 +20,7 @@
     "electron:rebuild": "electron-builder install-app-deps",
     "electron:prepare": "next build && node scripts/electron-prepare.mjs",
     "electron:dev": "pnpm electron:rebuild && pnpm electron:prepare && electron electron/main.cjs",
-    "electron:build:win": "pnpm electron:rebuild && pnpm electron:prepare && electron-builder --win --x64 --config electron-builder.yml"
+    "electron:build:win": "pnpm electron:rebuild && pnpm electron:prepare && electron-builder --win --x64 --config electron-builder.yml --publish=never"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

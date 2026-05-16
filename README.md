@@ -22,6 +22,10 @@ box.
 |---|---|
 | ![Cashflow](screenshots/reports-cashflow-light.png) | ![Sankey](screenshots/reports-sankey-light.png) |
 
+| Envelope (income, expenses, affordability) | Accounts (per-account credits / debits / balance) |
+|---|---|
+| ![Envelope](screenshots/reports-envelope-light.png) | ![Accounts](screenshots/reports-accounts-light.png) |
+
 | Investments | Superannuation |
 |---|---|
 | ![Investments](screenshots/investments-light.png) | ![Super](screenshots/super-light.png) |
@@ -82,9 +86,16 @@ in a password manager before you start.
 
 ## Installation
 
-A self-built container image on GHCR. Pull, run, supply two
-secrets, point a volume at a folder for the database file. That's
-it.
+Two release artifacts, same app, different shapes:
+
+- **Linux container** (primary) — multi-device on your LAN. Pull
+  from GHCR, run with podman/docker, point a volume at a folder
+  for the database.
+- **Windows desktop** — single-user app for one Windows machine.
+  Download the .exe from the [latest GitHub Release](https://github.com/budgets-au/budgets/releases/latest)
+  and install. No server to manage.
+
+### Linux container (LAN deployment)
 
 ```bash
 # Pull the image
@@ -116,12 +127,36 @@ inside the container) and reach it via `http://<server-ip>:3000`.
 Set `NEXTAUTH_URL` to the URL you'll actually use (e.g.
 `http://budgets.lan`) so the login redirects work.
 
+### Windows desktop (single machine)
+
+Grab `budgets-X.Y.Z-setup.exe` from the
+[latest GitHub Release](https://github.com/budgets-au/budgets/releases/latest)
+and run it. Click through the installer (you can change the
+install dir). A shortcut lands on the Desktop and in the Start
+menu.
+
+On first launch the app opens a single window pointing at its
+bundled web server. You'll see the unlock screen — type a
+passphrase. The encrypted database file gets created at
+`%APPDATA%\Budgets\data\budget.db`; the passphrase is yours to
+keep (and lose at your own risk).
+
+Migrating from an existing Linux deployment? Install the desktop
+app, then **Settings → Backup → Restore** a `.sqlite` snapshot
+from your container's `$HOME/budgets-data/backups/` folder. Same
+encryption format, the app handles the swap.
+
+The .exe is unsigned for now, so Windows SmartScreen warns on
+first launch — click **More info → Run anyway**. (Will be signed
+once we have a cert.)
+
 ## Updating
 
 The sidebar shows a small **New release** link below the version
-number when a newer image is available on GHCR. Click it to read
-the release notes; redeploy by re-pulling and recreating the
-container:
+number when a newer release is available. Click it to read the
+notes.
+
+**Linux container:** re-pull and recreate.
 
 ```bash
 podman pull ghcr.io/budgets-au/budgets:latest
@@ -130,6 +165,11 @@ podman rm -f budgets
 ```
 
 Your `.env` and `$HOME/budgets-data` carry over.
+
+**Windows desktop:** download the newer setup .exe from the
+[latest Release](https://github.com/budgets-au/budgets/releases/latest)
+and run it — it replaces the install in place. Your
+`%APPDATA%\Budgets\data\budget.db` is untouched by the upgrade.
 
 ## Development
 

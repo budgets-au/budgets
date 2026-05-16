@@ -45,6 +45,7 @@ const PAGES: ReadonlyArray<PageCfg> = [
   { path: "/reports", name: "reports-cashflow", settleMs: 1500 },
   { path: "/reports?tab=sankey", name: "reports-sankey", settleMs: 1500 },
   { path: "/reports?tab=envelope", name: "reports-envelope", settleMs: 1500 },
+  { path: "/reports?tab=accounts", name: "reports-accounts", settleMs: 1500 },
   { path: "/reports?tab=tax", name: "reports-tax-deductions", settleMs: 1500 },
   { path: "/investments", name: "investments", settleMs: 1000 },
   { path: "/superannuation", name: "super", settleMs: 1000 },

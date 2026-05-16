@@ -9,6 +9,29 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.120.3 — 2026-05-16
+
+### Added
+- **README: Windows desktop install section.** Documents pulling
+  `budgets-X.Y.Z-setup.exe` from the latest GitHub Release,
+  first-run unlock flow, DB location, and migration path from a
+  Linux container via the existing backup/restore.
+- **README: Accounts report screenshot row** in the gallery.
+- **`scripts/release-notes.mjs`**: extracts the current version's
+  CHANGELOG section so the Windows CI workflow attaches structured
+  release notes instead of an auto-generated commit list.
+- **Screenshots regenerated** to capture the envelope-report
+  income section, the new Accounts tab, and other UI changes
+  since 0.114.
+
+### Fixed
+- **Windows CI: electron-builder tried to auto-publish.** Added
+  `--publish=never` to the `electron:build:win` script so
+  electron-builder only builds the artifact; uploading the .exe
+  + attaching it to the GitHub Release is left to the dedicated
+  `softprops/action-gh-release` step, which uses the workflow's
+  default token.
+
 ## 0.120.2 — 2026-05-16
 
 ### Fixed

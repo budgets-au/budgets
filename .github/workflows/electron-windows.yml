@@ -83,9 +83,15 @@ jobs:
           path: dist-electron/*.exe
           if-no-files-found: error
 
+      - name: Extract CHANGELOG section as release notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: node scripts/release-notes.mjs > release-body.md
+
       - name: Attach installer to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist-electron/*.exe
+          body_path: release-body.md
           generate_release_notes: true

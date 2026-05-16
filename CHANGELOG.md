@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.120.1 — 2026-05-16
+
+### Fixed
+- **Windows desktop build CI: missing `main` entry blocked the
+  packager.** The v0.120.0 CI run got through `next build` +
+  `electron-prepare` but electron-builder bailed at the asar
+  sanity-check looking for `index.js` (its default app entry)
+  because `package.json` didn't declare `"main"`. Set it to
+  `electron/main.cjs`, added the cosmetic `description` / `author`
+  fields the packager warned about, dropped the explicit
+  `@electron/rebuild` devDep (electron-builder ships its own copy)
+  and switched the `electron:rebuild` script to the standard
+  `electron-builder install-app-deps`.
+
 ## 0.120.0 — 2026-05-16
 
 ### Added

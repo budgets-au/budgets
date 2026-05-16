@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.120.6 — 2026-05-16
+
+### Fixed
+- **Windows desktop: server crashed at boot with `Cannot find
+  module '@swc/helpers/_/_interop_require_default'`.** Same class
+  of pnpm-strict-isolated linker / Next-standalone-trace gap the
+  Linux Dockerfile (lines 76-102) already works around for
+  `@signalapp/better-sqlite3`. `scripts/electron-prepare.mjs`
+  now stages the missing modules into the standalone tree via
+  `require.resolve` + `cpSync({dereference: true})`:
+  - `@swc/helpers` — the observed boot crash culprit.
+  - `@signalapp/better-sqlite3` + `bindings` +
+    `file-uri-to-path` — declared in `serverExternalPackages`
+    so the NFT trace deliberately skips them; without staging,
+    the first DB request would fail at module-resolve. Mirrors
+    the Dockerfile's `runtime-deps` chain.
+  - `drizzle/` migrations folder — read at runtime by
+    `runPendingMigrations()` after unlock. Without it the
+    schema would lag behind the code on every release.
+
 ## 0.120.5 — 2026-05-16
 
 ### Fixed

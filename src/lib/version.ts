@@ -11,4 +11,4 @@
  *
  * Keep the format as a JS string literal (double-quoted) on a single
  * line so the regex in scripts/docker-release.mjs stays simple. */
-export const APP_VERSION = "0.120.5";
+export const APP_VERSION = "0.120.6";

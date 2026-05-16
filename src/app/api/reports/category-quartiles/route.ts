@@ -46,9 +46,12 @@ export async function GET(request: Request) {
     accountIds.length > 0
       ? sql`AND t.account_id IN (${idList})`
       : sql`AND t.account_id IN (SELECT id FROM accounts WHERE is_archived = 0)`;
+  // Internal transfers (own-account moves) aren't real spending so
+  // we always exclude them from the box-plot's per-category
+  // distribution; external transfers (CC payoff, etc.) stay.
   const transferFilter = hideTransfers
     ? sql`AND (c.transfer_kind IS NULL OR c.transfer_kind = 'none')`
-    : sql``;
+    : sql`AND (c.transfer_kind IS NULL OR c.transfer_kind != 'internal')`;
 
   // Optional drill-down: restrict to a root category + descendants
   // so the operator can zoom into one branch of the hierarchy

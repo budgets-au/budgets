@@ -266,13 +266,17 @@ function Pillbar<T extends string>({
   );
 }
 
-interface TooltipPayload {
+interface ScatterPointPayload {
+  date?: string;
+  y?: number;
+  categoryName?: string | null;
+  fill?: string;
+}
+
+interface RechartsTooltipEntry {
   name?: string;
-  payload?: {
-    date?: string;
-    y?: number;
-    categoryName?: string | null;
-  };
+  dataKey?: string;
+  payload?: ScatterPointPayload;
 }
 
 function ScatterTooltip({
@@ -280,24 +284,28 @@ function ScatterTooltip({
   payload,
 }: {
   active?: boolean;
-  payload?: TooltipPayload[];
+  payload?: RechartsTooltipEntry[];
 }) {
   if (!active || !payload?.length) return null;
-  // ComposedChart hands the tooltip BOTH the scatter and the
-  // overlaid 14-day-mean line entries; the line's payload has no
-  // categoryName so naively reading payload[0] showed every
-  // tooltip as "Uncategorised". Find the scatter entry by name
-  // (set on the <Scatter name="Transactions"> below) and use its
-  // datum.
-  const scatterEntry = payload.find((p) => p.name === "Transactions");
-  const p = scatterEntry?.payload ?? payload[0]?.payload;
-  if (!p) return null;
+  // Recharts' ComposedChart populates payload with one entry per
+  // rendered series at the hovered position. For a (scatter + line)
+  // pair the line's entry's `.payload` lacks `categoryName` — so
+  // we filter to the entry whose datum actually carries the
+  // scatter shape. Looking for the field directly is more robust
+  // than matching the series `name`, which Recharts sometimes
+  // shadows with the dataKey.
+  const scatterEntry = payload.find(
+    (p) => p.payload != null && "categoryName" in p.payload,
+  );
+  if (!scatterEntry?.payload) return null;
+  const p = scatterEntry.payload;
   return (
     <ChartTooltipCard>
       <ChartTooltipHeader title={p.date ? formatDate(p.date) : ""} />
       <ChartTooltipRow
         label={p.categoryName ?? "Uncategorised"}
         value={typeof p.y === "number" ? formatAUD(p.y) : "—"}
+        swatch={p.fill ?? undefined}
       />
     </ChartTooltipCard>
   );

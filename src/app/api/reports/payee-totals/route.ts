@@ -48,9 +48,12 @@ export async function GET(request: Request) {
     accountIds.length > 0
       ? sql`AND t.account_id IN (${idList})`
       : sql`AND t.account_id IN (SELECT id FROM accounts WHERE is_archived = 0)`;
+  // Internal transfers between own accounts aren't useful in a
+  // payee Pareto — the "payee" is just the other account. Always
+  // exclude. External transfers (real outflow) stay.
   const transferFilter = hideTransfers
     ? sql`AND (c.transfer_kind IS NULL OR c.transfer_kind = 'none')`
-    : sql``;
+    : sql`AND (c.transfer_kind IS NULL OR c.transfer_kind != 'internal')`;
   const kindFilter =
     kind === "expense"
       ? sql`AND c.type = 'expense'`

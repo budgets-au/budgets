@@ -9,6 +9,45 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.112.0 — 2026-05-16
+
+### Changed
+- **Heatmap is now a category × month grid.** The GitHub-
+  contributions-style 7-row × N-week day grid was answering the
+  wrong question — "which day had a spike" rarely matters. The
+  redesigned heatmap is a true matrix: rows = leaf categories
+  (sorted by total spend descending), columns = months in the
+  window, cell colour = sqrt-scaled spend amount for that
+  category-month. Hovering a cell shows the dollar figure;
+  clicking opens `/transactions` filtered to that category +
+  month. Reuses `/api/reports/cashflow` — no new endpoint. The
+  expense / income toggle and the category-root filter dropdown
+  (the same one the other reports use) work here too. The
+  orphaned `/api/reports/daily-spend` endpoint is removed.
+
+### Fixed
+- **Scatter tooltip really does read the scatter datum now.**
+  0.111's fix matched the payload entry by `name === "Transactions"`,
+  but Recharts sometimes shadows `name` with the dataKey on
+  ComposedChart, so the search missed and every tooltip fell
+  back to "Uncategorised". Now the tooltip finds the entry whose
+  datum has a `categoryName` field at all — robust against
+  future Recharts churn. Colour swatch wired into the row so the
+  dot's category-colour shows next to the label.
+- **Scatter / Boxplot / Pareto exclude internal-transfer
+  categories by default.** Money moved between own accounts isn't
+  real spending and was distorting the boxplot's per-category
+  distribution + the Pareto's payee ranking. SQL now always
+  filters `c.transfer_kind != 'internal'`; external transfers
+  (real outflow to outside banks) stay visible. The existing
+  `?hideTransfers=true` query escape hatch still excludes all
+  transfer kinds entirely.
+- **Heatmap also drops internal-transfer categories** via cross-
+  reference with `/api/categories` (the cashflow payload doesn't
+  carry `transferKind`, so the report joins the two SWR-loaded
+  payloads client-side). Replaces a brittle regex-on-name hack
+  that incorrectly included some external-transfer rows.
+
 ## 0.111.0 — 2026-05-16
 
 ### Fixed

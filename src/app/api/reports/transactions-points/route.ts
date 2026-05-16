@@ -50,9 +50,14 @@ export async function GET(request: Request) {
     accountIds.length > 0
       ? sql`AND t.account_id IN (${idList})`
       : sql`AND t.account_id IN (SELECT id FROM accounts WHERE is_archived = 0)`;
+  // Internal transfers (money moved between own accounts) are
+  // never "spending" and pollute distribution / scatter views;
+  // always exclude them. External transfers (CC payoff to an
+  // outside bank, etc.) are real outflow so they stay unless
+  // `hideTransfers=true` filters them out too.
   const transferFilter = hideTransfers
     ? sql`AND (c.transfer_kind IS NULL OR c.transfer_kind = 'none')`
-    : sql``;
+    : sql`AND (c.transfer_kind IS NULL OR c.transfer_kind != 'internal')`;
   const kindFilter =
     kind === "expense"
       ? sql`AND c.type = 'expense'`

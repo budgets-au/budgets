@@ -9,6 +9,40 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.124.2 — 2026-05-16
+
+### Security
+- **Transitive-dep CVE sweep via `pnpm.overrides`.** Dependabot
+  reported 15 open advisories across the lockfile (8 high, 6
+  medium, 1 low). Pinned the floor on every affected package
+  in `package.json`'s `pnpm.overrides` block so future installs
+  can't regress:
+  - `tar ≥ 7.5.11` — 7 high-severity advisories: hardlink &
+    symlink path traversal, drive-relative linkpath traversal,
+    APFS-Unicode race condition. Pulled in via
+    `@signalapp/better-sqlite3`'s prebuild fetcher (no runtime
+    surface — already stripped by the Linux Dockerfile, but the
+    install-time tooling itself was vulnerable).
+  - `postcss ≥ 8.5.10` — medium XSS via unescaped `</style>`
+    in CSS stringify; via Next's build pipeline.
+  - `esbuild ≥ 0.25.0` — medium: dev server allowed cross-origin
+    requests to read responses (dev only).
+  - `fast-uri ≥ 3.1.2` — 2 high: host confusion + path traversal
+    via percent-encoded segments (dev tooling).
+  - `ip-address ≥ 10.1.1` — medium XSS in HTML-emitting methods
+    (dev tooling).
+  - `hono ≥ 4.12.18` — 3 advisories: CSS declaration injection
+    via JSX SSR, NumericDate validation in JWT verify, cache
+    middleware leak across users (all dev tooling).
+
+  Side effect: `@signalapp/better-sqlite3`'s prebuild fetcher
+  doesn't recognise tar 7's tarball format and falls back to
+  compiling from source on first install. Slower deps-stage
+  install (~2.5 min vs seconds) but the resulting `.node`
+  binary is identical at runtime.
+
+  All 295 tests still pass against the upgraded tree.
+
 ## 0.124.1 — 2026-05-16
 
 ### Security

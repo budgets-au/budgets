@@ -23,6 +23,7 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");
 const net = require("node:net");
+const crypto = require("node:crypto");
 
 // Single-instance lock — second launches focus the existing window
 // instead of spawning another Next server (which would fight for
@@ -91,11 +92,40 @@ function serverEntry() {
 function userDataPaths() {
   const root = app.getPath("userData");
   const dataDir = path.join(root, "data");
+  const logsDir = app.getPath("logs");
   fs.mkdirSync(dataDir, { recursive: true });
+  fs.mkdirSync(logsDir, { recursive: true });
   return {
     dataDir,
+    logsDir,
     sqlitePath: path.join(dataDir, "budget.db"),
+    secretsPath: path.join(dataDir, "secrets.json"),
+    serverLog: path.join(logsDir, "server.log"),
   };
+}
+
+/** next-auth v5 requires AUTH_SECRET in production or it throws
+ *  MissingSecret at module-eval and the server never reaches
+ *  listen(). This generates a per-install random hex secret on
+ *  first run and persists it in userData; subsequent launches
+ *  read the same value. Lose the file → you'll be logged out
+ *  (re-login with username/password regenerates a session). */
+function loadOrCreateAuthSecret(secretsPath) {
+  if (fs.existsSync(secretsPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(secretsPath, "utf8"));
+      if (typeof parsed.authSecret === "string" && parsed.authSecret.length >= 32) {
+        return parsed.authSecret;
+      }
+    } catch {
+      // Fall through and rewrite.
+    }
+  }
+  const fresh = crypto.randomBytes(32).toString("hex");
+  fs.writeFileSync(secretsPath, JSON.stringify({ authSecret: fresh }, null, 2), {
+    mode: 0o600,
+  });
+  return fresh;
 }
 
 let mainWindow = null;
@@ -103,7 +133,7 @@ let serverProc = null;
 
 async function startServerAndOpen() {
   const port = await pickPort();
-  const { dataDir, sqlitePath } = userDataPaths();
+  const { dataDir, sqlitePath, secretsPath, serverLog } = userDataPaths();
   const entry = serverEntry();
   if (!fs.existsSync(entry)) {
     dialog.showErrorBox(
@@ -114,6 +144,18 @@ async function startServerAndOpen() {
     return;
   }
 
+  const authSecret = loadOrCreateAuthSecret(secretsPath);
+  const port_ = String(port);
+  const nextauthUrl = `http://127.0.0.1:${port_}`;
+
+  // Append to a log file in app.getPath('logs') so a packaged
+  // launch (no terminal) has a forensic trail when the server
+  // refuses to bind. Truncate on each launch — keep the log
+  // scoped to "this session" rather than letting it grow
+  // unbounded across days.
+  const logStream = fs.createWriteStream(serverLog, { flags: "w" });
+  logStream.write(`--- launch ${new Date().toISOString()} ---\n`);
+
   // ELECTRON_RUN_AS_NODE makes this exe behave as plain Node when
   // spawned with that env var set. Means we don't need to ship a
   // separate `node.exe` alongside Electron.
@@ -122,29 +164,44 @@ async function startServerAndOpen() {
       ...process.env,
       ELECTRON_RUN_AS_NODE: "1",
       SQLITE_PATH: sqlitePath,
+      // next-auth v5 hard-requires this in production builds.
+      AUTH_SECRET: authSecret,
+      NEXTAUTH_SECRET: authSecret,
+      AUTH_URL: nextauthUrl,
+      NEXTAUTH_URL: nextauthUrl,
       // Server listens on loopback only — desktop app, no LAN
       // exposure. The window connects to 127.0.0.1.
       HOSTNAME: "127.0.0.1",
-      PORT: String(port),
+      PORT: port_,
       // Server-side relative path for backups; the dataDir is also
       // where /api/backup/list looks by default.
       BACKUPS_DIR: path.join(dataDir, "backups"),
       // Hide the Node deprecation warning chrome the standalone
       // server emits at boot — it's noisy in the packaged log.
       NODE_NO_WARNINGS: "1",
+      NEXT_TELEMETRY_DISABLED: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
     cwd: path.dirname(entry),
   });
-  serverProc.stdout.on("data", (b) => process.stdout.write(`[next] ${b}`));
-  serverProc.stderr.on("data", (b) => process.stderr.write(`[next] ${b}`));
+  const pipe = (src, tag) => {
+    src.on("data", (b) => {
+      const line = `[${tag}] ${b}`;
+      process.stdout.write(line);
+      logStream.write(line);
+    });
+  };
+  pipe(serverProc.stdout, "next");
+  pipe(serverProc.stderr, "next");
   serverProc.on("exit", (code, signal) => {
+    logStream.write(`--- exit code=${code} signal=${signal} ---\n`);
+    logStream.end();
     serverProc = null;
     if (!app.isReady()) return;
     if (mainWindow && !mainWindow.isDestroyed()) {
       dialog.showErrorBox(
         "Server stopped",
-        `The budgets server exited (code=${code}, signal=${signal}).\nClose and relaunch the app to restart it.`,
+        `The budgets server exited (code=${code}, signal=${signal}).\nLog: ${serverLog}\nClose and relaunch the app to restart it.`,
       );
     }
   });
@@ -152,7 +209,10 @@ async function startServerAndOpen() {
   try {
     await waitForPort(port);
   } catch (err) {
-    dialog.showErrorBox("Server failed to start", String(err));
+    dialog.showErrorBox(
+      "Server failed to start",
+      `${err}\n\nCheck the log for details:\n${serverLog}`,
+    );
     app.quit();
     return;
   }

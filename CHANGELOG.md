@@ -9,6 +9,36 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.120.4 — 2026-05-16
+
+### Fixed
+- **Windows desktop: server failed to bind on launch.** The first
+  shipped installer crashed at startup with "server did not bind
+  on :NNNNN after 100 attempts". Root cause: next-auth v5
+  requires `AUTH_SECRET` in production and was throwing
+  `MissingSecret` during the child server's module-eval, before
+  it ever reached `listen()`. Electron main now generates a
+  random 32-byte secret on first run, persists it in
+  `<userData>/data/secrets.json` (mode 0600), and threads it as
+  `AUTH_SECRET` / `NEXTAUTH_SECRET` / `AUTH_URL` / `NEXTAUTH_URL`
+  into the child process env.
+- **Windows desktop: server-process output now logged to disk.**
+  Packaged launches have no terminal attached, so stdout/stderr
+  from the spawned Next server vanished into the void — making
+  the previous boot failure undebuggable. Child output now also
+  appends to `app.getPath('logs')/server.log` (truncated per
+  launch) and the error dialog surfaces the log path so the user
+  can attach it.
+- **Installer artifact named `budgets-0.9.0-setup.exe` instead of
+  `budgets-X.Y.Z-setup.exe`.** electron-builder defaults to
+  `package.json`'s `version` field for `${version}`
+  interpolation, but that field is pinned at `0.9.0` for Docker-
+  layer caching. New `scripts/electron-build-win.mjs` wrapper
+  reads `APP_VERSION` from `src/lib/version.ts` and passes
+  `--config.extraMetadata.version=<APP_VERSION>` to
+  electron-builder so the .exe name and the release-notes
+  download link agree.
+
 ## 0.120.3 — 2026-05-16
 
 ### Added

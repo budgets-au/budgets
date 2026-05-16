@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { formatAUD } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -46,10 +47,16 @@ export function BoxplotReport({
   hideTransfers: boolean;
 }) {
   const [kind, setKind] = useState<"expense" | "income">("expense");
+  const [rootCategoryId, setRootCategoryId] = useState<string | null>(null);
+
+  const { data: allCategories = [] } = useSWR<
+    { id: string; name: string; parentId: string | null; type: string }[]
+  >("/api/categories", fetcher, { revalidateOnFocus: false });
 
   const params = new URLSearchParams({ from, to, kind });
   if (accountIds.length > 0) params.set("accountIds", accountIds.join(","));
   if (hideTransfers) params.set("hideTransfers", "true");
+  if (rootCategoryId) params.set("rootCategoryId", rootCategoryId);
   const url = `/api/reports/category-quartiles?${params}`;
   const { data, isLoading } = useSWR<BoxplotResp>(url, fetcher);
 
@@ -65,29 +72,42 @@ export function BoxplotReport({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 gap-2">
-        <CardTitle className="text-base">
-          Per-category amount distribution
-        </CardTitle>
-        <div
-          role="tablist"
-          className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
-        >
-          {(["expense", "income"] as const).map((k) => (
-            <button
-              key={k}
-              role="tab"
-              aria-selected={kind === k}
-              onClick={() => setKind(k)}
-              className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-                kind === k
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {k}
-            </button>
-          ))}
+      <CardHeader className="space-y-2 pb-3">
+        <div className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base">
+            Per-category amount distribution
+          </CardTitle>
+          <div
+            role="tablist"
+            className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
+          >
+            {(["expense", "income"] as const).map((k) => (
+              <button
+                key={k}
+                role="tab"
+                aria-selected={kind === k}
+                onClick={() => setKind(k)}
+                className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
+                  kind === k
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Filter to:</span>
+          <CategoryDropdown
+            value={rootCategoryId}
+            onChange={setRootCategoryId}
+            categories={allCategories}
+            placeholder="All categories"
+            uncategorisedLabel={null}
+            triggerClassName="h-7 min-w-[180px]"
+          />
         </div>
       </CardHeader>
       <CardContent>

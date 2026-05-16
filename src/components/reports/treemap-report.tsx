@@ -6,6 +6,7 @@ import { ResponsiveContainer, Treemap } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
+import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { formatAUD } from "@/lib/utils";
 import { CATEGORICAL_PALETTE } from "@/lib/colours";
 import type {
@@ -50,7 +51,17 @@ export function TreemapReport({
   hideTransfers: boolean;
 }) {
   const [scope, setScope] = useState<"expenses" | "income">("expenses");
+  // `drillId` is the current root of the treemap view: null = top
+  // of the hierarchy (every grandparent), otherwise the id of the
+  // node we drilled into. Two paths set it: clicking a rectangle
+  // in the chart (drill DOWN) and picking via the CategoryDropdown
+  // (jump anywhere). The "Back" button steps up one level via
+  // the parent pointer the tree carries.
   const [drillId, setDrillId] = useState<string | null>(null);
+
+  const { data: allCategories = [] } = useSWR<
+    { id: string; name: string; parentId: string | null; type: string }[]
+  >("/api/categories", fetcher, { revalidateOnFocus: false });
 
   const url = `/api/reports/cashflow?from=${from}&to=${to}${
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : ""
@@ -82,46 +93,65 @@ export function TreemapReport({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 gap-2">
-        <CardTitle className="text-base">
-          {scope === "expenses" ? "Expenses" : "Income"} treemap
-          {drillNode ? <> · {drillNode.name}</> : null}
-        </CardTitle>
-        <div className="flex items-center gap-2">
-          {drillId != null && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setDrillId(null)}
-            >
-              <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-              Back
-            </Button>
-          )}
-          <div
-            role="tablist"
-            aria-label="Treemap scope"
-            className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
-          >
-            {(["expenses", "income"] as const).map((s) => (
-              <button
-                key={s}
-                role="tab"
-                aria-selected={scope === s}
+      <CardHeader className="space-y-2 pb-3">
+        <div className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base">
+            {scope === "expenses" ? "Expenses" : "Income"} treemap
+            {drillNode ? <> · {drillNode.name}</> : null}
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {drillId != null && (
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={() => {
-                  setScope(s);
-                  setDrillId(null);
+                  // Step one level up via the tree's parent pointer.
+                  // Falls back to root when the current node already
+                  // sits at depth 0.
+                  const node = tree.byId.get(drillId);
+                  setDrillId(node?.parentId ?? null);
                 }}
-                className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-                  scope === s
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
               >
-                {s}
-              </button>
-            ))}
+                <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                Up
+              </Button>
+            )}
+            <div
+              role="tablist"
+              aria-label="Treemap scope"
+              className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
+            >
+              {(["expenses", "income"] as const).map((s) => (
+                <button
+                  key={s}
+                  role="tab"
+                  aria-selected={scope === s}
+                  onClick={() => {
+                    setScope(s);
+                    setDrillId(null);
+                  }}
+                  className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
+                    scope === s
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Filter to:</span>
+          <CategoryDropdown
+            value={drillId}
+            onChange={setDrillId}
+            categories={allCategories}
+            placeholder="All categories"
+            uncategorisedLabel={null}
+            triggerClassName="h-7 min-w-[180px]"
+          />
         </div>
       </CardHeader>
       <CardContent>
@@ -183,6 +213,10 @@ interface TmNode extends Record<string, unknown> {
   /** Stable indigo / palette index used by all descendants for
    * colour-family consistency. */
   paletteIndex: number;
+  /** Pointer back up the hierarchy — null for top-level grandparents.
+   * Used by the "↑ Up" button so the operator can step one level
+   * up rather than jumping all the way home. */
+  parentId: string | null;
   children: TmNode[];
 }
 
@@ -252,6 +286,7 @@ function buildTreemapTree(cats: CashflowCategory[]): {
       name: n.name,
       value,
       paletteIndex,
+      parentId: n.parentId,
       children,
     };
     byId.set(id, tm);
@@ -291,34 +326,55 @@ function toTreemapNode(n: TmNode): TmNode {
   };
 }
 
-/** Custom tile renderer so we can colour by paletteIndex with a
- * depth-aware luma tweak (deeper = darker), draw the label
- * legibly, and route clicks through to drill-down. */
+/** Custom tile renderer. Recharts spreads the per-cell data
+ * fields (our TmNode props) directly onto `props` alongside its
+ * own computed layout values (x/y/width/height/depth/index/name/
+ * value/children) — there is no `payload` envelope. */
 interface TileProps {
   x?: number;
   y?: number;
   width?: number;
   height?: number;
-  payload?: TmNode;
   depth?: number;
+  index?: number;
+  name?: string;
+  value?: number;
+  children?: ReadonlyArray<unknown> | null;
+  /** Spread from TmNode by Recharts. */
+  id?: string;
+  paletteIndex?: number;
   onDrill: (id: string, hasChildren: boolean) => void;
   totalValue: number;
 }
 
 function TreemapTile(props: TileProps) {
-  const { x = 0, y = 0, width = 0, height = 0, payload, depth = 0 } = props;
-  if (!payload) return null;
-  const colour = CATEGORICAL_PALETTE[payload.paletteIndex];
-  // Depth 0 darker, depth 1+ lighter — gives the hierarchy a
-  // subtle inside-out shading. Recharts calls TreemapTile for
-  // every node in the tree (depths 1..N where N is max depth);
-  // depth 0 is the synthetic root container Recharts inserts.
-  const opacity = depth <= 1 ? 1 : 0.75;
+  const {
+    x = 0,
+    y = 0,
+    width = 0,
+    height = 0,
+    depth = 0,
+    name,
+    value = 0,
+    id,
+    paletteIndex = 0,
+    children,
+  } = props;
+  // Recharts emits a synthetic depth-0 container node that wraps
+  // every chart; skip rendering it so we don't paint the whole
+  // viewport with the first root's colour.
+  if (depth === 0) return null;
+  const colour = CATEGORICAL_PALETTE[paletteIndex % CATEGORICAL_PALETTE.length];
+  // Depth 1 (grandparent in our model) is the dominant colour,
+  // deeper levels fade slightly so the hierarchy is legible.
+  const opacity = depth <= 1 ? 1 : depth === 2 ? 0.85 : 0.7;
   const showLabel = width > 56 && height > 24;
-  const hasChildren = (payload.children?.length ?? 0) > 0;
+  const hasChildren = (children?.length ?? 0) > 0;
   return (
     <g
-      onClick={() => props.onDrill(payload.id, hasChildren)}
+      onClick={() => {
+        if (id) props.onDrill(id, hasChildren);
+      }}
       style={{ cursor: hasChildren ? "pointer" : "default" }}
     >
       <rect
@@ -341,7 +397,7 @@ function TreemapTile(props: TileProps) {
             fontWeight={600}
             style={{ pointerEvents: "none" }}
           >
-            {payload.name}
+            {name}
           </text>
           <text
             x={x + 6}
@@ -350,7 +406,7 @@ function TreemapTile(props: TileProps) {
             fontSize={10}
             style={{ pointerEvents: "none" }}
           >
-            {formatAUD(payload.value)}
+            {formatAUD(value)}
           </text>
         </>
       )}

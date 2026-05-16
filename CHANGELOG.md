@@ -9,6 +9,45 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.111.0 — 2026-05-16
+
+### Fixed
+- **Treemap rectangles weren't rendering.** The custom tile-content
+  component was reading data fields off `props.payload.*`, but
+  Recharts' `<Treemap content={...}>` spreads the per-cell data
+  directly onto `props` (alongside its computed
+  `x/y/width/height/depth/name/value/children`) — there is no
+  `payload` envelope. Switched to reading `props.name`,
+  `props.value`, `props.paletteIndex`, etc. directly; depth-0
+  synthetic container is now skipped instead of painting the
+  whole viewport.
+- **Scatter tooltips showed every dot as "Uncategorised".** The
+  scatter's `<ComposedChart>` carries two series — the scatter
+  itself and the 14-day-mean line — and the tooltip's `payload`
+  array contains entries for both. The naïve `payload[0]` was
+  often the line's data point (which has no `categoryName`), so
+  every tooltip fell back to the placeholder. Tooltip now finds
+  the scatter entry by `name === "Transactions"` and reads its
+  datum.
+
+### Added
+- **Drill-down via category root on treemap / scatter / boxplot.**
+  Each chart gains a "Filter to:" `<CategoryDropdown>` that picks
+  the current root of the view. Two backend changes:
+  - `/api/reports/transactions-points` and
+    `/api/reports/category-quartiles` accept
+    `?rootCategoryId=<uuid>`; the server resolves the subtree
+    via `categoryDescendantIds()` and adds
+    `AND t.category_id IN (...)` to the WHERE.
+  - Treemap's existing click-to-drill now sets the same `drillId`
+    state the dropdown writes to, so the two interactions drive
+    one source of truth. "Back" becomes "Up" and steps one level
+    via the tree's `parentId` pointer (was previously jumping all
+    the way to root).
+  Dropdown shows every category in the household tree so the
+  operator can jump anywhere (Groceries → Fresh produce →
+  Supermarket) without click-walking through each level.
+
 ## 0.110.0 — 2026-05-15
 
 ### Added

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
+import { categoryDescendantIds } from "@/lib/category-descendants";
 
 const MAX_POINTS = 5_000;
 
@@ -59,6 +60,22 @@ export async function GET(request: Request) {
         ? sql`AND c.type = 'income'`
         : sql``;
 
+  // Optional drill-down: restrict to a category root + descendants.
+  // Walks the parent → children adjacency once via the shared
+  // helper so the SQL just gets a flat IN-list.
+  const rootCategoryId = searchParams.get("rootCategoryId");
+  let categoryFilter = sql``;
+  if (rootCategoryId && UUID_RE.test(rootCategoryId)) {
+    const subtree = await categoryDescendantIds(rootCategoryId);
+    if (subtree.length > 0) {
+      const subList = sql.join(
+        subtree.map((id) => sql`${id}`),
+        sql`, `,
+      );
+      categoryFilter = sql`AND t.category_id IN (${subList})`;
+    }
+  }
+
   const rows = await db.all(sql`
     SELECT
       t.id                            AS id,
@@ -74,6 +91,7 @@ export async function GET(request: Request) {
       ${accountFilter}
       ${transferFilter}
       ${kindFilter}
+      ${categoryFilter}
     ORDER BY t.date DESC
     LIMIT ${MAX_POINTS + 1}
   `);

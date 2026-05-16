@@ -19,6 +19,7 @@ import {
   ChartTooltipHeader,
   ChartTooltipRow,
 } from "@/components/ui/chart-tooltip";
+import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { formatAUD, formatDate } from "@/lib/utils";
 import { chartGridStroke } from "@/lib/colours";
 import { useDarkMode } from "@/hooks/use-dark-mode";
@@ -65,11 +66,19 @@ export function ScatterReport({
 }) {
   const [yScale, setYScale] = useState<"linear" | "log">("linear");
   const [kind, setKind] = useState<"expense" | "income" | "all">("expense");
+  const [rootCategoryId, setRootCategoryId] = useState<string | null>(null);
   const isDark = useDarkMode();
+
+  // Categories pulled in for the drill-down picker. SWR dedupes
+  // against the same /api/categories fetch other reports do.
+  const { data: allCategories = [] } = useSWR<
+    { id: string; name: string; parentId: string | null; type: string }[]
+  >("/api/categories", fetcher, { revalidateOnFocus: false });
 
   const params = new URLSearchParams({ from, to, kind });
   if (accountIds.length > 0) params.set("accountIds", accountIds.join(","));
   if (hideTransfers) params.set("hideTransfers", "true");
+  if (rootCategoryId) params.set("rootCategoryId", rootCategoryId);
   const url = `/api/reports/transactions-points?${params}`;
   const { data, isLoading } = useSWR<ScatterResp>(url, fetcher);
 
@@ -108,27 +117,40 @@ export function ScatterReport({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 gap-2">
-        <CardTitle className="text-base">
-          Transaction scatter
-        </CardTitle>
-        <div className="flex items-center gap-2">
-          <Pillbar
-            value={kind}
-            options={[
-              ["expense", "Expense"],
-              ["income", "Income"],
-              ["all", "All"],
-            ]}
-            onChange={setKind}
-          />
-          <Pillbar
-            value={yScale}
-            options={[
-              ["linear", "Linear"],
-              ["log", "Log"],
-            ]}
-            onChange={setYScale}
+      <CardHeader className="space-y-2 pb-3">
+        <div className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base">
+            Transaction scatter
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <Pillbar
+              value={kind}
+              options={[
+                ["expense", "Expense"],
+                ["income", "Income"],
+                ["all", "All"],
+              ]}
+              onChange={setKind}
+            />
+            <Pillbar
+              value={yScale}
+              options={[
+                ["linear", "Linear"],
+                ["log", "Log"],
+              ]}
+              onChange={setYScale}
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span>Filter to:</span>
+          <CategoryDropdown
+            value={rootCategoryId}
+            onChange={setRootCategoryId}
+            categories={allCategories}
+            placeholder="All categories"
+            uncategorisedLabel={null}
+            triggerClassName="h-7 min-w-[180px]"
           />
         </div>
       </CardHeader>
@@ -245,6 +267,7 @@ function Pillbar<T extends string>({
 }
 
 interface TooltipPayload {
+  name?: string;
   payload?: {
     date?: string;
     y?: number;
@@ -259,8 +282,16 @@ function ScatterTooltip({
   active?: boolean;
   payload?: TooltipPayload[];
 }) {
-  if (!active || !payload?.[0]?.payload) return null;
-  const p = payload[0].payload;
+  if (!active || !payload?.length) return null;
+  // ComposedChart hands the tooltip BOTH the scatter and the
+  // overlaid 14-day-mean line entries; the line's payload has no
+  // categoryName so naively reading payload[0] showed every
+  // tooltip as "Uncategorised". Find the scatter entry by name
+  // (set on the <Scatter name="Transactions"> below) and use its
+  // datum.
+  const scatterEntry = payload.find((p) => p.name === "Transactions");
+  const p = scatterEntry?.payload ?? payload[0]?.payload;
+  if (!p) return null;
   return (
     <ChartTooltipCard>
       <ChartTooltipHeader title={p.date ? formatDate(p.date) : ""} />

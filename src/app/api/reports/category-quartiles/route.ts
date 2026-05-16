@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { fiveNumberSummary } from "@/lib/reports/quartiles";
+import { categoryDescendantIds } from "@/lib/category-descendants";
 
 /** GET /api/reports/category-quartiles
  *
@@ -49,6 +50,23 @@ export async function GET(request: Request) {
     ? sql`AND (c.transfer_kind IS NULL OR c.transfer_kind = 'none')`
     : sql``;
 
+  // Optional drill-down: restrict to a root category + descendants
+  // so the operator can zoom into one branch of the hierarchy
+  // without losing the box-plot's per-category breakdown for the
+  // remaining sub-categories.
+  const rootCategoryId = searchParams.get("rootCategoryId");
+  let categoryFilter = sql``;
+  if (rootCategoryId && UUID_RE.test(rootCategoryId)) {
+    const subtree = await categoryDescendantIds(rootCategoryId);
+    if (subtree.length > 0) {
+      const subList = sql.join(
+        subtree.map((id) => sql`${id}`),
+        sql`, `,
+      );
+      categoryFilter = sql`AND t.category_id IN (${subList})`;
+    }
+  }
+
   // Pull every (categoryId, amount) pair in window, group in Node.
   const raw = (await db.all(sql`
     SELECT
@@ -63,6 +81,7 @@ export async function GET(request: Request) {
       AND c.type = ${kind}
       ${accountFilter}
       ${transferFilter}
+      ${categoryFilter}
   `)) as Array<{
     category_id: string;
     category_name: string;

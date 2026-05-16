@@ -9,6 +9,17 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.123.1 — 2026-05-16
+
+### Fixed
+- **Transaction row's Google-search icon no longer floats centred.**
+  Adding the new chain-link button in 0.123 gave the payee cell's
+  `justify-between` flex container three direct children instead of
+  two, so the Search icon ended up midway between the payee and the
+  link button. Wrapped both right-side buttons in a single
+  `inline-flex` cluster so the parent's `justify-between` keeps the
+  payee on the left and all action icons flush right.
+
 ## 0.123.0 — 2026-05-16
 
 ### Fixed

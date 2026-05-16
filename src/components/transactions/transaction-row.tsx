@@ -701,55 +701,62 @@ export function TransactionRow({
                 />
               )}
             </span>
-            {t.payee?.trim() && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const url = `https://www.google.com/search?q=${encodeURIComponent(t.payee!)}`;
-                  const w = Math.min(900, window.screen.availWidth - 100);
-                  const h = Math.min(720, window.screen.availHeight - 80);
-                  const left = Math.max(
-                    0,
-                    (window.screen.availWidth - w) / 2,
-                  );
-                  const top = Math.max(
-                    0,
-                    (window.screen.availHeight - h) / 2,
-                  );
-                  window.open(
-                    url,
-                    "payee-search",
-                    `popup=yes,width=${w},height=${h},left=${left},top=${top}`,
-                  );
-                }}
-                className="shrink-0 p-1 -my-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                title={`Search Google for "${t.payee}"`}
-                aria-label="Search Google for this payee"
-              >
-                <Search className="h-3.5 w-3.5" />
-              </button>
-            )}
-            {!linked && onRequestLink && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRequestLink({
-                    id: t.id,
-                    accountId: t.accountId,
-                    amount: t.amount,
-                    date: t.date,
-                    payee: t.payee,
-                  });
-                }}
-                className="shrink-0 p-1 -my-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100"
-                title="Link as transfer to another transaction"
-                aria-label="Link as transfer"
-              >
-                <Link2 className="h-3.5 w-3.5" />
-              </button>
-            )}
+            {/* Right-aligned action cluster — wrapped in a single
+                flex group so the parent `justify-between` keeps the
+                payee on the left and ALL buttons flush right. Without
+                this wrapper, adding more buttons would spread them
+                across the row instead of stacking on the right. */}
+            <span className="shrink-0 inline-flex items-center gap-1">
+              {t.payee?.trim() && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const url = `https://www.google.com/search?q=${encodeURIComponent(t.payee!)}`;
+                    const w = Math.min(900, window.screen.availWidth - 100);
+                    const h = Math.min(720, window.screen.availHeight - 80);
+                    const left = Math.max(
+                      0,
+                      (window.screen.availWidth - w) / 2,
+                    );
+                    const top = Math.max(
+                      0,
+                      (window.screen.availHeight - h) / 2,
+                    );
+                    window.open(
+                      url,
+                      "payee-search",
+                      `popup=yes,width=${w},height=${h},left=${left},top=${top}`,
+                    );
+                  }}
+                  className="shrink-0 p-1 -my-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  title={`Search Google for "${t.payee}"`}
+                  aria-label="Search Google for this payee"
+                >
+                  <Search className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {!linked && onRequestLink && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestLink({
+                      id: t.id,
+                      accountId: t.accountId,
+                      amount: t.amount,
+                      date: t.date,
+                      payee: t.payee,
+                    });
+                  }}
+                  className="shrink-0 p-1 -my-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100"
+                  title="Link as transfer to another transaction"
+                  aria-label="Link as transfer"
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </span>
           </div>
           {showNotes && (
             <div className="mt-0.5 text-xs text-muted-foreground">

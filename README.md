@@ -86,16 +86,9 @@ in a password manager before you start.
 
 ## Installation
 
-Two release artifacts, same app, different shapes:
-
-- **Linux container** (primary) — multi-device on your LAN. Pull
-  from GHCR, run with podman/docker, point a volume at a folder
-  for the database.
-- **Windows desktop** — single-user app for one Windows machine.
-  Download the portable .exe from the [latest GitHub Release](https://github.com/budgets-au/budgets/releases/latest)
-  and double-click. No installer, no server to manage.
-
-### Linux container (LAN deployment)
+A self-built container image on GHCR. Pull, run, supply two
+secrets, point a volume at a folder for the database file. That's
+it.
 
 ```bash
 # Pull the image
@@ -127,38 +120,12 @@ inside the container) and reach it via `http://<server-ip>:3000`.
 Set `NEXTAUTH_URL` to the URL you'll actually use (e.g.
 `http://budgets.lan`) so the login redirects work.
 
-### Windows desktop (single machine)
-
-Grab `budgets-X.Y.Z-portable.exe` from the
-[latest GitHub Release](https://github.com/budgets-au/budgets/releases/latest)
-and double-click it. The app opens — no installer wizard, no
-admin prompt, no Start-menu shortcuts. Drop the .exe wherever
-you keep your apps; "uninstalling" is deleting that file.
-
-On first launch the app opens a single window pointing at its
-bundled web server. You'll see the unlock screen — type a
-passphrase. The encrypted database file gets created at
-`%APPDATA%\Budgets\data\budget.db`; the passphrase is yours to
-keep (and lose at your own risk). Newer versions overwrite the
-.exe in place; the data folder is untouched, so upgrades preserve
-everything.
-
-Migrating from an existing Linux deployment? Run the desktop
-app, then **Settings → Backup → Restore** a `.sqlite` snapshot
-from your container's `$HOME/budgets-data/backups/` folder. Same
-encryption format, the app handles the swap.
-
-The .exe is unsigned for now, so Windows SmartScreen warns on
-first launch — click **More info → Run anyway**. (Will be signed
-once we have a cert.)
-
 ## Updating
 
 The sidebar shows a small **New release** link below the version
-number when a newer release is available. Click it to read the
-notes.
-
-**Linux container:** re-pull and recreate.
+number when a newer image is available on GHCR. Click it to read
+the release notes; redeploy by re-pulling and recreating the
+container:
 
 ```bash
 podman pull ghcr.io/budgets-au/budgets:latest
@@ -167,11 +134,6 @@ podman rm -f budgets
 ```
 
 Your `.env` and `$HOME/budgets-data` carry over.
-
-**Windows desktop:** download the newer portable .exe from the
-[latest Release](https://github.com/budgets-au/budgets/releases/latest)
-and replace the old one — no uninstall step needed. Your
-`%APPDATA%\Budgets\data\budget.db` is untouched by the upgrade.
 
 ## Development
 

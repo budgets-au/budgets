@@ -9,205 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
-## 0.120.8 — 2026-05-16
+## 0.121.0 — 2026-05-16
 
-### Changed
-- **Windows release is now a single portable .exe — no installer.**
-  Replaced the NSIS installer (`budgets-X.Y.Z-setup.exe`) with a
-  self-extracting portable build (`budgets-X.Y.Z-portable.exe`).
-  Double-click the .exe; the app opens. No wizard, no admin
-  prompt, no Start-menu shortcuts, no registry entries. Drop the
-  .exe wherever you keep your apps; "uninstalling" is deleting
-  that file. Data location (`%APPDATA%\Budgets\data\budget.db`)
-  is unchanged, so users upgrading from the v0.120.7 NSIS install
-  can uninstall it and run the portable .exe with their data
-  intact.
-
-### Added
-- **CI now smoke-tests the standalone server before packaging.**
-  After `next build` + `electron-prepare` but before
-  `electron-builder`, the Windows CI boots `.next/standalone/
-  server.js` and hits `/api/version-check`. If any module is
-  still missing, the workflow fails *before* producing a .exe —
-  no more shipping broken binaries the user has to install before
-  finding out.
-
-### Fixed
-- **Windows boot crash: `MODULE_NOT_FOUND @next/env`.** Added
-  `stagePackage("@next/env", nextDir)` to the
-  `scripts/electron-prepare.mjs` chain, sibling to the existing
-  `@swc/helpers` stage.
-- **Stop the missing-module whack-a-mole entirely.** The Windows
-  CI workflow now writes a `.npmrc` with `node-linker=hoisted`
-  before `pnpm install`, switching the install layout to the flat
-  `node_modules/` Next's standalone tracer was designed for.
-  Transitive deps now get traced + copied automatically; the
-  manual `stagePackage` calls stay as defence-in-depth. The
-  Linux container build is untouched (it doesn't run this
-  workflow).
-
-### Reduced
-- **Installer size: ~356 MB → ~170 MB (target).** Three coordinated
-  cuts in the Electron build pipeline:
-  - `electron-builder.yml`: `compression: maximum` (LZMA-2),
-    `electronLanguages: [en-US]` (English-only Chromium .pak
-    files), expanded `files` exclusion list (`*.ts`, `*.tsx`,
-    `*.md`, `tsconfig*.json`, lock files, etc.).
-  - `scripts/electron-prepare.mjs`: trims
-    `@signalapp/better-sqlite3`'s build artefacts (source tree,
-    intermediate object files, vendored
-    `tar`/`minipass`/`minizlib`) after staging — mirrors the
-    Linux Dockerfile's pattern at lines 60-70 and 155-160. Keeps
-    only `build/Release/better_sqlite3.node` (the binary the
-    runtime actually loads).
-
-## 0.120.7 — 2026-05-16
-
-### Fixed
-- **Windows CI: `electron-prepare.mjs` couldn't resolve packages
-  it was supposed to stage.** v0.120.6 introduced staging for
-  `@swc/helpers`, `bindings`, `file-uri-to-path` — but my
-  `require.resolve(name + "/package.json")` calls used the repo
-  root as the lookup root, and pnpm's strict-isolated linker only
-  hoists *direct* dependencies there. The transitive deps are at
-  `.pnpm/<name>@<ver>/node_modules/<name>/` and need a parent-
-  package's directory as the lookup root. Each `stagePackage`
-  call now threads the previous resolution's path as `paths:` to
-  the next, mirroring the Dockerfile's runtime-deps chain.
-
-## 0.120.6 — 2026-05-16
-
-### Fixed
-- **Windows desktop: server crashed at boot with `Cannot find
-  module '@swc/helpers/_/_interop_require_default'`.** Same class
-  of pnpm-strict-isolated linker / Next-standalone-trace gap the
-  Linux Dockerfile (lines 76-102) already works around for
-  `@signalapp/better-sqlite3`. `scripts/electron-prepare.mjs`
-  now stages the missing modules into the standalone tree via
-  `require.resolve` + `cpSync({dereference: true})`:
-  - `@swc/helpers` — the observed boot crash culprit.
-  - `@signalapp/better-sqlite3` + `bindings` +
-    `file-uri-to-path` — declared in `serverExternalPackages`
-    so the NFT trace deliberately skips them; without staging,
-    the first DB request would fail at module-resolve. Mirrors
-    the Dockerfile's `runtime-deps` chain.
-  - `drizzle/` migrations folder — read at runtime by
-    `runPendingMigrations()` after unlock. Without it the
-    schema would lag behind the code on every release.
-
-## 0.120.5 — 2026-05-16
-
-### Fixed
-- **Windows CI: `electron-build-win.mjs` failed to spawn pnpm.**
-  Node's `child_process.spawn('pnpm', …)` on Windows can't
-  resolve `pnpm.cmd` without an explicit shell, so the wrapper
-  bailed before electron-builder ran. Pass `shell: true` so the
-  OS resolves the shim transparently.
-
-## 0.120.4 — 2026-05-16
-
-### Fixed
-- **Windows desktop: server failed to bind on launch.** The first
-  shipped installer crashed at startup with "server did not bind
-  on :NNNNN after 100 attempts". Root cause: next-auth v5
-  requires `AUTH_SECRET` in production and was throwing
-  `MissingSecret` during the child server's module-eval, before
-  it ever reached `listen()`. Electron main now generates a
-  random 32-byte secret on first run, persists it in
-  `<userData>/data/secrets.json` (mode 0600), and threads it as
-  `AUTH_SECRET` / `NEXTAUTH_SECRET` / `AUTH_URL` / `NEXTAUTH_URL`
-  into the child process env.
-- **Windows desktop: server-process output now logged to disk.**
-  Packaged launches have no terminal attached, so stdout/stderr
-  from the spawned Next server vanished into the void — making
-  the previous boot failure undebuggable. Child output now also
-  appends to `app.getPath('logs')/server.log` (truncated per
-  launch) and the error dialog surfaces the log path so the user
-  can attach it.
-- **Installer artifact named `budgets-0.9.0-setup.exe` instead of
-  `budgets-X.Y.Z-setup.exe`.** electron-builder defaults to
-  `package.json`'s `version` field for `${version}`
-  interpolation, but that field is pinned at `0.9.0` for Docker-
-  layer caching. New `scripts/electron-build-win.mjs` wrapper
-  reads `APP_VERSION` from `src/lib/version.ts` and passes
-  `--config.extraMetadata.version=<APP_VERSION>` to
-  electron-builder so the .exe name and the release-notes
-  download link agree.
-
-## 0.120.3 — 2026-05-16
-
-### Added
-- **README: Windows desktop install section.** Documents pulling
-  `budgets-X.Y.Z-setup.exe` from the latest GitHub Release,
-  first-run unlock flow, DB location, and migration path from a
-  Linux container via the existing backup/restore.
-- **README: Accounts report screenshot row** in the gallery.
-- **`scripts/release-notes.mjs`**: extracts the current version's
-  CHANGELOG section so the Windows CI workflow attaches structured
-  release notes instead of an auto-generated commit list.
-- **Screenshots regenerated** to capture the envelope-report
-  income section, the new Accounts tab, and other UI changes
-  since 0.114.
-
-### Fixed
-- **Windows CI: electron-builder tried to auto-publish.** Added
-  `--publish=never` to the `electron:build:win` script so
-  electron-builder only builds the artifact; uploading the .exe
-  + attaching it to the GitHub Release is left to the dedicated
-  `softprops/action-gh-release` step, which uses the workflow's
-  default token.
-
-## 0.120.2 — 2026-05-16
-
-### Fixed
-- **Windows CI: node-gyp failed under default Python 3.12+.** The
-  `windows-latest` runner ships Python 3.12 by default; node-gyp 9
-  (pulled in by `@electron/rebuild` via `electron-builder
-  install-app-deps`) imports `distutils`, which was removed from
-  the stdlib in 3.12. Pinned Python 3.11 in the workflow via
-  `actions/setup-python` so `electron-builder install-app-deps`
-  can compile `@signalapp/better-sqlite3` against the Electron
-  Node ABI.
-
-## 0.120.1 — 2026-05-16
-
-### Fixed
-- **Windows desktop build CI: missing `main` entry blocked the
-  packager.** The v0.120.0 CI run got through `next build` +
-  `electron-prepare` but electron-builder bailed at the asar
-  sanity-check looking for `index.js` (its default app entry)
-  because `package.json` didn't declare `"main"`. Set it to
-  `electron/main.cjs`, added the cosmetic `description` / `author`
-  fields the packager warned about, dropped the explicit
-  `@electron/rebuild` devDep (electron-builder ships its own copy)
-  and switched the `electron:rebuild` script to the standard
-  `electron-builder install-app-deps`.
-
-## 0.120.0 — 2026-05-16
-
-### Added
-- **Windows desktop build via Electron.** A second release artifact
-  alongside the Linux container — the same Next.js app runs inside
-  a single-window Electron shell so the operator can install it on
-  a Windows machine and use it as a desktop app.
-  - `electron/main.cjs` spawns the existing Next standalone server
-    (no app code changes) as a child of the Electron binary via
-    `ELECTRON_RUN_AS_NODE=1`, picks a free localhost port at boot,
-    and opens a single `BrowserWindow` pointed at it.
-  - DB lives at `%APPDATA%/Budgets/data/budget.db`; on first run
-    the existing `/unlock` flow lets the user type a passphrase
-    which both creates and encrypts the DB. To migrate an existing
-    deployment: install + restore a backup via Settings → Backup.
-  - `electron-builder.yml` produces an NSIS installer
-    (`budgets-X.Y.Z-setup.exe`) — unsigned for v1, so first launch
-    triggers a SmartScreen warning the user clicks through.
-  - `.github/workflows/electron-windows.yml` builds the .exe on
-    `windows-latest`. Tagging a release (`v0.120.0`-style) attaches
-    the installer to the GitHub Release; manual dispatch leaves it
-    as a workflow artifact.
-  - Native module ABI handled by `@electron/rebuild` in the
-    `electron:rebuild` script. The Linux container release flow
-    (`pnpm docker:release`) is unchanged.
+### Removed
+- **Windows desktop build (Electron) — reverted.** Versions
+  0.120.0 through 0.120.8 added an Electron-based portable .exe
+  alongside the Linux container. Maintaining the second artifact
+  produced too much churn (repeated CI failures from
+  pnpm-isolated-linker / NFT-trace gaps, oversized installers,
+  Windows-specific env handling) for what the household actually
+  needs. Deleted:
+  - `electron/main.cjs`, `electron-builder.yml`,
+    `scripts/electron-prepare.mjs`,
+    `scripts/electron-build-win.mjs`,
+    `scripts/release-notes.mjs`,
+    `.github/workflows/electron-windows.yml`
+  - `electron`, `electron-builder` devDependencies + all
+    `electron:*` npm scripts + the `main`/`description`/`author`
+    fields that electron-builder needed in `package.json`
+  - GitHub releases v0.120.0 through v0.120.8 (and the
+    corresponding git tags)
+  The Linux container release flow (`pnpm docker:release` →
+  `registry.service.local`, `ghcr.io/budgets-au/budgets`) is the
+  only release artifact again. Functionality at this commit is
+  the same as 0.119.0 — no app-code changes were carried in the
+  0.120.x lineage.
 
 ## 0.119.0 — 2026-05-16
 

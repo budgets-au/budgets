@@ -1,9 +1,6 @@
 {
   "name": "budgets",
   "version": "0.9.0",
-  "description": "Self-hosted household budget tracker.",
-  "author": "budgets-au",
-  "main": "electron/main.cjs",
   "private": true,
   "packageManager": "pnpm@9.15.9",
   "scripts": {
@@ -16,11 +13,7 @@
     "test:e2e": "playwright test",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
-    "docker:release": "node scripts/docker-release.mjs",
-    "electron:rebuild": "electron-builder install-app-deps",
-    "electron:prepare": "next build && node scripts/electron-prepare.mjs",
-    "electron:dev": "pnpm electron:rebuild && pnpm electron:prepare && electron electron/main.cjs",
-    "electron:build:win": "pnpm electron:rebuild && pnpm electron:prepare && node scripts/electron-build-win.mjs"
+    "docker:release": "node scripts/docker-release.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -61,8 +54,6 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^6.0.1",
     "dotenv": "^16.4.7",
-    "electron": "^33.4.6",
-    "electron-builder": "^25.1.8",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",

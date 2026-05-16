@@ -9,6 +9,15 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.120.5 — 2026-05-16
+
+### Fixed
+- **Windows CI: `electron-build-win.mjs` failed to spawn pnpm.**
+  Node's `child_process.spawn('pnpm', …)` on Windows can't
+  resolve `pnpm.cmd` without an explicit shell, so the wrapper
+  bailed before electron-builder ran. Pass `shell: true` so the
+  OS resolves the shim transparently.
+
 ## 0.120.4 — 2026-05-16
 
 ### Fixed

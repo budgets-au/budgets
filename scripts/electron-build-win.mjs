@@ -30,18 +30,11 @@ if (!m) {
 const version = m[1];
 console.log(`▶ Building Windows installer for APP_VERSION=${version}`);
 
+// `shell: true` so the OS resolves the `pnpm` shim on Windows
+// (`pnpm.cmd`) — `spawn('pnpm', …)` without it can't find the
+// command because Windows requires an explicit file extension.
 const res = spawnSync(
-  "pnpm",
-  [
-    "exec",
-    "electron-builder",
-    "--win",
-    "--x64",
-    "--config",
-    "electron-builder.yml",
-    `--config.extraMetadata.version=${version}`,
-    "--publish=never",
-  ],
-  { stdio: "inherit", cwd: repoRoot },
+  `pnpm exec electron-builder --win --x64 --config electron-builder.yml --config.extraMetadata.version=${version} --publish=never`,
+  { stdio: "inherit", cwd: repoRoot, shell: true },
 );
 process.exit(res.status ?? 1);

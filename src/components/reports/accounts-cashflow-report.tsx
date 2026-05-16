@@ -266,20 +266,28 @@ export function AccountsCashflowReport({
                           values={netSeries(a.creditByMonth, a.debitByMonth, months)}
                           total={a.totalCredit - a.totalDebit}
                         />
-                        <MetricRow
-                          label="Transfer in"
-                          mode="transferIn"
-                          months={months}
-                          values={a.transferInByMonth}
-                          total={a.totalTransferIn}
-                        />
-                        <MetricRow
-                          label="Transfer out"
-                          mode="transferOut"
-                          months={months}
-                          values={a.transferOutByMonth}
-                          total={a.totalTransferOut}
-                        />
+                        {a.transferInBy.map((cp) => (
+                          <MetricRow
+                            key={`in-${cp.counterpartyId ?? "external"}`}
+                            label={`Transfer in from ${cp.counterpartyName}`}
+                            swatch={cp.counterpartyColor}
+                            mode="transferIn"
+                            months={months}
+                            values={cp.byMonth}
+                            total={cp.total}
+                          />
+                        ))}
+                        {a.transferOutBy.map((cp) => (
+                          <MetricRow
+                            key={`out-${cp.counterpartyId ?? "external"}`}
+                            label={`Transfer out to ${cp.counterpartyName}`}
+                            swatch={cp.counterpartyColor}
+                            mode="transferOut"
+                            months={months}
+                            values={cp.byMonth}
+                            total={cp.total}
+                          />
+                        ))}
                         <MetricRow
                           label="Balance"
                           mode="balance"
@@ -370,6 +378,7 @@ export function AccountsCashflowReport({
 
 function MetricRow({
   label,
+  swatch,
   mode,
   months,
   values,
@@ -378,6 +387,10 @@ function MetricRow({
   tfoot,
 }: {
   label: string;
+  /** Optional small colour dot rendered next to the label — used by
+   *  the per-counterparty transfer rows to show which account the
+   *  money came from / went to. */
+  swatch?: string | null;
   mode: CellMode;
   months: string[];
   values: Record<string, number>;
@@ -397,6 +410,12 @@ function MetricRow({
           tfoot ? "bg-muted/30" : "bg-background"
         }`}
       >
+        {swatch ? (
+          <span
+            className="inline-block w-2 h-2 rounded-full mr-1.5 align-middle"
+            style={{ backgroundColor: swatch }}
+          />
+        ) : null}
         {label}
       </td>
       {months.map((m) => {

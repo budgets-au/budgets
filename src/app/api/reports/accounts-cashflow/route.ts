@@ -4,6 +4,16 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 
+export interface TransferCounterpartyBreakdown {
+  /** Paired account's id, or null when the transfer's pair lives at an
+   *  external/unknown account (no `transfer_pair_id` recorded). */
+  counterpartyId: string | null;
+  counterpartyName: string;
+  counterpartyColor: string | null;
+  byMonth: Record<string, number>;
+  total: number;
+}
+
 export interface AccountsCashflowAccount {
   id: string;
   name: string;
@@ -23,6 +33,12 @@ export interface AccountsCashflowAccount {
   /** Absolute sum of money-out transfer transactions per month
    *  (categories with transferKind != 'none'). Subset of debits. */
   transferOutByMonth: Record<string, number>;
+  /** Transfer-in totals broken down by the counterparty account that
+   *  sent the money. Ordered by total descending. */
+  transferInBy: TransferCounterpartyBreakdown[];
+  /** Transfer-out totals broken down by the counterparty account that
+   *  received the money. Ordered by total descending. */
+  transferOutBy: TransferCounterpartyBreakdown[];
   /** Closing balance at the end of each month in the window. */
   balanceByMonth: Record<string, number>;
   totalCredit: number;
@@ -116,6 +132,16 @@ export async function GET(request: Request) {
   }>;
 
   const months = generateMonths(from, to);
+
+  // Cache of every account's display data — used to resolve transfer
+  // counterparties below (which may live at accounts NOT in the
+  // operator's current filter, e.g. archived ones).
+  const allAccountsRows = (await db.all(sql`
+    SELECT id, name, color FROM accounts
+  `)) as Array<{ id: string; name: string; color: string }>;
+  const accountNameById = new Map(
+    allAccountsRows.map((a) => [a.id, { name: a.name, color: a.color }]),
+  );
 
   if (accountRows.length === 0) {
     return NextResponse.json({
@@ -214,6 +240,73 @@ export async function GET(request: Request) {
     slot.transferOut.set(r.month, Math.abs(Number(r.transfer_out) || 0));
   }
 
+  // Per-account × month × counterparty breakdown for transfers only.
+  // The "counterparty" is the other leg's account_id (joined via
+  // transfer_pair_id). External / unpaired transfers (no transfer
+  // pair recorded) come through with counterparty_id = NULL — we
+  // bucket them under a synthetic "external" key in the JS
+  // aggregation so the UI can render them as a separate row.
+  const transferRows = (await db.all(sql`
+    SELECT
+      t.account_id                                                            AS account_id,
+      substr(t.date, 1, 7)                                                    AS month,
+      pair.account_id                                                          AS counterparty_id,
+      CAST(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END) AS REAL)       AS in_amount,
+      CAST(SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END) AS REAL)       AS out_amount
+    FROM transactions t
+    LEFT JOIN transactions pair ON pair.id = t.transfer_pair_id
+    LEFT JOIN categories c ON c.id = t.category_id
+    WHERE t.date >= ${from} AND t.date <= ${to}
+      AND t.account_id IN (${idList})
+      AND c.transfer_kind IN ('internal', 'external')
+    GROUP BY t.account_id, substr(t.date, 1, 7), pair.account_id
+  `)) as Array<{
+    account_id: string;
+    month: string;
+    counterparty_id: string | null;
+    in_amount: number;
+    out_amount: number;
+  }>;
+
+  // accountId → counterpartyKey → { byMonth, total } for in / out
+  // separately. counterpartyKey is the actual id when known, or the
+  // sentinel "(external)" when the pair is missing.
+  const EXTERNAL_KEY = "(external)";
+  const counterpartyAgg = new Map<
+    string,
+    {
+      in: Map<string, { byMonth: Map<string, number>; total: number }>;
+      out: Map<string, { byMonth: Map<string, number>; total: number }>;
+    }
+  >();
+  for (const id of accountIds) {
+    counterpartyAgg.set(id, { in: new Map(), out: new Map() });
+  }
+  function bumpCp(
+    side: "in" | "out",
+    accountId: string,
+    counterpartyKey: string,
+    month: string,
+    amount: number,
+  ) {
+    const slot = counterpartyAgg.get(accountId);
+    if (!slot) return;
+    let cp = slot[side].get(counterpartyKey);
+    if (!cp) {
+      cp = { byMonth: new Map(), total: 0 };
+      slot[side].set(counterpartyKey, cp);
+    }
+    cp.byMonth.set(month, (cp.byMonth.get(month) ?? 0) + amount);
+    cp.total += amount;
+  }
+  for (const r of transferRows) {
+    const key = r.counterparty_id ?? EXTERNAL_KEY;
+    const inAmt = Number(r.in_amount) || 0;
+    const outAmt = Math.abs(Number(r.out_amount) || 0);
+    if (inAmt > 0) bumpCp("in", r.account_id, key, r.month, inAmt);
+    if (outAmt > 0) bumpCp("out", r.account_id, key, r.month, outAmt);
+  }
+
   const totals = {
     creditByMonth: Object.fromEntries(months.map((m) => [m, 0])),
     debitByMonth: Object.fromEntries(months.map((m) => [m, 0])),
@@ -268,6 +361,34 @@ export async function GET(request: Request) {
     totals.totalTransferIn += totalTransferIn;
     totals.totalTransferOut += totalTransferOut;
     totals.closingBalance += closingBalance;
+
+    // Materialise the counterparty Maps into the public shape:
+    // a sorted array (descending by total) where each entry knows
+    // the other account's display name. Missing counterparties get
+    // the "(external)" sentinel resolved to "External".
+    const cpSlot = counterpartyAgg.get(a.id);
+    function materialiseCp(
+      side: "in" | "out",
+    ): TransferCounterpartyBreakdown[] {
+      const rows: TransferCounterpartyBreakdown[] = [];
+      const map = cpSlot ? cpSlot[side] : new Map();
+      for (const [key, agg] of map) {
+        const isExternal = key === EXTERNAL_KEY;
+        const meta = isExternal ? null : accountNameById.get(key);
+        const byMonth: Record<string, number> = {};
+        for (const m of months) byMonth[m] = agg.byMonth.get(m) ?? 0;
+        rows.push({
+          counterpartyId: isExternal ? null : key,
+          counterpartyName: meta?.name ?? "External",
+          counterpartyColor: meta?.color ?? null,
+          byMonth,
+          total: Math.round(agg.total * 100) / 100,
+        });
+      }
+      rows.sort((x, y) => y.total - x.total);
+      return rows;
+    }
+
     return {
       id: a.id,
       name: a.name,
@@ -278,6 +399,8 @@ export async function GET(request: Request) {
       debitByMonth,
       transferInByMonth,
       transferOutByMonth,
+      transferInBy: materialiseCp("in"),
+      transferOutBy: materialiseCp("out"),
       balanceByMonth,
       totalCredit: Math.round(totalCredit * 100) / 100,
       totalDebit: Math.round(totalDebit * 100) / 100,

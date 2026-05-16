@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.122.0 — 2026-05-16
+
+### Changed
+- **Accounts report: transfer rows now broken down by counterparty.**
+  The single "Transfer in" / "Transfer out" sub-rows per account
+  rolled every internal/external transfer into one number, hiding
+  the actually-useful detail: *where* the money came from / went to.
+  Replaced with one row per paired account — e.g. "Transfer in from
+  Savings", "Transfer out to Mortgage" — each with its own per-month
+  series and total. Counterparty resolved via `transfer_pair_id`
+  joined back to the transactions table; transfers with no recorded
+  pair surface under the synthetic "External" label. Each row gets
+  a small colour-dot swatch matching the counterparty account so the
+  paired account is identifiable at a glance.
+- `/api/reports/accounts-cashflow`: `AccountsCashflowAccount` gains
+  `transferInBy[]` and `transferOutBy[]` arrays. The existing
+  `transferInByMonth` / `transferOutByMonth` aggregates stay (still
+  used in the all-accounts footer).
+
 ## 0.121.0 — 2026-05-16
 
 ### Removed

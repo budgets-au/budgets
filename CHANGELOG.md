@@ -9,6 +9,44 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.115.0 — 2026-05-16
+
+### Added
+- **Envelope report shows income above expenses and an affordability
+  total at the bottom.** The report was previously an expense-only
+  envelope; the headline "set aside this much per envelope" answered
+  half the question without anchoring it to what was coming in. Two
+  new sections in the same table:
+  - **Income** rows at the top (emerald section header), with a
+    subtotal at the bottom of the section. Same tree expand/collapse
+    + eye-off exclude as the expense rows, sharing the same display
+    prefs.
+  - **Expenses** below (rose section header), with their own subtotal.
+  - **Affordability / Shortfall** footer: signed net (income −
+    expenses) across the period, broken out per month, week, and
+    day. Green when positive (money left to save or spend), red
+    when negative (you outspent income).
+  The empty-state copy now reads "No income or expenses in this
+  period" since either side can populate the report. The row
+  rendering itself was extracted to an internal helper so income
+  and expense rows render via the same code path.
+
+### Fixed
+- **Calendar day panel: "scheduled match" pills now stay attached
+  to the correct real transaction.** The matcher
+  (`matchScheduledToReal`) keyed its result set by the position of
+  each real event inside cashflow's own merged `events` array, but
+  the day-detail panel renders real rows from a separate
+  `/api/transactions` fetch sorted by the user's chosen column.
+  The two index spaces almost never agreed, so when more than one
+  match existed for a day the pills appeared one (or more) rows off
+  from the row they actually described. Re-keyed `claimedReal` /
+  `realToSched` by the transaction's own `id` so both consumers
+  (day panel and the grid cell's planned-dot check) look up matches
+  by identity instead of position. The matcher's scheduled side
+  stays positional inside `scheduledEvents` — that source array
+  is identical for matcher and consumers, so it can't drift.
+
 ## 0.113.0 — 2026-05-16
 
 ### Fixed

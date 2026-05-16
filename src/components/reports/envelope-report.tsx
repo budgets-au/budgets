@@ -212,18 +212,26 @@ export function EnvelopeReport({
   // Every time the data reloads (page open, period change, SWR revalidate),
   // collapse every parent — the report opens at the depth-0 overview each
   // time. User clicks within a session still expand individual subtrees.
+  // Both the income and expense trees feed the same collapsed-ids set;
+  // category ids are disjoint between the two so they can't collide.
   useEffect(() => {
     if (!data) return;
-    const t = buildTree(data.expenses);
-    const ids: string[] = [];
-    for (const n of t.nodes.values()) {
-      if ((t.rolled.get(n.id) ?? 0) === 0) continue;
-      const hasKids = (t.childrenOf.get(n.id) ?? []).some(
-        (cid) => (t.rolled.get(cid) ?? 0) > 0,
-      );
-      if (hasKids) ids.push(n.id);
-    }
-    setCollapsedIds(new Set(ids));
+    const collect = (trees: ReturnType<typeof buildTree>[]) => {
+      const ids: string[] = [];
+      for (const t of trees) {
+        for (const n of t.nodes.values()) {
+          if ((t.rolled.get(n.id) ?? 0) === 0) continue;
+          const hasKids = (t.childrenOf.get(n.id) ?? []).some(
+            (cid) => (t.rolled.get(cid) ?? 0) > 0,
+          );
+          if (hasKids) ids.push(n.id);
+        }
+      }
+      return ids;
+    };
+    setCollapsedIds(
+      new Set(collect([buildTree(data.income), buildTree(data.expenses)])),
+    );
   }, [data]);
   function toggleCollapsed(id: string) {
     setCollapsedIds((prev) => {
@@ -282,16 +290,22 @@ export function EnvelopeReport({
   const weeks = days / 7;
   const months = days / (365.25 / 12);
 
-  const tree = buildTree(data.expenses);
-  const allParentIds = Array.from(tree.nodes.values())
-    .filter((n) => {
-      const t = tree.rolled.get(n.id) ?? 0;
-      if (t === 0) return false;
-      return (tree.childrenOf.get(n.id) ?? []).some(
-        (cid) => (tree.rolled.get(cid) ?? 0) > 0,
-      );
-    })
-    .map((n) => n.id);
+  const incomeTree = buildTree(data.income);
+  const expenseTree = buildTree(data.expenses);
+  const collectParentIds = (t: ReturnType<typeof buildTree>) =>
+    Array.from(t.nodes.values())
+      .filter((n) => {
+        const total = t.rolled.get(n.id) ?? 0;
+        if (total === 0) return false;
+        return (t.childrenOf.get(n.id) ?? []).some(
+          (cid) => (t.rolled.get(cid) ?? 0) > 0,
+        );
+      })
+      .map((n) => n.id);
+  const allParentIds = [
+    ...collectParentIds(incomeTree),
+    ...collectParentIds(expenseTree),
+  ];
   const anyCollapsed = allParentIds.some((id) => collapsedIds.has(id));
 
   function collapseAll() {
@@ -301,20 +315,108 @@ export function EnvelopeReport({
     setCollapsedIds(new Set());
   }
 
-  const rows = flattenForDisplay(
-    tree,
+  const incomeRows = flattenForDisplay(
+    incomeTree,
     collapsedIds,
     excludedIds,
     showHidden,
     sortColumn,
     sortDir,
   );
-  // Grand total = sum of effective totals at depth-0, excluding rows that
-  // are themselves excluded (but still displayed when showHidden is on).
-  const grandTotal = rows
+  const expenseRows = flattenForDisplay(
+    expenseTree,
+    collapsedIds,
+    excludedIds,
+    showHidden,
+    sortColumn,
+    sortDir,
+  );
+  // Section totals = sum of effective totals at depth-0, excluding rows
+  // that are themselves excluded (but still displayed when showHidden is
+  // on). Net = income − expenses, signed; positive = surplus you can
+  // afford to save or spend further, negative = you spent more than you
+  // earned.
+  const incomeTotal = incomeRows
     .filter((r) => r.depth === 0 && !r.isExcluded)
     .reduce((s, r) => s + r.total, 0);
+  const expenseTotal = expenseRows
+    .filter((r) => r.depth === 0 && !r.isExcluded)
+    .reduce((s, r) => s + r.total, 0);
+  const netTotal = incomeTotal - expenseTotal;
   const hiddenCount = excludedIds.size;
+
+  // Single source of truth for one envelope row — duplicated between
+  // the income and expense sections, so the closure-captured state
+  // (collapsedIds, excludedIds, …) makes a helper cheaper than a
+  // standalone component.
+  const renderEnvelopeRow = (r: RenderRow) => {
+    const isCollapsed = collapsedIds.has(r.id);
+    const Chevron = isCollapsed ? ChevronRight : ChevronDown;
+    const directlyExcluded = excludedIds.has(r.id);
+    const fadedCls = r.isExcluded ? "opacity-40 line-through" : "";
+    return (
+      <tr key={r.id} className="hover:bg-muted/30 group">
+        <td
+          className={`pr-3 py-1.5 whitespace-nowrap ${INDENT_CLASS[r.depth]} ${ROW_FONT[r.depth]}`}
+        >
+          <span className="inline-flex items-center gap-1">
+            {r.hasChildren ? (
+              <button
+                type="button"
+                onClick={() => toggleCollapsed(r.id)}
+                className="p-0.5 -ml-0.5 rounded hover:bg-muted print:hidden"
+                aria-label={isCollapsed ? "Expand" : "Collapse"}
+              >
+                <Chevron className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            ) : (
+              <span className="w-[18px] inline-block" />
+            )}
+            <button
+              type="button"
+              onClick={() => toggleExcluded(r.id)}
+              className={`p-0.5 rounded hover:bg-muted print:hidden transition-opacity ${
+                directlyExcluded
+                  ? "opacity-100"
+                  : "lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100"
+              }`}
+              title={
+                directlyExcluded
+                  ? "Include this category in the envelope"
+                  : "Exclude this category (and its descendants) from the envelope"
+              }
+              aria-label={directlyExcluded ? "Include" : "Exclude"}
+            >
+              {directlyExcluded ? (
+                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : (
+                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+            </button>
+            <span className={fadedCls}>{r.name}</span>
+          </span>
+        </td>
+        <td className={`px-3 py-1.5 text-right tabular-nums text-muted-foreground ${fadedCls}`}>
+          {r.isExcluded ? "—" : formatAUD(r.total)}
+        </td>
+        <td className={`px-3 py-1.5 text-right tabular-nums text-muted-foreground ${fadedCls}`}>
+          {r.isExcluded ? "—" : formatAUD(r.total / months)}
+        </td>
+        <td
+          className={`px-3 py-1.5 text-right tabular-nums font-semibold ${
+            r.isExcluded
+              ? "text-muted-foreground"
+              : "text-indigo-600 dark:text-indigo-400"
+          } ${fadedCls}`}
+        >
+          {r.isExcluded ? "—" : formatAUD(r.total / weeks)}
+        </td>
+        <td className={`px-3 py-1.5 text-right tabular-nums text-muted-foreground ${fadedCls}`}>
+          {r.isExcluded ? "—" : formatAUD(r.total / days)}
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <Card data-print-area>
@@ -325,7 +427,7 @@ export function EnvelopeReport({
               Envelope
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Based on {days} days ({weeks.toFixed(1)} weeks · {months.toFixed(1)} months) — set aside this much per envelope to match.
+              Based on {days} days ({weeks.toFixed(1)} weeks · {months.toFixed(1)} months). Income above, expenses below; the bottom row is what's left over per period, month, week, and day.
             </p>
           </div>
           <div
@@ -377,9 +479,9 @@ export function EnvelopeReport({
             </Button>
           </div>
         </div>
-        {rows.length === 0 ? (
+        {incomeRows.length === 0 && expenseRows.length === 0 ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            No expenses in this period.
+            No income or expenses in this period.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -436,94 +538,88 @@ export function EnvelopeReport({
                   />
                 </tr>
               </thead>
-              <tbody className="divide-y">
-                {rows.map((r) => {
-                  const isCollapsed = collapsedIds.has(r.id);
-                  const Chevron = isCollapsed ? ChevronRight : ChevronDown;
-                  const directlyExcluded = excludedIds.has(r.id);
-                  // Excluded subtree rows render faded; values shown as "—"
-                  // since they're not contributing to the totals.
-                  const fadedCls = r.isExcluded
-                    ? "opacity-40 line-through"
-                    : "";
-                  return (
-                    <tr key={r.id} className="hover:bg-muted/30 group">
-                      <td
-                        className={`pr-3 py-1.5 whitespace-nowrap ${INDENT_CLASS[r.depth]} ${ROW_FONT[r.depth]}`}
-                      >
-                        <span className="inline-flex items-center gap-1">
-                          {r.hasChildren ? (
-                            <button
-                              type="button"
-                              onClick={() => toggleCollapsed(r.id)}
-                              className="p-0.5 -ml-0.5 rounded hover:bg-muted print:hidden"
-                              aria-label={isCollapsed ? "Expand" : "Collapse"}
-                            >
-                              <Chevron className="h-3.5 w-3.5 text-muted-foreground" />
-                            </button>
-                          ) : (
-                            <span className="w-[18px] inline-block" />
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => toggleExcluded(r.id)}
-                            className={`p-0.5 rounded hover:bg-muted print:hidden transition-opacity ${
-                              directlyExcluded
-                                ? "opacity-100"
-                                : "lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100"
-                            }`}
-                            title={
-                              directlyExcluded
-                                ? "Include this category in the envelope"
-                                : "Exclude this category (and its descendants) from the envelope"
-                            }
-                            aria-label={directlyExcluded ? "Include" : "Exclude"}
-                          >
-                            {directlyExcluded ? (
-                              <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                            ) : (
-                              <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                            )}
-                          </button>
-                          <span className={fadedCls}>{r.name}</span>
-                        </span>
-                      </td>
-                      <td className={`px-3 py-1.5 text-right tabular-nums text-muted-foreground ${fadedCls}`}>
-                        {r.isExcluded ? "—" : formatAUD(r.total)}
-                      </td>
-                      <td className={`px-3 py-1.5 text-right tabular-nums text-muted-foreground ${fadedCls}`}>
-                        {r.isExcluded ? "—" : formatAUD(r.total / months)}
-                      </td>
-                      <td
-                        className={`px-3 py-1.5 text-right tabular-nums font-semibold ${
-                          r.isExcluded
-                            ? "text-muted-foreground"
-                            : "text-indigo-600 dark:text-indigo-400"
-                        } ${fadedCls}`}
-                      >
-                        {r.isExcluded ? "—" : formatAUD(r.total / weeks)}
-                      </td>
-                      <td className={`px-3 py-1.5 text-right tabular-nums text-muted-foreground ${fadedCls}`}>
-                        {r.isExcluded ? "—" : formatAUD(r.total / days)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+              {incomeRows.length > 0 && (
+                <tbody className="divide-y">
+                  <tr className="bg-emerald-500/10 dark:bg-emerald-400/10 border-y border-emerald-500/30 dark:border-emerald-400/30">
+                    <td
+                      colSpan={5}
+                      className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300"
+                    >
+                      Income
+                    </td>
+                  </tr>
+                  {incomeRows.map(renderEnvelopeRow)}
+                  <tr className="bg-muted/30 font-medium">
+                    <td className="px-3 py-1.5 pl-3 text-muted-foreground">Income subtotal</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                      {formatAUD(incomeTotal)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                      {formatAUD(incomeTotal / months)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-indigo-600 dark:text-indigo-400">
+                      {formatAUD(incomeTotal / weeks)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                      {formatAUD(incomeTotal / days)}
+                    </td>
+                  </tr>
+                </tbody>
+              )}
+              {expenseRows.length > 0 && (
+                <tbody className="divide-y">
+                  <tr className="bg-rose-500/10 dark:bg-rose-400/10 border-y border-rose-500/30 dark:border-rose-400/30">
+                    <td
+                      colSpan={5}
+                      className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-300"
+                    >
+                      Expenses
+                    </td>
+                  </tr>
+                  {expenseRows.map(renderEnvelopeRow)}
+                  <tr className="bg-muted/30 font-medium">
+                    <td className="px-3 py-1.5 pl-3 text-muted-foreground">Expense subtotal</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                      {formatAUD(expenseTotal)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                      {formatAUD(expenseTotal / months)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-indigo-600 dark:text-indigo-400">
+                      {formatAUD(expenseTotal / weeks)}
+                    </td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+                      {formatAUD(expenseTotal / days)}
+                    </td>
+                  </tr>
+                </tbody>
+              )}
               <tfoot>
-                <tr className="border-t-2 bg-muted/40 font-semibold">
-                  <td className="px-3 py-2">Total</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {formatAUD(grandTotal)}
+                {/* Net = income − expenses for the period. Positive means
+                    money left over (you can afford to save or spend more);
+                    negative means you outspent your income. Green / red
+                    keeps the at-a-glance read unambiguous in both themes. */}
+                <tr
+                  className={`border-t-2 bg-muted/40 font-semibold ${
+                    netTotal >= 0
+                      ? "text-emerald-700 dark:text-emerald-400"
+                      : "text-rose-700 dark:text-rose-400"
+                  }`}
+                >
+                  <td className="px-3 py-2">
+                    {netTotal >= 0 ? "Affordability (income − expenses)" : "Shortfall (income − expenses)"}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {formatAUD(grandTotal / months)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-indigo-600 dark:text-indigo-400">
-                    {formatAUD(grandTotal / weeks)}
+                    {formatAUD(netTotal)}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {formatAUD(grandTotal / days)}
+                    {formatAUD(netTotal / months)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {formatAUD(netTotal / weeks)}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {formatAUD(netTotal / days)}
                   </td>
                 </tr>
               </tfoot>

@@ -1192,8 +1192,7 @@ export function CashflowCalendar({
                   // occurrence still shows the planned dot — the dot
                   // follows the money to the day it actually posted.
                   const claimedRealHere = (data?.events ?? []).some(
-                    (e, i) =>
-                      !e.isProjected && claimedReal.has(`${dateStr}#${i}`),
+                    (e) => !e.isProjected && e.id && claimedReal.has(e.id),
                   );
                   const summary = summarizeDay(
                     data && {
@@ -1456,26 +1455,29 @@ const MATCH_TOLERANCE_DAYS = 3;
  * Greedy one-to-one assignment of scheduled occurrences ↔ real transactions
  * across the whole loaded byDate map. Each scheduled event "claims" the
  * closest unclaimed real candidate within ±MATCH_TOLERANCE_DAYS that has the
- * same accountId and amount within a cent. The returned sets key into both
- * sides as `${date}#${idx}` where `idx` is the position within that day's
- * `events.filter(e => !e.isProjected)` (for reals) or `scheduledEvents` (for
- * scheds). Both views consume the same sets so they can't disagree.
+ * same accountId and amount within a cent.
+ *
+ * Real-side keying is by the transaction's own `id` — the day panel sorts
+ * its real rows independently of cashflow's internal ordering, so positional
+ * keys would drift between matcher and consumer. The scheduled side stays
+ * positional (`${date}#${idx}` within that day's `scheduledEvents`) because
+ * projected occurrences don't have a stable per-occurrence identifier we can
+ * thread through, and every scheduled consumer iterates the same source
+ * array.
  */
 function matchScheduledToReal(byDate: Map<string, DailyBalance>): {
   claimedReal: Set<string>;
   claimedSched: Set<string>;
   realToSched: Map<string, { scheduledId: string; scheduledDate: string }>;
 } {
-  type Pos = { date: string; idx: number; accountId?: string; amount: number; scheduledId?: string };
-  const reals: Pos[] = [];
-  const scheds: Pos[] = [];
+  type RealPos = { date: string; id: string; accountId?: string; amount: number };
+  type SchedPos = { date: string; idx: number; accountId?: string; amount: number; scheduledId?: string };
+  const reals: RealPos[] = [];
+  const scheds: SchedPos[] = [];
   for (const [d, dd] of byDate) {
-    let i = 0;
     for (const e of dd.events) {
-      if (!e.isProjected) {
-        reals.push({ date: d, idx: i, accountId: e.accountId, amount: e.amount });
-        i++;
-      }
+      if (e.isProjected || !e.id) continue;
+      reals.push({ date: d, id: e.id, accountId: e.accountId, amount: e.amount });
     }
     dd.scheduledEvents.forEach((e, j) => {
       // Budget-kind schedules are spending caps, not specific
@@ -1489,14 +1491,13 @@ function matchScheduledToReal(byDate: Map<string, DailyBalance>): {
       scheds.push({ date: d, idx: j, accountId: e.accountId, amount: e.amount, scheduledId: e.id });
     });
   }
-  const key = (p: Pos) => `${p.date}#${p.idx}`;
   const claimedReal = new Set<string>();
   const claimedSched = new Set<string>();
   const realToSched = new Map<string, { scheduledId: string; scheduledDate: string }>();
   for (const s of scheds) {
-    let best: { r: Pos; days: number } | null = null;
+    let best: { r: RealPos; days: number } | null = null;
     for (const r of reals) {
-      if (claimedReal.has(key(r))) continue;
+      if (claimedReal.has(r.id)) continue;
       if (r.accountId !== s.accountId) continue;
       if (Math.abs(r.amount - s.amount) > 0.01) continue;
       const days = Math.abs(
@@ -1510,10 +1511,9 @@ function matchScheduledToReal(byDate: Map<string, DailyBalance>): {
       if (!best || days < best.days) best = { r, days };
     }
     if (best && s.scheduledId) {
-      const realKey = key(best.r);
-      claimedReal.add(realKey);
-      claimedSched.add(key(s));
-      realToSched.set(realKey, { scheduledId: s.scheduledId, scheduledDate: s.date });
+      claimedReal.add(best.r.id);
+      claimedSched.add(`${s.date}#${s.idx}`);
+      realToSched.set(best.r.id, { scheduledId: s.scheduledId, scheduledDate: s.date });
     }
   }
   return { claimedReal, claimedSched, realToSched };
@@ -1660,8 +1660,7 @@ function DayDetailPanel({
               />
               <tbody className="divide-y">
                 {sortedTxns.map((t) => {
-                  const i = realTxns.findIndex((r) => r.id === t.id);
-                  const matchRef = realToSched.get(`${dateStr}#${i}`);
+                  const matchRef = realToSched.get(t.id);
                   const sched = matchRef
                     ? scheduledById.get(matchRef.scheduledId)
                     : undefined;

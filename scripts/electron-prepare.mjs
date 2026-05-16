@@ -77,26 +77,39 @@ copyDir(publicSrc, publicDst);
 console.log("\n▶ Staging pnpm-isolated runtime deps into standalone tree…");
 const standaloneNodeModules = resolve(standaloneDir, "node_modules");
 
-function stagePackage(pkgName) {
-  const pkgJson = require_.resolve(`${pkgName}/package.json`);
+// pnpm's strict-isolated linker only hoists direct dependencies
+// to top-level `node_modules`; transitive deps live under
+// `.pnpm/<name>@<ver>/node_modules/<name>/` and are NOT visible to
+// a default `require.resolve` from the repo root. Resolving them
+// requires walking through a parent package's location. The
+// Dockerfile's runtime-deps staging uses the same trick — see
+// lines 87-102.
+function stagePackage(pkgName, fromDir) {
+  const opts = fromDir ? { paths: [fromDir] } : undefined;
+  const pkgJson = require_.resolve(`${pkgName}/package.json`, opts);
   const srcDir = dirname(pkgJson);
   const dst = resolve(standaloneNodeModules, pkgName);
   if (existsSync(dst)) {
     console.log(`  already present: ${pkgName}`);
-    return;
+    return srcDir;
   }
   mkdirSync(dirname(dst), { recursive: true });
   cpSync(srcDir, dst, { recursive: true, dereference: true });
   console.log(`  staged ${pkgName} ← ${srcDir}`);
+  return srcDir;
 }
 
-// Plain tracer gap.
-stagePackage("@swc/helpers");
-// serverExternalPackage + its native-resolver peers. Same
-// chain the Dockerfile stages into runtime-deps/.
-stagePackage("@signalapp/better-sqlite3");
-stagePackage("bindings");
-stagePackage("file-uri-to-path");
+// Resolve `next` first so we can find @swc/helpers via it (a
+// transitive that pnpm hides from top-level resolves).
+const nextDir = dirname(require_.resolve("next/package.json"));
+stagePackage("@swc/helpers", nextDir);
+
+// serverExternalPackages chain: each peer's directory is the
+// lookup root for the next hop. Same shape as the Dockerfile's
+// staged sequence.
+const bs3Dir = stagePackage("@signalapp/better-sqlite3");
+const bindingsDir = stagePackage("bindings", bs3Dir);
+stagePackage("file-uri-to-path", bindingsDir);
 
 // Drizzle migrations are read at runtime by `runPendingMigrations()`
 // in src/db/index.ts whenever the DB unlocks. Without them the

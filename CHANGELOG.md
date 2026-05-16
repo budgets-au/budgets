@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.120.7 — 2026-05-16
+
+### Fixed
+- **Windows CI: `electron-prepare.mjs` couldn't resolve packages
+  it was supposed to stage.** v0.120.6 introduced staging for
+  `@swc/helpers`, `bindings`, `file-uri-to-path` — but my
+  `require.resolve(name + "/package.json")` calls used the repo
+  root as the lookup root, and pnpm's strict-isolated linker only
+  hoists *direct* dependencies there. The transitive deps are at
+  `.pnpm/<name>@<ver>/node_modules/<name>/` and need a parent-
+  package's directory as the lookup root. Each `stagePackage`
+  call now threads the previous resolution's path as `paths:` to
+  the next, mirroring the Dockerfile's runtime-deps chain.
+
 ## 0.120.6 — 2026-05-16
 
 ### Fixed

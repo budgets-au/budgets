@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.118.0 — 2026-05-16
+
+### Added
+- **New /reports tab: "Accounts" — per-account balance over time.**
+  Same column layout as the cashflow report (months across the top,
+  Total on the right) but the row axis is account instead of
+  category. Each active account is a parent row that expands to
+  three sub-rows:
+  - **Credits** — sum of positive transactions per month (emerald).
+  - **Debits** — absolute sum of negative transactions per month (rose).
+  - **Balance** — closing balance at the end of each month, with
+    negatives parenthesised in rose. The Total column on the Balance
+    row is the closing balance at `to` (a snapshot, not a sum).
+  Bottom "All accounts" footer aggregates the same three series
+  across the selected accounts. Default range is 11 months (long-
+  window tab) so the trend has room to read. Endpoint:
+  `/api/reports/accounts-cashflow?from=&to=&accountIds=` — opening
+  balance per account is `starting_balance + Σ(txns before from)`,
+  matching how the calendar's per-account series is back-computed.
+
 ## 0.117.0 — 2026-05-16
 
 ### Fixed

@@ -141,6 +141,7 @@ import { DailyHeatmapReport } from "./daily-heatmap-report";
 import { ScatterReport } from "./scatter-report";
 import { BoxplotReport } from "./boxplot-report";
 import { PayeeParetoReport } from "./payee-pareto-report";
+import { AccountsCashflowReport } from "./accounts-cashflow-report";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -167,6 +168,7 @@ const REPORT_TABS = [
   "expenses",
   "income",
   "envelope",
+  "accounts",
   "sankey",
   "treemap",
   "heatmap",
@@ -244,6 +246,7 @@ export function ReportsView({
         "scatter",
         "boxplot",
         "payees",
+        "accounts",
       ];
       const defaultMonths = longWindowTabs.includes(activeTab) ? 11 : 0;
       setFrom(
@@ -327,6 +330,7 @@ export function ReportsView({
           <TabsTrigger value="expenses">Expenses by Category</TabsTrigger>
           <TabsTrigger value="income">Income by Category</TabsTrigger>
           <TabsTrigger value="envelope">Envelope</TabsTrigger>
+          <TabsTrigger value="accounts">Accounts</TabsTrigger>
           <TabsTrigger value="sankey">Sankey</TabsTrigger>
           <TabsTrigger value="treemap">Treemap</TabsTrigger>
           <TabsTrigger value="heatmap">Heatmap</TabsTrigger>
@@ -361,6 +365,13 @@ export function ReportsView({
             accountIds={accountIds}
             hideTransfers={hideTransfers}
           />
+        </TabsContent>
+
+        {/* Accounts — per-account credit / debit / closing balance
+            by month, mirrors the cashflow report's column layout but
+            grouped by account instead of category. */}
+        <TabsContent value="accounts">
+          <AccountsCashflowReport from={from} to={to} accountIds={accountIds} />
         </TabsContent>
 
         {/* Sankey — money-flow visualisation: income → hub → expenses, with

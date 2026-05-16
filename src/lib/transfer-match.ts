@@ -33,6 +33,16 @@ export type CandidateRow = {
   a_category_id: string | null;
   b_category_id: string | null;
   date_gap: number;
+  /** Bank-supplied posting order (NULL when the import format didn't
+   *  include it). Lower = earlier in the statement. */
+  a_posted_seq: number | null;
+  b_posted_seq: number | null;
+  /** Bank-supplied posting timestamp (ms epoch). NULL when missing. */
+  a_posted_at: number | null;
+  b_posted_at: number | null;
+  /** Row insert time — always present, used as the final fallback. */
+  a_created_at: number;
+  b_created_at: number;
 };
 
 function tokensFromPayee(p: string | null): Set<string> {
@@ -120,6 +130,34 @@ function isLoanLike(accountType: string): "loan" | "credit" | null {
   return null;
 }
 
+/**
+ * Tiebreaker for candidates that tie on score AND date-gap (i.e. multiple
+ * same-day same-amount transfers competing for the same other-side legs).
+ * Smaller return value = more likely to be the actual pair.
+ *
+ * Strategy: rank by how close the two halves are in the bank's posting
+ * order. When the bank posts "checking debit #1 → checking debit #2 →
+ * savings credit → brokerage credit" on the same day, the matched legs
+ * (debit #1 ↔ savings credit) tend to live adjacent in posted_seq; the
+ * cross-pair (debit #1 ↔ brokerage credit) is farther apart.
+ *
+ * Fallback chain: `postedSeq` (set by every modern import path), then
+ * `postedAt` (older imports), then `createdAt` (always present). Each
+ * tier's distance is on its own numeric scale, so we'd never mix tiers;
+ * we pick whichever tier BOTH halves have populated.
+ *
+ * Exported for tests.
+ */
+export function tiebreakDistance(c: CandidateRow): number {
+  if (c.a_posted_seq !== null && c.b_posted_seq !== null) {
+    return Math.abs(c.a_posted_seq - c.b_posted_seq);
+  }
+  if (c.a_posted_at !== null && c.b_posted_at !== null) {
+    return Math.abs(c.a_posted_at - c.b_posted_at);
+  }
+  return Math.abs(c.a_created_at - c.b_created_at);
+}
+
 export interface PairResult {
   paired: number;
   suggested: number;
@@ -172,7 +210,13 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
       COALESCE(c2.transfer_kind, 'none') AS b_transfer_kind,
       t1.category_id             AS a_category_id,
       t2.category_id             AS b_category_id,
-      ABS(julianday(t1.date) - julianday(t2.date)) AS date_gap
+      ABS(julianday(t1.date) - julianday(t2.date)) AS date_gap,
+      t1.posted_seq              AS a_posted_seq,
+      t2.posted_seq              AS b_posted_seq,
+      t1.posted_at               AS a_posted_at,
+      t2.posted_at               AS b_posted_at,
+      t1.created_at              AS a_created_at,
+      t2.created_at              AS b_created_at
     FROM transactions t1
     JOIN transactions t2
       ON t2.id > t1.id
@@ -203,6 +247,12 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
     a_category_id: string | null;
     b_category_id: string | null;
     date_gap: number;
+    a_posted_seq: number | null;
+    b_posted_seq: number | null;
+    a_posted_at: number | null;
+    b_posted_at: number | null;
+    a_created_at: number;
+    b_created_at: number;
   }>;
   const asKind = (v: string): TransferKind =>
     v === "internal" || v === "external" ? v : "none";
@@ -230,12 +280,25 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
 
   // Score every candidate. Group by each transaction id so we can pick the
   // best counterpart per side and detect ambiguity.
-  type Scored = { aId: string; bId: string; score: number; gap: number };
+  //
+  // `tiebreak` is the posted-order distance between the two halves
+  // (see `tiebreakDistance`). It's the third sort key after score/gap
+  // and exists to disambiguate the multiple-same-day-same-amount
+  // collision where two correct pairs and two cross-pairs all tie on
+  // score+gap; the bank's posting order resolves the assignment.
+  type Scored = {
+    aId: string;
+    bId: string;
+    score: number;
+    gap: number;
+    tiebreak: number;
+  };
   const scored: Scored[] = rows.map((r) => ({
     aId: r.a_id,
     bId: r.b_id,
     score: scoreCandidate(r),
     gap: Number(r.date_gap),
+    tiebreak: tiebreakDistance(r),
   }));
 
   const byTxn = new Map<string, Scored[]>();
@@ -244,15 +307,41 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
     (byTxn.get(s.bId) ?? byTxn.set(s.bId, []).get(s.bId)!).push(s);
   }
 
-  function bestFor(id: string): Scored | null {
+  /**
+   * Best LIVE candidate for `id` — i.e. ignore candidates whose other side
+   * is already in `taken`. This is what makes the four-way same-day
+   * same-amount collision resolvable: once the outer greedy commits the
+   * first correct pair, the cross-pair candidates' other halves become
+   * unavailable and the remaining transactions' ambiguity collapses
+   * naturally. Without this filter, `bestFor` looks at the original
+   * candidate list and keeps returning null because of ties on dead
+   * candidates.
+   */
+  function bestFor(id: string, taken: Set<string>): Scored | null {
     const list = byTxn.get(id);
     if (!list || list.length === 0) return null;
-    const sorted = [...list].sort((x, y) => y.score - x.score || x.gap - y.gap);
+    const live = list.filter((s) => {
+      const otherId = s.aId === id ? s.bId : s.aId;
+      return !taken.has(otherId);
+    });
+    if (live.length === 0) return null;
+    const sorted = live.sort(
+      (x, y) => y.score - x.score || x.gap - y.gap || x.tiebreak - y.tiebreak,
+    );
     const top = sorted[0];
-    // Ambiguity: another candidate ties on score AND gap → don't auto-pair.
+    // Ambiguity only when the top-2 LIVE candidates tie on ALL THREE
+    // sort dimensions. Two genuinely indistinguishable candidates
+    // (same score, same gap, same posted-order distance) defer to
+    // suggestions.
     if (sorted.length > 1) {
       const second = sorted[1];
-      if (second.score === top.score && second.gap === top.gap) return null;
+      if (
+        second.score === top.score &&
+        second.gap === top.gap &&
+        second.tiebreak === top.tiebreak
+      ) {
+        return null;
+      }
     }
     return top;
   }
@@ -262,14 +351,16 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
   const taken = new Set<string>();
   const suggestionPairs: Scored[] = [];
 
-  for (const cand of [...scored].sort((x, y) => y.score - x.score || x.gap - y.gap)) {
+  for (const cand of [...scored].sort(
+    (x, y) => y.score - x.score || x.gap - y.gap || x.tiebreak - y.tiebreak,
+  )) {
     if (cand.score < AUTO_THRESHOLD) {
       if (cand.score >= SUGGEST_THRESHOLD) suggestionPairs.push(cand);
       continue;
     }
     if (taken.has(cand.aId) || taken.has(cand.bId)) continue;
-    if (bestFor(cand.aId)?.bId !== cand.bId) continue;
-    if (bestFor(cand.bId)?.aId !== cand.aId) continue;
+    if (bestFor(cand.aId, taken)?.bId !== cand.bId) continue;
+    if (bestFor(cand.bId, taken)?.aId !== cand.aId) continue;
 
     // Look up account types and current categoryIds from the row we already
     // hydrated, so we can auto-assign a payment category when the pair

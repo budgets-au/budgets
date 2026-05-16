@@ -9,6 +9,54 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.123.0 — 2026-05-16
+
+### Fixed
+- **Transfer auto-matcher: same-day same-amount collisions now
+  resolve more often.** The matcher's `bestFor()` was returning null
+  whenever a transaction's top-2 candidates tied on score+gap, which
+  meant generic-payee multi-transfer days left everything unpaired.
+  Two coordinated changes in
+  [src/lib/transfer-match.ts](src/lib/transfer-match.ts):
+  - **Posted-order tiebreaker** — added `tiebreakDistance(c)` as a
+    third sort key after score/gap. Smaller = the two halves of the
+    candidate posted closer together. Fallback chain:
+    `postedSeq → postedAt → createdAt`. The greedy outer loop and
+    `bestFor()` both use it.
+  - **Live-filter on `taken` candidates** — `bestFor()` now ignores
+    candidates whose other side has already been paired. So when the
+    first correct pair commits, the surviving candidates' ambiguity
+    collapses naturally and the second pair can also commit. Without
+    this, the second pair would stay stuck on the now-unreachable
+    cross-candidate.
+  Genuinely indistinguishable candidates (every signal ties) still
+  defer to suggestions — pinned by a regression test.
+
+### Added
+- **Manual "Link as transfer" button on every unpaired
+  transaction row.** Chain-link icon in the payee cell
+  (hover-revealed on desktop, always visible on mobile) opens a new
+  `<LinkTransferDialog>` pre-filtered to:
+  - Unpaired transactions only.
+  - Other accounts (not the source's).
+  - Opposite-sign amount within ±$1 of the source.
+  - Date within ±7 days.
+  A "Show all" toggle relaxes the amount filter for the
+  fee-adjusted-transfer case ($500 sent / $499.95 received).
+  Clicking a candidate calls the existing manual-pair API
+  (`PATCH /api/transactions/<id>/transfer-pair`) and refreshes the
+  transactions list. Handles every case the auto-matcher can't —
+  the matcher now defers to suggestions safely, and the dialog is
+  the user's escape hatch when neither suggestions nor the matcher
+  can resolve a pair.
+- Test coverage for the matcher's new behaviour: 3 helper-level
+  tests for `tiebreakDistance` (posted_seq / postedAt / createdAt
+  fallback chain) + 4 integration tests against an in-memory
+  SQLite covering the four-way collision happy path, the
+  truly-indistinguishable case, the single-pair regression, and
+  the below-threshold case. New file:
+  [src/lib/transfer-match.integration.test.ts](src/lib/transfer-match.integration.test.ts).
+
 ## 0.122.0 — 2026-05-16
 
 ### Changed

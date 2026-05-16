@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { scoreCandidate, AUTO_THRESHOLD, type CandidateRow } from "./transfer-match";
+import {
+  scoreCandidate,
+  AUTO_THRESHOLD,
+  tiebreakDistance,
+  type CandidateRow,
+} from "./transfer-match";
 
 function candidate(over: Partial<CandidateRow> = {}): CandidateRow {
   return {
@@ -18,6 +23,12 @@ function candidate(over: Partial<CandidateRow> = {}): CandidateRow {
     a_category_id: null,
     b_category_id: null,
     date_gap: 0,
+    a_posted_seq: null,
+    b_posted_seq: null,
+    a_posted_at: null,
+    b_posted_at: null,
+    a_created_at: 0,
+    b_created_at: 0,
     ...over,
   };
 }
@@ -182,5 +193,71 @@ describe("scoreCandidate — auto-link threshold combinations", () => {
   it("pure inverse-amount + same-day alone does NOT auto-link", () => {
     const c = candidate({ date_gap: 0 });
     expect(scoreCandidate(c)).toBeLessThan(AUTO_THRESHOLD);
+  });
+});
+
+describe("tiebreakDistance — posted-order fallback chain", () => {
+  it("prefers postedSeq when both halves have it", () => {
+    expect(
+      tiebreakDistance(
+        candidate({
+          a_posted_seq: 1,
+          b_posted_seq: 3,
+          // posted_at + created_at should be ignored when posted_seq is present.
+          a_posted_at: 100,
+          b_posted_at: 999,
+          a_created_at: 0,
+          b_created_at: 0,
+        }),
+      ),
+    ).toBe(2);
+  });
+
+  it("falls back to postedAt when only one side has a seq", () => {
+    expect(
+      tiebreakDistance(
+        candidate({
+          a_posted_seq: null,
+          b_posted_seq: 5,
+          a_posted_at: 1000,
+          b_posted_at: 1500,
+          a_created_at: 0,
+          b_created_at: 0,
+        }),
+      ),
+    ).toBe(500);
+  });
+
+  it("falls back to createdAt when neither postedSeq nor postedAt available", () => {
+    expect(
+      tiebreakDistance(
+        candidate({
+          a_posted_seq: null,
+          b_posted_seq: null,
+          a_posted_at: null,
+          b_posted_at: null,
+          a_created_at: 100,
+          b_created_at: 250,
+        }),
+      ),
+    ).toBe(150);
+  });
+
+  it("ranks adjacent posted_seq strictly ahead of non-adjacent posted_seq", () => {
+    // Two same-day same-amount transfers posted as seq 1..4. The
+    // helper alone disambiguates the far-apart cross-pair (1↔4) but
+    // *not* the adjacent cross-pair (2↔3) — that case relies on the
+    // outer greedy + live-filter in `pairTransfersInWindow` to
+    // resolve via cascading uniqueness after the first correct pair
+    // is committed. This test pins the property the helper can
+    // prove: any candidate spanning a posted_seq gap > 1 is strictly
+    // worse than a candidate spanning gap = 1.
+    const adjacent = tiebreakDistance(
+      candidate({ a_posted_seq: 1, b_posted_seq: 2 }),
+    );
+    const farCross = tiebreakDistance(
+      candidate({ a_posted_seq: 1, b_posted_seq: 4 }),
+    );
+    expect(adjacent).toBeLessThan(farCross);
   });
 });

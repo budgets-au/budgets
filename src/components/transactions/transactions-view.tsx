@@ -20,6 +20,7 @@ import { TransactionFilters } from "@/components/transactions/transaction-filter
 import { TransferSuggestionsPanel } from "@/components/transactions/transfer-suggestions-panel";
 import { MissedScheduledPanel } from "@/components/transactions/missed-scheduled-panel";
 import { TransactionRow } from "@/components/transactions/transaction-row";
+import { LinkTransferDialog } from "@/components/transactions/link-transfer-dialog";
 import { toast } from "sonner";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
@@ -115,6 +116,15 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
   const [bulkCategoryId, setBulkCategoryId] = useState<string>("");
   const [bulkApplying, setBulkApplying] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Manual-link dialog state: a non-null source means the dialog is
+  // open with that transaction as the "from" leg of the pair.
+  const [linkTransferSource, setLinkTransferSource] = useState<{
+    id: string;
+    accountId: string;
+    amount: string;
+    date: string;
+    payee: string | null;
+  } | null>(null);
   // All three view-prefs (page size, show-notes, show-linked-details)
   // now live in the DB-backed display-prefs blob alongside the other
   // toggles so they follow the operator across systems instead of
@@ -803,6 +813,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                             : null
                         }
                         onUnpair={handleUnpair}
+                        onRequestLink={setLinkTransferSource}
                         onChange={() => mutateTxns()}
                       />
                     );
@@ -901,6 +912,16 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
           )}
         </CardContent>
       </Card>
+      <LinkTransferDialog
+        source={linkTransferSource}
+        open={linkTransferSource !== null}
+        onOpenChange={(next) => {
+          if (!next) setLinkTransferSource(null);
+        }}
+        onPaired={() => {
+          mutateTxns();
+        }}
+      />
     </>
   );
 }

@@ -14,6 +14,7 @@ import {
   FileCheck,
   HandCoins,
   HelpCircle,
+  Link2,
   Lock,
   Pause,
   Percent,
@@ -485,6 +486,18 @@ export interface TransactionRowProps {
   /** Unlink callback — invoked from the linked-details cell. */
   onUnpair?: (txnId: string) => void;
 
+  /** Manual transfer-link callback. When provided AND the row is
+   *  unpaired, a small chain-link icon button appears in the payee
+   *  cell; clicking it asks the parent to open a candidate-picker
+   *  dialog with this row as the source. */
+  onRequestLink?: (txn: {
+    id: string;
+    accountId: string;
+    amount: string;
+    date: string;
+    payee: string | null;
+  }) => void;
+
   /** Refresh callback fired after inline edits (CategoryPicker,
    * NotesCell). */
   onChange?: () => void;
@@ -506,6 +519,7 @@ export function TransactionRow({
   onToggleExpand,
   match = null,
   onUnpair,
+  onRequestLink,
   onChange,
 }: TransactionRowProps) {
   const linked = !!t.transferPairId;
@@ -714,6 +728,26 @@ export function TransactionRow({
                 aria-label="Search Google for this payee"
               >
                 <Search className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {!linked && onRequestLink && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRequestLink({
+                    id: t.id,
+                    accountId: t.accountId,
+                    amount: t.amount,
+                    date: t.date,
+                    payee: t.payee,
+                  });
+                }}
+                className="shrink-0 p-1 -my-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100"
+                title="Link as transfer to another transaction"
+                aria-label="Link as transfer"
+              >
+                <Link2 className="h-3.5 w-3.5" />
               </button>
             )}
           </div>

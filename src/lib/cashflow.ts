@@ -10,6 +10,14 @@ export interface CashflowEvent {
   isProjected: boolean;
   id?: string;
   accountId?: string;
+  /** Scheduled-row kind (set on projected events only). Budget
+   * schedules carry `kind: "budget"`; the calendar's
+   * real-vs-scheduled matcher excludes those because a budget is
+   * a cap, not a single outflow — without this tag a "$200
+   * weekly Groceries" budget will falsely claim any random $200
+   * grocery transaction as its fulfilment, mis-matching the day
+   * panel + the dot positions. */
+  kind?: string;
 }
 
 export interface DailyBalance {
@@ -184,6 +192,7 @@ export function computeCashflow({
         isProjected: true,
         id: p.scheduledId,
         accountId: p.accountId,
+        kind: s.kind,
       });
       perDate.set(p.date, existing);
     }

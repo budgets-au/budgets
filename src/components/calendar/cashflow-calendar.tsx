@@ -1477,9 +1477,17 @@ function matchScheduledToReal(byDate: Map<string, DailyBalance>): {
         i++;
       }
     }
-    dd.scheduledEvents.forEach((e, j) =>
-      scheds.push({ date: d, idx: j, accountId: e.accountId, amount: e.amount, scheduledId: e.id }),
-    );
+    dd.scheduledEvents.forEach((e, j) => {
+      // Budget-kind schedules are spending caps, not specific
+      // outflows — letting them match a real txn would tag a
+      // random $200 grocery purchase as the fulfilment of a
+      // "$200 weekly Groceries" budget. They retain their `j`
+      // index in the day's scheduledEvents array so the day
+      // panel still surfaces them as planned rows; they're just
+      // never put into the matching candidate list.
+      if (e.kind === "budget") return;
+      scheds.push({ date: d, idx: j, accountId: e.accountId, amount: e.amount, scheduledId: e.id });
+    });
   }
   const key = (p: Pos) => `${p.date}#${p.idx}`;
   const claimedReal = new Set<string>();

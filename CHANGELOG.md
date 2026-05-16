@@ -9,6 +9,27 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.113.0 — 2026-05-16
+
+### Fixed
+- **Calendar: budget schedules no longer falsely claim real
+  transactions.** A scheduled budget ("$200 weekly Groceries"
+  — a spending cap, not a single planned outflow) was running
+  through the same real-vs-scheduled matcher as scheduled
+  payments. Any random $200 grocery purchase within ±5 days
+  ended up tagged as the fulfilment of that budget — the day
+  panel popover then showed a "matched" pill linking the txn
+  to a budget instead of leaving it as an unscheduled purchase,
+  and a separate scheduled-payment that genuinely should have
+  claimed it stayed orphaned. Two-part fix:
+  - `CashflowEvent` gains an optional `kind` field; the cashflow
+    builder tags projected events with `s.kind` so the calendar
+    can tell budgets apart from payments downstream.
+  - `matchScheduledToReal` in `cashflow-calendar.tsx` skips
+    events with `kind === "budget"` when populating the
+    candidate list. Budgets still render as planned rows in the
+    day panel; they just no longer participate in matching.
+
 ## 0.112.0 — 2026-05-16
 
 ### Changed

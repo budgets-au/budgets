@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.120.2 — 2026-05-16
+
+### Fixed
+- **Windows CI: node-gyp failed under default Python 3.12+.** The
+  `windows-latest` runner ships Python 3.12 by default; node-gyp 9
+  (pulled in by `@electron/rebuild` via `electron-builder
+  install-app-deps`) imports `distutils`, which was removed from
+  the stdlib in 3.12. Pinned Python 3.11 in the workflow via
+  `actions/setup-python` so `electron-builder install-app-deps`
+  can compile `@signalapp/better-sqlite3` against the Electron
+  Node ABI.
+
 ## 0.120.1 — 2026-05-16
 
 ### Fixed

@@ -34,6 +34,15 @@ jobs:
         with:
           node-version: 22
 
+      - name: Setup Python 3.11
+        # node-gyp 9.x (pulled in by @electron/rebuild) imports
+        # `distutils`, which was removed from the Python stdlib in
+        # 3.12. windows-latest ships 3.12+ by default, so pin a
+        # node-gyp-compatible version before install.
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:

@@ -1,0 +1,82 @@
+# Builds the Windows desktop installer for the budgets app.
+#
+# Triggers:
+#   • Tag push matching v*.*.* → cuts a GitHub Release and attaches
+#     the .exe.
+#   • Manual dispatch → builds the installer and uploads it as a
+#     workflow artifact (no release created).
+#
+# The .exe is unsigned for v1. Windows SmartScreen will warn first-
+# time users; click "More info → Run anyway" to bypass. Add a code-
+# signing cert + the corresponding env vars to enable proper
+# signing later — electron-builder picks them up automatically.
+
+name: Windows desktop build
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # Matches the `packageManager` field in package.json.
+          version: 9.15.9
+          run_install: false
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/pnpm/store/v3
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Windows installer
+        # `electron:build:win` chains:
+        #   electron:rebuild → next build → electron-prepare → electron-builder
+        # so root node_modules is rebuilt against the Electron Node ABI
+        # before `next build` copies it into `.next/standalone/`.
+        env:
+          # Build-time DB placeholders — `next build` evaluates
+          # src/db/index.ts and the unlock guard, which needs an
+          # in-memory DB + dummy key (matches the Dockerfile).
+          SQLITE_PATH: ":memory:"
+          SQLITE_KEY: build-time-placeholder
+          AUTH_SECRET: build-time-placeholder
+          NEXTAUTH_SECRET: build-time-placeholder
+        run: pnpm electron:build:win
+
+      - name: Upload installer as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: budgets-windows-installer
+          path: dist-electron/*.exe
+          if-no-files-found: error
+
+      - name: Attach installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-electron/*.exe
+          generate_release_notes: true

@@ -1,0 +1,64 @@
+# electron-builder config — produces the Windows installer.
+#
+# Run via `pnpm electron:build:win` (which chains `electron:prepare`
+# first to build Next + rebuild the native SQLite addon for the
+# Electron Node ABI + copy `.next/static` and `public/` into the
+# standalone tree where the server.js expects them).
+#
+# Note on bundling: Next's `output: "standalone"` produces a
+# self-contained tree at `.next/standalone/` with its own trimmed
+# `node_modules`. We ship that tree as `extraResources` (lives at
+# `resources/app/...` next to the asar) and keep electron-builder's
+# default node_modules sweep skipped — the main process inside
+# `electron/main.cjs` doesn't import any third-party packages, so
+# the asar payload is tiny.
+#
+# The SQLite addon lives inside the standalone tree's node_modules.
+# It MUST be rebuilt for Electron's Node ABI before packaging or the
+# child process will crash on `require('@signalapp/better-sqlite3')`
+# with NODE_MODULE_VERSION mismatch. `electron:prepare` runs
+# `electron-rebuild` for exactly this reason.
+
+appId: au.budgets.desktop
+productName: Budgets
+copyright: Copyright © 2026 budgets-au
+
+directories:
+  output: dist-electron
+  buildResources: electron/build
+
+files:
+  - electron/**/*
+  - "!**/.DS_Store"
+  - "!**/*.map"
+
+extraResources:
+  - from: .next/standalone
+    to: app/.next/standalone
+    filter: ["**/*"]
+  - from: .next/static
+    to: app/.next/static
+    filter: ["**/*"]
+  - from: public
+    to: app/public
+    filter: ["**/*"]
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: budgets-${version}-setup.${ext}
+  # No code-signing for v1; the user sees a SmartScreen warning on
+  # first launch. Add `certificateFile` + `certificatePassword` env
+  # (or sign in CI via `signtool`) once you have a cert.
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Budgets

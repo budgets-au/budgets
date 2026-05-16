@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.120.0 — 2026-05-16
+
+### Added
+- **Windows desktop build via Electron.** A second release artifact
+  alongside the Linux container — the same Next.js app runs inside
+  a single-window Electron shell so the operator can install it on
+  a Windows machine and use it as a desktop app.
+  - `electron/main.cjs` spawns the existing Next standalone server
+    (no app code changes) as a child of the Electron binary via
+    `ELECTRON_RUN_AS_NODE=1`, picks a free localhost port at boot,
+    and opens a single `BrowserWindow` pointed at it.
+  - DB lives at `%APPDATA%/Budgets/data/budget.db`; on first run
+    the existing `/unlock` flow lets the user type a passphrase
+    which both creates and encrypts the DB. To migrate an existing
+    deployment: install + restore a backup via Settings → Backup.
+  - `electron-builder.yml` produces an NSIS installer
+    (`budgets-X.Y.Z-setup.exe`) — unsigned for v1, so first launch
+    triggers a SmartScreen warning the user clicks through.
+  - `.github/workflows/electron-windows.yml` builds the .exe on
+    `windows-latest`. Tagging a release (`v0.120.0`-style) attaches
+    the installer to the GitHub Release; manual dispatch leaves it
+    as a workflow artifact.
+  - Native module ABI handled by `@electron/rebuild` in the
+    `electron:rebuild` script. The Linux container release flow
+    (`pnpm docker:release`) is unchanged.
+
 ## 0.119.0 — 2026-05-16
 
 ### Added

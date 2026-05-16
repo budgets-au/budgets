@@ -13,7 +13,11 @@
     "test:e2e": "playwright test",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
-    "docker:release": "node scripts/docker-release.mjs"
+    "docker:release": "node scripts/docker-release.mjs",
+    "electron:rebuild": "electron-rebuild --force --which-module @signalapp/better-sqlite3",
+    "electron:prepare": "next build && node scripts/electron-prepare.mjs",
+    "electron:dev": "pnpm electron:rebuild && pnpm electron:prepare && electron electron/main.cjs",
+    "electron:build:win": "pnpm electron:rebuild && pnpm electron:prepare && electron-builder --win --x64 --config electron-builder.yml"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -52,8 +56,11 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "@electron/rebuild": "^4.0.1",
     "@vitejs/plugin-react": "^6.0.1",
     "dotenv": "^16.4.7",
+    "electron": "^33.4.6",
+    "electron-builder": "^25.1.8",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",

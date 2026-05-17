@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.149.0 — 2026-05-17
+
+### Fixed
+- **Inline "Create category" *still* didn't fill the import
+  row.** 0.148 fixed the SWR-cache plumbing but left a stale-
+  closure bug in `RuleCreator.handleChange`: when the picker's
+  Create flow fires `onChange`, it does so via the OLD onChange
+  closure captured at the time `addCategory.open()` ran — and
+  that closure's `categories.find(...)` is reading the prop
+  captured at the OLD render, not the live SWR cache. The .find
+  returned undefined and the function bailed out before the
+  PATCH could land. Synced a `categoriesRef` inline on each
+  render so the captured handleChange sees the freshest list at
+  call time.
+
 ## 0.148.0 — 2026-05-17
 
 ### Fixed

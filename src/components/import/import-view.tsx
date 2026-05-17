@@ -1384,10 +1384,21 @@ function RuleCreator({
 }) {
   const [saving, setSaving] = useState(false);
 
+  // The "Create new category" flow inside the picker captures THIS
+  // render's `onChange` closure, which closes over THIS render's
+  // `categories` prop. By the time onChange fires (after the user
+  // submits the Add-Category dialog), the parent has SWR-refetched
+  // and a fresher categories list is in scope — but the captured
+  // closure still references the stale prop. A ref synced inline
+  // gives the captured handleChange a path back to the freshest
+  // list at call time.
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
+
   async function handleChange(catId: string) {
     if (!catId) return;
     if (catId === currentCategoryId) return;
-    const cat = categories.find((c) => c.id === catId);
+    const cat = categoriesRef.current.find((c) => c.id === catId);
     if (!cat) return;
     setSaving(true);
     try {

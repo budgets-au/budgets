@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.140.0 — 2026-05-17
+
+### Added
+- **"Reset & re-scan" button on the Transactions page.** Sits next
+  to "Re-scan transfers" in the TransferSuggestionsPanel. Deletes
+  every `is_synthetic=true` placeholder row (FK's `ON DELETE SET
+  NULL` clears the surviving partner's `transfer_pair_id`
+  automatically) and then runs `pairTransfersInWindow({})` over
+  the whole DB so any orphan whose real counterpart exists in a
+  tracked account gets auto-paired. Useful when the 0.137.0
+  backfill minted synthetics in External for transfers whose real
+  counterparts actually do live in tracked accounts (e.g. after
+  restoring a DB where partial deletes had cleared the pair_ids).
+  Confirmation dialog before firing — destructive op.
+  New endpoint: `POST /api/transfers/reset-and-rescan`.
+
 ## 0.139.0 — 2026-05-17
 
 ### Fixed

@@ -7,11 +7,13 @@ import {
   ChevronDown,
   ChevronRight,
   Check,
+  Eraser,
   RefreshCw,
   X,
 } from "lucide-react";
 import { formatAUD, formatDate, amountClass } from "@/lib/utils";
 import { toast } from "sonner";
+import { useConfirm } from "@/hooks/use-confirm-dialog";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -40,6 +42,8 @@ export function TransferSuggestionsPanel({ onChanged }: { onChanged?: () => void
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [rescanning, setRescanning] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const confirmDialog = useConfirm();
 
   async function confirm(id: string) {
     setBusy(id);
@@ -101,6 +105,56 @@ export function TransferSuggestionsPanel({ onChanged }: { onChanged?: () => void
     onChanged?.();
   }
 
+  /** Destructive maintenance: delete every synthetic placeholder, then
+   *  re-run the auto-pairing matcher. Useful when the orphan-transfer
+   *  backfill minted synthetics in the External account but the real
+   *  counterparts actually live in tracked accounts (e.g. after
+   *  restoring a DB whose pair_ids had been cleared via partial
+   *  deletes). Pairs that CAN be re-formed against tracked data WILL
+   *  be; the rest stay as un-paired orphans. */
+  async function resetAndRescan(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (resetting) return;
+    const ok = await confirmDialog({
+      title: "Delete synthetic placeholders & re-scan?",
+      description:
+        "Every transfer placeholder the app auto-minted in External (or another untracked-counterparty account) will be deleted. " +
+        "The matcher then re-pairs surviving rows against real tracked counterparts where possible. " +
+        "Manually-linked external pairs are also removed — re-create them via the row's Link icon if needed.",
+      confirmLabel: "Reset & re-scan",
+    });
+    if (!ok) return;
+    setResetting(true);
+    const res = await fetch("/api/transfers/reset-and-rescan", {
+      method: "POST",
+    });
+    setResetting(false);
+    if (!res.ok) {
+      toast.error("Reset failed");
+      return;
+    }
+    const body = (await res.json().catch(() => ({}))) as {
+      syntheticsDeleted?: number;
+      paired?: number;
+      suggested?: number;
+    };
+    const parts: string[] = [];
+    parts.push(`${body.syntheticsDeleted ?? 0} placeholder${(body.syntheticsDeleted ?? 0) === 1 ? "" : "s"} deleted`);
+    if ((body.paired ?? 0) > 0) parts.push(`${body.paired} auto-paired`);
+    if ((body.suggested ?? 0) > 0) {
+      parts.push(`${body.suggested} suggestion${body.suggested === 1 ? "" : "s"}`);
+    }
+    toast.success(parts.join(" · "));
+    mutate();
+    void globalMutate(
+      (k) => typeof k === "string" && k.startsWith("/api/transactions"),
+      undefined,
+      { revalidate: true },
+    );
+    void globalMutate("/api/accounts", undefined, { revalidate: true });
+    onChanged?.();
+  }
+
   const Chevron = expanded ? ChevronDown : ChevronRight;
   const hasSuggestions = suggestions.length > 0;
 
@@ -143,18 +197,30 @@ export function TransferSuggestionsPanel({ onChanged }: { onChanged?: () => void
             </span>
           </>
         )}
-        <button
-          type="button"
-          onClick={rescan}
-          disabled={rescanning}
-          className="ml-auto inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 px-2 py-1 rounded hover:bg-muted disabled:opacity-50 transition-colors"
-          title="Run the transfer matcher across every unpaired transaction"
-        >
-          <RefreshCw
-            className={`h-3 w-3 ${rescanning ? "animate-spin" : ""}`}
-          />
-          {rescanning ? "Scanning…" : "Re-scan transfers"}
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={resetAndRescan}
+            disabled={resetting || rescanning}
+            className="inline-flex items-center gap-1 text-xs text-rose-600 dark:text-rose-400 hover:text-rose-500 dark:hover:text-rose-300 px-2 py-1 rounded hover:bg-muted disabled:opacity-50 transition-colors"
+            title="Delete every auto-minted synthetic placeholder, then re-run the transfer matcher. Useful when the backfill paired transfers with External-account stubs but the real counterparts exist in tracked accounts."
+          >
+            <Eraser className="h-3 w-3" />
+            {resetting ? "Resetting…" : "Reset & re-scan"}
+          </button>
+          <button
+            type="button"
+            onClick={rescan}
+            disabled={rescanning || resetting}
+            className="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 px-2 py-1 rounded hover:bg-muted disabled:opacity-50 transition-colors"
+            title="Run the transfer matcher across every unpaired transaction"
+          >
+            <RefreshCw
+              className={`h-3 w-3 ${rescanning ? "animate-spin" : ""}`}
+            />
+            {rescanning ? "Scanning…" : "Re-scan transfers"}
+          </button>
+        </div>
       </div>
 
       {expanded && (

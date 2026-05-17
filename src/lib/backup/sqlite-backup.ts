@@ -11,11 +11,13 @@ import {
   existsSync,
   mkdirSync,
   openSync,
+  readFileSync,
   readSync,
   readdirSync,
   renameSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { statfs } from "node:fs/promises";
 import { dirname, join, resolve, basename, sep } from "node:path";
@@ -32,6 +34,67 @@ export interface BackupEntry {
   size: number;
   /** ISO timestamp from mtime — the source of truth for ordering. */
   mtime: string;
+  /** User-supplied annotation. Stored in a sidecar JSON file next to
+   *  the backup (see `*.meta.json` on disk). Null when no sidecar
+   *  exists or the sidecar's notes field is empty. */
+  notes: string | null;
+}
+
+/** Sidecar metadata schema. Lives alongside the encrypted backup file
+ *  as `<backup-filename>.meta.json`; intentionally OUTSIDE the
+ *  SQLCipher file so the operator can read notes without the
+ *  passphrase + so the format stays forward-extensible. */
+interface BackupMeta {
+  notes?: string | null;
+}
+
+function metaPathFor(backupPath: string): string {
+  return `${backupPath}.meta.json`;
+}
+
+function readBackupMeta(backupPath: string): BackupMeta {
+  const p = metaPathFor(backupPath);
+  if (!existsSync(p)) return {};
+  try {
+    const raw = readFileSync(p, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") {
+      const notes = (parsed as Record<string, unknown>).notes;
+      return {
+        notes: typeof notes === "string" && notes.length > 0 ? notes : null,
+      };
+    }
+  } catch {
+    // Sidecar corrupt — drop silently. The backup itself is the
+    // authoritative artefact; missing/broken notes are merely cosmetic.
+  }
+  return {};
+}
+
+function writeBackupMeta(backupPath: string, meta: BackupMeta): void {
+  const p = metaPathFor(backupPath);
+  const trimmedNotes = meta.notes?.trim() ?? "";
+  if (trimmedNotes.length === 0) {
+    // Empty notes → delete the sidecar so an empty annotation doesn't
+    // litter the directory or read as "" instead of null on next list.
+    if (existsSync(p)) rmSync(p);
+    return;
+  }
+  writeFileSync(p, JSON.stringify({ notes: trimmedNotes }, null, 2));
+}
+
+/** Update the notes annotation on a backup by filename. Throws if
+ *  the filename fails the safety guard or the backup itself doesn't
+ *  exist. Empty / whitespace-only notes delete the sidecar. */
+export function setBackupNotes(filename: string, notes: string): void {
+  if (!isSafeBackupFilename(filename)) {
+    throw new Error("Invalid backup filename");
+  }
+  const path = join(backupDir(), filename);
+  if (!existsSync(path)) {
+    throw new Error("Backup not found");
+  }
+  writeBackupMeta(path, { notes });
 }
 
 /** Where backups live. Defaults to `<dirname(SQLITE_PATH)>/backups/`
@@ -137,12 +200,15 @@ export function listBackups(): BackupEntry[] {
     if (!isSafeBackupFilename(name)) continue;
     const m = name.match(FILENAME_RE);
     if (!m) continue;
-    const stat = statSync(join(dir, name));
+    const filepath = join(dir, name);
+    const stat = statSync(filepath);
+    const meta = readBackupMeta(filepath);
     out.push({
       filename: name,
       type: m[1] as BackupType,
       size: stat.size,
       mtime: stat.mtime.toISOString(),
+      notes: meta.notes ?? null,
     });
   }
   out.sort((a, b) => (a.mtime < b.mtime ? 1 : a.mtime > b.mtime ? -1 : 0));
@@ -176,6 +242,7 @@ export async function takeBackup(type: BackupType): Promise<BackupEntry> {
     type,
     size: stat.size,
     mtime: stat.mtime.toISOString(),
+    notes: null,
   };
 }
 
@@ -192,6 +259,11 @@ export function deleteBackup(filename: string): void {
     throw new Error("Backup not found");
   }
   rmSync(path);
+  // Drop the sidecar metadata too — orphaned `.meta.json` files would
+  // just clutter the directory and confuse the user if they exported
+  // backups to a different machine.
+  const meta = metaPathFor(path);
+  if (existsSync(meta)) rmSync(meta);
 }
 
 /** Drop scheduled backups beyond `retain` count. Called after each

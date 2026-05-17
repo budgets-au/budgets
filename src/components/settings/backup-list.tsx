@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Download,
   HardDrive,
   Loader2,
+  Pencil,
   RefreshCcw,
   RotateCcw,
   Trash2,
@@ -29,6 +30,7 @@ interface BackupEntry {
   type: "manual" | "scheduled" | "pre-restore";
   size: number;
   mtime: string;
+  notes: string | null;
 }
 
 interface ListResponse {
@@ -216,6 +218,7 @@ export function BackupList() {
                 <th className="px-3 py-2 text-left font-medium">Date</th>
                 <th className="px-3 py-2 text-left font-medium">Type</th>
                 <th className="px-3 py-2 text-right font-medium">Size</th>
+                <th className="px-3 py-2 text-left font-medium">Notes</th>
                 <th className="px-3 py-2 text-right font-medium">Actions</th>
               </tr>
             </thead>
@@ -232,6 +235,13 @@ export function BackupList() {
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
                     {formatSize(b.size)}
+                  </td>
+                  <td className="px-3 py-2 max-w-[280px]">
+                    <BackupNotesCell
+                      filename={b.filename}
+                      notes={b.notes}
+                      onSaved={() => load()}
+                    />
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex gap-1">
@@ -434,5 +444,93 @@ function RestoreDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Inline-editable notes for a backup row. Click-to-edit; commit on
+ *  Enter or blur. Sends a PATCH to `/api/backup/[filename]` which
+ *  writes (or deletes when empty) the `<filename>.meta.json` sidecar.
+ *  Notes live OUTSIDE the encrypted SQLCipher file so they're readable
+ *  without the passphrase and survive restore swaps. */
+function BackupNotesCell({
+  filename,
+  notes,
+  onSaved,
+}: {
+  filename: string;
+  notes: string | null;
+  onSaved?: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!editing) setValue(notes ?? "");
+  }, [notes, editing]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  async function commit() {
+    const next = value.trim();
+    const current = (notes ?? "").trim();
+    if (next === current) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    const res = await fetch(`/api/backup/${encodeURIComponent(filename)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: next }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setEditing(false);
+      onSaved?.();
+    } else {
+      toast.error("Failed to save note");
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Escape") {
+            setValue(notes ?? "");
+            setEditing(false);
+          }
+        }}
+        disabled={saving}
+        maxLength={2000}
+        placeholder="e.g. before the import …"
+        className="w-full bg-transparent border-b border-input text-xs px-1 py-0.5 focus:outline-none focus:border-indigo-500"
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="group flex w-full items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground"
+      title={notes ?? "Click to add a note"}
+    >
+      <span className="truncate">
+        {notes ?? <span className="italic opacity-60">Add note…</span>}
+      </span>
+      <Pencil className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+    </button>
   );
 }

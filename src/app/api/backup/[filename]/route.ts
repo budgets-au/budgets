@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { auth, isAdmin } from "@/lib/auth";
-import { deleteBackup, isSafeBackupFilename } from "@/lib/backup/sqlite-backup";
+import {
+  deleteBackup,
+  isSafeBackupFilename,
+  setBackupNotes,
+} from "@/lib/backup/sqlite-backup";
 
 /** DELETE /api/backup/[filename] — drop a backup file. Admin-only:
  * a backup is a full unencrypted snapshot of every household
@@ -27,6 +32,48 @@ export async function DELETE(
   }
   try {
     deleteBackup(filename);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const status = msg === "Backup not found" ? 404 : 500;
+    return NextResponse.json({ ok: false, error: msg }, { status });
+  }
+}
+
+const patchSchema = z.object({
+  notes: z.string().max(2000),
+});
+
+/** PATCH /api/backup/[filename] — update the user-supplied notes on
+ *  a backup. Stored in a `<filename>.meta.json` sidecar so the
+ *  annotation lives outside the encrypted SQLCipher file (readable
+ *  without the passphrase + survives swaps). Empty / whitespace-only
+ *  notes delete the sidecar. */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ filename: string }> },
+) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { filename } = await params;
+  if (!isSafeBackupFilename(filename)) {
+    return NextResponse.json(
+      { ok: false, error: "Invalid backup filename" },
+      { status: 400 },
+    );
+  }
+  const body = await request.json().catch(() => null);
+  const parsed = patchSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, error: "Invalid body", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+  try {
+    setBackupNotes(filename, parsed.data.notes);
     return NextResponse.json({ ok: true });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

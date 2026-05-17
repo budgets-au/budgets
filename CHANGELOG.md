@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.141.0 — 2026-05-17
+
+### Added
+- **Notes field on backup rows.** Each backup in Settings →
+  Backups now has an inline-editable Notes column. Click "Add
+  note…" (or an existing note) to type a short annotation —
+  Enter to save, Escape to cancel. Useful for tagging
+  snapshots like "before the 2024 tax cleanup" or "pre-import
+  prod data".
+  Notes live in a `<backup-filename>.meta.json` sidecar next to
+  the backup file, intentionally OUTSIDE the encrypted SQLCipher
+  payload so the annotation is readable without the passphrase,
+  survives restore swaps, and is easy to inspect from a shell.
+  Empty / whitespace-only notes delete the sidecar so the
+  directory stays clean.
+  New API: `PATCH /api/backup/[filename]` with body
+  `{ notes: string }`.
+
 ## 0.140.0 — 2026-05-17
 
 ### Added

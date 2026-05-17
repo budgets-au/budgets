@@ -26,9 +26,14 @@ export function proxy(req: NextRequest) {
   // Routes that have to keep working while the DB is locked: the
   // unlock screen and its API, plus the framework's own static paths
   // (already filtered by the matcher below, but kept here for clarity
-  // in case the matcher widens later).
+  // in case the matcher widens later). The `/api/databases*` routes
+  // also bypass the lock since they touch the filesystem registry
+  // (not the encrypted DB) — the user needs to be able to switch
+  // between profiles or create a new one before unlocking either.
   const isUnlockRoute =
-    pathname === "/unlock" || pathname === "/api/unlock";
+    pathname === "/unlock" ||
+    pathname === "/api/unlock" ||
+    pathname.startsWith("/api/databases");
   if (!isUnlocked() && !isUnlockRoute) {
     const url = req.nextUrl.clone();
     url.pathname = "/unlock";

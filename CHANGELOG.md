@@ -9,6 +9,67 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.142.0 — 2026-05-17
+
+### Added
+- **Multiple databases.** A single install can now host several
+  independently-encrypted databases side-by-side. Each profile is a
+  `{ id, label, filename }` triple registered in a new
+  `databases.json` file at the data-directory root (next to the
+  encrypted SQLite files). Per-DB passphrase, re-unlock on switch,
+  no cross-DB views.
+  - **Switcher** in the sidebar header: lists every profile, picking
+    one POSTs to `/api/databases/switch`, locks the current
+    connection, and routes the operator to `/unlock` for the new
+    profile.
+  - **Create flow:** "Create new database…" entry in the switcher
+    dropdown. Prompts for a label + passphrase, registers the
+    profile, creates a fresh SQLCipher file with that passphrase,
+    auto-runs drizzle migrations + seeders (default user + system
+    categories — no sample data), and auto-unlocks the new file so
+    the operator lands on the empty dashboard ready to use.
+  - **On the /unlock page**, a "Switch database" expander surfaces
+    every registered profile and lets you re-target the unlock form
+    without re-typing the current profile's passphrase first
+    (useful when you've forgotten the passphrase or just want a
+    different one). The form's title also shows which profile
+    you're entering the passphrase for.
+- **Per-DB backup directory.** Backups now live in
+  `<base>/<profileId>/budgets_<type>_<timestamp>.sqlite` rather than
+  the flat `<base>/`, so multiple databases' backups don't collide.
+  On first unlock after upgrade, any legacy single-DB backups
+  sitting in the old `<base>/` location are auto-moved into
+  `<base>/default/` — fully idempotent, no operator action needed.
+
+### Changed
+- **Backup schedule moves from `app_settings` to the registry.** The
+  scheduled-backup config (enabled / intervalDays / retain) is now
+  stored in `databases.json` so a single global schedule governs
+  every profile, per the user spec. Existing installs whose
+  schedule was set in `app_settings.backup_schedule` will need to
+  re-toggle it on Settings → Backups after upgrade — the old
+  config isn't auto-migrated to avoid silently re-enabling
+  something the operator had disabled.
+- **`db.livePath` is now a function.** Previously a constant
+  exported from `src/db/index.ts`, it's been converted to a getter
+  (`livePath()`) that resolves through the registry to the active
+  profile's filename. Internal callers in the backup module update
+  accordingly — no external surface affected.
+
+### Schema
+- New module: `src/lib/db-profiles.ts` — profile registry + the
+  global backup schedule.
+- New API routes:
+  - `GET /api/databases` (public — no auth, surfaces profile labels
+    + active id only; safe because labels aren't sensitive and the
+    encryption keys never leave the operator's head).
+  - `POST /api/databases` (admin) — create + auto-unlock.
+  - `POST /api/databases/switch` (public — same security model as
+    GET; switching just changes which encrypted file the next
+    unlock attempt targets).
+- New helpers in `src/db/index.ts`: `switchProfile(id)`,
+  `initProfileFile(profileId, passphrase)`.
+
 ## 0.141.0 — 2026-05-17
 
 ### Added

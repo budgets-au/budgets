@@ -30,6 +30,7 @@ import { useAddCategory } from "@/hooks/use-add-category-dialog";
 import { useAddScheduled } from "@/hooks/use-add-scheduled-dialog";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useLockDatabase } from "@/hooks/use-lock-database";
+import { DatabaseSwitcher } from "./database-switcher";
 import { SidebarAccounts } from "./sidebar-accounts";
 import { APP_VERSION } from "@/lib/version";
 
@@ -114,25 +115,28 @@ export function Sidebar() {
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        <div className="px-6 py-5 border-b flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Image
-              src="/logo.png"
-              alt=""
-              width={40}
-              height={24}
-              className="h-6 w-auto"
-              priority
-            />
-            <span className="font-semibold text-lg tracking-tight">Budgets</span>
+        <div className="px-4 py-4 border-b space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Image
+                src="/logo.png"
+                alt=""
+                width={40}
+                height={24}
+                className="h-6 w-auto"
+                priority
+              />
+              <span className="font-semibold text-lg tracking-tight">Budgets</span>
+            </div>
+            <button
+              onClick={() => setOpen(false)}
+              className="lg:hidden p-1 -mr-1 text-muted-foreground hover:text-foreground"
+              aria-label="Close menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <button
-            onClick={() => setOpen(false)}
-            className="lg:hidden p-1 -mr-1 text-muted-foreground hover:text-foreground"
-            aria-label="Close menu"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <DatabaseSwitcher />
         </div>
         <nav className="flex-1 py-4 overflow-y-auto">
           {visibleNav.map(({ href, label, icon: Icon }) => {

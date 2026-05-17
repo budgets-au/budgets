@@ -22,9 +22,13 @@ import {
 import { statfs } from "node:fs/promises";
 import { dirname, join, resolve, basename, sep } from "node:path";
 import Database from "@signalapp/better-sqlite3";
-import { db, getClient, livePath, lock } from "@/db";
-import { appSettings, type BackupSchedule } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { getClient, livePath, lock } from "@/db";
+import { type BackupSchedule } from "@/db/schema";
+import {
+  getActiveProfile,
+  readSchedule as readScheduleFromRegistry,
+  writeSchedule as writeScheduleToRegistry,
+} from "@/lib/db-profiles";
 
 export type BackupType = "manual" | "scheduled" | "pre-restore";
 
@@ -100,8 +104,58 @@ export function setBackupNotes(filename: string, notes: string): void {
 /** Where backups live. Defaults to `<dirname(SQLITE_PATH)>/backups/`
  * so the same volume mount that holds the live DB also holds the
  * snapshots. Override via BACKUP_DIR for off-volume storage. */
+/** Where backups live. Returns a profile-specific subdirectory so
+ *  multiple databases' backups don't collide. The base directory is
+ *  `BACKUP_DIR` (env override) or `<dirname(activeLivePath)>/backups`;
+ *  the active profile's id is appended as a subdir. The legacy
+ *  single-DB layout (`<base>/budgets_*.sqlite`) gets migrated into
+ *  `<base>/default/` by `migrateLegacyBackups()` on first call. */
 export function backupDir(): string {
-  return resolve(process.env.BACKUP_DIR ?? join(dirname(livePath), "backups"));
+  const baseRoot = resolve(
+    process.env.BACKUP_DIR ?? join(dirname(livePath()), "backups"),
+  );
+  return join(baseRoot, getActiveProfile().id);
+}
+
+/** Root of the backup hierarchy — parent of every per-profile subdir.
+ *  Used by the legacy-layout migration. */
+function backupRootDir(): string {
+  return resolve(
+    process.env.BACKUP_DIR ?? join(dirname(livePath()), "backups"),
+  );
+}
+
+/** One-shot migration: if the legacy layout (`<base>/budgets_*.sqlite`
+ *  + their `.meta.json` sidecars directly under base) is present,
+ *  move every file into `<base>/default/` so the per-profile layout
+ *  takes over. Idempotent — repeated calls are no-ops once the legacy
+ *  files are gone. */
+export function migrateLegacyBackups(): void {
+  const root = backupRootDir();
+  if (!existsSync(root)) return;
+  const defaultProfileSubdir = join(root, "default");
+  let moved = 0;
+  for (const name of readdirSync(root)) {
+    const full = join(root, name);
+    // Subdirs (already-per-profile-organised) are skipped.
+    if (statSync(full).isDirectory()) continue;
+    // Migrate only files matching the backup pattern OR their meta
+    // sidecars; leave anything else (e.g. a README) untouched.
+    const isBackup = FILENAME_RE.test(name);
+    const isMeta = /^budgets_(manual|scheduled|pre-restore)_[0-9TZ.\-]+\.sqlite\.meta\.json$/.test(name);
+    if (!isBackup && !isMeta) continue;
+    mkdirSync(defaultProfileSubdir, { recursive: true });
+    const dest = join(defaultProfileSubdir, name);
+    try {
+      renameSync(full, dest);
+      moved += 1;
+    } catch {
+      /* ignore — file may already exist at dest from a partial prior run */
+    }
+  }
+  if (moved > 0) {
+    console.log(`[backup] Migrated ${moved} legacy backup file(s) into <base>/default/`);
+  }
 }
 
 export interface DiskUsage {
@@ -292,48 +346,37 @@ const DEFAULT_SCHEDULE: BackupSchedule = {
   lastRunAt: null,
 };
 
-/** Pull the schedule config from app_settings.id=1, with defaults for
- * a fresh install. Reads through the unlocked `db` proxy — callers
- * must run after the DB is unlocked (the scheduler waits for that).
+/** Pull the schedule config from the multi-DB registry. The schedule
+ *  is global — one config governs scheduled backups across every
+ *  profile (only the currently-unlocked profile actually gets backed
+ *  up when the timer fires, since SQLCipher needs an in-memory key
+ *  to copy the file).
  *
- * Falls back to defaults if the `backup_schedule` column doesn't
- * exist yet (the migration hasn't applied) so the backup list page
- * still loads. */
+ *  Reads from `databases.json` so this works pre-unlock too (the
+ *  Settings page can render the schedule UI without the user typing
+ *  a passphrase first). */
 export function readSchedule(): BackupSchedule {
-  try {
-    // .all() forces the synchronous better-sqlite3 result — drizzle's
-    // typed builder otherwise stays a thenable and TS won't let us
-    // destructure it directly.
-    const rows = db
-      .select({ schedule: appSettings.backupSchedule })
-      .from(appSettings)
-      .where(eq(appSettings.id, 1))
-      .limit(1)
-      .all();
-    return rows[0]?.schedule ?? DEFAULT_SCHEDULE;
-  } catch (e) {
-    console.error("[backup] readSchedule failed, using defaults:", e);
-    return DEFAULT_SCHEDULE;
-  }
+  const cfg = readScheduleFromRegistry();
+  return {
+    enabled: cfg.enabled,
+    intervalDays: cfg.intervalDays,
+    retain: cfg.retain,
+    lastRunAt: cfg.lastRunAt,
+  };
 }
 
 /** Persist a partial schedule update. Merges over the existing config
- * so `lastRunAt` (touched by the scheduler) and the user-edited
- * fields don't clobber each other. */
+ *  so `lastRunAt` (touched by the scheduler) and the user-edited
+ *  fields don't clobber each other. */
 export function writeSchedule(patch: Partial<BackupSchedule>): BackupSchedule {
   const current = readSchedule();
   const next: BackupSchedule = { ...current, ...patch };
-  db.update(appSettings)
-    .set({ backupSchedule: next, updatedAt: new Date() })
-    .where(eq(appSettings.id, 1))
-    .run();
-  // If the row didn't exist (very fresh install pre-migration), insert
-  // it. The migration covers id=1 so this is belt-and-braces.
-  db.run(sql`
-    INSERT INTO app_settings (id, backup_schedule)
-    SELECT 1, ${JSON.stringify(next)}
-    WHERE NOT EXISTS (SELECT 1 FROM app_settings WHERE id = 1)
-  `);
+  writeScheduleToRegistry({
+    enabled: next.enabled,
+    intervalDays: next.intervalDays,
+    retain: next.retain,
+    lastRunAt: next.lastRunAt,
+  });
   return next;
 }
 
@@ -407,8 +450,9 @@ export function swapLive(newDbPath: string): void {
   // Remove WAL + SHM siblings of the live DB — they belong to the
   // pre-restore connection and will be regenerated when the next
   // unlock opens the new file.
+  const path = livePath();
   for (const suffix of ["-wal", "-shm"]) {
-    const p = livePath + suffix;
+    const p = path + suffix;
     if (existsSync(p)) {
       try {
         rmSync(p);
@@ -417,5 +461,5 @@ export function swapLive(newDbPath: string): void {
       }
     }
   }
-  renameSync(safe, livePath);
+  renameSync(safe, path);
 }

@@ -17,14 +17,21 @@ import {
 import { describeOpenError } from "./open-error";
 import { DEFAULT_CATEGORIES } from "./default-categories";
 import { buildSampleData } from "./sample-data";
+import {
+  activeLivePath,
+  getActiveProfile,
+  pathForProfile,
+  readRegistry,
+  setActiveProfileId,
+} from "@/lib/db-profiles";
 
-// Default DB path: /data/budget.db inside the container (mount ./data
-// to /data on the host), or process.env.SQLITE_PATH for non-Docker /
-// dev.
-const sqlitePath = process.env.SQLITE_PATH ?? "/data/budget.db";
-/** Where the live database lives — re-exported so the backup module
- * can copy from / swap to it without re-resolving the env. */
-export const livePath = sqlitePath;
+/** Where the live database lives — derived from the active profile in
+ * the registry. The backup module + restore flow call this to copy
+ * from / swap to the on-disk file. Falls back to the SQLITE_PATH
+ * basename via the default profile when no registry exists yet. */
+export function livePath(): string {
+  return activeLivePath();
+}
 
 /**
  * Lock state for the SQLCipher passphrase. The app boots in LOCKED
@@ -50,6 +57,12 @@ type DrizzleDb = BetterSQLite3Database<Schema>;
 interface DbState {
   client: BetterSqlite3.Database | null;
   drizzleDb: DrizzleDb | null;
+  /** Id of the profile whose file `client` is currently keyed against.
+   * Compared against `getActiveProfile().id` on every unlock to detect
+   * a profile switch that happened while the connection was held —
+   * if they differ, the old connection is dropped so the new one
+   * opens the right file. */
+  openProfileId: string | null;
 }
 
 // Pin the lock state to globalThis ALWAYS, not just in dev. In prod
@@ -67,7 +80,11 @@ interface DbState {
 // this for HMR survival; the prod path needs it for chunk-boundary
 // survival.
 const globalForDb = globalThis as unknown as { __dbState?: DbState };
-const state: DbState = globalForDb.__dbState ?? { client: null, drizzleDb: null };
+const state: DbState = globalForDb.__dbState ?? {
+  client: null,
+  drizzleDb: null,
+  openProfileId: null,
+};
 globalForDb.__dbState = state;
 
 export class DbLockedError extends Error {
@@ -84,13 +101,13 @@ export function isUnlocked(): boolean {
   return state.client !== null;
 }
 
-/** True when a SQLCipher file is already present at the configured
- * path. Used by /api/unlock to tell the unlock page whether this is
- * a first-run scenario (no file → typing a passphrase CREATES the
- * DB) or an existing-DB unlock (typing the wrong passphrase
- * fails). */
+/** True when a SQLCipher file is already present at the active
+ * profile's path. Used by /api/unlock to tell the unlock page
+ * whether this is a first-run scenario (no file → typing a
+ * passphrase CREATES the DB) or an existing-DB unlock (typing the
+ * wrong passphrase fails). */
 export function dbExists(): boolean {
-  return existsSync(sqlitePath);
+  return existsSync(livePath());
 }
 
 /** Direct access to the underlying better-sqlite3 handle. Used by the
@@ -120,10 +137,11 @@ function openWithKey(passphrase: string): OpenResult {
   if (!passphrase) {
     return { ok: false, error: "Passphrase is required." };
   }
+  const path = livePath();
   let client: BetterSqlite3.Database | undefined;
   try {
-    mkdirSync(dirname(sqlitePath), { recursive: true });
-    client = new Database(sqlitePath) as unknown as BetterSqlite3.Database;
+    mkdirSync(dirname(path), { recursive: true });
+    client = new Database(path) as unknown as BetterSqlite3.Database;
     // PRAGMA key MUST be the very first statement on the connection,
     // before any read or write.
     client.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
@@ -139,7 +157,7 @@ function openWithKey(passphrase: string): OpenResult {
     } catch {
       /* ignore */
     }
-    return { ok: false, error: describeOpenError(err, sqlitePath) };
+    return { ok: false, error: describeOpenError(err, path) };
   }
 }
 
@@ -158,10 +176,27 @@ export function unlock(
   const probe = openWithKey(passphrase);
   if (!probe.ok) return probe;
 
+  const activeId = getActiveProfile().id;
+  // If a stale connection is still open against a DIFFERENT profile —
+  // e.g. the operator called switchProfile() but didn't unlock the
+  // new one — drop it first so the in-memory client always matches
+  // the active profile id.
+  if (state.client && state.openProfileId && state.openProfileId !== activeId) {
+    try {
+      state.client.close();
+    } catch {
+      /* ignore */
+    }
+    state.client = null;
+    state.drizzleDb = null;
+    state.openProfileId = null;
+  }
+
   if (state.client) {
-    // Already keyed in this process. The probe confirmed the supplied
-    // passphrase opens the file, so the state stays — discard the
-    // probe handle and reuse the live connection.
+    // Already keyed in this process (and against the same profile).
+    // The probe confirmed the supplied passphrase opens the file, so
+    // the state stays — discard the probe handle and reuse the live
+    // connection.
     try {
       probe.client.close();
     } catch {
@@ -176,6 +211,7 @@ export function unlock(
     seedSystemCategoriesIfMissing();
     seedSampleDataIfMissing();
     runOrphanTransferBackfill();
+    runLegacyBackupMigration();
     return { ok: true };
   }
 
@@ -185,14 +221,57 @@ export function unlock(
   probe.client.pragma("busy_timeout = 5000");
   state.client = probe.client;
   state.drizzleDb = drizzle(probe.client, { schema });
+  state.openProfileId = activeId;
 
   runPendingMigrations();
   seedDefaultUserIfMissing();
   seedSystemCategoriesIfMissing();
   seedSampleDataIfMissing();
   runOrphanTransferBackfill();
+  runLegacyBackupMigration();
 
   return { ok: true };
+}
+
+/** Move any legacy backup files (sitting at `<base>/budgets_*.sqlite`
+ *  from the single-DB layout) into `<base>/default/` so the
+ *  per-profile backup layout takes over. Lazy-imported to avoid a
+ *  cycle with the backup module. Errors are logged but never thrown. */
+function runLegacyBackupMigration(): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m = require("@/lib/backup/sqlite-backup");
+    m.migrateLegacyBackups();
+  } catch (e) {
+    console.error("[db] Legacy-backup migration failed:", e);
+  }
+}
+
+/**
+ * Switch the active profile. Closes the currently-open connection
+ * (re-unlock-on-switch semantics), updates the registry's active
+ * pointer, and returns. The next request will hit DbLockedError and
+ * the proxy/middleware will redirect to /unlock against the newly-
+ * active profile's file.
+ *
+ * Throws if the supplied id isn't a known profile.
+ */
+export function switchProfile(id: string): void {
+  const reg = readRegistry();
+  if (!reg.profiles.some((p) => p.id === id)) {
+    throw new Error(`Unknown profile id: ${id}`);
+  }
+  // Always lock first — even when switching to the SAME id, the
+  // caller is asking us to re-unlock from scratch.
+  try {
+    state.client?.close();
+  } catch {
+    /* ignore */
+  }
+  state.client = null;
+  state.drizzleDb = null;
+  state.openProfileId = null;
+  setActiveProfileId(id);
 }
 
 /** One-shot data backfill that gives every legacy "this is a transfer"
@@ -483,6 +562,7 @@ export function lock(): void {
   }
   state.client = null;
   state.drizzleDb = null;
+  state.openProfileId = null;
 }
 
 // Auto-unlock from env if the operator chose to inject the key that
@@ -492,9 +572,136 @@ if (process.env.SQLITE_KEY) {
   const r = unlock(process.env.SQLITE_KEY);
   if (!r.ok) {
     console.error(
-      `[db] SQLITE_KEY in env did NOT unlock ${sqlitePath}: ${r.error}. ` +
+      `[db] SQLITE_KEY in env did NOT unlock ${livePath()}: ${r.error}. ` +
         `Falling back to web unlock.`,
     );
+  }
+}
+
+/** Create a brand-new SQLCipher file for a freshly-registered profile.
+ *  Opens it with the supplied passphrase (this is what writes the
+ *  encryption key to the new file), runs pragmas + migrations + the
+ *  one-time seeders, then closes the connection. The caller is
+ *  responsible for then calling `switchProfile(id)` and routing the
+ *  user to `/unlock` so they re-enter the passphrase against the now-
+ *  active new file.
+ *
+ *  Throws if the path already exists (preventing accidental clobber)
+ *  or if SQLite/SQLCipher reports an open error.
+ *
+ *  Imports drizzle migrator + seeders locally to avoid a cycle with
+ *  `db/index.ts`'s top-level state.
+ */
+export function initProfileFile(
+  profileId: string,
+  passphrase: string,
+): { ok: true } | { ok: false; error: string } {
+  if (!passphrase) return { ok: false, error: "Passphrase is required." };
+  const reg = readRegistry();
+  const profile = reg.profiles.find((p) => p.id === profileId);
+  if (!profile) return { ok: false, error: `Unknown profile: ${profileId}` };
+  const path = pathForProfile(profile);
+  if (existsSync(path)) {
+    return {
+      ok: false,
+      error: `File already exists at ${path}; refusing to overwrite.`,
+    };
+  }
+  let client: BetterSqlite3.Database | undefined;
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    client = new Database(path) as unknown as BetterSqlite3.Database;
+    client.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
+    client.pragma("cipher_compatibility = 4");
+    client.pragma("journal_mode = WAL");
+    client.pragma("foreign_keys = ON");
+    client.pragma("busy_timeout = 5000");
+    // Run drizzle migrations against this fresh handle directly.
+    // We don't promote it to state.client — the caller will switch
+    // and the user will re-unlock against this file.
+    const d = drizzle(client, { schema });
+    migrate(d, { migrationsFolder: resolve(process.cwd(), "drizzle") });
+    // Seed system categories + default user so the new DB is
+    // immediately usable on first unlock. Skip sample data — fresh
+    // multi-DB profiles are intentionally empty so the operator can
+    // start with their own data.
+    // Use raw inserts here to avoid the singleton-state assumption
+    // baked into the seedXxxIfMissing helpers below.
+    const count = client
+      .prepare("SELECT count(*) AS n FROM categories")
+      .get() as { n: number };
+    if (count.n === 0) {
+      // DEFAULT_CATEGORIES is a flat list — no parent / child
+      // relationships (those are created by the operator later via
+      // the categories UI). One INSERT per row, parent_id always
+      // null.
+      const insertCat = client.prepare(
+        `INSERT INTO categories (id, name, type, color, parent_id, is_system, transfer_kind, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, 1, 'none', strftime('%s','now')*1000, strftime('%s','now')*1000)`,
+      );
+      const newId = (): string =>
+        Array.from(
+          { length: 16 },
+          () => Math.floor(Math.random() * 256),
+        )
+          .map((b, i) => {
+            if (i === 6) return ((b & 0x0f) | 0x40).toString(16).padStart(2, "0");
+            if (i === 8) return ((b & 0x3f) | 0x80).toString(16).padStart(2, "0");
+            return b.toString(16).padStart(2, "0");
+          })
+          .join("")
+          .replace(
+            /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
+            "$1-$2-$3-$4-$5",
+          );
+      for (const c of DEFAULT_CATEGORIES) {
+        insertCat.run(newId(), c.name, c.type, c.color);
+      }
+    }
+    // Default user. Username admin / password admin — operator should
+    // rotate via Settings.
+    const userCount = client
+      .prepare("SELECT count(*) AS n FROM users")
+      .get() as { n: number };
+    if (userCount.n === 0) {
+      client
+        .prepare(
+          `INSERT INTO users (id, username, password_hash, role, created_at)
+           VALUES (lower(hex(randomblob(16))), 'admin', ?, 'admin', strftime('%s','now')*1000)`,
+        )
+        .run(hashSync("admin", 10));
+    }
+    // Mark the orphan-transfer backfill as done so it doesn't fire
+    // its first-time pass on a fresh DB.
+    client
+      .prepare(
+        `INSERT INTO app_settings (id, transfer_backfill_done, sample_data_seeded, updated_at)
+         VALUES (1, 1, 1, strftime('%s','now')*1000)
+         ON CONFLICT(id) DO UPDATE SET transfer_backfill_done = 1, sample_data_seeded = 1`,
+      )
+      .run();
+    client.close();
+    return { ok: true };
+  } catch (err) {
+    try {
+      client?.close();
+    } catch {
+      /* ignore */
+    }
+    // If we created a partial file, remove it so a retry has a clean
+    // slate.
+    try {
+      if (existsSync(path)) {
+        // Don't delete an existing-but-not-mine file — the existsSync
+        // check at the top guards that, so this branch only fires on
+        // partial writes from this same call.
+        const { rmSync } = require("node:fs");
+        rmSync(path);
+      }
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, error: describeOpenError(err, path) };
   }
 }
 

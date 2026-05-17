@@ -198,8 +198,13 @@ export async function GET(request: Request) {
       substr(t.date, 1, 7)                                                                                                 AS month,
       CAST(SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END) AS REAL)                                                   AS credit,
       CAST(SUM(CASE WHEN t.amount < 0 THEN t.amount ELSE 0 END) AS REAL)                                                   AS debit,
-      CAST(SUM(CASE WHEN t.amount > 0 AND c.transfer_kind IN ('internal','external') THEN t.amount ELSE 0 END) AS REAL)    AS transfer_in,
-      CAST(SUM(CASE WHEN t.amount < 0 AND c.transfer_kind IN ('internal','external') THEN t.amount ELSE 0 END) AS REAL)    AS transfer_out
+      -- A row counts as a transfer when EITHER its category is
+      -- tagged internal/external OR its is_transfer flag is set.
+      -- The flag covers manually-paired rows whose category was
+      -- never updated (manualPair sets is_transfer but leaves the
+      -- category alone, by design — see transfer-match.ts).
+      CAST(SUM(CASE WHEN t.amount > 0 AND (c.transfer_kind IN ('internal','external') OR t.is_transfer = 1) THEN t.amount ELSE 0 END) AS REAL) AS transfer_in,
+      CAST(SUM(CASE WHEN t.amount < 0 AND (c.transfer_kind IN ('internal','external') OR t.is_transfer = 1) THEN t.amount ELSE 0 END) AS REAL) AS transfer_out
     FROM transactions t
     LEFT JOIN categories c ON c.id = t.category_id
     WHERE t.date >= ${from} AND t.date <= ${to}
@@ -258,7 +263,9 @@ export async function GET(request: Request) {
     LEFT JOIN categories c ON c.id = t.category_id
     WHERE t.date >= ${from} AND t.date <= ${to}
       AND t.account_id IN (${idList})
-      AND c.transfer_kind IN ('internal', 'external')
+      -- Mirror the monthRows filter: accept rows the matcher tagged
+      -- via category OR rows manually paired via is_transfer = 1.
+      AND (c.transfer_kind IN ('internal', 'external') OR t.is_transfer = 1)
     GROUP BY t.account_id, substr(t.date, 1, 7), pair.account_id
   `)) as Array<{
     account_id: string;

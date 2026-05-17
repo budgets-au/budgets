@@ -758,7 +758,7 @@ export function TransactionRow({
                       payee: t.payee,
                     });
                   }}
-                  className="shrink-0 p-1 -my-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100"
+                  className="shrink-0 p-1 -my-1 rounded text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 hover:bg-muted transition-colors"
                   title="Link as transfer to another transaction"
                   aria-label="Link as transfer"
                 >

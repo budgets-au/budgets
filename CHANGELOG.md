@@ -9,6 +9,33 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.128.1 — 2026-05-17
+
+### Fixed
+- **Accounts report: manually-paired transfers now appear in the
+  counterparty breakdown.** Both the per-account aggregate and the
+  per-counterparty rows in
+  `/api/reports/accounts-cashflow` were filtering on
+  `c.transfer_kind IN ('internal','external')` only, which silently
+  dropped any transaction paired via the manual-link dialog (those
+  rows have `is_transfer = 1` but the category's `transfer_kind`
+  stays `'none'` — `manualPair()` sets the pair link without
+  touching the user's category). Both filters now also accept
+  `t.is_transfer = 1`, so manually-paired rows land under the right
+  counterparty without losing the user's category choice. Pure
+  read-side change; no schema migration, no data rewrite.
+
+### Changed
+- **Transaction-row link icon is now always visible in the indigo
+  CTA colour.** The chain-link "Link as transfer" affordance on
+  unpaired rows used to be hover-revealed in muted grey, which
+  buried a useful action behind discovery friction. It's now shown
+  on every unpaired row in `text-indigo-600 dark:text-indigo-400`
+  so the affordance is obvious at a glance. The Unlink button on
+  paired rows stays hover-revealed in rose — it's destructive, so
+  nagging the operator with it on every row would be the wrong
+  energy.
+
 ## 0.128.0 — 2026-05-17
 
 ### Removed

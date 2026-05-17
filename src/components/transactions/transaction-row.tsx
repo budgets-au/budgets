@@ -736,6 +736,15 @@ export function TransactionRow({
                   <Search className="h-3.5 w-3.5" />
                 </button>
               )}
+              {/* Transfer-pair slot — always rendered so every row's
+                  action cluster has the same width and the Search
+                  icon stays at a consistent x-position. Unpaired
+                  rows show a Link2 ("link as transfer") that opens
+                  the candidate-picker dialog; paired rows show an
+                  Unlink that breaks the existing pair. When neither
+                  callback is supplied OR the unpaired-link callback
+                  is wired and the row has no payee context, fall
+                  back to a sized-only placeholder. */}
               {!linked && onRequestLink && (
                 <button
                   type="button"
@@ -755,6 +764,26 @@ export function TransactionRow({
                 >
                   <Link2 className="h-3.5 w-3.5" />
                 </button>
+              )}
+              {linked && onUnpair && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUnpair(t.id);
+                  }}
+                  className="shrink-0 p-1 -my-1 rounded text-muted-foreground hover:text-rose-500 hover:bg-muted transition-colors lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100"
+                  title="Unlink this transfer pair"
+                  aria-label="Unlink transfer"
+                >
+                  <Unlink className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {/* Width-matched placeholder for the rare row that has
+                  neither callback (e.g. embedded read-only contexts).
+                  Keeps the Search-icon column aligned. */}
+              {!(!linked && onRequestLink) && !(linked && onUnpair) && (
+                <span className="shrink-0 inline-block w-[22px]" aria-hidden />
               )}
             </span>
           </div>

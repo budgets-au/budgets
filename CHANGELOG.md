@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.124.4 — 2026-05-17
+
+### Fixed
+- **Transaction row: Search icon now stays at a consistent
+  x-position across paired and unpaired rows.** The chain-link
+  "Link as transfer" button was only rendered on unpaired rows,
+  so the icon-cluster width differed and the Search icon shifted
+  left on paired rows. Paired rows now render an Unlink button
+  in the same slot — same width, plus a useful affordance: click
+  to break the transfer pair directly from the row without
+  digging into the linked-details panel. Both buttons follow the
+  existing hover-revealed pattern (`lg:opacity-0
+  lg:group-hover:opacity-100`).
+
 ## 0.124.3 — 2026-05-16
 
 ### Added

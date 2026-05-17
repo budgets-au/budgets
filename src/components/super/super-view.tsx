@@ -15,14 +15,15 @@ import { SuperHistoryChart } from "./super-history-chart";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-type Person = "self" | "partner";
-
 interface Snapshot {
   id: string;
   fyEndYear: number;
   balance: string;
   contributions: string;
-  person: Person;
+  /** Free-form person key — see `src/lib/super-people.ts`. Used to
+   *  be constrained to "self" | "partner"; loosened in 0.127 so any
+   *  number of people can coexist. */
+  person: string;
   fundName: string | null;
   notes: string | null;
 }
@@ -70,18 +71,21 @@ function formatPct(p: number | null): string {
 
 const formatFY = formatFy;
 
-interface LabelsResponse {
-  selfLabel: string | null;
-  partnerLabel: string | null;
-}
-
-export function SuperView({ person }: { person: Person }) {
-  const swrKey = `/api/super?person=${person}`;
+export function SuperView({
+  person,
+  label,
+  onDelete,
+}: {
+  person: string;
+  label: string;
+  /** Optional — when supplied, the heading shows a small trash
+   *  icon that calls back with the person key. The host page
+   *  decides whether deletion is allowed (e.g. block deleting the
+   *  last person so the page is never empty). */
+  onDelete?: (key: string) => void;
+}) {
+  const swrKey = `/api/super?person=${encodeURIComponent(person)}`;
   const { data: snapshots = [], isLoading } = useSWR<Snapshot[]>(swrKey, fetcher);
-  const { data: labels } = useSWR<LabelsResponse>("/api/super/labels", fetcher);
-  const fallback = person === "self" ? "Me" : "Partner";
-  const heading =
-    (person === "self" ? labels?.selfLabel : labels?.partnerLabel) ?? fallback;
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -106,7 +110,7 @@ export function SuperView({ person }: { person: Person }) {
 
   return (
     <div className="space-y-4">
-      <EditableHeading person={person} heading={heading} />
+      <EditableHeading person={person} heading={label} onDelete={onDelete} />
       {latest && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Card>
@@ -267,9 +271,11 @@ export function SuperView({ person }: { person: Person }) {
 function EditableHeading({
   person,
   heading,
+  onDelete,
 }: {
-  person: Person;
+  person: string;
   heading: string;
+  onDelete?: (key: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(heading);
@@ -281,13 +287,18 @@ function EditableHeading({
       return;
     }
     setSaving(true);
-    const res = await fetch("/api/super/labels", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ person, label: draft }),
-    });
+    const res = await fetch(
+      `/api/super/people/${encodeURIComponent(person)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: draft }),
+      },
+    );
     if (res.ok) {
-      mutate("/api/super/labels");
+      // Hosting page subscribes to /api/super/people; invalidate it
+      // so the heading + tab order pick up the new label.
+      mutate("/api/super/people");
       setEditing(false);
     } else {
       toast.error("Couldn't save label");
@@ -330,17 +341,30 @@ function EditableHeading({
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        setDraft(heading);
-        setEditing(true);
-      }}
-      className="group inline-flex items-center gap-2 text-xl font-semibold hover:text-foreground"
-    >
-      {heading}
-      <Pencil className="h-3.5 w-3.5 text-muted-foreground lg:opacity-0 lg:group-hover:opacity-100 transition-opacity" />
-    </button>
+    <div className="inline-flex items-center gap-2 group">
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(heading);
+          setEditing(true);
+        }}
+        className="inline-flex items-center gap-2 text-xl font-semibold hover:text-foreground"
+      >
+        {heading}
+        <Pencil className="h-3.5 w-3.5 text-muted-foreground lg:opacity-0 lg:group-hover:opacity-100 transition-opacity" />
+      </button>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={() => onDelete(person)}
+          className="p-1 rounded text-muted-foreground hover:text-rose-500 hover:bg-muted transition-colors lg:opacity-0 lg:group-hover:opacity-100"
+          title={`Remove "${heading}" and all their snapshots`}
+          aria-label="Remove person"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -452,7 +476,7 @@ function SnapshotForm({
   onCancel,
   onSaved,
 }: {
-  person: Person;
+  person: string;
   snapshot?: Snapshot;
   onCancel: () => void;
   onSaved: () => void;

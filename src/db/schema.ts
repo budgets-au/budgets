@@ -359,11 +359,22 @@ export type BackupSchedule = {
   lastRunAt: string | null;
 };
 
+/** Ordered list of "people" tracked on the super page. Each entry's
+ *  `key` matches `superannuation_snapshots.person`; `label` is the
+ *  display name shown in the UI. The legacy `super_self_label` /
+ *  `super_partner_label` columns are still read as a backfill source
+ *  for keys "self" and "partner" when this column is null, but new
+ *  writes go through this list. */
+export type SuperPerson = { key: string; label: string };
+
 export const appSettings = sqliteTable("app_settings", {
   id: integer("id").primaryKey().default(1),
-  // Custom labels for the two Super columns ("Me"/"Partner" by default).
+  // Legacy: only read as a fallback when `super_people` is null and
+  // a snapshot uses key "self" / "partner". New label updates land
+  // in the `superPeople` JSON column instead.
   superSelfLabel: text("super_self_label"),
   superPartnerLabel: text("super_partner_label"),
+  superPeople: text("super_people", { mode: "json" }).$type<SuperPerson[]>(),
   taxConfig: text("tax_config", { mode: "json" }).$type<TaxConfig>(),
   backupSchedule: text("backup_schedule", { mode: "json" }).$type<BackupSchedule>(),
   /** DB-backed equivalent of the per-browser localStorage blob —

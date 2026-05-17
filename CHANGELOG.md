@@ -9,6 +9,56 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.127.0 — 2026-05-17
+
+### Changed
+- **Superannuation page: 1 or more people, not fixed at 2.** The
+  page used to render two `<SuperView>` columns (`self` + `partner`)
+  regardless of household size, which left a perpetually-empty
+  "Partner" column for single-person households. Replaced with a
+  dynamic list managed via a new `app_settings.super_people` JSON
+  column (migration `0008_super_people.sql`).
+  - **Add person**: button at the bottom of the page accepts a
+    free-text label (e.g. "Sarah"), auto-slugs it into a stable key,
+    and appends to the list. Numeric-suffix collision avoidance so
+    two people can share a first name.
+  - **Rename person**: click the heading on any `<SuperView>` and
+    edit inline — same affordance as before, now routed through
+    the new `/api/super/people/[key]` PATCH instead of the old
+    label-pair endpoint.
+  - **Remove person**: trash icon next to the heading (hover-revealed
+    on desktop). Confirmed via the same `useConfirm` dialog the
+    transactions list uses; on confirm, every snapshot for that
+    person is deleted alongside the people-list entry. The last
+    remaining person can't be removed (the trash icon is hidden so
+    the page always has something to render).
+  - **Layout**: 1 person → full-width single column; ≥2 → two-column
+    grid on lg+, single-column below. Wraps gracefully past two
+    people on lg+ (they stack into rows).
+  - **Migration**: `loadSuperPeople()` lazy-derives the initial list
+    from existing snapshots + the legacy `super_self_label` /
+    `super_partner_label` columns. No data migration needed; older
+    installs land on the new page with their existing self / partner
+    setup intact, and the first write to the people list (rename or
+    add) snapshots it into the JSON column.
+
+### Removed
+- **`/api/super/labels` endpoint** — replaced by the new
+  `/api/super/people` CRUD endpoints. The legacy
+  `super_self_label` / `super_partner_label` columns remain on
+  `app_settings` for one release as a backfill source for
+  `loadSuperPeople()`; planned for removal in a later cleanup.
+
+### Security
+- **Code-scanning: 5 path-injection alerts dismissed as
+  false-positive.** The flagged dataflow passes through
+  `assertWithinBackupDir(p)` which resolves the path and asserts
+  `startsWith(backupDir())`, returning the validated value for the
+  caller to re-bind. The runtime guard is correct; CodeQL's heuristic
+  doesn't recognise this particular sanitiser pattern. Filenames
+  are also pre-validated via `isSafeBackupFilename()` on every API
+  route. Documented the rationale on each dismissed alert.
+
 ## 0.126.1 — 2026-05-17
 
 ### Fixed

@@ -47,11 +47,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database snapshots — too large, contain PII; the README + git tag pair is
-# the source of truth for which snapshot pairs with which commit
-backups/*.dump
-backups/*.sql
-
 # CSV / OFX / QIF samples that drive the import regression tests —
 # kept locally on dev machines but never committed since they're
 # real-world bank exports (even anonymised, the financial pattern

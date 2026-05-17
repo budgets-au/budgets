@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
@@ -154,18 +155,19 @@ export function ImportView() {
   /** Which row is expanded. Single-row-open-at-a-time matches the
    * Transactions page (transactions-view.tsx → `expandedId`). */
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  // SWR-backed so the global cache invalidation from the
+  // Add-Category dialog reaches this list — without it, the in-row
+  // "Create new category" affordance can't render the new label
+  // until the page is refreshed.
+  const { data: categories = [] } = useSWR<CategoryOption[]>(
+    "/api/categories",
+    (url: string) => fetch(url).then((r) => r.json()),
+  );
   /** Optimistic category overrides keyed by importHash so the chip flips
    * instantly when the user creates a rule via the in-row picker. */
   const [localOverrides, setLocalOverrides] = useState<
     Map<string, { categoryId: string; categoryName: string }>
   >(new Map());
-  useEffect(() => {
-    fetch("/api/categories")
-      .then((r) => r.json())
-      .then((cats: CategoryOption[]) => setCategories(cats))
-      .catch(() => {});
-  }, []);
 
   const [file, setFile] = useState<File | null>(null);
 

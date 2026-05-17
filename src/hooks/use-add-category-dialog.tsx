@@ -133,9 +133,24 @@ export function AddCategoryProvider({ children }: { children: ReactNode }) {
       setIsOpen(false);
       setName("");
       setParentId("");
-      // Refresh anyone fetching /api/categories — sidebar pickers,
-      // transactions page, the categories page itself, etc.
-      globalMutate("/api/categories");
+      // Optimistically inject the new row into every subscriber's
+      // cache so the picker that opened this dialog can render the
+      // new category's label immediately on the same React tick that
+      // its value flips to the new id. A background revalidation
+      // still runs to keep the cache canonical. Awaiting the
+      // optimistic write guarantees the cache is updated before the
+      // onCreated callback fires its own state setters.
+      if (created) {
+        await globalMutate(
+          "/api/categories",
+          (current: CategoryDef[] | undefined) => {
+            if (!current) return [created];
+            if (current.some((c) => c.id === created.id)) return current;
+            return [...current, created];
+          },
+          { revalidate: true },
+        );
+      }
       if (created && onCreatedRef.current) {
         onCreatedRef.current(created);
       }

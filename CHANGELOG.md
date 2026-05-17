@@ -9,6 +9,27 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.148.0 — 2026-05-17
+
+### Fixed
+- **Inline "Create category" didn't apply to the source row.** The
+  0.147 picker affordance closed the dialog cleanly but the row
+  it opened from showed the empty placeholder instead of the new
+  category, and the picker's option list didn't include the new
+  row until the page was refreshed. Two compounding bugs:
+  - The Add-Category dialog only *invalidated* the
+    `/api/categories` SWR cache after POST; nothing pre-seeded
+    the new row, so subscribers stayed stale until the
+    background revalidation returned. Switched to an optimistic
+    cache write that injects the new row synchronously, then
+    revalidates in the background.
+  - The CSV import view fetched categories via plain
+    `useState + fetch` instead of SWR, so it never subscribed
+    to the cache at all — `globalMutate` was a no-op for it.
+    Converted to `useSWR("/api/categories")` so the optimistic
+    write reaches the import-row picker the same way it reaches
+    everywhere else.
+
 ## 0.147.0 — 2026-05-17
 
 ### Added

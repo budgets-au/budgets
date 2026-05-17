@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
@@ -86,7 +87,14 @@ export function Sidebar() {
         >
           <Menu className="h-6 w-6" />
         </button>
-        <span className="text-xl">💰</span>
+        <Image
+          src="/logo.png"
+          alt=""
+          width={32}
+          height={20}
+          className="h-5 w-auto"
+          priority
+        />
         <span className="font-semibold text-lg tracking-tight">Budgets</span>
       </div>
 
@@ -108,7 +116,14 @@ export function Sidebar() {
       >
         <div className="px-6 py-5 border-b flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">💰</span>
+            <Image
+              src="/logo.png"
+              alt=""
+              width={40}
+              height={24}
+              className="h-6 w-auto"
+              priority
+            />
             <span className="font-semibold text-lg tracking-tight">Budgets</span>
           </div>
           <button

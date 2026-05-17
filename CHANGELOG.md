@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.134.0 — 2026-05-17
+
+### Changed
+- **App logo replaces the 💰 emoji.** Custom illustration (calendar
+  + bar-chart card + gold coin stack) replaces the placeholder
+  emoji in three places: mobile topbar, desktop sidebar header, and
+  the login card. The asset's white background was knocked out to
+  transparent so it sits cleanly on both light and dark themes — no
+  white rectangle bleeding through in dark mode.
+- **Favicon updated.** Both `src/app/icon.png` (modern browsers)
+  and a regenerated multi-size `src/app/favicon.ico` (16/32/48/64/
+  128/256) now use the new logo.
+
 ## 0.133.0 — 2026-05-17
 
 ### Fixed

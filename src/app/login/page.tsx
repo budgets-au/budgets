@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +39,14 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="text-3xl mb-2">💰</div>
+          <Image
+            src="/logo.png"
+            alt=""
+            width={160}
+            height={80}
+            className="h-16 w-auto mb-2 mx-auto"
+            priority
+          />
           <CardTitle className="text-2xl">Budgets</CardTitle>
           <p className="text-sm text-muted-foreground">Household spending tracker</p>
         </CardHeader>

@@ -524,6 +524,10 @@ export function CategoryManager({
                 typeFilter={form.type === "income" ? "income" : "expense"}
                 maxDepth={1}
                 uncategorisedLabel="Top-level"
+                // Opening another Add-Category dialog from inside the
+                // editor is recursive and confusing — keep this picker
+                // strict-pick.
+                allowCreate={false}
                 triggerClassName="h-9 text-sm px-3 w-full"
                 popoverClassName="w-[var(--anchor-width)] p-0 gap-0 overflow-hidden min-w-72"
               />
@@ -736,6 +740,8 @@ function CategoryEditDialog({
               // which must stay ≤ 2 — so candidate.depth ≤ 1 - myDepth.
               maxDepth={1 - myDepth}
               uncategorisedLabel="Top-level"
+              // Mirrors the New-Category form above — strict-pick only.
+              allowCreate={false}
               triggerClassName="h-9 text-sm px-3 w-full"
               popoverClassName="w-[var(--anchor-width)] p-0 gap-0 overflow-hidden min-w-72"
             />

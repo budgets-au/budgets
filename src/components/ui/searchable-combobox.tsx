@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronsUpDown, Check } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronsUpDown, Check, Plus } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -39,6 +39,17 @@ export interface SearchableComboboxProps {
   /** Trigger label when no value matches any item (e.g. value="" and no
    * pinned id="" entry exists). */
   emptyTriggerLabel?: string;
+  /** Opt-in: when set, a "+ Create '<query>'" row appears at the
+   *  bottom of the popover whenever the search box has a non-empty
+   *  query. Picking it closes the popover and fires `onSelect(query)`.
+   *  The combobox is generic, so it does not know what "create" means
+   *  — the caller wires the handler (e.g. open the Add-Category
+   *  dialog with the query prefilled). `label` lets the caller
+   *  customise the row content; default is "Create '<query>'". */
+  onCreate?: {
+    onSelect: (typedQuery: string) => void;
+    label?: (typedQuery: string) => ReactNode;
+  };
   triggerClassName?: string;
   popoverClassName?: string;
   disabled?: boolean;
@@ -71,6 +82,7 @@ export function SearchableCombobox({
   searchPlaceholder = "Search…",
   emptyMessage = "No matches.",
   emptyTriggerLabel,
+  onCreate,
   triggerClassName,
   popoverClassName,
   disabled,
@@ -163,22 +175,37 @@ export function SearchableCombobox({
       ?.scrollIntoView({ block: "nearest" });
   }, [activeIdx]);
 
+  const trimmedQuery = query.trim();
+  const hasCreateRow = !!onCreate && trimmedQuery.length > 0;
+  const createRowIdx = hasCreateRow ? filtered.length : -1;
+  const totalRows = filtered.length + (hasCreateRow ? 1 : 0);
+
   function applyValue(id: string) {
     onChange(id);
     setOpen(false);
   }
 
+  function triggerCreate() {
+    if (!hasCreateRow) return;
+    setOpen(false);
+    onCreate!.onSelect(trimmedQuery);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIdx((i) => (filtered.length === 0 ? 0 : (i + 1) % filtered.length));
+      setActiveIdx((i) => (totalRows === 0 ? 0 : (i + 1) % totalRows));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIdx((i) =>
-        filtered.length === 0 ? 0 : (i - 1 + filtered.length) % filtered.length,
+        totalRows === 0 ? 0 : (i - 1 + totalRows) % totalRows,
       );
     } else if (e.key === "Enter") {
       e.preventDefault();
+      if (hasCreateRow && activeIdx === createRowIdx) {
+        triggerCreate();
+        return;
+      }
       const pick = filtered[activeIdx];
       if (pick) applyValue(pick.item.id);
     } else if (e.key === "Escape") {
@@ -228,7 +255,7 @@ export function SearchableCombobox({
           className="max-h-72 overflow-y-auto py-1"
           role="listbox"
         >
-          {filtered.length === 0 && (
+          {filtered.length === 0 && !hasCreateRow && (
             <li className="px-2 py-2 text-xs text-muted-foreground italic">
               {emptyMessage}
             </li>
@@ -268,6 +295,32 @@ export function SearchableCombobox({
               </li>
             );
           })}
+          {hasCreateRow && (
+            <li
+              data-idx={createRowIdx}
+              role="option"
+              aria-selected={false}
+              onMouseEnter={() => setActiveIdx(createRowIdx)}
+              onClick={triggerCreate}
+              className={`flex items-center gap-2 px-2 py-1 text-xs cursor-pointer border-t ${
+                activeIdx === createRowIdx ? "bg-muted" : ""
+              }`}
+            >
+              <Plus className="h-3 w-3 shrink-0 text-indigo-600 dark:text-indigo-400" />
+              <span className="truncate min-w-0">
+                {onCreate!.label ? (
+                  onCreate!.label(trimmedQuery)
+                ) : (
+                  <>
+                    Create{" "}
+                    <span className="font-medium">
+                      &ldquo;{trimmedQuery}&rdquo;
+                    </span>
+                  </>
+                )}
+              </span>
+            </li>
+          )}
         </ul>
       </PopoverContent>
     </Popover>

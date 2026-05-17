@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { ChevronsUpDown, Check } from "lucide-react";
+import { ChevronsUpDown, Check, Plus } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { buildCategoryMeta } from "@/lib/category-path";
+import { useAddCategory } from "@/hooks/use-add-category-dialog";
 import { cn } from "@/lib/utils";
 
 /** Minimal category shape every consumer already has on hand —
@@ -59,6 +60,15 @@ export interface CategoryDropdownProps {
   /** Trigger button text when no value is selected. */
   placeholder?: string;
 
+  /** When true (default), an inline "Create '<query>'" affordance
+   * appears at the bottom of the popover whenever the search box has
+   * a non-empty query. Picking it opens the global Add-Category
+   * dialog with the typed text prefilled, and applies the new id via
+   * `onChange` as soon as the POST succeeds. Set false on parent-
+   * pickers inside the New-Category dialog itself — opening another
+   * Add-Category dialog from there is recursive and unhelpful. */
+  allowCreate?: boolean;
+
   /** Cosmetic. */
   triggerClassName?: string;
   popoverClassName?: string;
@@ -100,6 +110,7 @@ export function CategoryDropdown({
   maxDepth,
   uncategorisedLabel = "Uncategorised",
   placeholder = "Pick a category…",
+  allowCreate = true,
   triggerClassName,
   popoverClassName,
   disabled = false,
@@ -109,6 +120,7 @@ export function CategoryDropdown({
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const addCategory = useAddCategory();
 
   const { meta } = useMemo(() => buildCategoryMeta(categories), [categories]);
 
@@ -200,15 +212,33 @@ export function CategoryDropdown({
   }, [activeIdx]);
 
   // Sentinel sits at index 0 when present; entries occupy 1..N (or
-  // 0..N-1 when sentinel is omitted).
+  // 0..N-1 when sentinel is omitted). The "Create '<query>'" row,
+  // when active, is appended after the entries.
+  const trimmedQuery = query.trim();
   const hasSentinel = uncategorisedLabel !== null;
   const sentinelIdx = hasSentinel ? 0 : -1;
   const firstEntryIdx = hasSentinel ? 1 : 0;
-  const totalRows = filtered.length + (hasSentinel ? 1 : 0);
+  const hasCreateRow = allowCreate && trimmedQuery.length > 0;
+  const createRowIdx = hasCreateRow
+    ? firstEntryIdx + filtered.length
+    : -1;
+  const totalRows =
+    filtered.length + (hasSentinel ? 1 : 0) + (hasCreateRow ? 1 : 0);
 
   function apply(id: string | null) {
     onChange(id);
     setOpen(false);
+  }
+
+  function triggerCreate() {
+    const name = trimmedQuery;
+    if (!name) return;
+    setOpen(false);
+    addCategory.open({
+      name,
+      type: typeFilter,
+      onCreated: (cat) => onChange(cat.id),
+    });
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -223,6 +253,8 @@ export function CategoryDropdown({
       e.preventDefault();
       if (hasSentinel && activeIdx === sentinelIdx) {
         apply(null);
+      } else if (hasCreateRow && activeIdx === createRowIdx) {
+        triggerCreate();
       } else {
         const pick = filtered[activeIdx - firstEntryIdx];
         if (pick) apply(pick.id);
@@ -290,7 +322,7 @@ export function CategoryDropdown({
               </span>
             </li>
           )}
-          {filtered.length === 0 && query.trim().length > 0 && (
+          {filtered.length === 0 && trimmedQuery.length > 0 && !hasCreateRow && (
             <li className="px-2 py-2 text-xs text-muted-foreground italic">
               No matches.
             </li>
@@ -326,6 +358,24 @@ export function CategoryDropdown({
               </li>
             );
           })}
+          {hasCreateRow && (
+            <li
+              data-idx={createRowIdx}
+              role="option"
+              aria-selected={false}
+              onMouseEnter={() => setActiveIdx(createRowIdx)}
+              onClick={triggerCreate}
+              className={`flex items-center gap-2 px-2 py-1 text-xs cursor-pointer border-t ${
+                activeIdx === createRowIdx ? "bg-muted" : ""
+              }`}
+            >
+              <Plus className="h-3 w-3 shrink-0 text-indigo-600 dark:text-indigo-400" />
+              <span className="truncate min-w-0">
+                Create{" "}
+                <span className="font-medium">&ldquo;{trimmedQuery}&rdquo;</span>
+              </span>
+            </li>
+          )}
         </ul>
       </PopoverContent>
     </Popover>

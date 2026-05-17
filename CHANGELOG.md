@@ -9,6 +9,38 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.147.0 — 2026-05-17
+
+### Added
+- **Create a category from the picker.** Type a name into any
+  category picker (transaction row, CSV import row, bulk-action
+  bar, scheduled-transaction form, schedule button, dashboard
+  widget config, daily-heatmap filter) — if the typed text
+  doesn't match an existing category, a "+ Create '<query>'"
+  affordance appears at the bottom of the popover. Picking it
+  opens the existing Add-Category dialog with the name
+  prefilled (and the type preset when the picker has a
+  `typeFilter`, e.g. import rows whose sign already implies
+  income/expense). On save, the new category id is applied
+  back to the field that opened the picker — no extra click,
+  no navigation away from where you were working.
+- **Generic `onCreate` hook on `SearchableCombobox`.** The
+  underlying combobox primitive grew an opt-in `onCreate`
+  prop: any caller can wire a "Create '<query>'" empty-state
+  row. The transactions bulk-action picker uses it to pop the
+  Add-Category dialog; other callers (account / payee
+  pickers) are unchanged.
+
+### Changed
+- `useAddCategory().open()` now accepts `name` (prefill) and
+  `onCreated` (callback fired with the row returned by
+  `POST /api/categories`) so picker callers can immediately
+  bind the new id to the source field.
+- Parent-pickers inside the category editor (New + Edit
+  forms) opt out of the create affordance — opening another
+  Add-Category dialog from inside an Add-Category dialog is
+  recursive and unhelpful.
+
 ## 0.146.0 — 2026-05-17
 
 ### Added

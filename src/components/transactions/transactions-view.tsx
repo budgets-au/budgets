@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Switch } from "@/components/ui/switch";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
+import { useAddCategory } from "@/hooks/use-add-category-dialog";
 import { parseISO } from "date-fns";
 import { X, Trash2 } from "lucide-react";
 import { expandRecurrence } from "@/lib/recurrence";
@@ -406,6 +407,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
 
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const confirmDialog = useConfirm();
+  const addCategory = useAddCategory();
   async function bulkDelete() {
     if (selectedIds.size === 0) return;
     const ok = await confirmDialog({
@@ -608,6 +610,13 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
             ]}
             searchPlaceholder="Search categories…"
             emptyTriggerLabel="Choose category…"
+            onCreate={{
+              onSelect: (name) =>
+                addCategory.open({
+                  name,
+                  onCreated: (cat) => setBulkCategoryId(cat.id),
+                }),
+            }}
             triggerClassName="h-8 text-xs w-[260px] border rounded-md px-3 bg-background inline-flex items-center justify-between gap-2"
           />
           <Button

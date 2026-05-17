@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -40,9 +41,29 @@ interface CategoryDef {
   type: "income" | "expense";
 }
 
+/** Shape of the row returned by `POST /api/categories`. Forwarded
+ *  verbatim to the `onCreated` callback so callers can immediately
+ *  bind the new id (e.g. apply it to a transaction being edited or
+ *  an import row whose category cell was empty). */
+export interface CreatedCategory {
+  id: string;
+  name: string;
+  parentId: string | null;
+  type: "income" | "expense";
+}
+
 interface AddCategoryContext {
-  /** Open the dialog. Optionally pre-fill type and parent. */
-  open: (preset?: { type?: "income" | "expense"; parentId?: string | null }) => void;
+  /** Open the dialog. Optionally pre-fill type / parent / name, and
+   *  receive the created row via `onCreated` (fires only on a
+   *  successful POST). Used by the "Create '<query>'" affordance in
+   *  the category pickers so the new category is selected the moment
+   *  it lands. */
+  open: (preset?: {
+    type?: "income" | "expense";
+    parentId?: string | null;
+    name?: string;
+    onCreated?: (cat: CreatedCategory) => void;
+  }) => void;
 }
 
 const Ctx = createContext<AddCategoryContext | null>(null);
@@ -62,6 +83,11 @@ export function AddCategoryProvider({ children }: { children: ReactNode }) {
   const [type, setType] = useState<"income" | "expense">("expense");
   const [parentId, setParentId] = useState("");
   const [loading, setLoading] = useState(false);
+  // Held in a ref so the latest callback survives re-renders during
+  // form submission without forcing the dialog to re-mount.
+  const onCreatedRef = useRef<((cat: CreatedCategory) => void) | undefined>(
+    undefined,
+  );
 
   const { data: categories = [] } = useSWR<CategoryDef[]>(
     "/api/categories",
@@ -69,9 +95,10 @@ export function AddCategoryProvider({ children }: { children: ReactNode }) {
   );
 
   const open = useCallback<AddCategoryContext["open"]>((preset) => {
-    setName("");
+    setName(preset?.name ?? "");
     setType(preset?.type ?? "expense");
     setParentId(preset?.parentId ?? "");
+    onCreatedRef.current = preset?.onCreated;
     setIsOpen(true);
   }, []);
 
@@ -80,6 +107,7 @@ export function AddCategoryProvider({ children }: { children: ReactNode }) {
     if (!next) {
       setName("");
       setParentId("");
+      onCreatedRef.current = undefined;
     }
   }
 
@@ -98,6 +126,9 @@ export function AddCategoryProvider({ children }: { children: ReactNode }) {
     });
     setLoading(false);
     if (res.ok) {
+      const created = (await res.json().catch(() => null)) as
+        | CreatedCategory
+        | null;
       toast.success("Category created");
       setIsOpen(false);
       setName("");
@@ -105,6 +136,10 @@ export function AddCategoryProvider({ children }: { children: ReactNode }) {
       // Refresh anyone fetching /api/categories — sidebar pickers,
       // transactions page, the categories page itself, etc.
       globalMutate("/api/categories");
+      if (created && onCreatedRef.current) {
+        onCreatedRef.current(created);
+      }
+      onCreatedRef.current = undefined;
     } else {
       const err = await res.json().catch(() => ({}));
       toast.error(err?.error ?? "Failed to create category");

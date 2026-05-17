@@ -9,6 +9,34 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.131.0 — 2026-05-17
+
+### Added
+- **Envelope report — All / Income / Expenses three-way toggle.**
+  Sits next to the other report toolbar controls; defaults to All
+  (current behaviour). Picking one side drops the other section
+  and the bottom "Affordability / Shortfall" net row (which has
+  no meaning when only one side is visible). Persisted via
+  `displayPrefs.envelopeScope`.
+- **Scheduled Transactions page — All / Selected accounts toggle
+  in the topbar.** Defaults to **All accounts** so the page opens
+  showing every schedule regardless of the sidebar's account
+  filter (matches how operators actually use the page — budget
+  planning is rarely scoped to a single account). Switch to
+  **Selected accounts** to defer to the sidebar like the rest of
+  the app. Persisted via `displayPrefs.scheduledAccountFilterMode`.
+- **Hide-transfers toggle on every analytics report.** Cashflow,
+  Sankey, Envelope, YoY, Treemap, and Scatter each grow their
+  own `Hide transfers` switch in the header. Default is **ON**
+  on every tab — transfer-typed categories (transferKind in
+  `internal`/`external`) were polluting the totals on most
+  reports. Flip off per-tab to include them again. Each tab owns
+  its own pref so the choice on the Cashflow tab doesn't change
+  the Sankey, etc.: `cashflowHideTransfers`,
+  `sankeyHideTransfers`, `treemapHideTransfers`,
+  `scatterHideTransfers`, `yoyHideTransfers`,
+  `envelopeHideTransfers` (all default `true`).
+
 ## 0.130.0 — 2026-05-17
 
 ### Changed

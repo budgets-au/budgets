@@ -5,6 +5,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { ScheduledListView } from "@/components/scheduled/scheduled-list-view";
 import { ScheduleSuggestionsPanel } from "@/components/scheduled/schedule-suggestions-panel";
 import { NewScheduledButton } from "@/components/scheduled/new-scheduled-dialog";
+import { ScheduledAccountFilterToggle } from "@/components/scheduled/scheduled-account-filter-toggle";
 
 export default async function ScheduledPage() {
   const rows = await db
@@ -61,6 +62,7 @@ export default async function ScheduledPage() {
         title="Scheduled Transactions"
         actions={
           <>
+            <ScheduledAccountFilterToggle />
             <ScheduleSuggestionsPanel />
             <NewScheduledButton />
           </>

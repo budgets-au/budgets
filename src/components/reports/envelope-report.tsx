@@ -6,6 +6,7 @@ import { differenceInDays, parseISO } from "date-fns";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Eye, EyeOff, Printer } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD } from "@/lib/utils";
 
@@ -194,7 +195,7 @@ export function EnvelopeReport({
   from,
   to,
   accountIds,
-  hideTransfers,
+  // hideTransfers prop is legacy — envelope now owns its own pref.
 }: {
   from: string;
   to: string;
@@ -203,6 +204,8 @@ export function EnvelopeReport({
 }) {
   const accountIdsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
+  const { prefs, setPref } = useDisplayPrefs();
+  const hideTransfers = prefs.envelopeHideTransfers;
   const { data, isLoading } = useSWR<CashflowData>(
     `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
     fetcher,
@@ -244,7 +247,9 @@ export function EnvelopeReport({
 
   // Excluded cat ids — the eye-off toggle. DB-backed via displayPrefs
   // so the operator's curated envelope set follows them across devices.
-  const { prefs, setPref } = useDisplayPrefs();
+  const scope = prefs.envelopeScope;
+  const showIncome = scope === "all" || scope === "income";
+  const showExpenses = scope === "all" || scope === "expenses";
   const excludedIds = new Set(prefs.envelopeExcludedCatIds);
   function toggleExcluded(id: string) {
     const next = new Set(excludedIds);
@@ -448,6 +453,44 @@ export function EnvelopeReport({
             className="flex items-center gap-2 print:hidden"
             data-print-hide
           >
+            <div
+              role="radiogroup"
+              aria-label="Envelope scope"
+              className="flex rounded-md border overflow-hidden text-xs"
+            >
+              {([
+                { value: "all", label: "All" },
+                { value: "income", label: "Income" },
+                { value: "expenses", label: "Expenses" },
+              ] as const).map((opt) => {
+                const active = scope === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setPref("envelopeScope", opt.value)}
+                    className={`px-2.5 py-1 transition-colors ${
+                      active
+                        ? "bg-indigo-600 text-white font-medium"
+                        : "bg-background text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <Switch
+                size="sm"
+                checked={hideTransfers}
+                onCheckedChange={(v) => setPref("envelopeHideTransfers", v)}
+                aria-label="Hide transfer-typed categories"
+              />
+              Hide transfers
+            </label>
             {hiddenCount > 0 && (
               <Button
                 variant={showHidden ? "default" : "outline"}
@@ -493,9 +536,17 @@ export function EnvelopeReport({
             </Button>
           </div>
         </div>
-        {incomeRows.length === 0 && expenseRows.length === 0 ? (
+        {(() => {
+          const hasIncomeContent = showIncome && incomeRows.length > 0;
+          const hasExpenseContent = showExpenses && expenseRows.length > 0;
+          return !hasIncomeContent && !hasExpenseContent;
+        })() ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            No income or expenses in this period.
+            {scope === "income"
+              ? "No income in this period."
+              : scope === "expenses"
+                ? "No expenses in this period."
+                : "No income or expenses in this period."}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -552,7 +603,7 @@ export function EnvelopeReport({
                   />
                 </tr>
               </thead>
-              {incomeRows.length > 0 && (
+              {showIncome && incomeRows.length > 0 && (
                 <tbody className="divide-y">
                   <tr className="bg-emerald-500/10 dark:bg-emerald-400/10 border-y border-emerald-500/30 dark:border-emerald-400/30">
                     <td
@@ -580,7 +631,7 @@ export function EnvelopeReport({
                   </tr>
                 </tbody>
               )}
-              {expenseRows.length > 0 && (
+              {showExpenses && expenseRows.length > 0 && (
                 <tbody className="divide-y">
                   <tr className="bg-rose-500/10 dark:bg-rose-400/10 border-y border-rose-500/30 dark:border-rose-400/30">
                     <td
@@ -608,35 +659,43 @@ export function EnvelopeReport({
                   </tr>
                 </tbody>
               )}
-              <tfoot>
-                {/* Net = income − expenses for the period. Positive means
-                    money left over (you can afford to save or spend more);
-                    negative means you outspent your income. Green / red
-                    keeps the at-a-glance read unambiguous in both themes. */}
-                <tr
-                  className={`border-t-2 bg-muted/40 font-semibold ${
-                    netTotal >= 0
-                      ? "text-emerald-700 dark:text-emerald-400"
-                      : "text-rose-700 dark:text-rose-400"
-                  }`}
-                >
-                  <td className="px-3 py-2">
-                    {netTotal >= 0 ? "Affordability (income − expenses)" : "Shortfall (income − expenses)"}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {formatAUD(netTotal)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {formatAUD(netTotal / months)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {formatAUD(netTotal / weeks)}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {formatAUD(netTotal / days)}
-                  </td>
-                </tr>
-              </tfoot>
+              {scope === "all" && (
+                <tfoot>
+                  {/* Net = income − expenses for the period. Positive
+                      means money left over (you can afford to save or
+                      spend more); negative means you outspent your
+                      income. Green / red keeps the at-a-glance read
+                      unambiguous in both themes. Only rendered when
+                      BOTH sides are visible — focusing on one side
+                      drops the row since the subtraction has no
+                      meaning then. */}
+                  <tr
+                    className={`border-t-2 bg-muted/40 font-semibold ${
+                      netTotal >= 0
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : "text-rose-700 dark:text-rose-400"
+                    }`}
+                  >
+                    <td className="px-3 py-2">
+                      {netTotal >= 0
+                        ? "Affordability (income − expenses)"
+                        : "Shortfall (income − expenses)"}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatAUD(netTotal)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatAUD(netTotal / months)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatAUD(netTotal / weeks)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatAUD(netTotal / days)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}

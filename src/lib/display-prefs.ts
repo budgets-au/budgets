@@ -83,6 +83,22 @@ export interface DisplayPrefs {
   cashflowShowHidden: boolean;
   /** Sankey diagram scope on Reports → Sankey. */
   reportsSankeyScope: "all" | "income" | "expenses";
+  /** Per-report toggle: when true, drops transfer-typed categories
+   * (transferKind in 'internal','external') from the underlying
+   * cashflow query. Default true on every tab — transfers are usually
+   * noise when reading these visualisations. The cashflow tab also
+   * still supports its per-category eye toggle, which is additive. */
+  cashflowHideTransfers: boolean;
+  sankeyHideTransfers: boolean;
+  treemapHideTransfers: boolean;
+  scatterHideTransfers: boolean;
+  yoyHideTransfers: boolean;
+  envelopeHideTransfers: boolean;
+  /** Which side(s) the Envelope report shows. `all` is income +
+   * expenses with the net row; `income` / `expenses` focus the view
+   * on one side and drop the net row (which has no meaning when only
+   * one side is visible). */
+  envelopeScope: "all" | "income" | "expenses";
   /** Sort column for the Envelope report. `name` is the default and
    * matches "tree categories alphabetically"; `period` sorts by the
    * rolled-up total for the selected window. */
@@ -92,6 +108,15 @@ export interface DisplayPrefs {
   envelopeSortDir: "asc" | "desc";
   /** Excluded category IDs on Reports → Envelope. */
   envelopeExcludedCatIds: string[];
+  /** Whether the Scheduled Transactions page respects the global
+   * account filter from the sidebar.
+   *   "all"      — show every schedule regardless of sidebar filter
+   *                (the default; the page lives in budget-planning
+   *                land where the operator usually wants the whole
+   *                picture).
+   *   "selected" — defer to the sidebar's selection, like the rest
+   *                of the app. */
+  scheduledAccountFilterMode: "all" | "selected";
   /** Per-tab from/to date range on the Reports page. Keyed by tab id. */
   reportsPeriodByTab: Record<string, { from: string; to: string }>;
 
@@ -183,9 +208,17 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   cashflowExcludedCatIds: [],
   cashflowShowHidden: false,
   reportsSankeyScope: "all",
+  cashflowHideTransfers: true,
+  sankeyHideTransfers: true,
+  treemapHideTransfers: true,
+  scatterHideTransfers: true,
+  yoyHideTransfers: true,
+  envelopeHideTransfers: true,
+  envelopeScope: "all",
   envelopeSortColumn: "name",
   envelopeSortDir: "asc",
   envelopeExcludedCatIds: [],
+  scheduledAccountFilterMode: "all",
   reportsPeriodByTab: {},
   globalAccountIds: [],
   scheduledMatchWindowMonths: 6,
@@ -450,12 +483,26 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
       "reportsSankeyScope",
       ["all", "income", "expenses"] as const,
     ),
+    cashflowHideTransfers: bool("cashflowHideTransfers"),
+    sankeyHideTransfers: bool("sankeyHideTransfers"),
+    treemapHideTransfers: bool("treemapHideTransfers"),
+    scatterHideTransfers: bool("scatterHideTransfers"),
+    yoyHideTransfers: bool("yoyHideTransfers"),
+    envelopeHideTransfers: bool("envelopeHideTransfers"),
+    envelopeScope: pickEnum(
+      "envelopeScope",
+      ["all", "income", "expenses"] as const,
+    ),
     envelopeSortColumn: pickEnum(
       "envelopeSortColumn",
       ["name", "period"] as const,
     ),
     envelopeSortDir: pickEnum("envelopeSortDir", ["asc", "desc"] as const),
     envelopeExcludedCatIds: stringArray("envelopeExcludedCatIds"),
+    scheduledAccountFilterMode: pickEnum(
+      "scheduledAccountFilterMode",
+      ["all", "selected"] as const,
+    ),
     reportsPeriodByTab: periodMap("reportsPeriodByTab"),
     globalAccountIds: stringArray("globalAccountIds"),
     scheduledMatchWindowMonths: num("scheduledMatchWindowMonths"),

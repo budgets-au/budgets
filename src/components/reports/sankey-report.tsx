@@ -4,6 +4,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD } from "@/lib/utils";
@@ -337,7 +338,9 @@ export function SankeyReport({
   from,
   to,
   accountIds,
-  hideTransfers,
+  // hideTransfers prop is legacy (the global control was removed in
+  // 0.7.0). The Sankey now owns its own pref so the toggle in the
+  // header is independent of other tabs.
 }: {
   from: string;
   to: string;
@@ -346,6 +349,12 @@ export function SankeyReport({
 }) {
   const accountIdsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
+  const { prefs, setPref } = useDisplayPrefs();
+  const hideTransfers = prefs.sankeyHideTransfers;
+  const scope: SankeyScope = prefs.reportsSankeyScope;
+  function changeScope(next: SankeyScope) {
+    setPref("reportsSankeyScope", next);
+  }
   const { data, isLoading } = useSWR<CashflowData>(
     `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
     fetcher,
@@ -356,11 +365,6 @@ export function SankeyReport({
   );
   const isDark = useDarkMode();
 
-  const { prefs, setPref } = useDisplayPrefs();
-  const scope: SankeyScope = prefs.reportsSankeyScope;
-  function changeScope(next: SankeyScope) {
-    setPref("reportsSankeyScope", next);
-  }
 
   // Set of cat ids whose children are revealed. Depth-0 cats are always
   // revealed (showing depth-1 parents) — only depth-1 cats are toggleable
@@ -725,6 +729,15 @@ export function SankeyReport({
                     : "Expand all children"}
               </button>
             )}
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <Switch
+                size="sm"
+                checked={hideTransfers}
+                onCheckedChange={(v) => setPref("sankeyHideTransfers", v)}
+                aria-label="Hide transfer-typed categories"
+              />
+              Hide transfers
+            </label>
           </div>
           <p className="text-xs text-muted-foreground">
             {summaryParts.join(" · ")}

@@ -1003,7 +1003,10 @@ export function CashflowReport({
   from,
   to,
   accountIds,
-  hideTransfers,
+  // The shared `hideTransfers` prop on each report comp is legacy — the
+  // global toggle was removed in 0.7.0. The Cashflow tab now owns its
+  // own per-report pref (cashflowHideTransfers) so it can render a
+  // switch independent of the other tabs.
 }: {
   from: string;
   to: string;
@@ -1021,6 +1024,7 @@ export function CashflowReport({
   const showPlan = displayPrefs.cashflowShowPlan;
   const showHidden = displayPrefs.cashflowShowHidden;
   const excludedIds = displayPrefs.cashflowExcludedCatIds;
+  const hideTransfers = displayPrefs.cashflowHideTransfers;
 
   function toggleShowCounts() {
     setPref("cashflowShowCounts", !showCounts);
@@ -1199,6 +1203,19 @@ export function CashflowReport({
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Show counts</span>
           <Switch checked={showCounts} onCheckedChange={toggleShowCounts} aria-label="Show transaction counts" />
+        </div>
+
+        {/* Hide transfers toggle — drops transfer-typed categories
+            (transferKind in 'internal','external') from the underlying
+            cashflow query. Default on; flip off to include transfers
+            in the totals + rows. */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Hide transfers</span>
+          <Switch
+            checked={hideTransfers}
+            onCheckedChange={(v) => setPref("cashflowHideTransfers", v)}
+            aria-label="Hide transfer-typed categories"
+          />
         </div>
 
         {/* Show hidden categories — only rendered when there's

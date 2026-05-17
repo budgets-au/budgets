@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD } from "@/lib/utils";
 import {
   startOfFinancialYear,
@@ -241,13 +243,15 @@ function flattenForDisplay(
  * uses so the comparison is apples-to-apples. */
 export function YoYReport({
   accountIds,
-  hideTransfers,
+  // hideTransfers prop is legacy — YoY now owns its own pref.
 }: {
   accountIds: string[];
   hideTransfers: boolean;
 }) {
   const [scope, setScope] = useState<"expense" | "income" | "all">("expense");
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const { prefs, setPref } = useDisplayPrefs();
+  const hideTransfers = prefs.yoyHideTransfers;
 
   const now = new Date();
   const thisFY = {
@@ -381,6 +385,15 @@ export function YoYReport({
               </button>
             ))}
           </div>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+            <Switch
+              size="sm"
+              checked={hideTransfers}
+              onCheckedChange={(v) => setPref("yoyHideTransfers", v)}
+              aria-label="Hide transfer-typed categories"
+            />
+            Hide transfers
+          </label>
         </div>
       </CardHeader>
       <CardContent>

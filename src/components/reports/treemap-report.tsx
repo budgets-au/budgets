@@ -5,8 +5,10 @@ import useSWR from "swr";
 import { ResponsiveContainer, Treemap } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { ChevronLeft } from "lucide-react";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD } from "@/lib/utils";
 import { CATEGORICAL_PALETTE } from "@/lib/colours";
 import type {
@@ -39,18 +41,17 @@ export function TreemapReport({
   from,
   to,
   accountIds,
-  hideTransfers: _hideTransfers,
+  // hideTransfers prop is legacy — see comment on similar reports.
+  // Treemap now owns its own per-report pref.
 }: {
   from: string;
   to: string;
   accountIds: string[];
-  /** Threaded through for prop-signature parity with the other
-   * report tabs; the cashflow API never paid attention to it
-   * and the reports already filter via the per-tab eye / exclude
-   * UI elsewhere. */
   hideTransfers: boolean;
 }) {
   const [scope, setScope] = useState<"expenses" | "income">("expenses");
+  const { prefs, setPref } = useDisplayPrefs();
+  const hideTransfers = prefs.treemapHideTransfers;
   // `drillId` is the current root of the treemap view: null = top
   // of the hierarchy (every grandparent), otherwise the id of the
   // node we drilled into. Two paths set it: clicking a rectangle
@@ -63,7 +64,7 @@ export function TreemapReport({
     { id: string; name: string; parentId: string | null; type: string }[]
   >("/api/categories", fetcher, { revalidateOnFocus: false });
 
-  const url = `/api/reports/cashflow?from=${from}&to=${to}${
+  const url = `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : ""
   }`;
   const { data, isLoading } = useSWR<CashflowData>(url, fetcher);
@@ -140,6 +141,15 @@ export function TreemapReport({
                 </button>
               ))}
             </div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <Switch
+                size="sm"
+                checked={hideTransfers}
+                onCheckedChange={(v) => setPref("treemapHideTransfers", v)}
+                aria-label="Hide transfer-typed categories"
+              />
+              Hide transfers
+            </label>
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

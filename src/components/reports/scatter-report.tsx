@@ -22,7 +22,9 @@ import {
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { formatAUD, formatDate } from "@/lib/utils";
 import { chartGridStroke } from "@/lib/colours";
+import { Switch } from "@/components/ui/switch";
 import { useDarkMode } from "@/hooks/use-dark-mode";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { rollingMean } from "@/lib/reports/rolling-mean";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -57,7 +59,7 @@ export function ScatterReport({
   from,
   to,
   accountIds,
-  hideTransfers,
+  // hideTransfers prop is legacy — see comment on similar reports.
 }: {
   from: string;
   to: string;
@@ -68,6 +70,8 @@ export function ScatterReport({
   const [kind, setKind] = useState<"expense" | "income" | "all">("expense");
   const [rootCategoryId, setRootCategoryId] = useState<string | null>(null);
   const isDark = useDarkMode();
+  const { prefs, setPref } = useDisplayPrefs();
+  const hideTransfers = prefs.scatterHideTransfers;
 
   // Categories pulled in for the drill-down picker. SWR dedupes
   // against the same /api/categories fetch other reports do.
@@ -140,6 +144,15 @@ export function ScatterReport({
               ]}
               onChange={setYScale}
             />
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <Switch
+                size="sm"
+                checked={hideTransfers}
+                onCheckedChange={(v) => setPref("scatterHideTransfers", v)}
+                aria-label="Hide transfer-typed transactions"
+              />
+              Hide transfers
+            </label>
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

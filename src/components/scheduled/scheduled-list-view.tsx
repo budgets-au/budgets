@@ -254,7 +254,18 @@ export function ScheduledListView({
   // Honour the global account filter from the sidebar. Empty set = no filter.
   // A schedule is in-scope when it touches at least one selected account
   // (source side OR — for transfers — the destination side).
-  const { ids: accountFilterIds } = useAccountFilter();
+  //
+  // The page-level toggle (`scheduledAccountFilterMode`) can opt out of the
+  // sidebar filter entirely — in "all" mode every schedule is in-scope
+  // regardless of which accounts the sidebar has selected, which matches
+  // the budget-planning use of this page. "selected" mode defers to the
+  // sidebar like the rest of the app.
+  const { ids: rawAccountFilterIds } = useAccountFilter();
+  const { prefs: displayPrefsForFilter } = useDisplayPrefs();
+  const accountFilterIds =
+    displayPrefsForFilter.scheduledAccountFilterMode === "all"
+      ? []
+      : rawAccountFilterIds;
 
   // Server-side render and the first client render disagree on `new Date()`
   // when their timezones differ (UTC server vs. local client), which produces

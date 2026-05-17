@@ -7,7 +7,9 @@ import { useDropzone } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, ChevronDown, ChevronRight } from "lucide-react";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
+import { useAddAccount } from "@/hooks/use-add-account-dialog";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { formatAUD, amountClass, cn } from "@/lib/utils";
@@ -18,6 +20,14 @@ interface CategoryOption {
   name: string;
   parentId: string | null;
   type: "income" | "expense" | string;
+}
+
+interface AccountOption {
+  id: string;
+  name: string;
+  type: string;
+  accountNumberLast4: string | null;
+  institution?: string | null;
 }
 
 interface Neighbour {
@@ -163,10 +173,25 @@ export function ImportView() {
     "/api/categories",
     (url: string) => fetch(url).then((r) => r.json()),
   );
+  // The unresolved-account resolver below needs the live account list
+  // to populate its picker; sharing the SWR key means a new account
+  // created mid-import (via the "Create new account" affordance)
+  // shows up in the picker immediately via optimistic write.
+  const { data: accounts = [] } = useSWR<AccountOption[]>(
+    "/api/accounts",
+    (url: string) => fetch(url).then((r) => r.json()),
+  );
   /** Optimistic category overrides keyed by importHash so the chip flips
    * instantly when the user creates a rule via the in-row picker. */
   const [localOverrides, setLocalOverrides] = useState<
     Map<string, { categoryId: string; categoryName: string }>
+  >(new Map());
+  /** Per-bank-id account overrides. Keyed by `qifAccount?.name ?? ""`
+   *  — every row sharing the same bank identifier picks up the same
+   *  resolution. Lets the operator clear all "unresolved account"
+   *  rows in one click. */
+  const [accountOverrides, setAccountOverrides] = useState<
+    Map<string, { accountId: string; accountName: string }>
   >(new Map());
 
   const [file, setFile] = useState<File | null>(null);
@@ -272,18 +297,33 @@ export function ImportView() {
   // the operator's eye). Account filter still applies.
   const effectiveRows = useMemo(() => {
     return (data?.rows ?? []).map((r) => {
-      const o = localOverrides.get(r.importHash);
-      if (!o) return r;
-      return {
-        ...r,
-        method: "rule" as const,
-        categoryId: o.categoryId,
-        categoryName: o.categoryName,
-        score: undefined,
-        support: undefined,
-      } satisfies TestResultRow;
+      let next = r;
+      const c = localOverrides.get(r.importHash);
+      if (c) {
+        next = {
+          ...next,
+          method: "rule" as const,
+          categoryId: c.categoryId,
+          categoryName: c.categoryName,
+          score: undefined,
+          support: undefined,
+        };
+      }
+      // Account override: any row whose bank-id is in the override
+      // map gets its resolved-account fields rewritten so the commit
+      // payload + the chip/expand UI see the operator's choice.
+      const a = accountOverrides.get(r.qifAccount?.name ?? "");
+      if (a) {
+        next = {
+          ...next,
+          resolvedAccountId: a.accountId,
+          resolvedAccountName: a.accountName,
+          resolvedAccountVia: "alias" as const,
+        };
+      }
+      return next satisfies TestResultRow;
     });
-  }, [data?.rows, localOverrides]);
+  }, [data?.rows, localOverrides, accountOverrides]);
 
   const filteredRows = effectiveRows.filter((r) => {
     if (accountFilter !== "all" && (r.qifAccount?.name ?? "") !== accountFilter)
@@ -408,6 +448,21 @@ export function ImportView() {
           </Card>
 
           <SaveLearnedAliases rows={data.rows} />
+
+          <UnresolvedAccountsResolver
+            rows={effectiveRows}
+            accounts={accounts}
+            onResolve={(bankId, account) =>
+              setAccountOverrides((prev) => {
+                const next = new Map(prev);
+                next.set(bankId, {
+                  accountId: account.id,
+                  accountName: account.name,
+                });
+                return next;
+              })
+            }
+          />
 
           {/* Per-account chip row — only meaningful for multi-account
             QIF files. Single-account imports skip this entirely. */}
@@ -1359,6 +1414,151 @@ function SaveLearnedAliases({ rows }: { rows: TestResultRow[] }) {
             ? "Saving…"
             : `Save ${candidates.length} alias${candidates.length === 1 ? "" : "es"}`}
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Surfaces rows whose source bank-account-id didn't resolve to any
+ *  app account (no alias, no last-4 match, no heuristic hit). For
+ *  each such bank-id, the operator can either pick an existing
+ *  account or pop the Add-Account dialog with the bank-id prefilled.
+ *  Resolutions persist as bank-account aliases so the same CSV
+ *  re-imports auto-resolve next time. */
+function UnresolvedAccountsResolver({
+  rows,
+  accounts,
+  onResolve,
+}: {
+  rows: TestResultRow[];
+  accounts: AccountOption[];
+  onResolve: (bankId: string, account: AccountOption) => void;
+}) {
+  const addAccount = useAddAccount();
+  // Group unresolved rows by bank-id. Rows without a bank-id share
+  // the synthetic key "" so they all resolve in one shot.
+  const groups = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of rows) {
+      if (r.resolvedAccountId) continue;
+      const key = r.qifAccount?.name ?? "";
+      m.set(key, (m.get(key) ?? 0) + 1);
+    }
+    return Array.from(m.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
+  }, [rows]);
+
+  if (groups.length === 0) return null;
+
+  async function persistAlias(bankId: string, accountId: string) {
+    if (!bankId) return;
+    try {
+      await fetch("/api/import/learn-aliases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          aliases: [{ kind: "bank-account", value: bankId, accountId }],
+        }),
+      });
+    } catch {
+      // Best-effort — the row override still applies locally even if
+      // alias persistence fails; the user just won't get auto-resolve
+      // on the next import of the same file.
+    }
+  }
+
+  function applyExisting(bankId: string, accountId: string) {
+    const acct = accounts.find((a) => a.id === accountId);
+    if (!acct) return;
+    onResolve(bankId, acct);
+    void persistAlias(bankId, acct.id);
+    toast.success(
+      `${bankId ? `"${bankId}"` : "Unidentified rows"} → ${acct.name}`,
+    );
+  }
+
+  function applyCreated(bankId: string, account: AccountOption) {
+    onResolve(bankId, account);
+    void persistAlias(bankId, account.id);
+    toast.success(
+      `${bankId ? `"${bankId}"` : "Unidentified rows"} → ${account.name}`,
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-3 pb-3 space-y-2">
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-400">
+            Unresolved accounts
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            These rows&rsquo; source account didn&rsquo;t match any of your
+            accounts by alias or last-4 digits. Pick or create one — the
+            choice is saved as an alias so the next import auto-resolves.
+          </p>
+        </div>
+        <ul className="space-y-2">
+          {groups.map(([bankId, count]) => {
+            const last4 = (bankId.match(/(\d{4})\D*$/)?.[1]) ?? "";
+            return (
+              <li
+                key={bankId}
+                className="flex flex-wrap items-center gap-2 text-xs"
+              >
+                <span className="font-mono shrink-0">
+                  {bankId || "(no bank id)"}
+                </span>
+                <span className="text-muted-foreground tabular-nums shrink-0">
+                  {count} row{count === 1 ? "" : "s"}
+                </span>
+                <span className="text-muted-foreground shrink-0">→</span>
+                <SearchableCombobox
+                  value=""
+                  onChange={(id) => applyExisting(bankId, id)}
+                  items={accounts.map((a) => ({
+                    id: a.id,
+                    label: a.name,
+                    ancestors: a.accountNumberLast4
+                      ? [`••${a.accountNumberLast4}`]
+                      : undefined,
+                  }))}
+                  placeholder="Pick account…"
+                  emptyTriggerLabel="Pick account…"
+                  searchPlaceholder="Search accounts…"
+                  emptyMessage="No accounts."
+                  onCreate={{
+                    onSelect: (name) =>
+                      addAccount.open({
+                        name,
+                        accountNumberLast4: last4,
+                        onCreated: (acct) =>
+                          applyCreated(bankId, acct as AccountOption),
+                      }),
+                  }}
+                  triggerClassName="h-7 text-xs px-2 border rounded-md bg-background inline-flex items-center justify-between gap-2 min-w-[200px]"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-xs"
+                  onClick={() =>
+                    addAccount.open({
+                      name: bankId,
+                      accountNumberLast4: last4,
+                      onCreated: (acct) =>
+                        applyCreated(bankId, acct as AccountOption),
+                    })
+                  }
+                >
+                  + New
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
       </CardContent>
     </Card>
   );

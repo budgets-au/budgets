@@ -9,6 +9,28 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.150.0 — 2026-05-17
+
+### Added
+- **Resolve unknown accounts inline during CSV import.** Imports
+  whose source bank-account-id didn't match any existing account
+  (no alias, no last-4 hit, no heuristic match) used to flash an
+  amber "X rows have no resolved account — won't be committed"
+  banner and force the operator out to Settings → Accounts to
+  create the account, then come back and re-upload. The unresolved
+  rows are now grouped by bank-id directly above the row table;
+  each group has a picker for existing accounts plus a "+ New"
+  shortcut. Picking or creating an account immediately resolves
+  every row sharing that bank-id and writes a bank-account alias
+  via `POST /api/import/learn-aliases` so next time the same file
+  is parsed it auto-resolves.
+- **Global `useAddAccount()` hook + `AddAccountProvider`.** Mirrors
+  `useAddCategory()` from 0.147 — a globally-mounted modal with
+  name / type / institution / last-4 / starting-balance fields,
+  optimistic SWR cache write so the new account shows up in
+  pickers across the app the moment it's saved. Available to any
+  component under `(app)/layout.tsx`.
+
 ## 0.149.0 — 2026-05-17
 
 ### Fixed

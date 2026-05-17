@@ -5,6 +5,7 @@ import { SessionProvider } from "@/components/layout/session-provider";
 import { MustChangePasswordBanner } from "@/components/layout/must-change-password-banner";
 import { ConfirmDialogProvider } from "@/hooks/use-confirm-dialog";
 import { AddCategoryProvider } from "@/hooks/use-add-category-dialog";
+import { AddAccountProvider } from "@/hooks/use-add-account-dialog";
 import { AddScheduledProvider } from "@/hooks/use-add-scheduled-dialog";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <SessionProvider>
       <ConfirmDialogProvider>
         <AddCategoryProvider>
+        <AddAccountProvider>
         <AddScheduledProvider>
         <div className="flex min-h-screen bg-muted/30">
           <Sidebar />
@@ -29,6 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
         </AddScheduledProvider>
+        </AddAccountProvider>
         </AddCategoryProvider>
       </ConfirmDialogProvider>
     </SessionProvider>

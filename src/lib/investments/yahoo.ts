@@ -300,31 +300,48 @@ export async function persistPriceCache(
 
 /** Recent news for a ticker. Yahoo's search endpoint returns a mixed
  *  payload of quote matches + news headlines; we ask for news-only
- *  (quotesCount=0) and `newsCount` items. The returned items are
- *  filtered to those whose `relatedTickers` actually mention this
- *  symbol when the list is present — Yahoo's general financial-news
- *  feed mixes unrelated stories when a specific ticker has nothing
- *  recent, and the per-ticker filter keeps the panel relevant
- *  rather than showing generic Wall-Street headlines.
+ *  (quotesCount=0) and a generous `newsCount` window so the strict
+ *  per-ticker filter below has a reasonable pool to draw from.
+ *
+ *  Filter rules — both must hold for an item to be kept:
+ *    1. `relatedTickers` is present and non-empty (drops generic
+ *       financial-news roundups Yahoo mixes in when a specific
+ *       ticker has nothing recent).
+ *    2. `relatedTickers` contains the searched symbol OR the bare
+ *       ticker (e.g. "CBA.AX" matches "CBA" or "CBA.AX"). Yahoo
+ *       sometimes drops exchange suffixes from the tags even when
+ *       the search query had one.
+ *
+ *  This is stricter than v0.125's "accept untagged items" rule,
+ *  which let generic Wall-Street stories through. The cost is fewer
+ *  items per panel — when Yahoo has nothing tagged for the symbol,
+ *  the panel correctly reports "no recent announcements" rather
+ *  than showing irrelevant noise.
  *
  *  Picks the smallest thumbnail Yahoo offers (typically 140×140) so
  *  the JSON payload stays tight. */
 export async function getNews(
   symbol: string,
-  count = 10,
+  count = 20,
 ): Promise<NewsItem[]> {
   const url = `${SEARCH_URL}?q=${encodeURIComponent(symbol)}&quotesCount=0&newsCount=${count}`;
   const res = await yahooFetch(url);
   const data = (await res.json()) as YahooSearchResponse;
   const upper = symbol.toUpperCase();
-  // The `relatedTickers` cross-check: an item is relevant if it
-  // explicitly mentions our ticker. When absent, Yahoo couldn't tag
-  // it — accept it conservatively if we asked specifically for this
-  // symbol (Yahoo's search results are already symbol-keyed).
+  // Strip exchange suffix (".AX", ".L", etc.) so a request for
+  // "CBA.AX" still matches "CBA" in relatedTickers.
+  const bare = upper.includes(".") ? upper.split(".")[0] : upper;
   return (data.news ?? [])
     .filter((n) => {
-      if (!n.relatedTickers || n.relatedTickers.length === 0) return true;
-      return n.relatedTickers.some((t) => t.toUpperCase() === upper);
+      if (!n.relatedTickers || n.relatedTickers.length === 0) return false;
+      return n.relatedTickers.some((t) => {
+        const tagUpper = t.toUpperCase();
+        if (tagUpper === upper || tagUpper === bare) return true;
+        const tagBare = tagUpper.includes(".")
+          ? tagUpper.split(".")[0]
+          : tagUpper;
+        return tagBare === bare;
+      });
     })
     .map((n) => {
       const thumb = n.thumbnail?.resolutions ?? [];

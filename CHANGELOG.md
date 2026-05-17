@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.126.1 — 2026-05-17
+
+### Fixed
+- **Investments announcements were showing generic financial news.**
+  v0.125's `getNews` filter accepted items with no `relatedTickers`
+  tag, which Yahoo applies to general Wall-Street roundups — those
+  ended up in the panel even when nothing recent existed for the
+  specific ticker. Tightened the filter:
+  - Items must have a non-empty `relatedTickers` (drops generic
+    feeds).
+  - The list must include the searched symbol *or its bare form*
+    — e.g. searching for `CBA.AX` accepts items tagged `CBA` or
+    `CBA.AX`, since Yahoo sometimes drops exchange suffixes from
+    its own tags.
+  Item-count window widened from 10 to 20 so the strict filter
+  still has a reasonable pool. When the symbol genuinely has
+  nothing recent, the panel correctly shows "No recent
+  announcements" instead of irrelevant noise.
+
 ## 0.126.0 — 2026-05-17
 
 ### Added

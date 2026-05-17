@@ -9,7 +9,8 @@ const updateSchema = z.object({
   fyEndYear: z.number().int().min(1990).max(2200).optional(),
   balance: z.string().optional(),
   contributions: z.string().optional(),
-  person: z.enum(["self", "partner"]).optional(),
+  // Free-text person key; see /api/super/route.ts for the why.
+  person: z.string().min(1).max(60).optional(),
   fundName: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
 });

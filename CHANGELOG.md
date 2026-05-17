@@ -9,6 +9,30 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.128.3 — 2026-05-17
+
+### Fixed
+- **Super page: new people showed every other person's snapshots.**
+  The `/api/super` GET endpoint still validated the `?person=…`
+  query parameter with `z.enum(["self","partner"])` — a leftover
+  from before 0.127's N-people refactor. Any new person key
+  (e.g. `bob` from "Add person → Bob") silently failed the parse,
+  the route fell through to the unfiltered query branch, and
+  returned **every** snapshot regardless of person. So adding
+  "Bob" appeared to inherit data from "self" and "partner". Fixed
+  by replacing the enum with a free-text `z.string().min(1).max(60)`
+  in three places:
+  - `/api/super/route.ts` GET filter
+  - `/api/super/route.ts` POST `createSchema` (also broke new-snapshot
+    creation for arbitrary keys)
+  - `/api/super/[id]/route.ts` PATCH `updateSchema` (broke snapshot
+    edits for arbitrary keys)
+
+  No data was lost or rewritten — the snapshots are correctly
+  stored under each person's key. The bug was strictly in the read
+  path. Adding a new person on the upgraded image will now show
+  the empty state it should have shown all along.
+
 ## 0.128.2 — 2026-05-17
 
 ### Fixed

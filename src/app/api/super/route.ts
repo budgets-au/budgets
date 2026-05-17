@@ -5,7 +5,13 @@ import { superannuationSnapshots } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 
-const PERSON = z.enum(["self", "partner"]);
+// `person` is a free-text key matching `superannuation_snapshots.person`.
+// Loosened from the legacy `z.enum(["self","partner"])` in 0.128.3
+// because the N-people super page (0.127) lets the operator add
+// arbitrary keys via slugifyPersonKey — and the old enum was silently
+// failing the parse on any new key, causing the GET filter to fall
+// through to "return ALL snapshots" instead of filtering by person.
+const PERSON = z.string().min(1).max(60);
 
 const createSchema = z.object({
   fyEndYear: z.number().int().min(1990).max(2200),

@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.152.0 — 2026-05-17
+
+### Fixed
+- **Bulk-category update on the transactions page didn't visibly
+  refresh.** Searching for transactions, selecting all, picking a
+  category from the toolbar correctly PATCH'd the rows on the
+  server, but each row's CategoryPicker stayed showing its old
+  trigger label until the page was refreshed. The picker
+  initialised local state from the `categoryId` prop with
+  `useState(categoryId)` and never re-synced — so the parent's
+  optimistic SWR write flipped the prop, but the local state was
+  frozen at the post-mount value. Added a `lastSeenProp` ref so
+  the picker sees the prop change and syncs local state without
+  clobbering any in-flight user pick on the same row.
+
 ## 0.151.0 — 2026-05-17
 
 ### Added

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CategoryDropdown, type CategoryLike } from "@/components/categories/category-dropdown";
@@ -25,6 +25,24 @@ export function CategoryPicker({
   const [, startTransition] = useTransition();
   const [pending, setPending] = useState(false);
   const [value, setValue] = useState(categoryId ?? null);
+  // Track the last prop we observed, NOT just the prop itself, so we
+  // can tell "the parent changed it" from "we changed it locally."
+  // Without this guard, a bulk-PATCH from the transactions toolbar
+  // (which mutates the SWR cache to flip every selected row's
+  // categoryId) leaves THIS picker's local `value` stuck on the
+  // pre-update id forever — the trigger keeps showing the old
+  // category until the row remounts (page refresh). With it, the
+  // useEffect spots the prop change and syncs local state; in-flight
+  // user picks aren't clobbered because the ref didn't see those
+  // come through props.
+  const lastSeenProp = useRef<string | null>(categoryId ?? null);
+  useEffect(() => {
+    const next = categoryId ?? null;
+    if (lastSeenProp.current !== next) {
+      lastSeenProp.current = next;
+      setValue(next);
+    }
+  }, [categoryId]);
 
   async function applyValue(newValue: string | null) {
     const prev = value;

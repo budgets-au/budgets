@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.132.0 — 2026-05-17
+
+### Fixed
+- **Flow report: archived counterparty accounts no longer render
+  as "Unknown".** The Sankey's account-name lookup was built only
+  from `/api/accounts` (which omits archived rows by default), so
+  any archived account on the other end of a transfer fell through
+  to the "Unknown" fallback. The cashflow API already carries
+  `counterpartyName` + `counterpartyColor` for every leg (server
+  resolves them from a full accounts scan that INCLUDES archived
+  rows), matching what the Accounts report uses for its
+  per-counterparty rows — so the fix is to merge those into the
+  client-side lookup table. No API change.
+
 ## 0.131.0 — 2026-05-17
 
 ### Added

@@ -288,8 +288,33 @@ export function TransferFlowReport({
       map.set(a.id, { name: a.name, color: a.color ?? "#94a3b8" });
     }
     if (data) {
+      // Add each filtered account by id (current view's primary
+      // sources/destinations).
       for (const a of data.accounts) {
         map.set(a.id, { name: a.name, color: a.color });
+      }
+      // The counterparty breakdowns on each account already carry the
+      // OTHER end's name + color — server resolves them from a full
+      // accounts scan that INCLUDES archived rows. So an archived
+      // account showing up as a counterparty here gets a proper label
+      // even though /api/accounts (non-archived default) skipped it.
+      for (const a of data.accounts) {
+        for (const cp of a.transferInBy) {
+          if (cp.counterpartyId == null) continue;
+          if (map.has(cp.counterpartyId)) continue;
+          map.set(cp.counterpartyId, {
+            name: cp.counterpartyName,
+            color: cp.counterpartyColor ?? "#94a3b8",
+          });
+        }
+        for (const cp of a.transferOutBy) {
+          if (cp.counterpartyId == null) continue;
+          if (map.has(cp.counterpartyId)) continue;
+          map.set(cp.counterpartyId, {
+            name: cp.counterpartyName,
+            color: cp.counterpartyColor ?? "#94a3b8",
+          });
+        }
       }
     }
     return map;

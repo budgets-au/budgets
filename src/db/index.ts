@@ -636,8 +636,13 @@ export function initProfileFile(
       // the categories UI). One INSERT per row, parent_id always
       // null.
       const insertCat = client.prepare(
-        `INSERT INTO categories (id, name, type, color, parent_id, is_system, transfer_kind, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, 1, 'none', strftime('%s','now')*1000, strftime('%s','now')*1000)`,
+        // categories table has `created_at` but NO `updated_at` —
+        // unlike most other tables. Fresh-DB creates via
+        // `initProfileFile()` were crashing here with "table
+        // categories has no column named updated_at" until this
+        // INSERT was trimmed to match.
+        `INSERT INTO categories (id, name, type, color, parent_id, is_system, transfer_kind, created_at)
+         VALUES (?, ?, ?, ?, NULL, 1, 'none', strftime('%s','now')*1000)`,
       );
       const newId = (): string =>
         Array.from(

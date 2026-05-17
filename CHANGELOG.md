@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.145.0 — 2026-05-17
+
+### Fixed
+- **"Create new database" failed with `table categories has no
+  column named updated_at`.** The system-categories seeder for a
+  fresh DB was running a raw `INSERT INTO categories (... ,
+  created_at, updated_at)` — but the `categories` table doesn't
+  have an `updated_at` column (unlike every OTHER table on the
+  schema). The 0.142 multi-DB rework re-introduced the column
+  reference when the seeder switched from drizzle's typed insert
+  to raw SQL. Dropped the trailing column + the matching
+  `strftime('%s','now')*1000` value; new-DB create now flows
+  through.
+
 ## 0.144.0 — 2026-05-17
 
 ### Fixed

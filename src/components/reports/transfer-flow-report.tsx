@@ -40,6 +40,8 @@ interface FlowLink {
   value: number;
 }
 
+type NodeColumn = "left" | "middle" | "right";
+
 interface SankeyNodeDatum {
   name: string;
 }
@@ -113,7 +115,7 @@ function makeCustomNode(
   isDark: boolean,
   colorsByIdx: string[],
   labelsByIdx: string[],
-  sideByIdx: ("source" | "target")[],
+  colByIdx: NodeColumn[],
 ) {
   const fillDefault = isDark ? EXTERNAL_COLOR_DARK : EXTERNAL_COLOR_LIGHT;
   return function CustomNode(props: CustomNodeProps) {
@@ -128,26 +130,42 @@ function makeCustomNode(
       return null;
     }
     const fill = colorsByIdx[index] ?? fillDefault;
-    const side = sideByIdx[index] ?? "target";
-    const isSource = side === "source";
-    const labelX = isSource ? x - 6 : x + width + 6;
-    const textAnchor: "start" | "end" = isSource ? "end" : "start";
+    const col = colByIdx[index] ?? "right";
+    // Left-col nodes get labels in the left margin; right-col nodes get
+    // labels in the right margin; middle (root) node sits above the
+    // rectangle so the labels don't collide with the ribbons converging
+    // on it from both sides.
+    const isLeft = col === "left";
+    const isMiddle = col === "middle";
+    const labelX = isMiddle
+      ? x + width / 2
+      : isLeft
+        ? x - 6
+        : x + width + 6;
+    const textAnchor: "start" | "middle" | "end" = isMiddle
+      ? "middle"
+      : isLeft
+        ? "end"
+        : "start";
     const labelFill = isDark ? "#e2e8f0" : "#0f172a";
     const subFill = isDark ? "#94a3b8" : "#64748b";
     const name = labelsByIdx[index] ?? "";
-    // Each node's `value` is computed by Recharts as the larger of incoming
-    // or outgoing flow — for the split-by-side layout we use here, each
-    // node has flow only on one side so this is just that side's total.
     const valueText = formatAUD(
-      Number((props.payload?.value ?? 0)) || 0,
+      Number(props.payload?.value ?? 0) || 0,
     ).replace("A$", "$");
-    const textY = y + height / 2 + 4;
     const APPROX_CHAR_PX = 6.5;
     const labelWidthEst = name.length * APPROX_CHAR_PX;
     const valueGap = 8;
-    const valueX = isSource
-      ? labelX - labelWidthEst - valueGap
-      : labelX + labelWidthEst + valueGap;
+    const labelY = isMiddle ? y - 8 : y + height / 2 + 4;
+    const valueY = isMiddle ? y + height + 12 : labelY;
+    const valueX = isMiddle
+      ? x + width / 2
+      : isLeft
+        ? labelX - labelWidthEst - valueGap
+        : labelX + labelWidthEst + valueGap;
+    const valueAnchor: "start" | "middle" | "end" = isMiddle
+      ? "middle"
+      : textAnchor;
     return (
       <g>
         <rect
@@ -157,21 +175,23 @@ function makeCustomNode(
           height={Math.max(2, height)}
           fill={fill}
           fillOpacity={0.95}
+          stroke={isMiddle ? "#6366f1" : "none"}
+          strokeWidth={isMiddle ? 2 : 0}
         />
         <text
           x={labelX}
-          y={textY}
+          y={labelY}
           textAnchor={textAnchor}
-          fontSize={11}
-          fontWeight={500}
-          fill={labelFill}
+          fontSize={isMiddle ? 12 : 11}
+          fontWeight={isMiddle ? 600 : 500}
+          fill={isMiddle ? "#6366f1" : labelFill}
         >
           {name}
         </text>
         <text
           x={valueX}
-          y={textY}
-          textAnchor={textAnchor}
+          y={valueY}
+          textAnchor={valueAnchor}
           fontSize={10}
           fill={subFill}
         >
@@ -229,10 +249,25 @@ export function TransferFlowReport({
   to: string;
   accountIds: string[];
 }) {
-  const accountIdsParam =
-    accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
+  const [rootAccountId, setRootAccountId] = useState<string>("all");
+  const [hideExternal, setHideExternal] = useState(false);
+
+  // Data fetch:
+  //   "all" mode  → sidebar account filter applies (multi-account view).
+  //   root mode   → fetch ONLY the root account, ignoring sidebar — the
+  //                 view is about that account's own perspective and
+  //                 the sidebar's role is secondary. Root's
+  //                 transferInBy/transferOutBy carry every counterparty
+  //                 (including non-filtered & archived accounts), so a
+  //                 single fetch is enough.
+  const fetchAccountIdsParam =
+    rootAccountId !== "all"
+      ? `&accountIds=${rootAccountId}`
+      : accountIds.length > 0
+        ? `&accountIds=${accountIds.join(",")}`
+        : "";
   const { data, isLoading } = useSWR<AccountsCashflowReport>(
-    `/api/reports/accounts-cashflow?from=${from}&to=${to}${accountIdsParam}`,
+    `/api/reports/accounts-cashflow?from=${from}&to=${to}${fetchAccountIdsParam}`,
     fetcher,
   );
   // The picker shows every non-archived account, not just the ones the
@@ -244,16 +279,54 @@ export function TransferFlowReport({
   );
   const isDark = useDarkMode();
 
-  const [rootAccountId, setRootAccountId] = useState<string>("all");
-  const [hideExternal, setHideExternal] = useState(false);
+  // Lookup table for every account that might be referenced. The cashflow
+  // payload may be narrow (a single root account) so /api/accounts is the
+  // authoritative name/color source for counterparties.
+  const accountMeta = useMemo(() => {
+    const map = new Map<string, { name: string; color: string }>();
+    for (const a of allAccounts) {
+      map.set(a.id, { name: a.name, color: a.color ?? "#94a3b8" });
+    }
+    if (data) {
+      for (const a of data.accounts) {
+        map.set(a.id, { name: a.name, color: a.color });
+      }
+    }
+    return map;
+  }, [allAccounts, data]);
 
-  // Build the raw link list once (per data change) before applying the
-  // root / hide-external filters — flow direction is captured by the
-  // sender's `transferOutBy[]`. Iterating receivers' `transferInBy[]`
-  // would double-count every internal pair.
+  // Build links from the cashflow payload. In "all" mode we walk every
+  // filtered account's outbound list, plus inbound from counterparties
+  // NOT in the filter (so a non-filtered account paying a filtered one
+  // still shows up — same convention the Accounts report uses for its
+  // per-counterparty transfer rows). In root mode the root's own in/out
+  // arrays carry every leg directly; no dedupe needed because root is
+  // the only account we walked.
   const rawLinks: FlowLink[] = useMemo(() => {
     if (!data) return [];
     const out: FlowLink[] = [];
+    if (rootAccountId !== "all") {
+      const root = data.accounts.find((a) => a.id === rootAccountId);
+      if (!root) return [];
+      for (const cp of root.transferInBy) {
+        if (cp.total <= 0) continue;
+        out.push({
+          sourceAccountId: cp.counterpartyId ?? EXTERNAL_ID,
+          targetAccountId: root.id,
+          value: cp.total,
+        });
+      }
+      for (const cp of root.transferOutBy) {
+        if (cp.total <= 0) continue;
+        out.push({
+          sourceAccountId: root.id,
+          targetAccountId: cp.counterpartyId ?? EXTERNAL_ID,
+          value: cp.total,
+        });
+      }
+      return out;
+    }
+    const filteredIds = new Set(data.accounts.map((a) => a.id));
     for (const a of data.accounts) {
       for (const cp of a.transferOutBy) {
         if (cp.total <= 0) continue;
@@ -263,29 +336,23 @@ export function TransferFlowReport({
           value: cp.total,
         });
       }
-    }
-    return out;
-  }, [data]);
-
-  // Lookup table for every account that might be referenced — sidebar
-  // filter restricts the report to visible accounts, but the OTHER end
-  // of a transfer can be any account (including archived). Use the
-  // accountsCashflowReport's account rows + supplement with /api/accounts
-  // for any missing counterparties.
-  const accountMeta = useMemo(() => {
-    const map = new Map<string, { name: string; color: string }>();
-    for (const a of allAccounts) {
-      map.set(a.id, { name: a.name, color: a.color ?? "#94a3b8" });
-    }
-    // Override with the cashflow report's accounts in case any colour
-    // differs (the report sometimes adds visual styling). Same shape.
-    if (data) {
-      for (const a of data.accounts) {
-        map.set(a.id, { name: a.name, color: a.color });
+      for (const cp of a.transferInBy) {
+        if (cp.total <= 0) continue;
+        // If the other end IS in the filter, that account's own
+        // transferOutBy already captured this leg above — skip to
+        // avoid double-counting. External (counterpartyId == null) is
+        // always kept since External has no out-list of its own.
+        if (cp.counterpartyId !== null && filteredIds.has(cp.counterpartyId))
+          continue;
+        out.push({
+          sourceAccountId: cp.counterpartyId ?? EXTERNAL_ID,
+          targetAccountId: a.id,
+          value: cp.total,
+        });
       }
     }
-    return map;
-  }, [allAccounts, data]);
+    return out;
+  }, [data, rootAccountId]);
 
   if (isLoading) {
     return (
@@ -300,7 +367,7 @@ export function TransferFlowReport({
     );
   }
 
-  // Apply filters (root account + hide external) to the raw link list.
+  // Apply hide-external to the raw links.
   let links = rawLinks;
   if (hideExternal) {
     links = links.filter(
@@ -308,32 +375,29 @@ export function TransferFlowReport({
         l.sourceAccountId !== EXTERNAL_ID && l.targetAccountId !== EXTERNAL_ID,
     );
   }
-  if (rootAccountId !== "all") {
-    links = links.filter(
-      (l) =>
-        l.sourceAccountId === rootAccountId ||
-        l.targetAccountId === rootAccountId,
-    );
-  }
 
-  // Pickable accounts for the dropdown: every non-archived account from
-  // /api/accounts. Sorted by name for stable scanning.
   const pickerAccounts = [...allAccounts]
     .filter((a) => !a.isArchived)
     .sort((x, y) => x.name.localeCompare(y.name));
 
+  const isRootMode = rootAccountId !== "all";
   const hasContent = links.length > 0;
 
-  // Build the Sankey datum. Each account that appears as a source gets
-  // a left-column node; each account that appears as a target gets a
-  // right-column node. Splitting by side prevents Recharts from drawing
-  // cycles when A → B and B → A both exist in the window.
+  // Node layout depends on mode:
+  //   all  → split each participating account into a left "source"
+  //          node + a right "destination" node so cycles (A→B and
+  //          B→A in the same window) lay out cleanly left-to-right.
+  //   root → 3 columns: left = sources flowing into root,
+  //          middle = root itself (a single shared node — both target
+  //          of left-side links AND source of right-side links so the
+  //          ribbons converge then diverge), right = destinations.
   const nodes: SankeyNodeDatum[] = [];
   const colorsByIdx: string[] = [];
   const labelsByIdx: string[] = [];
-  const sideByIdx: ("source" | "target")[] = [];
-  const sourceIdxByAccount = new Map<string, number>();
-  const targetIdxByAccount = new Map<string, number>();
+  const colByIdx: NodeColumn[] = [];
+  const leftIdxByAccount = new Map<string, number>();
+  const rightIdxByAccount = new Map<string, number>();
+  let rootIdx = -1;
 
   function metaFor(id: string): { name: string; color: string } {
     if (id === EXTERNAL_ID) {
@@ -349,39 +413,56 @@ export function TransferFlowReport({
       }
     );
   }
-
-  function ensureSourceNode(id: string): number {
-    const existing = sourceIdxByAccount.get(id);
-    if (existing != null) return existing;
+  function pushNode(id: string, col: NodeColumn): number {
     const meta = metaFor(id);
     const i = nodes.length;
     nodes.push({ name: meta.name });
     colorsByIdx.push(meta.color);
     labelsByIdx.push(meta.name);
-    sideByIdx.push("source");
-    sourceIdxByAccount.set(id, i);
+    colByIdx.push(col);
     return i;
   }
-  function ensureTargetNode(id: string): number {
-    const existing = targetIdxByAccount.get(id);
+  function ensureLeftNode(id: string): number {
+    const existing = leftIdxByAccount.get(id);
     if (existing != null) return existing;
-    const meta = metaFor(id);
-    const i = nodes.length;
-    nodes.push({ name: meta.name });
-    colorsByIdx.push(meta.color);
-    labelsByIdx.push(meta.name);
-    sideByIdx.push("target");
-    targetIdxByAccount.set(id, i);
+    const i = pushNode(id, "left");
+    leftIdxByAccount.set(id, i);
     return i;
+  }
+  function ensureRightNode(id: string): number {
+    const existing = rightIdxByAccount.get(id);
+    if (existing != null) return existing;
+    const i = pushNode(id, "right");
+    rightIdxByAccount.set(id, i);
+    return i;
+  }
+  function ensureRootNode(id: string): number {
+    if (rootIdx >= 0) return rootIdx;
+    rootIdx = pushNode(id, "middle");
+    return rootIdx;
   }
 
   const sankeyLinks: SankeyLinkDatum[] = [];
   const linkColors: string[] = [];
   for (const l of links) {
-    const sIdx = ensureSourceNode(l.sourceAccountId);
-    const tIdx = ensureTargetNode(l.targetAccountId);
+    let sIdx: number;
+    let tIdx: number;
+    if (isRootMode) {
+      if (l.sourceAccountId === rootAccountId) {
+        sIdx = ensureRootNode(rootAccountId);
+        tIdx = ensureRightNode(l.targetAccountId);
+      } else if (l.targetAccountId === rootAccountId) {
+        sIdx = ensureLeftNode(l.sourceAccountId);
+        tIdx = ensureRootNode(rootAccountId);
+      } else {
+        continue;
+      }
+    } else {
+      sIdx = ensureLeftNode(l.sourceAccountId);
+      tIdx = ensureRightNode(l.targetAccountId);
+    }
     sankeyLinks.push({ source: sIdx, target: tIdx, value: l.value });
-    // Tint each ribbon with the SOURCE account's colour — reads as
+    // Tint each ribbon by the SOURCE account's colour — reads as
     // "this account paid out X".
     linkColors.push(colorsByIdx[sIdx]);
   }
@@ -442,7 +523,9 @@ export function TransferFlowReport({
         </div>
         {!hasContent ? (
           <p className="text-sm text-muted-foreground py-8 text-center">
-            No transfers in the selected window.
+            {isRootMode
+              ? "No transfers in or out of this account in the selected window."
+              : "No transfers in the selected window."}
           </p>
         ) : (
           <div
@@ -459,8 +542,8 @@ export function TransferFlowReport({
                 linkCurvature={0.5}
                 iterations={64}
                 align="left"
-                margin={{ top: 8, right: 160, bottom: 8, left: 160 }}
-                node={makeCustomNode(isDark, colorsByIdx, labelsByIdx, sideByIdx)}
+                margin={{ top: 28, right: 160, bottom: 28, left: 160 }}
+                node={makeCustomNode(isDark, colorsByIdx, labelsByIdx, colByIdx)}
                 link={makeCustomLink(linkColors)}
               >
                 <Tooltip content={<FlowTooltip />} />

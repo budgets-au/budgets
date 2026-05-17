@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.130.0 — 2026-05-17
+
+### Changed
+- **Flow report — root-account view becomes a 3-column ribbon:
+  `inbound | root | outbound`.** Picking a root account now puts
+  that account in the middle of the Sankey as a single shared node;
+  every account that sent money INTO root sits in the left column,
+  every account that received money FROM root sits in the right
+  column. An account that's on both sides of root in the window
+  appears once on each side (separate copies), which is correct —
+  the two ribbons represent independent legs. The root rectangle
+  gets an indigo outline + label so it stays the focal point. In
+  "All accounts" mode the layout is unchanged (left-source /
+  right-destination split-by-side).
+- **Flow report — counterparties render regardless of the sidebar
+  account filter** (mirrors the Accounts report's per-counterparty
+  rows). Specifically:
+    - Root-mode fetches only the root account's cashflow and walks
+      its own `transferInBy[]` / `transferOutBy[]`, so every
+      counterparty leg is captured even if the sidebar filter
+      excludes the other end.
+    - All-mode now also walks each filtered account's
+      `transferInBy[]` for inbound legs whose source is OUTSIDE the
+      sidebar — previously only `transferOutBy[]` was iterated, so
+      a non-filtered account paying a filtered one was missed.
+    - Internal pairs are deduped against the filtered-set so an
+      A→B leg with both A and B in the sidebar is still counted
+      exactly once.
+
 ## 0.129.0 — 2026-05-17
 
 ### Added

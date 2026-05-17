@@ -4,11 +4,6 @@
 -- and only re-fetch from Yahoo when the last fetch for the symbol
 -- is older than NEWS_TTL_HOURS (currently 24h, defined in the
 -- /api/investments/[id]/news handler).
---
--- The (symbol, uuid) unique constraint dedups items that show up
--- across multiple fetches. Symbol is stored uppercased and with the
--- Yahoo exchange suffix preserved (e.g. CBA.AX) so we don't
--- conflate two listings of the same ticker on different venues.
 CREATE TABLE investment_news (
   id           TEXT PRIMARY KEY,
   symbol       TEXT NOT NULL,
@@ -20,11 +15,7 @@ CREATE TABLE investment_news (
   thumbnail    TEXT,
   fetched_at   INTEGER NOT NULL
 );
-
-CREATE UNIQUE INDEX investment_news_symbol_uuid_idx
-  ON investment_news (symbol, uuid);
-
--- For "what's the most recent fetch on this symbol" — drives the
--- cache-staleness check.
-CREATE INDEX investment_news_symbol_fetched_at_idx
-  ON investment_news (symbol, fetched_at DESC);
+--> statement-breakpoint
+CREATE UNIQUE INDEX investment_news_symbol_uuid_idx ON investment_news (symbol, uuid);
+--> statement-breakpoint
+CREATE INDEX investment_news_symbol_fetched_at_idx ON investment_news (symbol, fetched_at DESC);

@@ -1,8 +1,9 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import useSWR from "swr";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight, Printer } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -251,6 +252,9 @@ export function AccountsCashflowReport({
                           months={months}
                           values={a.creditByMonth}
                           total={a.totalCredit}
+                          accountId={a.id}
+                          periodFrom={from}
+                          periodTo={to}
                         />
                         <MetricRow
                           label="Debits"
@@ -258,6 +262,9 @@ export function AccountsCashflowReport({
                           months={months}
                           values={a.debitByMonth}
                           total={a.totalDebit}
+                          accountId={a.id}
+                          periodFrom={from}
+                          periodTo={to}
                         />
                         <MetricRow
                           label="Net (credits − debits)"
@@ -265,6 +272,9 @@ export function AccountsCashflowReport({
                           months={months}
                           values={netSeries(a.creditByMonth, a.debitByMonth, months)}
                           total={a.totalCredit - a.totalDebit}
+                          accountId={a.id}
+                          periodFrom={from}
+                          periodTo={to}
                         />
                         {a.transferInBy.map((cp) => (
                           <MetricRow
@@ -275,6 +285,9 @@ export function AccountsCashflowReport({
                             months={months}
                             values={cp.byMonth}
                             total={cp.total}
+                            accountId={a.id}
+                            periodFrom={from}
+                            periodTo={to}
                           />
                         ))}
                         {a.transferOutBy.map((cp) => (
@@ -286,6 +299,9 @@ export function AccountsCashflowReport({
                             months={months}
                             values={cp.byMonth}
                             total={cp.total}
+                            accountId={a.id}
+                            periodFrom={from}
+                            periodTo={to}
                           />
                         ))}
                         <MetricRow
@@ -299,6 +315,9 @@ export function AccountsCashflowReport({
                              months. */
                           total={a.closingBalance}
                           totalIsSnapshot
+                          accountId={a.id}
+                          periodFrom={from}
+                          periodTo={to}
                         />
                       </>
                     )}
@@ -326,6 +345,8 @@ export function AccountsCashflowReport({
                 values={totals.creditByMonth}
                 total={totals.totalCredit}
                 tfoot
+                periodFrom={from}
+                periodTo={to}
               />
               <MetricRow
                 label="Debits"
@@ -334,6 +355,8 @@ export function AccountsCashflowReport({
                 values={totals.debitByMonth}
                 total={totals.totalDebit}
                 tfoot
+                periodFrom={from}
+                periodTo={to}
               />
               <MetricRow
                 label="Net (credits − debits)"
@@ -342,6 +365,8 @@ export function AccountsCashflowReport({
                 values={netSeries(totals.creditByMonth, totals.debitByMonth, months)}
                 total={totals.totalCredit - totals.totalDebit}
                 tfoot
+                periodFrom={from}
+                periodTo={to}
               />
               <MetricRow
                 label="Transfer in"
@@ -350,6 +375,8 @@ export function AccountsCashflowReport({
                 values={totals.transferInByMonth}
                 total={totals.totalTransferIn}
                 tfoot
+                periodFrom={from}
+                periodTo={to}
               />
               <MetricRow
                 label="Transfer out"
@@ -358,6 +385,8 @@ export function AccountsCashflowReport({
                 values={totals.transferOutByMonth}
                 total={totals.totalTransferOut}
                 tfoot
+                periodFrom={from}
+                periodTo={to}
               />
               <MetricRow
                 label="Balance"
@@ -367,6 +396,8 @@ export function AccountsCashflowReport({
                 total={totals.closingBalance}
                 totalIsSnapshot
                 tfoot
+                periodFrom={from}
+                periodTo={to}
               />
             </tfoot>
           </table>
@@ -374,6 +405,53 @@ export function AccountsCashflowReport({
       </CardContent>
     </Card>
   );
+}
+
+/** Build a /transactions URL for a single cell. The slice param
+ *  picks which month (a "YYYY-MM" string) or the whole period
+ *  ("total"). Returns null when the cell shouldn't be a link —
+ *  e.g. a zero value or the snapshot Total column on the Balance
+ *  row (where the number is a closing-balance, not a sum of
+ *  transactions). */
+function buildCellHref(opts: {
+  mode: CellMode;
+  slice: string | "total";
+  periodFrom: string;
+  periodTo: string;
+  accountId?: string;
+}): string | null {
+  const { mode, slice, periodFrom, periodTo, accountId } = opts;
+  // Resolve the date window: a specific month → that month's first
+  // and last day; "total" → the whole report range.
+  let from: string;
+  let to: string;
+  if (slice === "total") {
+    from = periodFrom;
+    to = periodTo;
+  } else {
+    const start = parseISO(`${slice}-01`);
+    from = `${slice}-01`;
+    to = format(endOfMonth(start), "yyyy-MM-dd");
+  }
+  const params = new URLSearchParams();
+  params.set("from", from);
+  params.set("to", to);
+  if (accountId) params.set("accountIds", accountId);
+  // Metric → filter mapping. Credits and Debits filter by amount
+  // sign; transfer rows additionally restrict to paired/categorised
+  // transfers via `transfersFilter=only` so the user sees only the
+  // matched legs. Net + Balance don't add a metric filter; the
+  // account-window slice is the relevant lens.
+  if (mode === "credit") params.set("direction", "in");
+  else if (mode === "debit") params.set("direction", "out");
+  else if (mode === "transferIn") {
+    params.set("direction", "in");
+    params.set("transfersFilter", "only");
+  } else if (mode === "transferOut") {
+    params.set("direction", "out");
+    params.set("transfersFilter", "only");
+  }
+  return `/transactions?${params.toString()}`;
 }
 
 function MetricRow({
@@ -385,6 +463,9 @@ function MetricRow({
   total,
   totalIsSnapshot,
   tfoot,
+  accountId,
+  periodFrom,
+  periodTo,
 }: {
   label: string;
   /** Optional small colour dot rendered next to the label — used by
@@ -397,12 +478,37 @@ function MetricRow({
   total: number;
   totalIsSnapshot?: boolean;
   tfoot?: boolean;
+  /** When set, the cells become drill-down links scoped to this
+   *  account. Omit for the all-accounts footer (the resulting URLs
+   *  span all visible accounts via the default account filter). */
+  accountId?: string;
+  /** Report-window bounds, used by the "Total" column's URL builder
+   *  and as fallback when no month is selected. */
+  periodFrom: string;
+  periodTo: string;
 }) {
   const totalCell = formatCell(total, mode);
   // The Total column is misleading for a snapshot metric (balance),
   // so we show the closing-balance value but skip the per-mode tint.
   const totalClass = totalIsSnapshot ? "text-foreground" : totalCell.className;
   const rowBg = tfoot ? "bg-muted/30" : "";
+  const renderCellContent = (
+    text: string,
+    cellClass: string,
+    href: string | null,
+  ) => {
+    if (!href || text === "—") {
+      return <span className={cellClass}>{text}</span>;
+    }
+    return (
+      <Link
+        href={href}
+        className={`${cellClass} hover:underline hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors`}
+      >
+        {text}
+      </Link>
+    );
+  };
   return (
     <tr className={`hover:bg-muted/20 ${rowBg}`}>
       <td
@@ -420,19 +526,43 @@ function MetricRow({
       </td>
       {months.map((m) => {
         const cell = formatCell(values[m], mode);
+        const href = buildCellHref({
+          mode,
+          slice: m,
+          periodFrom,
+          periodTo,
+          accountId,
+        });
         return (
           <td
             key={m}
             className={`px-3 py-1 text-right tabular-nums ${cell.className}`}
           >
-            {cell.text}
+            {renderCellContent(cell.text, "", href)}
           </td>
         );
       })}
       <td
         className={`px-3 py-1 text-right tabular-nums font-semibold border-l ${totalClass}`}
       >
-        {total === 0 ? "—" : totalCell.text}
+        {renderCellContent(
+          total === 0 ? "—" : totalCell.text,
+          "",
+          // Balance's "Total" is a closing-balance snapshot, not a
+          // sum of transactions — clicking it would land on a list
+          // that wouldn't add up to the displayed number. Skip the
+          // link there. Every other metric: link to the whole-period
+          // filtered view.
+          totalIsSnapshot
+            ? null
+            : buildCellHref({
+                mode,
+                slice: "total",
+                periodFrom,
+                periodTo,
+                accountId,
+              }),
+        )}
       </td>
     </tr>
   );

@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.126.0 — 2026-05-17
+
+### Added
+- **Accounts report: every numeric cell drills into
+  /transactions.** Click any value in the Credits / Debits / Net /
+  Transfer in / Transfer out / Balance rows and you land on the
+  transactions list pre-filtered to that account + month + metric
+  (e.g. Credits in May = the source account scoped to a `direction=in`
+  filter for that month's window). The Total column links to the
+  whole-period view. The all-accounts footer rows skip the account
+  filter so the drill-down spans every visible account. The Balance
+  row's Total cell stays unlinked because it's a closing-balance
+  snapshot, not a sum that would round-trip against a transaction
+  list.
+
+### Fixed
+- **Migration 0007 now applies cleanly under better-sqlite3.** The
+  driver doesn't accept multi-statement SQL strings; the original
+  `0007_investment_news.sql` jammed CREATE TABLE + two CREATE INDEX
+  statements together, which broke every test that booted the
+  in-memory DB. Reformatted with `--> statement-breakpoint`
+  separators (drizzle's convention; see `0000_narrow_black_panther.sql`
+  for prior art). Existing prod DBs won't re-run the migration; this
+  only affects fresh installs and the test DB.
+
 ## 0.125.0 — 2026-05-17
 
 ### Added

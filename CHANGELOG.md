@@ -9,6 +9,34 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.133.0 — 2026-05-17
+
+### Fixed
+- **Accounts report drill-through respects the clicked
+  counterparty.** Clicking a "Transfer in from B" / "Transfer out
+  to B" cell used to land on `/transactions` filtered only by
+  direction + `transfersFilter=only` — so the resulting list
+  showed every transfer in that direction (from B, C, D,
+  External…), not just the ones paired with B. The list summed
+  to the wrong number.
+  - New URL param on `/api/transactions`:
+    `transferPairAccountId=<uuid|external>`. UUID restricts to
+    rows whose `transfer_pair_id` points to a transaction in that
+    account; `external` restricts to unpaired transfers (the
+    "External" counterparty bucket in the report). The SQL
+    condition mirrors the accounts-cashflow API's grouping on
+    `pair.account_id` so the resulting list sums to the cell.
+  - `buildCellHref()` + `<MetricRow>` in the accounts report
+    thread the counterparty through; per-counterparty rows now
+    emit `transferPairAccountId=<…>` on every cell.
+- **Per-month Balance cells in the accounts report are no longer
+  clickable.** They were linking to "every transaction in this
+  account for this month," which doesn't sum to the closing-balance
+  snapshot displayed in the cell. Same logic that already kept the
+  Balance Total column unlinked (it's a snapshot, not a sum)
+  applies per-month — `buildCellHref()` now returns `null` for
+  every `balance` cell.
+
 ## 0.132.0 — 2026-05-17
 
 ### Fixed

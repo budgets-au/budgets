@@ -113,6 +113,46 @@ export async function GET(request: Request) {
     conditions.push(isNull(transactions.transferPairId));
   }
 
+  // Drill-through filter from the accounts report's per-counterparty
+  // rows: "transactions whose paired leg lives in account X". Two
+  // accepted shapes:
+  //   <uuid>     → restrict to rows whose transfer_pair_id points to
+  //                a transaction in that account.
+  //   "external" → restrict to transfers that have no paired leg
+  //                recorded (the "External" counterparty bucket in
+  //                the accounts report). Mirrors the cashflow API's
+  //                dual condition so the resulting list matches the
+  //                cell's source-of-truth.
+  // Anything else is silently ignored — same pattern as the other
+  // validated params.
+  const transferPairAccountIdRaw = searchParams.get("transferPairAccountId");
+  if (transferPairAccountIdRaw === "external") {
+    conditions.push(
+      sql`${transactions.transferPairId} IS NULL AND (
+        ${transactions.isTransfer} = 1
+        OR EXISTS (
+          SELECT 1 FROM categories c
+          WHERE c.id = ${transactions.categoryId}
+            AND c.transfer_kind IN ('internal','external')
+        )
+      )`,
+    );
+  } else if (transferPairAccountIdRaw) {
+    const uuidParse = z
+      .string()
+      .uuid()
+      .safeParse(transferPairAccountIdRaw);
+    if (uuidParse.success) {
+      conditions.push(
+        sql`EXISTS (
+          SELECT 1 FROM transactions p
+          WHERE p.id = ${transactions.transferPairId}
+            AND p.account_id = ${uuidParse.data}
+        )`,
+      );
+    }
+  }
+
   // direction=out  → only outflows (amount < 0)
   // direction=in   → only inflows  (amount > 0)
   // anything else  → no filter

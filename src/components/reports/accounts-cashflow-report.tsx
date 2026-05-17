@@ -286,6 +286,7 @@ export function AccountsCashflowReport({
                             values={cp.byMonth}
                             total={cp.total}
                             accountId={a.id}
+                            counterpartyId={cp.counterpartyId}
                             periodFrom={from}
                             periodTo={to}
                           />
@@ -300,6 +301,7 @@ export function AccountsCashflowReport({
                             values={cp.byMonth}
                             total={cp.total}
                             accountId={a.id}
+                            counterpartyId={cp.counterpartyId}
                             periodFrom={from}
                             periodTo={to}
                           />
@@ -419,8 +421,19 @@ function buildCellHref(opts: {
   periodFrom: string;
   periodTo: string;
   accountId?: string;
+  /** Counterparty constraint for the per-counterparty transfer rows.
+   *  Use the account's uuid for a known counterparty, `null` for the
+   *  External bucket (transfers with no paired leg recorded), or
+   *  `undefined` for non-per-counterparty rows (no constraint). */
+  counterpartyId?: string | null;
 }): string | null {
-  const { mode, slice, periodFrom, periodTo, accountId } = opts;
+  const { mode, slice, periodFrom, periodTo, accountId, counterpartyId } = opts;
+  // Balance cells are closing-balance snapshots, not sums of the
+  // transactions in the window — clicking them would land on a list
+  // that doesn't add up to the displayed number. Unlinked at every
+  // slice (the Total column was already unlinked via the
+  // `totalIsSnapshot` short-circuit at the call site).
+  if (mode === "balance") return null;
   // Resolve the date window: a specific month → that month's first
   // and last day; "total" → the whole report range.
   let from: string;
@@ -440,7 +453,7 @@ function buildCellHref(opts: {
   // Metric → filter mapping. Credits and Debits filter by amount
   // sign; transfer rows additionally restrict to paired/categorised
   // transfers via `transfersFilter=only` so the user sees only the
-  // matched legs. Net + Balance don't add a metric filter; the
+  // matched legs. Net doesn't add a metric filter; the
   // account-window slice is the relevant lens.
   if (mode === "credit") params.set("direction", "in");
   else if (mode === "debit") params.set("direction", "out");
@@ -450,6 +463,16 @@ function buildCellHref(opts: {
   } else if (mode === "transferOut") {
     params.set("direction", "out");
     params.set("transfersFilter", "only");
+  }
+  // Per-counterparty rows: constrain to the OTHER leg's account so
+  // the resulting list sums to the clicked cell (rather than to
+  // every transfer in the direction). `null` is the External bucket
+  // — transfers with no paired leg recorded. `undefined` skips this
+  // entirely.
+  if (counterpartyId === null) {
+    params.set("transferPairAccountId", "external");
+  } else if (counterpartyId !== undefined) {
+    params.set("transferPairAccountId", counterpartyId);
   }
   return `/transactions?${params.toString()}`;
 }
@@ -464,6 +487,7 @@ function MetricRow({
   totalIsSnapshot,
   tfoot,
   accountId,
+  counterpartyId,
   periodFrom,
   periodTo,
 }: {
@@ -482,6 +506,10 @@ function MetricRow({
    *  account. Omit for the all-accounts footer (the resulting URLs
    *  span all visible accounts via the default account filter). */
   accountId?: string;
+  /** Per-counterparty constraint. uuid → drill to the OTHER leg's
+   *  account; null → External bucket (no paired leg); undefined →
+   *  not a per-counterparty row (no constraint). */
+  counterpartyId?: string | null;
   /** Report-window bounds, used by the "Total" column's URL builder
    *  and as fallback when no month is selected. */
   periodFrom: string;
@@ -532,6 +560,7 @@ function MetricRow({
           periodFrom,
           periodTo,
           accountId,
+          counterpartyId,
         });
         return (
           <td
@@ -561,6 +590,7 @@ function MetricRow({
                 periodFrom,
                 periodTo,
                 accountId,
+                counterpartyId,
               }),
         )}
       </td>

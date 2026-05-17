@@ -1183,6 +1183,19 @@ function CommitToDb({
           `Nothing to update — ${result.skippedDuplicate} duplicate${result.skippedDuplicate === 1 ? "" : "s"} already in sync.`,
         );
       }
+      // Auto-pairing summary: the commit endpoint runs the matcher
+      // after insert. Surfacing this here makes the behaviour
+      // visible — the operator imports a CSV and immediately sees
+      // "+ N transfers paired" instead of wondering why a transfer
+      // they expected isn't linked.
+      const paired = typeof result.transfersPaired === "number" ? result.transfersPaired : 0;
+      const suggested = typeof result.transfersSuggested === "number" ? result.transfersSuggested : 0;
+      if (paired > 0 || suggested > 0) {
+        const pieces: string[] = [];
+        if (paired > 0) pieces.push(`${paired} transfer${paired === 1 ? "" : "s"} auto-paired`);
+        if (suggested > 0) pieces.push(`${suggested} suggestion${suggested === 1 ? "" : "s"} surfaced`);
+        toast.success(pieces.join(" · "));
+      }
       // Hand the just-committed importLogIds to the transactions
       // page so an Undo affordance can sit in its topbar (next to
       // the Import button). Then redirect — the import-review page

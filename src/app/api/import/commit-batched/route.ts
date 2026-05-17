@@ -11,6 +11,7 @@ import {
   loadTokenFreq,
 } from "@/lib/categorize";
 import { learnAccountAlias } from "@/lib/import/resolve-account";
+import { pairTransfersInWindow } from "@/lib/transfer-match";
 
 const rowSchema = z.object({
   /** Where this row should land. Required — rows without a resolved
@@ -46,9 +47,11 @@ const bodySchema = z.object({
  * POSTs here from its "Commit to DB" action after the categorise pass.
  *
  * Doesn't re-run categorisation (the categorise route already produced
- * `categoryId`s). Doesn't run transfer-pair matching — that's a
- * separate sweep. Aliases learned from each row's `bankAccountId` →
- * resolved `accountId` so future imports auto-route.
+ * `categoryId`s). DOES run transfer-pair matching after insert — see
+ * the `pairTransfersInWindow` call at the bottom; idempotent so an
+ * import with no transfer rows just no-ops. Aliases learned from
+ * each row's `bankAccountId` → resolved `accountId` so future
+ * imports auto-route.
  */
 export async function POST(request: Request) {
   const session = await auth();
@@ -558,6 +561,25 @@ async function runCommit(request: Request) {
     await learnAccountAlias("bank-account", aliasValue, accountId);
   }
 
+  // Auto-run transfer-pair matching against every unpaired row.
+  // The historical comment "doesn't run transfer-pair matching" was
+  // a footgun — a user importing one bank's CSV would never see the
+  // matcher until they manually hit /api/transfers/repair (and no UI
+  // exposed that endpoint). The matcher is idempotent — only touches
+  // `transfer_pair_id IS NULL` rows — and amortises across import
+  // size, so running it on every commit is safe + makes auto-pairing
+  // the expected default behaviour. A failure here is non-fatal: the
+  // commit already succeeded; we surface the error in the response
+  // and the user can re-run via the manual button on /transactions.
+  let pairResult: { paired: number; suggested: number } | null = null;
+  let pairError: string | null = null;
+  try {
+    pairResult = await pairTransfersInWindow({});
+  } catch (e) {
+    pairError = e instanceof Error ? e.message : String(e);
+    console.error("[commit-batched] transfer-match sweep failed:", e);
+  }
+
   return NextResponse.json({
     imported,
     skippedDuplicate: dupeUpdates.length,
@@ -570,5 +592,8 @@ async function runCommit(request: Request) {
     importLogIds,
     accountsTouched: insertsByAccount.size,
     aliasesLearned: aliasesToLearn.size,
+    transfersPaired: pairResult?.paired ?? 0,
+    transfersSuggested: pairResult?.suggested ?? 0,
+    transferMatchError: pairError,
   });
 }

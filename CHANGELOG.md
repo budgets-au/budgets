@@ -9,6 +9,46 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.128.2 — 2026-05-17
+
+### Fixed
+- **Transfer matcher now runs automatically after every import
+  commit.** Up to this release the `/api/import/commit-batched`
+  endpoint explicitly skipped transfer-pair matching — and no UI
+  surfaced the `/api/transfers/repair` endpoint either — so a
+  user importing a CSV that contained a transfer would never see
+  it auto-paired unless they happened to know the secret URL.
+  That was the actual cause behind "imports are missing the
+  match": the matcher was never running. Two changes:
+  - `pairTransfersInWindow({})` now runs after the commit succeeds
+    (inside a try-catch so a matcher failure can't fail the
+    commit). The response payload gains `transfersPaired` and
+    `transfersSuggested`; the import view surfaces a toast like
+    "3 transfers auto-paired" so the behaviour is visible.
+  - **`TransferSuggestionsPanel` always renders** (was: only when
+    suggestions existed) and includes a new "Re-scan transfers"
+    button that hits `/api/transfers/repair` directly. The user
+    can retroactively pair anything that landed before this
+    release. The panel collapses to a quiet single-row state when
+    suggestions are zero so it doesn't crowd the page.
+
+### Added
+- **6 new transfer-matcher integration tests** covering the
+  realistic single-bank flows that were untested:
+  - Lenient account-name match (one payee mentions the other
+    account, score crosses AUTO_THRESHOLD without needing
+    transfer-kind categories).
+  - ±3 day gap handling — bank posts the credit a day late.
+  - Refusal to pair across a >3 day gap (out of window).
+  - Loan-boundary pair auto-assigns "Loan Payment" category on
+    the source side.
+  - Existing pairs (manual or auto) survive a re-run untouched.
+  - Idempotency — running the sweep twice produces zero new
+    pairs on the second pass.
+
+  Brings the integration test count from 4 → 10. Total suite
+  is 294 passing.
+
 ## 0.128.1 — 2026-05-17
 
 ### Fixed

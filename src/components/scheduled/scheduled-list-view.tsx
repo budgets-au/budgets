@@ -90,6 +90,10 @@ interface TxRow {
   accountName: string | null;
   accountColor: string | null;
   categoryId: string | null;
+  /** Set when this row is one half of a matched transfer pair. The
+   * scheduled view's pair-display block uses it to render the
+   * destination leg without re-running the matcher on it. */
+  transferPairId: string | null;
 }
 
 function SortableTh<C extends string>({
@@ -762,10 +766,17 @@ export function ScheduledListView({
 
       const matchingStart = effectiveStartForMatching(sib, segWindowFrom);
       const scheduleForMatch = { ...sib, startDate: matchingStart };
+      // Single-leg projection for transfers: the destination's existence
+      // is established by the source-leg match's transfer_pair_id (see
+      // transferPairRows below). Projecting both legs would force the
+      // destination through matchSchedule's category filter, which it
+      // typically fails because auto-pairing only categorises the source
+      // — surfacing the destination as a false "missed" occurrence.
       const projected = expandRecurrence(
         scheduleForMatch as unknown as ScheduledTransaction,
         segWindowFrom,
         segWindowTo,
+        { transferDualLeg: false },
       );
 
       const segMatched = new Map<string, { occurrenceDate: string }>();
@@ -836,19 +847,31 @@ export function ScheduledListView({
     const dateSet = new Set<string>();
     for (const [, m] of matchedReals) dateSet.add(m.occurrenceDate);
     for (const u of unmatchedOccurrences) dateSet.add(u.date);
+    // Index by id for the destination-leg lookup below.
+    const txnById = new Map(txns.map((t) => [t.id, t]));
     const rows: TransferPairRow[] = Array.from(dateSet).map((date) => {
       const sourceTxn = txns.find(
         (t) =>
           t.accountId === sourceAccountId &&
           matchedReals.get(t.id)?.occurrenceDate === date,
       );
-      const destTxn = destAccountId
-        ? txns.find(
-            (t) =>
-              t.accountId === destAccountId &&
-              matchedReals.get(t.id)?.occurrenceDate === date,
-          )
-        : undefined;
+      // Destination leg: walk the source's transfer_pair_id rather than
+      // re-running matchSchedule on the dest account. This is the half
+      // of the bug fix that surfaces the paired row in the UI — without
+      // it, the pair-display had to find the dest txn via the same
+      // matcher pass that produced the false-positive "missed" warning.
+      let destTxn: TxRow | undefined;
+      if (destAccountId) {
+        if (sourceTxn?.transferPairId) {
+          const paired = txnById.get(sourceTxn.transferPairId);
+          if (paired && paired.accountId === destAccountId) destTxn = paired;
+        }
+        if (!destTxn) {
+          // Fallback for manually-paired rows whose other leg isn't in
+          // the local txn pool (archived counterparty etc.) — leave
+          // destTxn undefined so the existing "no match" UI renders.
+        }
+      }
       return {
         date,
         source: { txn: sourceTxn, expectedAmount: sourceAmt, accountId: sourceAccountId },

@@ -235,10 +235,18 @@ export function MissedScheduledPanel({ accounts }: { accounts: Account[] }) {
       const claimed = new Set<string>();
 
       for (const s of siblings) {
+        // Single-leg projection for transfers: the destination's
+        // existence is established by the source-leg match's
+        // transfer_pair_id (resolved in the parent transactions view,
+        // not here). Projecting both legs would force the destination
+        // through matchSchedule's category filter, which it typically
+        // fails because auto-pairing only categorises the source —
+        // surfacing the destination as a false "missed" warning.
         const projected = expandRecurrence(
           s as unknown as ScheduledTransaction,
           fromDate,
           toDate,
+          { transferDualLeg: false },
         );
         const rangeMin = s.amountMin != null ? Math.abs(parseFloat(s.amountMin)) : null;
         const allowedCategoryIds = s.categoryId ? descendantSet(s.categoryId) : null;
@@ -249,18 +257,6 @@ export function MissedScheduledPanel({ accounts }: { accounts: Account[] }) {
         // bank feed lag retroactively once the txn does post.
         const matchable: MissedOcc[] = [];
         for (const p of projected) {
-          // Transfer destination legs whose target account is archived
-          // are unreachable: archived accounts are excluded from the txn
-          // pool so the matcher could never find the credit, and we'd
-          // falsely flag the leg as missed. Skip them entirely — the
-          // source leg still gets matched normally.
-          if (
-            s.type === "transfer" &&
-            p.accountId !== s.accountId &&
-            !accountById.has(p.accountId)
-          ) {
-            continue;
-          }
           matchable.push({
             scheduledId: s.id,
             date: p.date,

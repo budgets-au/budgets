@@ -9,6 +9,55 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.136.0 — 2026-05-17
+
+### Fixed
+- **Import crash on modest CSVs (~100 KB or more).** The
+  categorise dry-run endpoint's stage-2 trigram pass ran
+  `suggestCategoryByHistory()` inside `Promise.all(stage2.map(...))`,
+  and that helper did its own full table scan of `transactions`
+  on every call. For a 99 KB CSV with ~800 stage-2 rows that
+  fanned out to ~800 concurrent full-table scans, each holding a
+  copy of the result buffer in V8 memory — straight OOM kill on
+  the container.
+  Fix: extend `suggestCategoryByHistory()` with a
+  `preloadedCandidates` parameter and pass the trigram pool that
+  the categorise route ALREADY fetches once at the top of the
+  block. The outer loop also drops `Promise.all` for a plain
+  `for…of` — better-sqlite3 is synchronous internally, so the
+  Promise.all gave no real concurrency; it just kept N copies of
+  the buffer alive at once. Memory now stays at one pool's worth
+  for the whole import regardless of CSV size.
+- **Scheduled-transfer false-positive "missed payment" warning.**
+  When a recurring transfer schedule's two real legs are correctly
+  paired (`transfer_pair_id` set, `is_transfer = 1`), the destination
+  leg still surfaced as MISSED. Root cause: `expandRecurrence()`
+  projected BOTH legs per occurrence, and `matchSchedule()`'s
+  per-occurrence category filter rejected the destination leg
+  because the transfer auto-matcher only categorises the SOURCE
+  side — the destination keeps its original (usually NULL)
+  category.
+  Fix: add a `transferDualLeg?: boolean` option to
+  `expandRecurrence()` (default `true`, preserves existing
+  cashflow / dashboard behaviour). The scheduled list view and
+  the missed-scheduled panel pass `transferDualLeg: false` so
+  matching runs against the source leg only; the pair-display
+  block in the list view recovers the destination row by walking
+  the source's `transfer_pair_id` instead.
+
+### Changed
+- **Shared transfer-row predicate.** New
+  `src/lib/transfer-filter.ts` exposes a canonical
+  `isTransferRow` SQL fragment (`category.transfer_kind IN
+  ('internal','external') OR transactions.is_transfer = 1`). The
+  Accounts-cashflow endpoint's two inline copies of this OR are
+  now expressed via the named helper. Cashflow's
+  `hideTransfers` filter — which is intentionally narrower
+  (`transfer_kind != 'internal'` only, so external transfers like
+  loan payments still count as real cashflow) — is left alone;
+  the helper's JSDoc spells out the divergence so future
+  developers don't blindly unify them.
+
 ## 0.135.0 — 2026-05-17
 
 ### Changed

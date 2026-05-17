@@ -482,66 +482,75 @@ export async function POST(request: Request) {
           isNotNull(transactions.matchPayee),
         ),
       );
-    await Promise.all(
-      stage2.map(async (it) => {
-        const suggestion = await suggestCategoryByHistory(
-          it.normalizedPayee,
-          it.amount,
-          tokenFreq,
-        );
-        if (!suggestion) return;
-        const queryMatch = deriveMatchPayee(it.normalizedPayee, tokenFreq) ?? "";
-        if (!queryMatch) return;
-        // Top 30 nearest neighbours above the same 0.4 floor the suggester
-        // uses, sorted by similarity desc.
-        const scored = trigramPool
-          .map((c) => ({
-            normalized_payee: c.normalizedPayee ?? "",
-            sim: trigramSimilarity(c.matchPayee ?? "", queryMatch),
-            amount: parseFloat(c.amount),
-            category_id: c.categoryId as string,
-          }))
-          .filter((n) => n.sim > 0.4);
-        scored.sort((a, b) => b.sim - a.sim);
-        const widePool = scored.slice(0, 30);
+    // SEQUENTIAL — was Promise.all-mapped, which gave no real concurrency
+    // (better-sqlite3 is synchronous; the event loop processes the work
+    // serially anyway) but kept N copies of the candidate buffer alive
+    // inside each in-flight `suggestCategoryByHistory()` call. Before
+    // this fix, a 99 KB CSV with ~800 stage2 rows fan-out triggered
+    // ~800 concurrent full-table scans of `transactions` AND held all
+    // their result buffers in V8 memory at once — straight OOM kill on
+    // the container. Sequential walk + reusing the already-loaded
+    // `trigramPool` (passed in via the new preloadedCandidates arg)
+    // cuts memory back to one pool's worth of rows for the whole import.
+    for (const it of stage2) {
+      const suggestion = await suggestCategoryByHistory(
+        it.normalizedPayee,
+        it.amount,
+        tokenFreq,
+        trigramPool,
+      );
+      if (!suggestion) continue;
+      const queryMatch = deriveMatchPayee(it.normalizedPayee, tokenFreq) ?? "";
+      if (!queryMatch) continue;
+      // Top 30 nearest neighbours above the same 0.4 floor the suggester
+      // uses, sorted by similarity desc.
+      const scored = trigramPool
+        .map((c) => ({
+          normalized_payee: c.normalizedPayee ?? "",
+          sim: trigramSimilarity(c.matchPayee ?? "", queryMatch),
+          amount: parseFloat(c.amount),
+          category_id: c.categoryId as string,
+        }))
+        .filter((n) => n.sim > 0.4);
+      scored.sort((a, b) => b.sim - a.sim);
+      const widePool = scored.slice(0, 30);
 
-        // Per-category min/max derived from the same neighbourhood the
-        // suggester scored over. ABS so signed amounts (expense rows are
-        // negative) read as a clean magnitude range.
-        const byCat = new Map<string, { support: number; min: number; max: number }>();
-        for (const n of widePool) {
-          const mag = Math.abs(n.amount);
-          const cur = byCat.get(n.category_id);
-          if (cur) {
-            cur.support += 1;
-            if (mag < cur.min) cur.min = mag;
-            if (mag > cur.max) cur.max = mag;
-          } else {
-            byCat.set(n.category_id, { support: 1, min: mag, max: mag });
-          }
+      // Per-category min/max derived from the same neighbourhood the
+      // suggester scored over. ABS so signed amounts (expense rows are
+      // negative) read as a clean magnitude range.
+      const byCat = new Map<string, { support: number; min: number; max: number }>();
+      for (const n of widePool) {
+        const mag = Math.abs(n.amount);
+        const cur = byCat.get(n.category_id);
+        if (cur) {
+          cur.support += 1;
+          if (mag < cur.min) cur.min = mag;
+          if (mag > cur.max) cur.max = mag;
+        } else {
+          byCat.set(n.category_id, { support: 1, min: mag, max: mag });
         }
-        const categoryRanges: CategoryRange[] = Array.from(byCat.entries())
-          .map(([cid, v]) => ({
-            categoryName: catName.get(cid) ?? null,
-            support: v.support,
-            minAmount: v.min,
-            maxAmount: v.max,
-            isPicked: cid === suggestion.categoryId,
-          }))
-          .sort((a, b) => Number(b.isPicked) - Number(a.isPicked) || b.support - a.support);
+      }
+      const categoryRanges: CategoryRange[] = Array.from(byCat.entries())
+        .map(([cid, v]) => ({
+          categoryName: catName.get(cid) ?? null,
+          support: v.support,
+          minAmount: v.min,
+          maxAmount: v.max,
+          isPicked: cid === suggestion.categoryId,
+        }))
+        .sort((a, b) => Number(b.isPicked) - Number(a.isPicked) || b.support - a.support);
 
-        trigramHits.set(it.key, {
-          ...suggestion,
-          neighbours: widePool.slice(0, 5).map((n) => ({
-            normalizedPayee: n.normalized_payee,
-            similarity: n.sim,
-            amount: n.amount,
-            categoryName: catName.get(n.category_id) ?? null,
-          })),
-          categoryRanges,
-        });
-      }),
-    );
+      trigramHits.set(it.key, {
+        ...suggestion,
+        neighbours: widePool.slice(0, 5).map((n) => ({
+          normalizedPayee: n.normalized_payee,
+          similarity: n.sim,
+          amount: n.amount,
+          categoryName: catName.get(n.category_id) ?? null,
+        })),
+        categoryRanges,
+      });
+    }
   }
 
   // Per-row account resolution. Tries the alias table, then the account-

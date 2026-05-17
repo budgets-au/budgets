@@ -87,10 +87,19 @@ function nextOccurrence(
  * produce two events — one on the source account (the stored amount, which
  * is negative for transfers by convention) and one on the destination with
  * the opposite sign — so projections show on both legs of the transfer.
+ *
+ * When `transferDualLeg` is false the destination event is omitted. Used by
+ * matcher consumers (scheduled list view, missed-scheduled panel,
+ * transactions view) where the destination's existence is established via
+ * the source-leg match's `transfer_pair_id` instead. Without this opt-out
+ * the destination occurrence would fail the matcher's category filter
+ * (auto-pairing only categorises the source leg) and surface as a
+ * false-positive "missed" warning.
  */
 function eventsForOccurrence(
   scheduled: RecurrenceInput,
   cursor: Date,
+  transferDualLeg: boolean,
 ): ProjectedEvent[] {
   // Caller (expandRecurrence) already filters out null-accountId rows.
   if (!scheduled.accountId) return [];
@@ -104,7 +113,11 @@ function eventsForOccurrence(
     isProjected: true,
     scheduledId: scheduled.id,
   };
-  if (scheduled.type === "transfer" && scheduled.transferToAccountId) {
+  if (
+    transferDualLeg &&
+    scheduled.type === "transfer" &&
+    scheduled.transferToAccountId
+  ) {
     const destEvent: ProjectedEvent = {
       date,
       accountId: scheduled.transferToAccountId,
@@ -126,7 +139,7 @@ export function expandRecurrence(
   scheduled: RecurrenceInput,
   from: Date,
   to: Date,
-  options?: { includeBudgets?: boolean },
+  options?: { includeBudgets?: boolean; transferDualLeg?: boolean },
 ): ProjectedEvent[] {
   // Budgets are spending caps, not specific transactions, so most callers
   // (missed-detection, schedule lists, reports) want them excluded. The
@@ -135,13 +148,14 @@ export function expandRecurrence(
   // Rows without an accountId can never project regardless.
   if (!scheduled.accountId) return [];
   if (scheduled.kind === "budget" && !options?.includeBudgets) return [];
+  const transferDualLeg = options?.transferDualLeg ?? true;
   const events: ProjectedEvent[] = [];
   const start = parseISO(scheduled.startDate);
   const end = scheduled.endDate ? parseISO(scheduled.endDate) : null;
 
   if (scheduled.frequency === "once") {
     if (inRange(start, from, to)) {
-      events.push(...eventsForOccurrence(scheduled, start));
+      events.push(...eventsForOccurrence(scheduled, start, transferDualLeg));
     }
     return events;
   }
@@ -168,7 +182,7 @@ export function expandRecurrence(
   // Emit all occurrences in range
   while (!isAfter(cursor, rangeEnd)) {
     if (!isBefore(cursor, from)) {
-      events.push(...eventsForOccurrence(scheduled, cursor));
+      events.push(...eventsForOccurrence(scheduled, cursor, transferDualLeg));
     }
     cursor = nextOccurrence(cursor, scheduled.frequency, scheduled.interval, effectiveDayOfMonth);
   }

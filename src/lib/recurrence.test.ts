@@ -239,6 +239,33 @@ describe("expandRecurrence — basics", () => {
     expect(total).toBe(3000);
   });
 
+  it("transferDualLeg=false suppresses the destination event", () => {
+    // Regression: scheduled-list-view + missed-scheduled-panel run the
+    // matcher with a category filter that the destination leg fails
+    // (auto-pairing only categorises the source). Dropping the dest
+    // projection at the recurrence layer is the bug fix — the dest's
+    // existence is recovered downstream via transfer_pair_id.
+    const s = makeSchedule({
+      type: "transfer",
+      amount: "-300.00",
+      transferToAccountId: "00000000-0000-0000-0000-0000000000cc",
+      startDate: "2026-02-01",
+      frequency: "monthly",
+      interval: 1,
+    });
+    const events = expandRecurrence(
+      s,
+      parseISO("2026-02-01"),
+      parseISO("2026-04-30"),
+      { transferDualLeg: false },
+    );
+    expect(events).toHaveLength(3); // 3 occurrences × 1 (source) leg
+    for (const e of events) {
+      expect(e.accountId).toBe(s.accountId);
+      expect(e.amount).toBe("-300.00");
+    }
+  });
+
   it("respects endDate by truncating the series", () => {
     const s = makeSchedule({
       startDate: "2026-01-01",

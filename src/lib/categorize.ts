@@ -209,10 +209,23 @@ export function deriveMatchPayee(
  * small handful of strong-similarity rows in a different category.
  * Capping at the closest K neighbours stops that.
  */
+export interface SuggestCandidate {
+  categoryId: string | null;
+  matchPayee: string | null;
+  amount: string;
+}
+
 export async function suggestCategoryByHistory(
   normalizedPayee: string,
   amount: number,
   freq?: Map<string, number>,
+  /** Pre-fetched pool of categorised, payee-tagged rows. When supplied,
+   *  skip the DB scan — critical for the bulk-categorise path in the
+   *  import pipeline, where calling this function N times in a
+   *  `Promise.all` was running N full table scans on `transactions`
+   *  concurrently and OOM-killing the container on modest CSVs. The
+   *  caller fetches the pool ONCE and shares it across every row. */
+  preloadedCandidates?: ReadonlyArray<SuggestCandidate>,
 ): Promise<CategorySuggestion | null> {
   if (!normalizedPayee || normalizedPayee.length < 3) return null;
   // Compute a match form for the query using the same noise-stripping rule
@@ -233,19 +246,21 @@ export async function suggestCategoryByHistory(
   // GIN trigram index but that's not portable to SQLite. Same scoring
   // shape: top-K neighbours by trigram similarity, k-NN vote weighted
   // by sim^2 and an amount-band boost.
-  const candidates = await db
-    .select({
-      categoryId: transactions.categoryId,
-      matchPayee: transactions.matchPayee,
-      amount: transactions.amount,
-    })
-    .from(transactions)
-    .where(
-      and(
-        isNotNull(transactions.categoryId),
-        isNotNull(transactions.matchPayee),
-      ),
-    );
+  const candidates: ReadonlyArray<SuggestCandidate> =
+    preloadedCandidates ??
+    (await db
+      .select({
+        categoryId: transactions.categoryId,
+        matchPayee: transactions.matchPayee,
+        amount: transactions.amount,
+      })
+      .from(transactions)
+      .where(
+        and(
+          isNotNull(transactions.categoryId),
+          isNotNull(transactions.matchPayee),
+        ),
+      ));
   const scored: { categoryId: string; sim: number; amountMatch: number }[] = [];
   for (const c of candidates) {
     if (!c.categoryId || !c.matchPayee) continue;

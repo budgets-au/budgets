@@ -9,6 +9,30 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.129.0 — 2026-05-17
+
+### Added
+- **Flow report — Sankey of money between accounts.** New tab on
+  `/reports` (sits next to Accounts) visualising transfers as
+  variable-width ribbons between source and destination accounts.
+  Each account splits into a left "source" and right "destination"
+  node so two-way pairs render cleanly without cycles. A root-account
+  picker narrows the chart to ribbons touching a single chosen
+  account; a "Hide external" switch drops any leg whose other end
+  isn't a tracked account.
+  Reuses `/api/reports/accounts-cashflow` — no new endpoint, no
+  schema change — and iterates each account's `transferOutBy[]`
+  exactly once so internal pairs aren't double-counted.
+
+### Changed
+- **Super page: "Add person" moves to the topbar as an indigo CTA.**
+  Mirrors the Transactions page's Import button placement — the
+  primary affordance for the page lives next to the profile dropdown
+  rather than below the people grid. Inline naming flow is preserved
+  (input + Add + cancel inline in the topbar). Driven by
+  `<AddPersonButton />`; `SuperPageBody` now only owns the people
+  grid + delete callback.
+
 ## 0.128.3 — 2026-05-17
 
 ### Fixed

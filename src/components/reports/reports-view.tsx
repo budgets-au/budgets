@@ -141,6 +141,7 @@ import { DailyHeatmapReport } from "./daily-heatmap-report";
 import { ScatterReport } from "./scatter-report";
 import { PayeeParetoReport } from "./payee-pareto-report";
 import { AccountsCashflowReport } from "./accounts-cashflow-report";
+import { TransferFlowReport } from "./transfer-flow-report";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -168,6 +169,7 @@ const REPORT_TABS = [
   "income",
   "envelope",
   "accounts",
+  "flow",
   "sankey",
   "treemap",
   "heatmap",
@@ -243,6 +245,7 @@ export function ReportsView({
         "scatter",
         "payees",
         "accounts",
+        "flow",
       ];
       const defaultMonths = longWindowTabs.includes(activeTab) ? 11 : 0;
       setFrom(
@@ -327,6 +330,7 @@ export function ReportsView({
           <TabsTrigger value="income">Income by Category</TabsTrigger>
           <TabsTrigger value="envelope">Envelope</TabsTrigger>
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
+          <TabsTrigger value="flow">Flow</TabsTrigger>
           <TabsTrigger value="sankey">Sankey</TabsTrigger>
           <TabsTrigger value="treemap">Treemap</TabsTrigger>
           <TabsTrigger value="heatmap">Heatmap</TabsTrigger>
@@ -367,6 +371,13 @@ export function ReportsView({
             grouped by account instead of category. */}
         <TabsContent value="accounts">
           <AccountsCashflowReport from={from} to={to} accountIds={accountIds} />
+        </TabsContent>
+
+        {/* Flow — Sankey of money moving between accounts. Reuses the
+            accounts-cashflow payload; root-account picker narrows the
+            ribbons to one chosen account. */}
+        <TabsContent value="flow">
+          <TransferFlowReport from={from} to={to} accountIds={accountIds} />
         </TabsContent>
 
         {/* Sankey — money-flow visualisation: income → hub → expenses, with

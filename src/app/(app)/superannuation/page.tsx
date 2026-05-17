@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Topbar } from "@/components/layout/topbar";
 import { SuperPageBody } from "@/components/super/super-page-body";
+import { AddPersonButton } from "@/components/super/add-person-button";
 import { loadSuperPeople } from "@/lib/super-people";
 import { getDisplayPrefs } from "@/lib/display-prefs-server";
 
@@ -14,7 +15,7 @@ export default async function SuperannuationPage() {
   const initialPeople = await loadSuperPeople();
   return (
     <div>
-      <Topbar title="Superannuation" />
+      <Topbar title="Superannuation" actions={<AddPersonButton />} />
       <div className="p-4 lg:p-6">
         <SuperPageBody initialPeople={initialPeople} />
       </div>

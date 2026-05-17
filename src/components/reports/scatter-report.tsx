@@ -201,7 +201,13 @@ export function ScatterReport({
                       v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v.toFixed(0)}`
                     }
                   />
-                  <Tooltip content={<ScatterTooltip />} cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }} />
+                  <Tooltip
+                    content={
+                      <ScatterTooltip allPoints={scatterData} />
+                    }
+                    cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
+                    isAnimationActive={false}
+                  />
                   <Scatter
                     name="Transactions"
                     data={scatterData}
@@ -267,6 +273,7 @@ function Pillbar<T extends string>({
 }
 
 interface ScatterPointPayload {
+  x?: number;
   date?: string;
   y?: number;
   categoryName?: string | null;
@@ -279,34 +286,76 @@ interface RechartsTooltipEntry {
   payload?: ScatterPointPayload;
 }
 
+const MAX_TOOLTIP_ROWS = 12;
+
+/** Tooltip that shows every point sharing the hovered date, not just
+ *  the one Recharts thinks is "closest". With dozens of transactions
+ *  on a single day, the default behaviour surfaces a random one and
+ *  the cursor's vertical guideline highlights a column the tooltip
+ *  doesn't describe. This version derives the hovered timestamp from
+ *  the active payload and lists every scatter point at that x.
+ *  Capped at MAX_TOOLTIP_ROWS to avoid a tooltip that scrolls the
+ *  screen on a busy day. */
 function ScatterTooltip({
   active,
   payload,
+  allPoints,
 }: {
   active?: boolean;
   payload?: RechartsTooltipEntry[];
+  allPoints: Array<{
+    x: number;
+    y: number;
+    date: string;
+    categoryName: string | null;
+    fill: string;
+  }>;
 }) {
   if (!active || !payload?.length) return null;
-  // Recharts' ComposedChart populates payload with one entry per
-  // rendered series at the hovered position. For a (scatter + line)
-  // pair the line's entry's `.payload` lacks `categoryName` — so
-  // we filter to the entry whose datum actually carries the
-  // scatter shape. Looking for the field directly is more robust
-  // than matching the series `name`, which Recharts sometimes
-  // shadows with the dataKey.
+  // Pick any entry whose payload looks like a scatter point — the
+  // line-series entry's `.payload` lacks the scatter fields. Either
+  // way we only need the x-coordinate.
   const scatterEntry = payload.find(
     (p) => p.payload != null && "categoryName" in p.payload,
   );
-  if (!scatterEntry?.payload) return null;
-  const p = scatterEntry.payload;
+  const hoveredX = scatterEntry?.payload?.x;
+  if (typeof hoveredX !== "number") return null;
+  const dateLabel = scatterEntry?.payload?.date
+    ? formatDate(scatterEntry.payload.date)
+    : "";
+  // Equality on the numeric timestamp is safe: scatterData seeds
+  // these from `parseISO(date).getTime()` so same-day points share
+  // the exact same value.
+  const sameDay = allPoints
+    .filter((p) => p.x === hoveredX)
+    .sort((a, b) => b.y - a.y);
+  if (sameDay.length === 0) return null;
+  const visible = sameDay.slice(0, MAX_TOOLTIP_ROWS);
+  const hiddenCount = sameDay.length - visible.length;
+  const dayTotal = sameDay.reduce((s, p) => s + p.y, 0);
   return (
     <ChartTooltipCard>
-      <ChartTooltipHeader title={p.date ? formatDate(p.date) : ""} />
-      <ChartTooltipRow
-        label={p.categoryName ?? "Uncategorised"}
-        value={typeof p.y === "number" ? formatAUD(p.y) : "—"}
-        swatch={p.fill ?? undefined}
-      />
+      <ChartTooltipHeader title={dateLabel} />
+      {visible.map((p, i) => (
+        <ChartTooltipRow
+          key={i}
+          label={p.categoryName ?? "Uncategorised"}
+          value={formatAUD(p.y)}
+          swatch={p.fill}
+        />
+      ))}
+      {hiddenCount > 0 && (
+        <ChartTooltipRow
+          label={`+${hiddenCount} more`}
+          value=""
+        />
+      )}
+      {sameDay.length > 1 && (
+        <ChartTooltipRow
+          label={<span className="font-semibold">Total</span>}
+          value={formatAUD(dayTotal)}
+        />
+      )}
     </ChartTooltipCard>
   );
 }

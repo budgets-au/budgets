@@ -139,7 +139,6 @@ import { YoYReport } from "./yoy-report";
 import { TreemapReport } from "./treemap-report";
 import { DailyHeatmapReport } from "./daily-heatmap-report";
 import { ScatterReport } from "./scatter-report";
-import { BoxplotReport } from "./boxplot-report";
 import { PayeeParetoReport } from "./payee-pareto-report";
 import { AccountsCashflowReport } from "./accounts-cashflow-report";
 
@@ -173,7 +172,6 @@ const REPORT_TABS = [
   "treemap",
   "heatmap",
   "scatter",
-  "boxplot",
   "payees",
   "tax",
 ] as const;
@@ -233,10 +231,9 @@ export function ReportsView({
     } else {
       // Long-window tabs need ≥ 11 months to be meaningful — a
       // weekly-envelope figure from one month of data is misleading,
-      // a heatmap of 30 days is empty most of the time, a boxplot
-      // from a single month's transactions has too few samples to
-      // pick up a sensible distribution. Other tabs default to
-      // "this month".
+      // a heatmap of 30 days is empty most of the time, a payee-pareto
+      // from a single month has too few rows to find the 80/20.
+      // Other tabs default to "this month".
       const today = new Date();
       const longWindowTabs: ReportTab[] = [
         "envelope",
@@ -244,7 +241,6 @@ export function ReportsView({
         "treemap",
         "heatmap",
         "scatter",
-        "boxplot",
         "payees",
         "accounts",
       ];
@@ -335,7 +331,6 @@ export function ReportsView({
           <TabsTrigger value="treemap">Treemap</TabsTrigger>
           <TabsTrigger value="heatmap">Heatmap</TabsTrigger>
           <TabsTrigger value="scatter">Scatter</TabsTrigger>
-          <TabsTrigger value="boxplot">Boxplot</TabsTrigger>
           <TabsTrigger value="payees">Payees</TabsTrigger>
           <TabsTrigger value="tax">Tax Deductions</TabsTrigger>
         </TabsList>
@@ -411,18 +406,6 @@ export function ReportsView({
             colour by category, smoothing line on top. */}
         <TabsContent value="scatter">
           <ScatterReport
-            from={from}
-            to={to}
-            accountIds={accountIds}
-            hideTransfers={hideTransfers}
-          />
-        </TabsContent>
-
-        {/* Boxplot — per-category amount distribution (min, Q1,
-            median, Q3, max, outliers) so the operator can spot
-            categories with wide variance. */}
-        <TabsContent value="boxplot">
-          <BoxplotReport
             from={from}
             to={to}
             accountIds={accountIds}

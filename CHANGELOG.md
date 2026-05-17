@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.128.0 — 2026-05-17
+
+### Removed
+- **Boxplot report tab.** The per-category quartile distribution
+  added in 0.110 turned out to be the report the operator actually
+  reaches for least; the scatter + treemap tabs cover the same
+  "where does the variance live" question more legibly. Deleted:
+  the tab + `<BoxplotReport>` component, the
+  `/api/reports/category-quartiles` endpoint, the `quartiles.ts`
+  helper, and its test file. Saved 7 tests (288 total, was 295) +
+  removed the long-window default for the boxplot tab.
+
+### Fixed
+- **Scatter report tooltip now shows every point on the hovered
+  date instead of one.** With ~20 transactions on a busy day, the
+  default Recharts tooltip surfaced a single point that often
+  wasn't the one the cursor's vertical guideline was over —
+  reading as "the tooltip zooms in from the left and doesn't hit
+  the target". The custom tooltip now derives the hovered
+  timestamp from the active payload, filters every point with that
+  same x, and lists them all (capped at 12 rows; surplus appears
+  as "+N more"). When the day has more than one transaction the
+  tooltip also shows a Total at the bottom. Also passes
+  `isAnimationActive={false}` so the tooltip jumps directly to its
+  position instead of tweening across the chart on every hover.
+
 ## 0.127.0 — 2026-05-17
 
 ### Changed

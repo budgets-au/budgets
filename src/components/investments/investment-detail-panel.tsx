@@ -10,6 +10,7 @@ import { Trash2, Plus, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { formatAUD, formatDate, amountClass } from "@/lib/utils";
 import { InvestmentHistoryChart } from "./investment-history-chart";
+import { AnnouncementsPanel } from "./announcements-panel";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -135,6 +136,8 @@ export function InvestmentDetailPanel({ id }: { id: string }) {
       {receivedDividends.length > 0 && (
         <DividendsList dividends={receivedDividends} currency={detail.currency} />
       )}
+
+      <AnnouncementsPanel investmentId={id} />
     </div>
   );
 }

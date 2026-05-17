@@ -927,7 +927,11 @@ function GrandparentRows({
         negate={negate}
         grandparent
         hasDirect={group.hasDirect}
-        href={group.hasDirect ? `/transactions?categoryId=${group.grandparentId}&from=${from}&to=${to}` : undefined}
+        href={
+          group.hasDirect
+            ? `/transactions?categoryId=${encodeURIComponent(group.grandparentId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+            : undefined
+        }
         showValues={totalsLevel === "grandparent"}
         opts={opts}
         budgetPerMonth={group.budgetPerMonth}

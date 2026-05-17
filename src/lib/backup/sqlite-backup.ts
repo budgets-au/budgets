@@ -106,15 +106,20 @@ export function isSafeBackupFilename(name: string): boolean {
  * is rooted in `backupDir()` so a future caller that skipped the
  * filename validator can't pass an arbitrary path through. Throws
  * — these functions have no useful behaviour on an out-of-dir
- * path, fail fast. Recognised by CodeQL as a path-traversal
- * sanitiser, so it also silences the dataflow alerts on each
- * function entry. */
-export function assertWithinBackupDir(p: string): void {
+ * path, fail fast.
+ *
+ * Returns the resolved, in-bounds path. Callers MUST use the
+ * returned value instead of the raw input — that's what makes the
+ * dataflow visible to CodeQL's `js/path-injection` checker as a
+ * sanitiser. Asserting without re-binding the value leaves the
+ * tainted variable in scope for the downstream fs calls. */
+export function assertWithinBackupDir(p: string): string {
   const root = resolve(backupDir());
   const candidate = resolve(p);
   if (candidate !== root && !candidate.startsWith(root + sep)) {
     throw new Error(`Path is not inside the backup dir: ${p}`);
   }
+  return candidate;
 }
 
 function timestampForFilename(): string {
@@ -272,15 +277,15 @@ export function verifyBackup(
   path: string,
   passphrase: string,
 ): { ok: true; size: number } | { ok: false; error: string } {
-  assertWithinBackupDir(path);
-  if (!existsSync(path)) return { ok: false, error: "Backup file not found" };
+  const safe = assertWithinBackupDir(path);
+  if (!existsSync(safe)) return { ok: false, error: "Backup file not found" };
   let probe: ReturnType<typeof Database> | undefined;
   try {
-    probe = new Database(path);
+    probe = new Database(safe);
     probe.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
     probe.pragma("cipher_compatibility = 4");
     probe.prepare("SELECT count(*) FROM sqlite_master").get();
-    return { ok: true, size: statSync(path).size };
+    return { ok: true, size: statSync(safe).size };
   } catch {
     return { ok: false, error: "Wrong passphrase or corrupt backup file." };
   } finally {
@@ -298,10 +303,10 @@ export function verifyBackup(
  * Used on uploaded files to bail out before attempting to key them.
  */
 export function looksLikeSqlcipher(path: string): boolean {
-  assertWithinBackupDir(path);
-  if (!existsSync(path)) return false;
+  const safe = assertWithinBackupDir(path);
+  if (!existsSync(safe)) return false;
   const head = Buffer.alloc(16);
-  const fd = openSync(path, "r");
+  const fd = openSync(safe, "r");
   try {
     readSync(fd, head, 0, 16, 0);
   } finally {
@@ -325,7 +330,7 @@ export function looksLikeSqlcipher(path: string): boolean {
  * trigger the proxy's lock-redirect to /unlock.
  */
 export function swapLive(newDbPath: string): void {
-  assertWithinBackupDir(newDbPath);
+  const safe = assertWithinBackupDir(newDbPath);
   lock();
   // Remove WAL + SHM siblings of the live DB — they belong to the
   // pre-restore connection and will be regenerated when the next
@@ -340,5 +345,5 @@ export function swapLive(newDbPath: string): void {
       }
     }
   }
-  renameSync(newDbPath, livePath);
+  renameSync(safe, livePath);
 }

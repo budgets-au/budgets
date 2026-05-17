@@ -50,6 +50,13 @@
       "when": 1778900000000,
       "tag": "0006_app_settings_display_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1779000000000,
+      "tag": "0007_investment_news",
+      "breakpoints": true
     }
   ]
 }

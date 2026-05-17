@@ -9,6 +9,38 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.125.0 — 2026-05-17
+
+### Added
+- **Investments: "Recent announcements" panel** on every
+  investment's detail page (stocks, paper-trades, RSUs, options).
+  Pulls 10 most-recent headlines for the ticker from Yahoo
+  Finance's news endpoint, filters to items whose
+  `relatedTickers` includes the symbol, and renders title +
+  publisher + relative-published-time + thumbnail. Items link
+  out to the original publisher's page in a new tab. Cached
+  server-side in a new `investment_news` table (migration
+  `drizzle/0007_investment_news.sql`); refreshed when the most
+  recent cache row is older than 24h. Yahoo upstream failures
+  fall back to the cached payload tagged `stale: true` rather
+  than 5xx-ing the panel.
+
+### Security
+- **CodeQL: path-injection sanitiser pattern.**
+  `assertWithinBackupDir(p)` now RETURNS the resolved safe path
+  rather than just asserting in place — callers (`verifyBackup`,
+  `looksLikeSqlcipher`, `swapLive`) re-bind via
+  `const safe = assertWithinBackupDir(path)` and use the
+  returned value downstream. CodeQL's `js/path-injection`
+  checker walks the dataflow through the return value to
+  recognise the sanitiser; the prior assert-and-discard pattern
+  left the original tainted variable in scope.
+- **CodeQL: one more `<Link href>` interpolation encoded.**
+  Caught a third interpolated href in `cashflow-report.tsx`
+  (line 930, the grandparent-header `<HierRow>` call) that the
+  first sweep missed. Now wraps `group.grandparentId` / `from`
+  / `to` in `encodeURIComponent`.
+
 ## 0.124.4 — 2026-05-17
 
 ### Fixed

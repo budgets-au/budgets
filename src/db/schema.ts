@@ -604,6 +604,31 @@ export const investmentPrices = sqliteTable(
   ],
 );
 
+// Per-ticker news cache for the investments "Recent announcements"
+// panel. Yahoo returns ~10 items per query; we dedup on (symbol,
+// uuid) and only refetch when fetched_at is older than the TTL set
+// in the /api/investments/[id]/news handler.
+export const investmentNews = sqliteTable(
+  "investment_news",
+  {
+    id: text("id").primaryKey().$defaultFn(newUuid),
+    symbol: text("symbol").notNull(),
+    uuid: text("uuid").notNull(),
+    title: text("title").notNull(),
+    publisher: text("publisher"),
+    link: text("link").notNull(),
+    publishedAt: integer("published_at", { mode: "timestamp_ms" }),
+    thumbnail: text("thumbnail"),
+    fetchedAt: integer("fetched_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("investment_news_symbol_uuid_idx").on(t.symbol, t.uuid),
+    index("investment_news_symbol_fetched_at_idx").on(t.symbol, t.fetchedAt),
+  ],
+);
+
 // Tickers the user wants to watch but hasn't bought. Distinct from
 // `investments` so cost-basis / quantity / vest schedule logic doesn't
 // have to special-case zero-quantity rows. Symbol is unique because
@@ -768,6 +793,8 @@ export type NewInvestment = typeof investments.$inferInsert;
 export type InvestmentVest = typeof investmentVests.$inferSelect;
 export type NewInvestmentVest = typeof investmentVests.$inferInsert;
 export type InvestmentPrice = typeof investmentPrices.$inferSelect;
+export type InvestmentNews = typeof investmentNews.$inferSelect;
+export type NewInvestmentNews = typeof investmentNews.$inferInsert;
 export type WatchlistEntry = typeof watchlist.$inferSelect;
 export type NewWatchlistEntry = typeof watchlist.$inferInsert;
 export type SuperSnapshot = typeof superannuationSnapshots.$inferSelect;

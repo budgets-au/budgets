@@ -11,6 +11,16 @@ const UA =
 const SEARCH_URL = "https://query1.finance.yahoo.com/v1/finance/search";
 const CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 
+export interface NewsItem {
+  uuid: string;
+  title: string;
+  publisher: string | null;
+  link: string;
+  /** Unix epoch ms (the Yahoo response uses seconds; we convert). */
+  publishedAt: number | null;
+  thumbnail: string | null;
+}
+
 export interface SearchResult {
   symbol: string;
   name: string;
@@ -40,6 +50,23 @@ interface YahooSearchResponse {
     quoteType?: string;
     exchange?: string;
     currency?: string;
+  }>;
+  news?: Array<{
+    uuid: string;
+    title: string;
+    publisher?: string;
+    link: string;
+    /** seconds since epoch */
+    providerPublishTime?: number;
+    thumbnail?: {
+      resolutions?: Array<{
+        url: string;
+        width: number;
+        height: number;
+        tag?: string;
+      }>;
+    };
+    relatedTickers?: string[];
   }>;
 }
 
@@ -269,4 +296,50 @@ export async function persistPriceCache(
     .map((c) => ({ symbol, date: c.date, close: c.close.toString() }));
   if (toInsert.length === 0) return;
   await db.insert(investmentPrices).values(toInsert);
+}
+
+/** Recent news for a ticker. Yahoo's search endpoint returns a mixed
+ *  payload of quote matches + news headlines; we ask for news-only
+ *  (quotesCount=0) and `newsCount` items. The returned items are
+ *  filtered to those whose `relatedTickers` actually mention this
+ *  symbol when the list is present — Yahoo's general financial-news
+ *  feed mixes unrelated stories when a specific ticker has nothing
+ *  recent, and the per-ticker filter keeps the panel relevant
+ *  rather than showing generic Wall-Street headlines.
+ *
+ *  Picks the smallest thumbnail Yahoo offers (typically 140×140) so
+ *  the JSON payload stays tight. */
+export async function getNews(
+  symbol: string,
+  count = 10,
+): Promise<NewsItem[]> {
+  const url = `${SEARCH_URL}?q=${encodeURIComponent(symbol)}&quotesCount=0&newsCount=${count}`;
+  const res = await yahooFetch(url);
+  const data = (await res.json()) as YahooSearchResponse;
+  const upper = symbol.toUpperCase();
+  // The `relatedTickers` cross-check: an item is relevant if it
+  // explicitly mentions our ticker. When absent, Yahoo couldn't tag
+  // it — accept it conservatively if we asked specifically for this
+  // symbol (Yahoo's search results are already symbol-keyed).
+  return (data.news ?? [])
+    .filter((n) => {
+      if (!n.relatedTickers || n.relatedTickers.length === 0) return true;
+      return n.relatedTickers.some((t) => t.toUpperCase() === upper);
+    })
+    .map((n) => {
+      const thumb = n.thumbnail?.resolutions ?? [];
+      const small =
+        thumb.find((t) => t.tag === "140x140") ?? thumb[thumb.length - 1] ?? null;
+      return {
+        uuid: n.uuid,
+        title: n.title,
+        publisher: n.publisher ?? null,
+        link: n.link,
+        publishedAt:
+          typeof n.providerPublishTime === "number"
+            ? n.providerPublishTime * 1000
+            : null,
+        thumbnail: small?.url ?? null,
+      };
+    });
 }

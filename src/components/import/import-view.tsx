@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Upload, FileText, ChevronDown, ChevronRight } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
@@ -193,6 +194,21 @@ export function ImportView() {
   const [accountOverrides, setAccountOverrides] = useState<
     Map<string, { accountId: string; accountName: string }>
   >(new Map());
+  /** When on, creating a category rule via the in-row picker also
+   *  applies the same category to every OTHER pending row with the
+   *  same normalised payee. Avoids hand-categorising twenty Coles
+   *  rows when one rule covers them all. Default off so the
+   *  operator opts in deliberately. */
+  const [autoApplyRules, setAutoApplyRules] = useState(false);
+  // Refs so the (potentially-stale-closure) handleRuleCreated reads
+  // the latest values at call time — the callback chain that lands
+  // here goes through async POSTs in RuleCreator, so the closure
+  // captured at click time isn't guaranteed to see the latest
+  // toggle state or row data when onCreated finally fires.
+  const autoApplyRef = useRef(autoApplyRules);
+  autoApplyRef.current = autoApplyRules;
+  const rowsRef = useRef(data?.rows ?? []);
+  rowsRef.current = data?.rows ?? [];
 
   const [file, setFile] = useState<File | null>(null);
 
@@ -336,6 +352,33 @@ export function ImportView() {
     setLocalOverrides((prev) => {
       const next = new Map(prev);
       next.set(importHash, { categoryId: cat.id, categoryName: cat.name });
+      if (autoApplyRef.current) {
+        const sourceRow = rowsRef.current.find(
+          (r) => r.importHash === importHash,
+        );
+        const payee = sourceRow?.normalizedPayee;
+        if (payee) {
+          let added = 0;
+          for (const r of rowsRef.current) {
+            if (r.importHash === importHash) continue;
+            if ((r.normalizedPayee ?? "") !== payee) continue;
+            // Skip rows the operator already overrode by hand —
+            // their prior pick is more authoritative than a
+            // fan-out from a sibling.
+            if (next.has(r.importHash)) continue;
+            next.set(r.importHash, {
+              categoryId: cat.id,
+              categoryName: cat.name,
+            });
+            added += 1;
+          }
+          if (added > 0) {
+            toast.success(
+              `Also applied to ${added} pending row${added === 1 ? "" : "s"} with the same payee`,
+            );
+          }
+        }
+      }
       return next;
     });
   }
@@ -381,6 +424,24 @@ export function ImportView() {
               </p>
             )}
           </div>
+          <label className="flex items-start justify-between gap-3 pt-1 cursor-pointer">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">
+                Apply new rules to pending rows
+              </p>
+              <p className="text-xs text-muted-foreground">
+                When you categorise a row via the in-row picker, the same
+                category is also applied to every other pending row with the
+                same normalised payee. Saves hand-categorising every row in
+                a large multi-payee file.
+              </p>
+            </div>
+            <Switch
+              checked={autoApplyRules}
+              onCheckedChange={setAutoApplyRules}
+              aria-label="Toggle apply-new-rules-to-pending-rows"
+            />
+          </label>
         </CardContent>
       </Card>
 

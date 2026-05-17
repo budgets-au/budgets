@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.151.0 — 2026-05-17
+
+### Added
+- **"Apply new rules to pending rows" toggle on the CSV import
+  page.** When on, picking a category for a row via the in-row
+  picker doesn't just create the payee rule — it also rewrites
+  the local category override for every other pending row that
+  shares the same normalised payee. Saves hand-categorising
+  twenty Coles rows when one rule covers them all. A toast
+  reports how many sibling rows were filled in. Off by default
+  so existing flows are unaffected; rows the operator already
+  overrode by hand are preserved (their pick wins over the
+  fan-out).
+
 ## 0.150.0 — 2026-05-17
 
 ### Added

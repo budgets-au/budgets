@@ -194,8 +194,21 @@ export async function diskUsage(): Promise<DiskUsage> {
   if (diskUsageCache && now - diskUsageCache.at < DISK_USAGE_CACHE_MS) {
     return diskUsageCache.value;
   }
-  const dir = backupDir();
-  const target = existsSync(dir) ? dir : dirname(dir);
+  // Walk up the directory chain until we hit an existing path. Used
+  // to be a single-level fallback (`existsSync(dir) ? dir :
+  // dirname(dir)`) — sufficient when `backupDir()` was a flat
+  // `<base>/`, since `<base>/..` always exists. Multi-DB pushed it
+  // to `<base>/<profileId>/`, so on a fresh install both `<base>/`
+  // AND `<base>/<profileId>/` are missing and the single fallback
+  // landed on a non-existent path → `statfs` ENOENT → /api/backup
+  // 500. Walking up bottoms out at `/` (or the data volume root),
+  // which always exists.
+  let target = backupDir();
+  while (!existsSync(target)) {
+    const parent = dirname(target);
+    if (parent === target) break; // reached the filesystem root
+    target = parent;
+  }
   const s = await statfs(target);
   const value: DiskUsage = {
     totalBytes: s.blocks * s.bsize,

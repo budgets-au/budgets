@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth, isAdmin } from "@/lib/auth";
 import { rekey } from "@/db";
+import { validatePassphrase } from "@/lib/passphrase";
+import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 
 /**
  * Rotate the SQLCipher passphrase. Admin-only — rotating the
@@ -42,6 +44,17 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // Same control-char rejection both unlock + rekey use — a rotated
+  // key with a CR/LF/NUL embedded would break the next PRAGMA cycle
+  // mid-statement just as easily as the initial unlock would.
+  const currentValidation = validatePassphrase(current);
+  if (currentValidation) {
+    return NextResponse.json({ ok: false, error: currentValidation }, { status: 400 });
+  }
+  const nextValidation = validatePassphrase(next);
+  if (nextValidation) {
+    return NextResponse.json({ ok: false, error: nextValidation }, { status: 400 });
+  }
   if (next.length < 8) {
     return NextResponse.json(
       { ok: false, error: "New passphrase must be at least 8 characters." },
@@ -54,9 +67,25 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // Throttle rekey attempts — same shape as /api/unlock. Lower max
+  // because rekey is admin-gated already, but we still want to slow
+  // a hostile session that's somehow gained admin from grinding the
+  // current-passphrase check.
+  const rl = rateLimit("rekey:POST", { max: 5, windowMs: 60_000 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Too many rekey attempts. Try again in ${rl.retryAfter}s.`,
+      },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+    );
+  }
+
   const result = rekey(current, next);
   if (!result.ok) {
     return NextResponse.json(result, { status: 400 });
   }
+  resetRateLimit("rekey:POST");
   return NextResponse.json({ ok: true });
 }

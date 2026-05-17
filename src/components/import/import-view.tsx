@@ -1436,7 +1436,12 @@ function RuleCreator({
   // category is picked the tint clears.
   const needsAction = !currentCategoryId && !!normalizedPayee && !saving;
   return (
-    <span onClick={(e) => e.stopPropagation()}>
+    // `<div>` rather than `<span onClick>` — the onClick here is a
+    // pure event-bubble suppressor (the inner CategoryDropdown owns
+    // its own interaction), so we want non-interactive semantics +
+    // no implicit role/keyboard expectation from a click handler on
+    // a span.
+    <div onClick={(e) => e.stopPropagation()}>
       <CategoryDropdown
         value={currentCategoryId}
         onChange={(v) => handleChange(v ?? "")}
@@ -1450,6 +1455,6 @@ function RuleCreator({
         )}
         uncategorisedLabel={null}
       />
-    </span>
+    </div>
   );
 }

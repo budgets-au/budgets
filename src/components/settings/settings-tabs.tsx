@@ -57,7 +57,7 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
         <TabsTrigger value="security">Security</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="general" className="space-y-6">
+      <TabsContent value="general" className="space-y-6 max-w-2xl">
         <ThemeToggle />
         <div className="rounded-xl border bg-card divide-y">
           <div className="px-4 py-3">
@@ -178,20 +178,24 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
         </div>
       </TabsContent>
 
-      <TabsContent value="accounts">
+      <TabsContent value="accounts" className="max-w-2xl">
         <AccountVisibility initialAccounts={initialAccounts} />
       </TabsContent>
 
-      <TabsContent value="rules">
+      <TabsContent value="rules" className="max-w-2xl">
         <PayeeRulesManager />
       </TabsContent>
 
+      {/* Backups intentionally fills the page width — the notes
+          column added in 0.141 needs the room, and the per-DB
+          subdir from 0.142 makes the table denser. Other tabs
+          keep the original max-w-2xl for readability. */}
       <TabsContent value="backups" className="space-y-6">
         <BackupList />
         <BackupSchedule />
       </TabsContent>
 
-      <TabsContent value="security" className="space-y-6">
+      <TabsContent value="security" className="space-y-6 max-w-2xl">
         <UserManager />
         <SampleDataPanel />
         <OrphanCategoriesPanel />

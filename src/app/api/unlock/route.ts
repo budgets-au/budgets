@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { unlock, isUnlocked, dbExists } from "@/db";
+import { validatePassphrase } from "@/lib/passphrase";
+import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 
 /**
  * Web-side unlock endpoint. Accepts `{ passphrase }` JSON, runs it
@@ -25,6 +27,23 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // Rate-limit the unlock endpoint to dampen brute-force attempts.
+  // Single global bucket per process — sufficient for a household
+  // app where the legit user types a handful of attempts at worst;
+  // anything past that is either a typo loop (slow down, breathe)
+  // or a brute-force scan (slow down, attacker). 5 attempts per
+  // 60-second window then 429 + Retry-After.
+  const rl = rateLimit("unlock:POST", { max: 5, windowMs: 60_000 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Too many unlock attempts. Try again in ${rl.retryAfter}s.`,
+      },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -38,19 +57,24 @@ export async function POST(request: Request) {
     typeof body === "object" && body !== null && "passphrase" in body
       ? (body as { passphrase: unknown }).passphrase
       : null;
-  if (typeof passphrase !== "string" || passphrase.length === 0) {
+  const validationError = validatePassphrase(passphrase);
+  if (validationError) {
     return NextResponse.json(
-      { ok: false, error: "Passphrase is required" },
+      { ok: false, error: validationError },
       { status: 400 },
     );
   }
 
-  const result = unlock(passphrase);
+  const result = unlock(passphrase as string);
   if (!result.ok) {
     return NextResponse.json(
       { ok: false, error: result.error },
       { status: 401 },
     );
   }
+  // Successful unlock — clear the rate-limit counter so a legit user
+  // who fat-fingered four times then got it right doesn't waste their
+  // remaining budget for the rest of the minute.
+  resetRateLimit("unlock:POST");
   return NextResponse.json({ ok: true });
 }

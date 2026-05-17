@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Trash2, Plus, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { formatAUD, formatDate, amountClass } from "@/lib/utils";
+import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { InvestmentHistoryChart } from "./investment-history-chart";
 import { AnnouncementsPanel } from "./announcements-panel";
 
@@ -223,6 +224,7 @@ function VestsPanel({
   const [vestDate, setVestDate] = useState("");
   const [quantity, setQuantity] = useState("");
   const [performanceNote, setPerformanceNote] = useState("");
+  const confirmDialog = useConfirm();
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -263,6 +265,17 @@ function VestsPanel({
   }
 
   async function handleDelete(vestId: string) {
+    // Confirm before destroying a vesting-schedule entry — there's no
+    // undo, and accidentally hitting the trash icon was leaking data
+    // before this guard landed.
+    const ok = await confirmDialog({
+      title: "Remove vest?",
+      description:
+        "The vesting-schedule entry will be permanently deleted. " +
+        "Add it again manually if you need to undo.",
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
     const res = await fetch(`/api/investments/vests/${vestId}`, {
       method: "DELETE",
     });
@@ -270,6 +283,8 @@ function VestsPanel({
       toast.success("Vest removed");
       mutate(`/api/investments/${investmentId}`);
       mutate(`/api/investments/${investmentId}/history`);
+    } else {
+      toast.error("Failed to remove vest");
     }
   }
 

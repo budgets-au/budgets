@@ -10,7 +10,7 @@ export default async function SettingsPage() {
   return (
     <div>
       <Topbar title="Settings" />
-      <div className="p-4 lg:p-6 max-w-2xl">
+      <div className="p-4 lg:p-6">
         <SettingsTabs initialAccounts={allAccounts} />
       </div>
     </div>

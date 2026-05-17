@@ -9,6 +9,68 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.144.0 — 2026-05-17
+
+### Fixed
+- **Multi-DB switcher dropdown items were silent no-ops.** The
+  0.142 implementation used `onSelect` (a Radix idiom) where Base UI's
+  `MenuPrimitive.Item` fires `onClick`. Clicking a profile in the
+  sidebar dropdown or "Create new database…" did nothing. Both
+  handlers swapped to `onClick`.
+- **`/api/backup` 500s on a fresh multi-DB install** — the per-
+  profile backup subdir (`<base>/<profileId>/`) doesn't exist
+  until the first backup is taken, and `diskUsage()`'s single-level
+  fallback (`dirname(dir)`) landed on `<base>/` which also doesn't
+  exist on a never-backed-up install. Walks up the directory chain
+  to the filesystem root before calling `statfs` now.
+- **Orphan-transfer backfill crashed silently in production**
+  (`ReferenceError: Cannot access 'al' before initialization`).
+  `src/lib/backfill-orphan-transfers.ts` was importing `db` at the
+  top level, which webpack bundled into a cycle with `src/db/index.ts`
+  (`db/index.ts` lazy-requires the backfill module from inside
+  `unlock()`, while the backfill's top-level import re-entered the
+  still-initialising `db` module → TDZ). Pulled the import inside
+  the function so it resolves at call time.
+
+### Changed
+- **Audit pass — UX + a11y cleanups:**
+  - Switch thumb gets `dark:bg-slate-200` so the dark-theme glare
+    goes away (the thumb was bright white on the indigo track).
+  - `aria-current="page"` on the active profile entry in the DB
+    switcher dropdown — visual cues (indigo + "active" pill) are
+    now duplicated semantically.
+  - Vest delete in `investments/investment-detail-panel.tsx` gated
+    behind `useConfirm()` — was a one-click no-undo data loss.
+  - `<span onClick={stopPropagation}>` wrapper in `import-view.tsx`
+    rewritten as `<div>` — the click handler was a pure
+    bubble-suppressor, not interactive, so it shouldn't carry the
+    implicit click-target semantics a `<span onClick>` does.
+- **Backups tab is full-width** in Settings. The page-level
+  `max-w-2xl` constraint was moved to each non-backup
+  `<TabsContent>`; the Backups tab now uses the full Settings
+  area to make room for the notes column added in 0.141 + the
+  per-DB backup-dir layout from 0.142.
+- **TODO.md rewritten.** Every item from the 2026-05-15 "Up
+  next" table shipped in 0.131 → 0.143; cleared the table,
+  rolled the items into "Done / dropped". New blind-spot section
+  for multi-DB coverage gaps.
+
+### Security
+- **Rate-limit on `/api/unlock` + `/api/rekey`** — 5 attempts per
+  60-second window per process, then 429 + `Retry-After`. Self-
+  hosted single-tenant blast radius is small, but the deterrent
+  blunts accidental typo bursts + casual scripted scans. New
+  helper at `src/lib/rate-limit.ts`. Successful unlock clears
+  the counter so legit fat-finger sequences don't waste their
+  remaining budget.
+- **Reject control characters (CR / LF / TAB / NUL / DEL) in
+  passphrases** at the validation boundary. SQLCipher's
+  `PRAGMA key = '...'` interpolation escaped single-quotes
+  already; the control-char block closes the
+  newline-terminates-statement vector. New helper at
+  `src/lib/passphrase.ts`, wired into both `/api/unlock` and
+  `/api/rekey`.
+
 ## 0.143.0 — 2026-05-17
 
 ### Fixed

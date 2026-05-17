@@ -101,27 +101,38 @@ export function DatabaseSwitcher() {
           <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
-          {data.profiles.map((p) => (
-            <DropdownMenuItem
-              key={p.id}
-              onSelect={() => switchTo(p.id)}
-              className={
-                p.id === data.activeProfileId
-                  ? "font-medium text-indigo-600 dark:text-indigo-400"
-                  : ""
-              }
-            >
-              <DatabaseIcon className="h-3.5 w-3.5 mr-2" />
-              <span className="truncate">{p.label}</span>
-              {p.id === data.activeProfileId && (
-                <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">
-                  active
-                </span>
-              )}
-            </DropdownMenuItem>
-          ))}
+          {data.profiles.map((p) => {
+            const isActive = p.id === data.activeProfileId;
+            return (
+              <DropdownMenuItem
+                key={p.id}
+                // base-ui's Menu.Item uses `onClick` (not `onSelect` —
+                // that's the Radix idiom). The previous `onSelect`
+                // prop silently did nothing, so picking a profile
+                // (or "Create new database") was a no-op.
+                onClick={() => switchTo(p.id)}
+                // aria-current="page" surfaces the active selection to
+                // assistive tech — visual cues (bold + indigo + "active"
+                // pill) are duplicated semantically here.
+                aria-current={isActive ? "page" : undefined}
+                className={
+                  isActive
+                    ? "font-medium text-indigo-600 dark:text-indigo-400"
+                    : ""
+                }
+              >
+                <DatabaseIcon className="h-3.5 w-3.5 mr-2" />
+                <span className="truncate">{p.label}</span>
+                {isActive && (
+                  <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">
+                    active
+                  </span>
+                )}
+              </DropdownMenuItem>
+            );
+          })}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setCreateOpen(true)}>
+          <DropdownMenuItem onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-2" />
             <span>Create new database…</span>
           </DropdownMenuItem>

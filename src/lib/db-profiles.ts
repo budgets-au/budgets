@@ -273,6 +273,14 @@ export function createProfile(label: string): DbProfile {
   if (!trimmed) throw new Error("Label is required");
   if (trimmed.length > 80) throw new Error("Label must be ≤ 80 chars");
   const reg = readRegistry();
+  // Case-insensitive uniqueness on label. Three "Test DB" entries
+  // in the dropdown is the symptom this guard prevents — the
+  // filename allocator is already unique-by-slug, but the label
+  // is the operator's primary disambiguator.
+  const lowered = trimmed.toLowerCase();
+  if (reg.profiles.some((p) => p.label.toLowerCase() === lowered)) {
+    throw new Error(`A database labelled "${trimmed}" already exists`);
+  }
   // Generate a unique id with up to 5 attempts; the 8-char base36 has
   // collision odds that make 5 essentially infinite headroom.
   let id = freshSlug();
@@ -291,6 +299,34 @@ export function createProfile(label: string): DbProfile {
   };
   writeRegistry({ ...reg, profiles: [...reg.profiles, profile] });
   return profile;
+}
+
+/** Rename a profile. Case-insensitive uniqueness check on the new
+ *  label — same rule `createProfile` enforces on insert.
+ *  Throws when the id isn't registered or the new label collides
+ *  with another profile. */
+export function renameProfile(id: string, nextLabel: string): DbProfile {
+  const trimmed = nextLabel.trim();
+  if (!trimmed) throw new Error("Label is required");
+  if (trimmed.length > 80) throw new Error("Label must be ≤ 80 chars");
+  const reg = readRegistry();
+  const target = reg.profiles.find((p) => p.id === id);
+  if (!target) throw new Error(`Unknown profile id: ${id}`);
+  const lowered = trimmed.toLowerCase();
+  if (
+    reg.profiles.some(
+      (p) => p.id !== id && p.label.toLowerCase() === lowered,
+    )
+  ) {
+    throw new Error(`A database labelled "${trimmed}" already exists`);
+  }
+  if (target.label === trimmed) return target;
+  const updated: DbProfile = { ...target, label: trimmed };
+  writeRegistry({
+    ...reg,
+    profiles: reg.profiles.map((p) => (p.id === id ? updated : p)),
+  });
+  return updated;
 }
 
 /** Read the global scheduled-backup config. Returns the registry's

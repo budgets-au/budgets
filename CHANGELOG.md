@@ -9,6 +9,33 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.146.0 — 2026-05-17
+
+### Added
+- **Settings → Databases tab.** A new manager that lists every
+  registered database profile alongside its on-disk filename +
+  created-at date. Inline rename per row (click the rename
+  button → edit → Enter to save, Escape to cancel). The active
+  profile is highlighted indigo + tagged "active". Delete is
+  intentionally out of scope for v1 — too easy to wipe data by
+  accident; the active-profile guard + backup cleanup flow
+  needs more thought before that lands.
+- **DB switcher dropdown shows the filename.** The sidebar
+  dropdown now renders each profile as a two-line cell — label
+  on top, filename in monospace below — so duplicate or
+  ambiguous labels can still be disambiguated visually. Same
+  data, just surfaced in the UI.
+  New API: `PATCH /api/databases/[id]` accepts `{ label }`,
+  enforces case-insensitive uniqueness.
+
+### Fixed
+- **`createProfile()` accepted duplicate labels.** Creating
+  "Test DB" three times produced three identical entries in
+  the switcher dropdown (the filename slugs were unique, but
+  the labels weren't). Added a case-insensitive uniqueness
+  check — fails fast with "A database labelled X already
+  exists".
+
 ## 0.145.0 — 2026-05-17
 
 ### Fixed

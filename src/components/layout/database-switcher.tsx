@@ -121,8 +121,17 @@ export function DatabaseSwitcher() {
                     : ""
                 }
               >
-                <DatabaseIcon className="h-3.5 w-3.5 mr-2" />
-                <span className="truncate">{p.label}</span>
+                <DatabaseIcon className="h-3.5 w-3.5 mr-2 shrink-0" />
+                {/* Two-line cell: label on top, filename (mono) below
+                    so the operator can disambiguate when labels happen
+                    to repeat. Manage labels in Settings → Database
+                    files. */}
+                <span className="flex flex-col min-w-0 leading-tight">
+                  <span className="truncate">{p.label}</span>
+                  <span className="truncate text-[10px] font-mono text-muted-foreground">
+                    {p.filename}
+                  </span>
+                </span>
                 {isActive && (
                   <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground">
                     active

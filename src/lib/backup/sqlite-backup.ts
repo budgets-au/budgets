@@ -239,6 +239,38 @@ export function assertWithinBackupDir(p: string): string {
   return candidate;
 }
 
+/** Sanitised resolver for the live DB path. The path is derived from
+ * `livePath()` → active profile's filename → registry JSON, all of
+ * which is operator-controlled (the registry file lives on disk and
+ * could be hand-edited). Although `parseRegistry()` already rejects
+ * filenames that fail `isValidFilename()` (basename === filename +
+ * allow-list regex), CodeQL doesn't see that as a sanitiser — so
+ * `renameSync(...)` against `livePath()` raised a
+ * `js/path-injection` alert.
+ *
+ * Same fix shape as `assertWithinBackupDir`: assert AND re-bind. The
+ * caller has to use the RETURN VALUE for CodeQL to recognise the
+ * dataflow as sanitised; asserting in-place wouldn't be enough. */
+function assertLivePath(p: string): string {
+  // The active profile's file lives in the data directory (parent of
+  // SQLITE_PATH). Resolve absolutely + assert containment, identical
+  // shape to the backup-dir guard.
+  const root = resolve(dirname(p));
+  const candidate = resolve(p);
+  if (candidate !== root && !candidate.startsWith(root + sep)) {
+    throw new Error(`Path escapes the data dir: ${p}`);
+  }
+  // Belt-and-braces: enforce the filename allow-list directly on
+  // basename(candidate). `parseRegistry()` already rejects malformed
+  // filenames upstream, but defending here means CodeQL sees a hard
+  // regex check between the registry value and the fs call.
+  const bn = basename(candidate);
+  if (!/^[A-Za-z0-9_.\-]{1,80}\.db$/.test(bn)) {
+    throw new Error(`Filename fails the allow-list: ${bn}`);
+  }
+  return candidate;
+}
+
 function timestampForFilename(): string {
   return new Date().toISOString().replace(/[:]/g, "-");
 }
@@ -338,13 +370,6 @@ export function sweepRetention(): void {
     }
   }
 }
-
-const DEFAULT_SCHEDULE: BackupSchedule = {
-  enabled: false,
-  intervalDays: 7,
-  retain: 7,
-  lastRunAt: null,
-};
 
 /** Pull the schedule config from the multi-DB registry. The schedule
  *  is global — one config governs scheduled backups across every
@@ -449,10 +474,13 @@ export function swapLive(newDbPath: string): void {
   lock();
   // Remove WAL + SHM siblings of the live DB — they belong to the
   // pre-restore connection and will be regenerated when the next
-  // unlock opens the new file.
-  const path = livePath();
+  // unlock opens the new file. `assertLivePath` re-binds the value
+  // so CodeQL's path-injection checker sees a sanitised flow into
+  // the fs.* calls below (the underlying livePath() resolves through
+  // the user-editable registry JSON).
+  const safeLive = assertLivePath(livePath());
   for (const suffix of ["-wal", "-shm"]) {
-    const p = path + suffix;
+    const p = safeLive + suffix;
     if (existsSync(p)) {
       try {
         rmSync(p);
@@ -461,5 +489,5 @@ export function swapLive(newDbPath: string): void {
       }
     }
   }
-  renameSync(safe, path);
+  renameSync(safe, safeLive);
 }

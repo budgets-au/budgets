@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.143.0 — 2026-05-17
+
+### Fixed
+- **CodeQL `js/path-injection` on the restore swap.** After 0.142.0
+  turned `livePath` from a constant into a getter resolving through
+  the multi-DB registry, the `renameSync(safe, livePath())` call in
+  `swapLive()` raised an alert: `livePath()` ultimately reads
+  `accounts.filename` from the on-disk `databases.json`, which is
+  operator-editable. `parseRegistry()` already enforces a strict
+  filename allow-list (`/^[A-Za-z0-9_.\-]{1,80}\.db$/` +
+  `basename === filename`), but CodeQL doesn't see that as a
+  sanitiser when the value flows through a getter and back into
+  `fs.*`. Fix follows the same shape as the existing
+  `assertWithinBackupDir` guard — new `assertLivePath()` helper
+  asserts `resolve(p).startsWith(resolve(dirname(p)) + sep)` AND
+  re-applies the allow-list regex on `basename()`, then returns
+  the sanitised path. The caller in `swapLive` binds the return
+  value before the fs operations, which is the dataflow pattern
+  the CodeQL checker recognises.
+
 ## 0.142.0 — 2026-05-17
 
 ### Added

@@ -1,13 +1,16 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import Link from "next/link";
 import useSWR from "swr";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight, Printer } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { AccountsCashflowReport } from "@/app/api/reports/accounts-cashflow/route";
+import {
+  AccountsCellDialog,
+  type AccountsCellQuery,
+} from "./accounts-cell-dialog";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const numFmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
@@ -119,6 +122,12 @@ export function AccountsCashflowReport({
   useEffect(() => {
     setCollapsedIds(new Set());
   }, [from, to, accountIds.join(",")]);
+
+  // Drill-through popup state — mirrors the Cashflow report's
+  // CellOpenerContext pattern but the accounts-cashflow shape is
+  // small enough to thread setCellQuery directly as a prop instead
+  // of wrapping in a Context.
+  const [cellQuery, setCellQuery] = useState<AccountsCellQuery | null>(null);
 
   if (isLoading) {
     return (
@@ -253,8 +262,10 @@ export function AccountsCashflowReport({
                           values={a.creditByMonth}
                           total={a.totalCredit}
                           accountId={a.id}
+                          accountName={a.name}
                           periodFrom={from}
                           periodTo={to}
+                          openCell={setCellQuery}
                         />
                         <MetricRow
                           label="Debits"
@@ -263,8 +274,10 @@ export function AccountsCashflowReport({
                           values={a.debitByMonth}
                           total={a.totalDebit}
                           accountId={a.id}
+                          accountName={a.name}
                           periodFrom={from}
                           periodTo={to}
+                          openCell={setCellQuery}
                         />
                         <MetricRow
                           label="Net (credits − debits)"
@@ -273,8 +286,10 @@ export function AccountsCashflowReport({
                           values={netSeries(a.creditByMonth, a.debitByMonth, months)}
                           total={a.totalCredit - a.totalDebit}
                           accountId={a.id}
+                          accountName={a.name}
                           periodFrom={from}
                           periodTo={to}
+                          openCell={setCellQuery}
                         />
                         {a.transferInBy.map((cp) => (
                           <MetricRow
@@ -286,9 +301,11 @@ export function AccountsCashflowReport({
                             values={cp.byMonth}
                             total={cp.total}
                             accountId={a.id}
+                            accountName={a.name}
                             counterpartyId={cp.counterpartyId}
                             periodFrom={from}
                             periodTo={to}
+                            openCell={setCellQuery}
                           />
                         ))}
                         {a.transferOutBy.map((cp) => (
@@ -301,9 +318,11 @@ export function AccountsCashflowReport({
                             values={cp.byMonth}
                             total={cp.total}
                             accountId={a.id}
+                            accountName={a.name}
                             counterpartyId={cp.counterpartyId}
                             periodFrom={from}
                             periodTo={to}
+                            openCell={setCellQuery}
                           />
                         ))}
                         <MetricRow
@@ -318,8 +337,10 @@ export function AccountsCashflowReport({
                           total={a.closingBalance}
                           totalIsSnapshot
                           accountId={a.id}
+                          accountName={a.name}
                           periodFrom={from}
                           periodTo={to}
+                          openCell={setCellQuery}
                         />
                       </>
                     )}
@@ -349,6 +370,7 @@ export function AccountsCashflowReport({
                 tfoot
                 periodFrom={from}
                 periodTo={to}
+                openCell={setCellQuery}
               />
               <MetricRow
                 label="Debits"
@@ -359,6 +381,7 @@ export function AccountsCashflowReport({
                 tfoot
                 periodFrom={from}
                 periodTo={to}
+                openCell={setCellQuery}
               />
               <MetricRow
                 label="Net (credits − debits)"
@@ -369,6 +392,7 @@ export function AccountsCashflowReport({
                 tfoot
                 periodFrom={from}
                 periodTo={to}
+                openCell={setCellQuery}
               />
               <MetricRow
                 label="Transfer in"
@@ -379,6 +403,7 @@ export function AccountsCashflowReport({
                 tfoot
                 periodFrom={from}
                 periodTo={to}
+                openCell={setCellQuery}
               />
               <MetricRow
                 label="Transfer out"
@@ -389,6 +414,7 @@ export function AccountsCashflowReport({
                 tfoot
                 periodFrom={from}
                 periodTo={to}
+                openCell={setCellQuery}
               />
               <MetricRow
                 label="Balance"
@@ -400,81 +426,73 @@ export function AccountsCashflowReport({
                 tfoot
                 periodFrom={from}
                 periodTo={to}
+                openCell={setCellQuery}
               />
             </tfoot>
           </table>
         </div>
       </CardContent>
+      <AccountsCellDialog
+        query={cellQuery}
+        onClose={() => setCellQuery(null)}
+      />
     </Card>
   );
 }
 
-/** Build a /transactions URL for a single cell. The slice param
- *  picks which month (a "YYYY-MM" string) or the whole period
- *  ("total"). Returns null when the cell shouldn't be a link —
- *  e.g. a zero value or the snapshot Total column on the Balance
- *  row (where the number is a closing-balance, not a sum of
- *  transactions). */
-function buildCellHref(opts: {
+/** Build the AccountsCellQuery payload for a single cell. Returns
+ *  null when the cell shouldn't open the popup — e.g. a zero value,
+ *  a Balance cell (closing-balance snapshot, not a sum), or any cell
+ *  whose underlying filter wouldn't tell the user anything useful. */
+function buildCellQuery(opts: {
   mode: CellMode;
   slice: string | "total";
   periodFrom: string;
   periodTo: string;
   accountId?: string;
-  /** Counterparty constraint for the per-counterparty transfer rows.
-   *  Use the account's uuid for a known counterparty, `null` for the
-   *  External bucket (transfers with no paired leg recorded), or
-   *  `undefined` for non-per-counterparty rows (no constraint). */
+  accountName?: string;
+  rowLabel: string;
   counterpartyId?: string | null;
-}): string | null {
-  const { mode, slice, periodFrom, periodTo, accountId, counterpartyId } = opts;
+}): AccountsCellQuery | null {
+  const {
+    mode,
+    slice,
+    periodFrom,
+    periodTo,
+    accountId,
+    accountName,
+    rowLabel,
+    counterpartyId,
+  } = opts;
   // Balance cells are closing-balance snapshots, not sums of the
-  // transactions in the window — clicking them would land on a list
-  // that doesn't add up to the displayed number. Unlinked at every
-  // slice (the Total column was already unlinked via the
-  // `totalIsSnapshot` short-circuit at the call site).
+  // transactions in the window — opening the popup would land on a
+  // list that doesn't add up to the displayed number.
   if (mode === "balance") return null;
   // Resolve the date window: a specific month → that month's first
   // and last day; "total" → the whole report range.
   let from: string;
   let to: string;
+  let rangeLabel: string;
   if (slice === "total") {
     from = periodFrom;
     to = periodTo;
+    rangeLabel = `${format(parseISO(periodFrom), "MMM yyyy")} – ${format(parseISO(periodTo), "MMM yyyy")}`;
   } else {
     const start = parseISO(`${slice}-01`);
     from = `${slice}-01`;
     to = format(endOfMonth(start), "yyyy-MM-dd");
+    rangeLabel = format(start, "MMM ''yy");
   }
-  const params = new URLSearchParams();
-  params.set("from", from);
-  params.set("to", to);
-  if (accountId) params.set("accountIds", accountId);
-  // Metric → filter mapping. Credits and Debits filter by amount
-  // sign; transfer rows additionally restrict to paired/categorised
-  // transfers via `transfersFilter=only` so the user sees only the
-  // matched legs. Net doesn't add a metric filter; the
-  // account-window slice is the relevant lens.
-  if (mode === "credit") params.set("direction", "in");
-  else if (mode === "debit") params.set("direction", "out");
-  else if (mode === "transferIn") {
-    params.set("direction", "in");
-    params.set("transfersFilter", "only");
-  } else if (mode === "transferOut") {
-    params.set("direction", "out");
-    params.set("transfersFilter", "only");
-  }
-  // Per-counterparty rows: constrain to the OTHER leg's account so
-  // the resulting list sums to the clicked cell (rather than to
-  // every transfer in the direction). `null` is the External bucket
-  // — transfers with no paired leg recorded. `undefined` skips this
-  // entirely.
-  if (counterpartyId === null) {
-    params.set("transferPairAccountId", "external");
-  } else if (counterpartyId !== undefined) {
-    params.set("transferPairAccountId", counterpartyId);
-  }
-  return `/transactions?${params.toString()}`;
+  const accountPart = accountName ?? "All accounts";
+  return {
+    mode: mode as Exclude<CellMode, "balance">,
+    from,
+    to,
+    rangeLabel,
+    displayName: `${accountPart} · ${rowLabel}`,
+    accountId,
+    counterpartyId,
+  };
 }
 
 function MetricRow({
@@ -487,9 +505,11 @@ function MetricRow({
   totalIsSnapshot,
   tfoot,
   accountId,
+  accountName,
   counterpartyId,
   periodFrom,
   periodTo,
+  openCell,
 }: {
   label: string;
   /** Optional small colour dot rendered next to the label — used by
@@ -502,18 +522,23 @@ function MetricRow({
   total: number;
   totalIsSnapshot?: boolean;
   tfoot?: boolean;
-  /** When set, the cells become drill-down links scoped to this
-   *  account. Omit for the all-accounts footer (the resulting URLs
-   *  span all visible accounts via the default account filter). */
+  /** When set, the cells open a drill-down popup scoped to this
+   *  account. Omit for the all-accounts footer (the resulting view
+   *  spans all visible accounts via the default account filter). */
   accountId?: string;
+  /** Display name of the account for the popup title. Omit on the
+   *  all-accounts footer to render "All accounts" instead. */
+  accountName?: string;
   /** Per-counterparty constraint. uuid → drill to the OTHER leg's
    *  account; null → External bucket (no paired leg); undefined →
    *  not a per-counterparty row (no constraint). */
   counterpartyId?: string | null;
-  /** Report-window bounds, used by the "Total" column's URL builder
+  /** Report-window bounds, used by the "Total" column's query builder
    *  and as fallback when no month is selected. */
   periodFrom: string;
   periodTo: string;
+  /** Open the cell drill-through popup. */
+  openCell: (q: AccountsCellQuery) => void;
 }) {
   const totalCell = formatCell(total, mode);
   // The Total column is misleading for a snapshot metric (balance),
@@ -523,18 +548,19 @@ function MetricRow({
   const renderCellContent = (
     text: string,
     cellClass: string,
-    href: string | null,
+    query: AccountsCellQuery | null,
   ) => {
-    if (!href || text === "—") {
+    if (!query || text === "—") {
       return <span className={cellClass}>{text}</span>;
     }
     return (
-      <Link
-        href={href}
-        className={`${cellClass} hover:underline hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors`}
+      <button
+        type="button"
+        onClick={() => openCell(query)}
+        className={`${cellClass} hover:underline hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer bg-transparent border-0 p-0 font-inherit text-inherit text-right tabular-nums`}
       >
         {text}
-      </Link>
+      </button>
     );
   };
   return (
@@ -554,12 +580,14 @@ function MetricRow({
       </td>
       {months.map((m) => {
         const cell = formatCell(values[m], mode);
-        const href = buildCellHref({
+        const query = buildCellQuery({
           mode,
           slice: m,
           periodFrom,
           periodTo,
           accountId,
+          accountName,
+          rowLabel: label,
           counterpartyId,
         });
         return (
@@ -567,7 +595,7 @@ function MetricRow({
             key={m}
             className={`px-3 py-1 text-right tabular-nums ${cell.className}`}
           >
-            {renderCellContent(cell.text, "", href)}
+            {renderCellContent(cell.text, "", query)}
           </td>
         );
       })}
@@ -580,16 +608,18 @@ function MetricRow({
           // Balance's "Total" is a closing-balance snapshot, not a
           // sum of transactions — clicking it would land on a list
           // that wouldn't add up to the displayed number. Skip the
-          // link there. Every other metric: link to the whole-period
+          // popup there. Every other metric: open the whole-period
           // filtered view.
           totalIsSnapshot
             ? null
-            : buildCellHref({
+            : buildCellQuery({
                 mode,
                 slice: "total",
                 periodFrom,
                 periodTo,
                 accountId,
+                accountName,
+                rowLabel: label,
                 counterpartyId,
               }),
         )}

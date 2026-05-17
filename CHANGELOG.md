@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.138.0 — 2026-05-17
+
+### Changed
+- **Accounts report cells open an inline popup, not a full-page
+  navigation.** Clicking any non-zero numeric cell in the
+  Accounts-cashflow table now opens a dialog listing the underlying
+  transactions in place — same pattern the Cashflow report uses for
+  its category cells. Includes Date / Payee / Account / Category /
+  Amount columns, a transaction count + total in the header, and an
+  "Open in transactions →" link in the footer for the rare case
+  where you want the full filter view. Balance cells stay
+  unclickable (they're closing-balance snapshots, not transaction
+  sums). New component:
+  `src/components/reports/accounts-cell-dialog.tsx`.
+
 ## 0.137.0 — 2026-05-17
 
 ### Added

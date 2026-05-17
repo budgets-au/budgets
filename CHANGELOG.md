@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.135.0 — 2026-05-17
+
+### Changed
+- **Print button promoted to the page-level Reports toolbar.** Sat
+  inside the Envelope card's header before, where it got crowded
+  by the All / Income / Expenses + Hide transfers controls and
+  forced them onto a second row. Now sits at the far-right of the
+  page toolbar next to Quick range — works for every report tab,
+  not just Envelope. Window.print() + existing data-print-hide /
+  data-print-area CSS rules carry the scoping through unchanged.
+- **Envelope card title row no longer wraps.** With Print gone,
+  All / Income / Expenses + Hide transfers + Expand all all fit
+  on the same line as the "Envelope" title.
+
 ## 0.134.0 — 2026-05-17
 
 ### Changed

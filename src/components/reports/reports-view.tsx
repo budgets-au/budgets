@@ -20,8 +20,9 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Printer } from "lucide-react";
 import { formatAUD } from "@/lib/utils";
 import {
   ChartTooltipCard,
@@ -319,6 +320,19 @@ export function ReportsView({
           <RangePresetPopover from={from} to={to} now={now} onApply={applyRange} />
         </div>
 
+        {/* Page-level Print. Triggers window.print(); the @media print
+            stylesheet hides everything tagged data-print-hide so only
+            the active report panel ends up on paper. Sits at the
+            far-right of the toolbar so it doesn't crowd the date /
+            range controls. */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto self-end"
+          onClick={() => window.print()}
+        >
+          <Printer className="h-4 w-4 mr-1.5" /> Print
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>

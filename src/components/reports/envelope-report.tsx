@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { differenceInDays, parseISO } from "date-fns";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Eye, EyeOff, Printer } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -527,13 +527,6 @@ export function EnvelopeReport({
                 )}
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.print()}
-            >
-              <Printer className="h-4 w-4 mr-1.5" /> Print
-            </Button>
           </div>
         </div>
         {(() => {

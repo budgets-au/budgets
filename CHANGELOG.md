@@ -9,6 +9,74 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.137.0 — 2026-05-17
+
+### Added
+- **"Link as transfer" supports external (untracked) counterparties.**
+  The Link-transfer dialog gains a second action below the tracked-
+  account candidate list: a text field where you type the
+  counterparty name ("HSBC savings", "Mom", "PayPal", etc.). The
+  backend finds-or-creates an `isExternal=true` account with that
+  name, inserts a synthetic counterpart transaction there (opposite
+  sign, same date, marked `is_synthetic=true`), and links both
+  sides via `transfer_pair_id`. Subsequent links to the same name
+  reuse the account; autocomplete in the input surfaces existing
+  external accounts so duplicates from casing differences don't
+  pile up.
+- **Synthetic-leg reconciliation on CSV import.** If the user later
+  imports the real bank CSV for an account that has synthetic
+  stubs (e.g. they decide to start tracking HSBC savings after
+  having linked transfers to it), the commit-batched route now
+  matches each incoming row against existing synthetics in that
+  account (±3 day window, exact amount), and PROMOTES the
+  synthetic in place — preserving `id` and `transfer_pair_id` so
+  the source-leg's pointer stays valid. The synthetic's
+  `is_synthetic` flag is cleared on promotion. No duplication, no
+  manual re-linking.
+
+### Changed
+- **Single source of truth for "is this a transfer?" — the
+  `transfer_pair_id` column.** The `isTransferRow` SQL helper
+  introduced in 0.136.0 has collapsed to a one-signal predicate
+  (`transfer_pair_id IS NOT NULL`). The auto-matcher
+  (`pairTransfersInWindow`), `manualPair`, and the new
+  `manualPairExternal` all stop writing `is_transfer` — the
+  column is now legacy data. Cashflow report's `hideTransfers`
+  uncategorised branch swaps `is_transfer = 0` for the equivalent
+  `transfer_pair_id IS NULL`.
+- **`/api/transactions/[id]/transfer-pair`** accepts a new body
+  shape: `{ external: "<counterparty name>" }`. The original
+  `{ pairId: <uuid | null> }` shape is unchanged.
+- **`manualUnpair` deletes synthetic counterparts.** When the
+  unpaired row's partner was an auto-minted synthetic stub, the
+  stub has no remaining purpose — it's deleted outright instead
+  of being left as orphaned noise in the external account.
+
+### Fixed (data backfill)
+- **Orphaned legacy transfer rows get pair_ids on first unlock.**
+  A one-shot startup backfill mints synthetic counterparts in a
+  default "External" account for every row matching:
+  `is_transfer = 1 AND transfer_pair_id IS NULL`, OR a category
+  whose `transfer_kind` is internal/external with no pair. This
+  closes the divergence the 0.136.0 audit found between the three
+  legacy signals and gives every transfer-flavoured row a real
+  pair_id going forward. Idempotent — second runs find zero
+  orphans. After this lands, every existing query that filters on
+  "is this a transfer" agrees, regardless of which historical
+  signal was used to mark it.
+
+### Schema
+- New column: `transactions.is_synthetic` (boolean, default false).
+  See `drizzle/0009_transactions_is_synthetic.sql`.
+
+### Not removed (yet)
+- The `transactions.is_transfer` column and the
+  `categories.transfer_kind` enum stay in the schema — read by
+  the backfill to find orphans, and still surfaced in API
+  responses for UI compatibility. A future release will drop
+  them once we've confirmed no consumer (in-app or in users'
+  scripts) still relies on the values.
+
 ## 0.136.0 — 2026-05-17
 
 ### Fixed

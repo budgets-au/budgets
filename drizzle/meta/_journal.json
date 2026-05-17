@@ -64,6 +64,13 @@
       "when": 1779100000000,
       "tag": "0008_super_people",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1779200000000,
+      "tag": "0009_transactions_is_synthetic",
+      "breakpoints": true
     }
   ]
 }

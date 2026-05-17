@@ -123,7 +123,7 @@ export async function GET(request: Request) {
     FROM transactions
     WHERE category_id IS NULL AND CAST(amount AS REAL) > 0
       AND date >= ${from} AND date <= ${to}
-      ${hideTransfers ? sql`AND is_transfer = 0` : sql``}
+      ${hideTransfers ? sql`AND transfer_pair_id IS NULL` : sql``}
       ${accountFilter}
     GROUP BY substr(date, 1, 7)
   `);
@@ -137,7 +137,7 @@ export async function GET(request: Request) {
     FROM transactions
     WHERE category_id IS NULL AND CAST(amount AS REAL) < 0
       AND date >= ${from} AND date <= ${to}
-      ${hideTransfers ? sql`AND is_transfer = 0` : sql``}
+      ${hideTransfers ? sql`AND transfer_pair_id IS NULL` : sql``}
       ${accountFilter}
     GROUP BY substr(date, 1, 7)
   `);

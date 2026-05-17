@@ -1,59 +1,35 @@
 import { sql } from "drizzle-orm";
 
 /**
- * Canonical SQL predicates for "is this transaction a transfer?"
+ * Canonical SQL predicate for "is this transaction a transfer?"
  *
- * Two signals exist in the schema:
+ * **A transaction is a transfer iff it has a `transfer_pair_id`.**
+ * The pair-id is the sole source of truth. Both legs of any transfer —
+ * auto-paired, manually-paired, or synthetic-leg-paired (where the
+ * other side lives in an isExternal=true placeholder account) — carry
+ * a non-null `transfer_pair_id` after the 0009/0010 migration window.
  *
- *   - `categories.transfer_kind` enum (`'none' | 'internal' | 'external'`):
- *     set on the category itself. Auto-pairing in
- *     `src/lib/transfer-match.ts` reads it and uses it as a scoring
- *     signal, but never writes it. The category-manager UI writes it.
+ * Historical signals that have been retired:
+ *   - `transactions.is_transfer` boolean — dropped in migration 0010;
+ *     it was redundant with `transfer_pair_id IS NOT NULL`.
+ *   - `categories.transfer_kind` enum — kept in the schema as a UI
+ *     label hint, but no longer used as a query filter for transfer-
+ *     ness. Internal vs external classification is now derived from
+ *     the paired accounts' types (`isPoolAsset(both)` → internal).
  *
- *   - `transactions.is_transfer` boolean flag: set by the auto-matcher
- *     when it pairs two rows, and by `manualPair()` when the user
- *     manually links via the "Link as transfer" UI. NEVER cleared
- *     except by `manualUnpair()`.
- *
- * Both signals are needed because they're written by different code
- * paths and aren't kept in sync:
- *
- *   - Auto-pair: writes `is_transfer=1` always; writes `category_id`
- *     only when crossing a loan/credit boundary AND the source side
- *     was uncategorised.
- *   - Manual-pair: writes `is_transfer=1`; never touches category.
- *   - Legacy categorise-without-pair: a category with transfer_kind
- *     ∈ {internal, external} but no matched counterpart → flag=0,
- *     kind=internal/external.
- *
- * The canonical "is this row a transfer" predicate ORs the two signals
- * together. This is what the Accounts and Flow reports use to surface
- * transfer breakdowns, and what the `/api/transactions` endpoint's
- * `transferPairAccountId` drill-through requires to match cells in the
- * Accounts report.
+ * The aliases (`t.`) match the conventional join layout every
+ * call-site already uses. If you join with a different alias, use
+ * the `mkIsTransferRow(txnAlias)` factory.
  *
  * NOTE — this is NOT the same as the cashflow report's `hideTransfers`
- * filter, which is narrower (`transfer_kind != 'internal'`, internal-
- * only). External transfers like loan payments ARE real cashflow, so
- * they're kept visible in cashflow totals even when hideTransfers is
- * on. Don't replace cashflow's filter with this helper.
- *
- * The aliases (`c.`, `t.`) match the conventional join layout every
- * call-site already uses. If you join with different aliases, pass
- * them via the factory.
+ * filter, which is intentionally narrower (only INTERNAL transfers are
+ * hidden so external loan/CC payments remain visible as real cashflow).
+ * Cashflow uses `c.transfer_kind != 'internal'` directly; don't
+ * replace it with this helper.
  */
-export const isTransferRow = sql<boolean>`(
-  COALESCE(c.transfer_kind, 'none') IN ('internal','external')
-  OR COALESCE(t.is_transfer, 0) = 1
-)`;
+export const isTransferRow = sql<boolean>`(${sql.raw("t")}.transfer_pair_id IS NOT NULL)`;
 
-/** Factory for queries that use non-standard join aliases. */
-export function mkIsTransferRow(
-  txnAlias: string,
-  catAlias: string,
-) {
-  return sql<boolean>`(
-    COALESCE(${sql.raw(catAlias)}.transfer_kind, 'none') IN ('internal','external')
-    OR COALESCE(${sql.raw(txnAlias)}.is_transfer, 0) = 1
-  )`;
+/** Factory for queries that use a non-standard txn alias. */
+export function mkIsTransferRow(txnAlias: string) {
+  return sql<boolean>`(${sql.raw(txnAlias)}.transfer_pair_id IS NOT NULL)`;
 }

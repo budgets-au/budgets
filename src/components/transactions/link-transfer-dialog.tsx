@@ -36,6 +36,13 @@ interface CandidateTxn {
   transferPairId: string | null;
 }
 
+interface AccountLite {
+  id: string;
+  name: string;
+  isExternal: boolean | number;
+  isArchived: boolean | number;
+}
+
 /** Manually link an unpaired transaction to another transaction as a
  * transfer pair. Opens to a candidate list pre-filtered to
  * unpaired-only, opposite-sign amounts within ±$1 of the source, on
@@ -56,6 +63,24 @@ export function LinkTransferDialog({
   const [query, setQuery] = useState("");
   const [showAll, setShowAll] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [externalName, setExternalName] = useState("");
+
+  // Existing isExternal accounts feed the autocomplete suggestions on
+  // the "Link to external counterparty" section. Case-insensitive name
+  // matching in the backend means typing the same name twice
+  // (different case) resolves to the same account, but autocomplete
+  // makes the consistency obvious.
+  const { data: allAccounts = [] } = useSWR<AccountLite[]>(
+    open ? "/api/accounts" : null,
+    fetcher,
+  );
+  const externalAccounts = useMemo(
+    () =>
+      allAccounts
+        .filter((a) => a.isExternal && !a.isArchived)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [allAccounts],
+  );
 
   // Pull ±7 days of unpaired transactions around the source date. The
   // candidate list is small enough (typically tens) that client-side
@@ -145,6 +170,40 @@ export function LinkTransferDialog({
       onOpenChange(false);
       setQuery("");
       setShowAll(false);
+      setExternalName("");
+    } else {
+      const body = await res.json().catch(() => ({}));
+      toast.error(body.error ?? "Failed to link");
+    }
+  }
+
+  async function linkExternal() {
+    const name = externalName.trim();
+    if (!source || linking || !name) return;
+    setLinking(true);
+    const res = await fetch(
+      `/api/transactions/${source.id}/transfer-pair`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ external: name }),
+      },
+    );
+    setLinking(false);
+    if (res.ok) {
+      toast.success(`Linked to external · ${name}`);
+      void globalMutate(
+        (key) =>
+          typeof key === "string" &&
+          (key.startsWith("/api/transactions") || key === "/api/accounts"),
+        undefined,
+        { revalidate: true },
+      );
+      onPaired?.();
+      onOpenChange(false);
+      setQuery("");
+      setShowAll(false);
+      setExternalName("");
     } else {
       const body = await res.json().catch(() => ({}));
       toast.error(body.error ?? "Failed to link");
@@ -227,6 +286,55 @@ export function LinkTransferDialog({
                 ))
               )}
             </div>
+            {/* External-counterparty fallback. Use when the other leg
+                of the transfer lives somewhere we don't import (a
+                separate bank, family member, PayPal). Backend
+                finds-or-creates an isExternal=true account named after
+                the counterparty, mints a synthetic stub there, and
+                links both sides via transfer_pair_id. If the user
+                later imports the real CSV for that account, the
+                import flow reconciles it in place. */}
+            <div className="rounded-md border bg-muted/20 px-3 py-2.5 space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Or, link to an external counterparty
+              </p>
+              <p className="text-xs text-muted-foreground">
+                When the other side lives in an account you don&apos;t
+                import. We&apos;ll create a placeholder there so the
+                pair is real — and reconcile it later if you import
+                that account&apos;s CSV.
+              </p>
+              <div className="flex items-center gap-2">
+                <Input
+                  list="external-counterparty-suggestions"
+                  value={externalName}
+                  onChange={(e) => setExternalName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && externalName.trim()) {
+                      e.preventDefault();
+                      void linkExternal();
+                    }
+                  }}
+                  placeholder="Counterparty name — e.g. HSBC savings, Mom, PayPal"
+                  maxLength={120}
+                />
+                <datalist id="external-counterparty-suggestions">
+                  {externalAccounts.map((a) => (
+                    <option key={a.id} value={a.name} />
+                  ))}
+                </datalist>
+                <Button
+                  type="button"
+                  onClick={linkExternal}
+                  size="sm"
+                  variant="indigo"
+                  disabled={linking || externalName.trim().length === 0}
+                >
+                  Link external
+                </Button>
+              </div>
+            </div>
+
             <div className="flex justify-end">
               <Button
                 variant="ghost"

@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { transactions, transferSuggestions, categories } from "@/db/schema";
+import { accounts, transactions, transferSuggestions, categories } from "@/db/schema";
 import { sql, eq, and, isNull, inArray, or } from "drizzle-orm";
 
 /**
@@ -388,7 +388,6 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
         .update(transactions)
         .set({
           transferPairId: cand.bId,
-          isTransfer: true,
           ...(aPatchCategoryId ? { categoryId: aPatchCategoryId } : {}),
           updatedAt: new Date(),
         })
@@ -397,7 +396,6 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
         .update(transactions)
         .set({
           transferPairId: cand.aId,
-          isTransfer: true,
           ...(bPatchCategoryId ? { categoryId: bPatchCategoryId } : {}),
           updatedAt: new Date(),
         })
@@ -452,11 +450,11 @@ export async function manualPair(aId: string, bId: string): Promise<void> {
     }
     await tx
       .update(transactions)
-      .set({ transferPairId: bId, isTransfer: true, updatedAt: new Date() })
+      .set({ transferPairId: bId, updatedAt: new Date() })
       .where(eq(transactions.id, aId));
     await tx
       .update(transactions)
-      .set({ transferPairId: aId, isTransfer: true, updatedAt: new Date() })
+      .set({ transferPairId: aId, updatedAt: new Date() })
       .where(eq(transactions.id, bId));
     await tx
       .delete(transferSuggestions)
@@ -470,8 +468,140 @@ export async function manualPair(aId: string, bId: string): Promise<void> {
 }
 
 /**
+ * Pair a transaction with a SYNTHETIC counterpart inside a named external
+ * (untracked) account. Used when the user clicks "Link as transfer" but
+ * the other leg of the transfer lives somewhere we don't import (e.g. a
+ * separate bank, a family member's account, PayPal). The external account
+ * is found-or-created by case-insensitive name match; a stub transaction
+ * with `is_synthetic=true` is inserted to stand in for the missing leg;
+ * both rows are then linked via `transfer_pair_id`.
+ *
+ * The synthetic stub holds the OPPOSITE sign of the source amount, the
+ * same date, and a generic "External transfer" payee. It's never written
+ * to bank/import metadata (no importHash, no postedSeq) — distinguishing
+ * it from real rows even outside `is_synthetic`.
+ *
+ * If the user later imports the real CSV for that external account, the
+ * commit-batched route's reconciliation pass detects (account_id, date,
+ * amount)-matching synthetics and promotes them in place — preserving
+ * `id` and the source leg's `transfer_pair_id` pointer.
+ *
+ * Idempotency: matches `manualPair` — clears any pre-existing pair on
+ * the source side and any stale suggestion rows.
+ *
+ * @returns the ids of the created synthetic txn + the (possibly
+ *          newly-created) external account.
+ */
+export async function manualPairExternal(
+  sourceTxnId: string,
+  counterpartyName: string,
+): Promise<{ syntheticId: string; externalAccountId: string }> {
+  const trimmed = counterpartyName.trim();
+  if (!trimmed) {
+    throw new Error("counterpartyName must not be empty");
+  }
+  return await db.transaction(async (tx) => {
+    const [source] = await tx
+      .select({
+        id: transactions.id,
+        date: transactions.date,
+        amount: transactions.amount,
+        currency: accounts.currency,
+        transferPairId: transactions.transferPairId,
+      })
+      .from(transactions)
+      .leftJoin(accounts, eq(accounts.id, transactions.accountId))
+      .where(eq(transactions.id, sourceTxnId));
+    if (!source) {
+      throw new Error(`source transaction ${sourceTxnId} not found`);
+    }
+
+    // Find-or-create the external account. Case-insensitive lookup so
+    // typing "hsbc savings" once and "HSBC Savings" later resolves to
+    // one account, not two.
+    const existingExternals = await tx
+      .select({ id: accounts.id, name: accounts.name })
+      .from(accounts)
+      .where(eq(accounts.isExternal, true));
+    const lowered = trimmed.toLowerCase();
+    let externalAccountId = existingExternals.find(
+      (a) => a.name.toLowerCase() === lowered,
+    )?.id;
+    if (!externalAccountId) {
+      const [created] = await tx
+        .insert(accounts)
+        .values({
+          name: trimmed,
+          type: "cash",
+          currency: source.currency ?? "AUD",
+          isExternal: true,
+          isArchived: false,
+          startingBalance: "0",
+          currentBalance: "0",
+        })
+        .returning({ id: accounts.id });
+      externalAccountId = created.id;
+    }
+
+    // Opposite-sign amount for the synthetic. Use string math via
+    // parseFloat → negate → toFixed so we don't drop precision on
+    // banker-style amounts already stored as text.
+    const sourceAmt = parseFloat(source.amount);
+    const syntheticAmount = (-sourceAmt).toFixed(2);
+
+    // Clear any pre-existing pair on the source side (mirrors manualPair).
+    if (source.transferPairId) {
+      await tx
+        .update(transactions)
+        .set({ transferPairId: null, updatedAt: new Date() })
+        .where(eq(transactions.id, source.transferPairId));
+    }
+
+    // Insert the synthetic stub.
+    const [synthetic] = await tx
+      .insert(transactions)
+      .values({
+        accountId: externalAccountId,
+        date: source.date,
+        amount: syntheticAmount,
+        payee: "External transfer",
+        description: null,
+        categoryId: null,
+        isSynthetic: true,
+        transferPairId: sourceTxnId,
+      })
+      .returning({ id: transactions.id });
+
+    // Link the source side back.
+    await tx
+      .update(transactions)
+      .set({
+        transferPairId: synthetic.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(transactions.id, sourceTxnId));
+
+    // Drop any stale suggestion rows for the source side.
+    await tx
+      .delete(transferSuggestions)
+      .where(
+        or(
+          eq(transferSuggestions.transactionId, sourceTxnId),
+          eq(transferSuggestions.candidateId, sourceTxnId),
+        ),
+      );
+
+    return { syntheticId: synthetic.id, externalAccountId };
+  });
+}
+
+/**
  * Break the pair on this transaction (and its counterpart), leaving both
  * rows un-linked. `is_transfer` stays as-is — the user marked it that way.
+ *
+ * If the counterpart was a synthetic stub (auto-minted by
+ * `manualPairExternal`), it's deleted entirely — a free-floating
+ * "External transfer" row in an untracked account is just noise.
  */
 export async function manualUnpair(id: string): Promise<void> {
   await db.transaction(async (tx) => {
@@ -481,13 +611,29 @@ export async function manualUnpair(id: string): Promise<void> {
       .where(eq(transactions.id, id));
     if (!row?.pairId) return;
     const pairId = row.pairId;
+    const [pair] = await tx
+      .select({
+        id: transactions.id,
+        isSynthetic: transactions.isSynthetic,
+      })
+      .from(transactions)
+      .where(eq(transactions.id, pairId));
     await tx
       .update(transactions)
       .set({ transferPairId: null, updatedAt: new Date() })
       .where(eq(transactions.id, id));
-    await tx
-      .update(transactions)
-      .set({ transferPairId: null, updatedAt: new Date() })
-      .where(eq(transactions.id, pairId));
+    if (pair?.isSynthetic) {
+      // Synthetic stubs exist solely to back the pair on the source
+      // side. Once the pair is gone the stub has no purpose — leaving
+      // it would just clutter the external account with a spurious
+      // "External transfer" row that the operator can't even click into
+      // for context. Delete outright.
+      await tx.delete(transactions).where(eq(transactions.id, pairId));
+    } else {
+      await tx
+        .update(transactions)
+        .set({ transferPairId: null, updatedAt: new Date() })
+        .where(eq(transactions.id, pairId));
+    }
   });
 }

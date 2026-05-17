@@ -107,15 +107,11 @@ export async function DELETE(
       .where(eq(transactions.id, id))
       .limit(1);
     if (!target) return null;
-    // If this is half of a paired transfer, clear the partner's
-    // is_transfer flag — the FK already SET NULLs transfer_pair_id,
-    // but the dangling boolean was outliving the relationship.
-    if (target.transferPairId) {
-      await tx
-        .update(transactions)
-        .set({ isTransfer: false, updatedAt: new Date() })
-        .where(eq(transactions.id, target.transferPairId));
-    }
+    // The FK's `ON DELETE SET NULL` clears the partner's
+    // transfer_pair_id automatically. No is_transfer fix-up needed
+    // — that column was retired in PR 2 (transfer_pair_id alone is
+    // the truth) and the auto-matcher no longer writes it. Per-row
+    // touch on the partner is unnecessary.
     await tx.delete(transactions).where(eq(transactions.id, id));
     return target;
   });

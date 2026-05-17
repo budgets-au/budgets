@@ -175,6 +175,7 @@ export function unlock(
     seedDefaultUserIfMissing();
     seedSystemCategoriesIfMissing();
     seedSampleDataIfMissing();
+    runOrphanTransferBackfill();
     return { ok: true };
   }
 
@@ -189,8 +190,33 @@ export function unlock(
   seedDefaultUserIfMissing();
   seedSystemCategoriesIfMissing();
   seedSampleDataIfMissing();
+  runOrphanTransferBackfill();
 
   return { ok: true };
+}
+
+/** One-shot data backfill that gives every legacy "this is a transfer"
+ *  row a real `transfer_pair_id` by minting synthetics in a default
+ *  "External" account. Idempotent — subsequent runs find no orphans
+ *  and return paired=0 cheaply. Errors are logged but never thrown
+ *  (the unlock has already succeeded and the app remains usable). */
+function runOrphanTransferBackfill(): void {
+  if (!state.drizzleDb) return;
+  try {
+    // Lazy import: the helper pulls from `@/db` itself; importing it
+    // at module-init would create a cycle. Resolved at call time
+    // when the singleton is already initialised.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m = require("@/lib/backfill-orphan-transfers");
+    const result = m.backfillOrphanTransfers();
+    if (result.paired > 0) {
+      console.log(
+        `[db] Backfilled ${result.paired} orphan transfer row(s) with synthetic counterparts.`,
+      );
+    }
+  } catch (e) {
+    console.error("[db] Orphan-transfer backfill failed:", e);
+  }
 }
 
 /** Apply any pending drizzle migrations against the live keyed

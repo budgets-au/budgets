@@ -211,6 +211,14 @@ export const transactions = sqliteTable(
       (): AnySQLiteColumn => transactions.id,
       { onDelete: "set null" },
     ),
+    /** Synthetic-leg marker. TRUE only on rows the app minted itself
+     * to stand in for the OTHER leg of a transfer whose real
+     * counterpart lives in an untracked account. Auto-cleared when
+     * a CSV import promotes the row in place (commit-batched
+     * reconciliation pass). See drizzle/0009_transactions_is_synthetic.sql. */
+    isSynthetic: integer("is_synthetic", { mode: "boolean" })
+      .notNull()
+      .default(false),
     isReconciled: integer("is_reconciled", { mode: "boolean" })
       .notNull()
       .default(false),

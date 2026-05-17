@@ -17,7 +17,6 @@ const createSchema = z.object({
   description: z.string().optional(),
   categoryId: z.string().uuid().optional().nullable(),
   notes: z.string().optional(),
-  isTransfer: z.boolean().default(false),
 });
 
 const pairTxn = alias(transactions, "pair_txn");
@@ -125,19 +124,15 @@ export async function GET(request: Request) {
   //                cell's source-of-truth.
   // Anything else is silently ignored — same pattern as the other
   // validated params.
+  // Synthetic-leg model (migration 0009): every transfer has a real
+  // `transfer_pair_id`, including transfers whose other leg lives in
+  // an isExternal=true placeholder account. The drill-through from
+  // the Accounts report's per-counterparty rows just passes the
+  // counterparty's account UUID — the legacy `external` sentinel
+  // (used pre-backfill to find orphan `is_transfer=1` rows with no
+  // pair_id) is no longer needed and is silently ignored.
   const transferPairAccountIdRaw = searchParams.get("transferPairAccountId");
-  if (transferPairAccountIdRaw === "external") {
-    conditions.push(
-      sql`${transactions.transferPairId} IS NULL AND (
-        ${transactions.isTransfer} = 1
-        OR EXISTS (
-          SELECT 1 FROM categories c
-          WHERE c.id = ${transactions.categoryId}
-            AND c.transfer_kind IN ('internal','external')
-        )
-      )`,
-    );
-  } else if (transferPairAccountIdRaw) {
+  if (transferPairAccountIdRaw && transferPairAccountIdRaw !== "external") {
     const uuidParse = z
       .string()
       .uuid()

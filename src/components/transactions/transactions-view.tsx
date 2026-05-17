@@ -419,12 +419,12 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
     // Snapshot the row payloads BEFORE the DELETE fires so the
     // Undo handler has what it needs to re-POST. POST accepts a
     // narrower set of fields than the row carries (createSchema:
-    // accountId/date/amount/payee/description/categoryId/notes/
-    // isTransfer) — anything not in that list (balance, type,
-    // posted_seq, transferPairId, importHash) is reconstructed on
-    // insert or simply absent. Caveat: transfer-pair links don't
-    // survive an undo cycle; if the operator deleted a paired
-    // row, they'll need to re-pair it manually.
+    // accountId/date/amount/payee/description/categoryId/notes) —
+    // anything not in that list (balance, type, posted_seq,
+    // transferPairId, importHash) is reconstructed on insert or
+    // simply absent. Caveat: transfer-pair links don't survive an
+    // undo cycle; if the operator deleted a paired row, they'll
+    // need to re-pair it manually.
     const snapshot = txnsRaw
       .filter((t) => selectedIds.has(t.id))
       .map((t) => ({
@@ -435,7 +435,6 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
         description: t.description ?? "",
         categoryId: t.categoryId,
         notes: t.notes ?? "",
-        isTransfer: t.isTransfer,
       }));
     const res = await fetch("/api/transactions/bulk", {
       method: "DELETE",

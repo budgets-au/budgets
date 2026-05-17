@@ -1,0 +1,20 @@
+-- Adds `is_synthetic` flag to transactions. Set to TRUE only on rows
+-- that the app mints itself to stand in for the OTHER leg of a transfer
+-- whose real counterpart lives outside our tracked accounts. They live
+-- in `isExternal=true` "External: <counterparty name>" accounts that
+-- the app auto-creates when the user picks "Link as transfer" with a
+-- new external counterparty name.
+--
+-- Why: it lets us collapse the three-signal transfer system
+-- (`transactions.is_transfer` + `categories.transfer_kind` +
+-- `transactions.transfer_pair_id`) down to one — `transfer_pair_id IS
+-- NOT NULL`. Without synthetics, manually-flagged-as-transfer rows
+-- whose other leg isn't in the DB had to be tracked via the standalone
+-- `is_transfer` flag. Synthetics give every transfer a real pair.
+--
+-- When a user later imports the real CSV for that external account,
+-- the commit-batched route reconciles each incoming row against
+-- matching synthetic stubs (same account, ±3 days, exact amount) and
+-- promotes the synthetic in place — preserves `id`, preserves the
+-- source leg's `transfer_pair_id` pointer, clears `is_synthetic`.
+ALTER TABLE transactions ADD COLUMN is_synthetic INTEGER NOT NULL DEFAULT 0;

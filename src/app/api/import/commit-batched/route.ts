@@ -12,6 +12,7 @@ import {
 } from "@/lib/categorize";
 import { learnAccountAlias } from "@/lib/import/resolve-account";
 import { pairTransfersInWindow } from "@/lib/transfer-match";
+import { diffDaysISO } from "@/lib/utils";
 
 const rowSchema = z.object({
   /** Where this row should land. Required — rows without a resolved
@@ -308,13 +309,70 @@ async function runCommit(request: Request) {
 
     if (group.length === 0) continue;
     const offset = (maxByAccount.get(accountId) ?? -1) + 1;
-    await db.insert(transactions).values(
-      group.map((r) => {
-        const normalized = r.payee ? normalizePayee(r.payee) : null;
-        return {
-          accountId,
+
+    // ── Synthetic reconciliation ──────────────────────────────────────
+    // When the user previously linked a transfer to an untracked
+    // counterparty via "Link as transfer (external)", we minted a
+    // synthetic stub in this account (see transfer-match.ts:
+    // manualPairExternal). If the user is now importing real CSV
+    // rows for this account, those incoming rows may correspond to
+    // those stubs — same amount, ±3 days of the stub's date.
+    // Promoting in place preserves the synthetic's id and its
+    // `transfer_pair_id` pointer, so the source-leg's pair stays
+    // valid. Greedy 1:1 assignment; exact amount match (cents-level
+    // mismatches like fees fall through to a fresh insert and the
+    // user can re-link manually).
+    const syntheticCandidates = await db
+      .select({
+        id: transactions.id,
+        date: transactions.date,
+        amount: transactions.amount,
+      })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.accountId, accountId),
+          eq(transactions.isSynthetic, true),
+        ),
+      );
+    const claimedSynthetics = new Set<string>();
+    type Row = (typeof group)[number];
+    const promotions: { syntheticId: string; row: Row }[] = [];
+    const remainingToInsert: Row[] = [];
+    for (const r of group) {
+      const rAmtCanonical = parseFloat(r.amount).toFixed(2);
+      let best: { id: string; date: string } | null = null;
+      let bestDays = Infinity;
+      for (const s of syntheticCandidates) {
+        if (claimedSynthetics.has(s.id)) continue;
+        if (parseFloat(s.amount).toFixed(2) !== rAmtCanonical) continue;
+        const days = Math.abs(diffDaysISO(r.date, s.date));
+        if (days > 3) continue;
+        if (days < bestDays) {
+          bestDays = days;
+          best = { id: s.id, date: s.date };
+        }
+      }
+      if (best) {
+        claimedSynthetics.add(best.id);
+        promotions.push({ syntheticId: best.id, row: r });
+      } else {
+        remainingToInsert.push(r);
+      }
+    }
+
+    // Promote each matched synthetic in place. Keep `transferPairId`
+    // and the row `id` untouched; overwrite payee/description/import
+    // metadata with the real CSV's values. Date is set to the bank's
+    // posted date (the synthetic's date was a placeholder from the
+    // source leg).
+    let promotedCount = 0;
+    for (const { syntheticId, row: r } of promotions) {
+      const normalized = r.payee ? normalizePayee(r.payee) : null;
+      await db
+        .update(transactions)
+        .set({
           date: r.date,
-          amount: r.amount,
           payee: r.payee,
           normalizedPayee: normalized,
           matchPayee: deriveMatchPayee(normalized, tokenFreq),
@@ -323,17 +381,45 @@ async function runCommit(request: Request) {
           importHash: r.importHash,
           importLogId: log.id,
           postedAt: r.postedAt ? new Date(r.postedAt) : null,
-          // Offset the parser's per-file 0..N-1 by the account's
-          // current max+1 so postedSeq stays unique across imports.
-          // Relative order within the file is preserved (constant
-          // offset), so intra-day bank order still wins.
           postedSeq: r.postedSeq != null ? r.postedSeq + offset : null,
           type: r.type ?? null,
           balance: r.balance ?? null,
-        };
-      }),
-    );
+          isSynthetic: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(transactions.id, syntheticId));
+      promotedCount += 1;
+    }
+
+    if (remainingToInsert.length > 0) {
+      await db.insert(transactions).values(
+        remainingToInsert.map((r) => {
+          const normalized = r.payee ? normalizePayee(r.payee) : null;
+          return {
+            accountId,
+            date: r.date,
+            amount: r.amount,
+            payee: r.payee,
+            normalizedPayee: normalized,
+            matchPayee: deriveMatchPayee(normalized, tokenFreq),
+            description: r.description,
+            categoryId: r.categoryId ?? null,
+            importHash: r.importHash,
+            importLogId: log.id,
+            postedAt: r.postedAt ? new Date(r.postedAt) : null,
+            // Offset the parser's per-file 0..N-1 by the account's
+            // current max+1 so postedSeq stays unique across imports.
+            // Relative order within the file is preserved (constant
+            // offset), so intra-day bank order still wins.
+            postedSeq: r.postedSeq != null ? r.postedSeq + offset : null,
+            type: r.type ?? null,
+            balance: r.balance ?? null,
+          };
+        }),
+      );
+    }
     imported += group.length;
+    void promotedCount;
 
     // Refresh accounts.currentBalance so the dashboard widget +
     // sidebar pick up the new total without waiting for a SWR

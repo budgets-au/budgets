@@ -1,0 +1,12 @@
+-- Idempotency flag for the orphan-transfer → synthetic backfill
+-- introduced in 0.137.0. Without this, the backfill re-ran on every
+-- DB unlock and (correctly, per the spec) minted fresh synthetics for
+-- any `is_transfer=1 AND transfer_pair_id IS NULL` rows — which
+-- surprised users who restored older DBs containing rows they
+-- considered "fully matched" (the rows had the legacy `is_transfer`
+-- flag set, but no pair, so the backfill saw them as orphans).
+--
+-- The flag is set to 1 the first time the backfill runs successfully
+-- on a given DB; subsequent unlocks see it and skip. Resetting the
+-- flag (via Settings → Maintenance) opts back in for one more pass.
+ALTER TABLE app_settings ADD COLUMN transfer_backfill_done INTEGER NOT NULL DEFAULT 0;

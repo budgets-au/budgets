@@ -400,6 +400,16 @@ export const appSettings = sqliteTable("app_settings", {
   sampleDataSeeded: integer("sample_data_seeded", { mode: "boolean" })
     .notNull()
     .default(false),
+  /** Idempotency flag for the orphan-transfer → synthetic backfill
+   * (see src/lib/backfill-orphan-transfers.ts). Set to 1 the first
+   * time the backfill runs on this DB. Once 1, the unlock-time
+   * runner skips — so restoring an older DB doesn't repeatedly
+   * mint synthetics for the same orphan rows on every unlock.
+   * Surface a Settings → Maintenance button to reset + re-run if
+   * the operator wants the backfill to evaluate fresh. */
+  transferBackfillDone: integer("transfer_backfill_done", { mode: "boolean" })
+    .notNull()
+    .default(false),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),

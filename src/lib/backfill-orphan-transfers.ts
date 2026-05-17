@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { accounts, transactions, categories } from "@/db/schema";
+import { accounts, appSettings, transactions, categories } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 /** Default external-account name used when backfill mints synthetics
@@ -16,7 +16,7 @@ interface OrphanRow {
 }
 
 /**
- * One-shot startup backfill that gives every "this is a transfer" row a
+ * One-shot backfill that gives every "this is a transfer" row a
  * `transfer_pair_id` by minting synthetic counterparties in a default
  * `isExternal=true` "External" account.
  *
@@ -29,13 +29,15 @@ interface OrphanRow {
  *      were never paired (legacy data from before the matcher landed,
  *      or from manual category assignment).
  *
- * Idempotent: a second run finds zero rows because the first run set
- * `transfer_pair_id` on every orphan it saw. Safe to call on every
- * unlock — no-op after the first successful pass.
- *
  * Runs OUTSIDE a single transaction (better-sqlite3 limits transaction
  * size, and the loop's row count can be large). Each pair insert is
  * its own atomic step.
+ *
+ * Caller is responsible for the once-per-DB gating. The unlock-time
+ * runner in `db/index.ts` checks `app_settings.transfer_backfill_done`
+ * and only invokes this when the flag is false, then sets it true.
+ * Re-runs are opt-in via Settings → Maintenance → "Re-run transfer
+ * backfill".
  */
 export function backfillOrphanTransfers(): { paired: number } {
   // 1. Find-or-create the default external account.

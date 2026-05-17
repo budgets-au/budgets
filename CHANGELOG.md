@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.139.0 — 2026-05-17
+
+### Fixed
+- **Orphan-transfer backfill is now once-per-DB.** The unlock-time
+  backfill introduced in 0.137.0 was scanning + minting synthetics
+  on every unlock, which surprised users who restored an older DB:
+  any rows in the restored snapshot that had the legacy
+  `is_transfer=1` flag but no `transfer_pair_id` were treated as
+  orphans and paired with new synthetic counterparts in the
+  External account — even when the user considered those rows
+  "fully matched" already. New idempotency flag
+  `app_settings.transfer_backfill_done` (drizzle 0010) gets set
+  to 1 after the first successful pass on any given DB; subsequent
+  unlocks short-circuit and leave the data alone. Re-running can
+  be triggered manually by clearing the flag (Settings →
+  Maintenance UI to come).
+
 ## 0.138.0 — 2026-05-17
 
 ### Changed

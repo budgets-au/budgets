@@ -197,12 +197,27 @@ export function unlock(
 
 /** One-shot data backfill that gives every legacy "this is a transfer"
  *  row a real `transfer_pair_id` by minting synthetics in a default
- *  "External" account. Idempotent — subsequent runs find no orphans
- *  and return paired=0 cheaply. Errors are logged but never thrown
- *  (the unlock has already succeeded and the app remains usable). */
+ *  "External" account. Gated by the `transferBackfillDone` flag on
+ *  `app_settings` so it runs exactly once per DB instance — a restored
+ *  older DB whose flag is unset gets one pass; a restored DB with the
+ *  flag set is left alone (avoids minting fresh synthetics for rows
+ *  the operator considered "matched" in the source state). Re-runs
+ *  are opt-in via Settings → Maintenance.
+ *
+ *  Errors are logged but never thrown (the unlock has already
+ *  succeeded and the app remains usable). */
 function runOrphanTransferBackfill(): void {
-  if (!state.drizzleDb) return;
+  if (!state.drizzleDb || !state.client) return;
   try {
+    const flagRow = state.client
+      .prepare(
+        `SELECT transfer_backfill_done FROM app_settings WHERE id = 1`,
+      )
+      .get() as { transfer_backfill_done?: number } | undefined;
+    if (flagRow?.transfer_backfill_done === 1) {
+      // Already done on this DB — restore-safe no-op.
+      return;
+    }
     // Lazy import: the helper pulls from `@/db` itself; importing it
     // at module-init would create a cycle. Resolved at call time
     // when the singleton is already initialised.
@@ -214,6 +229,14 @@ function runOrphanTransferBackfill(): void {
         `[db] Backfilled ${result.paired} orphan transfer row(s) with synthetic counterparts.`,
       );
     }
+    // Mark the flag regardless of whether anything was paired — a
+    // fresh DB with zero orphans still "counts" as backfilled, and
+    // we don't want to re-scan on every unlock thereafter.
+    state.client
+      .prepare(
+        `UPDATE app_settings SET transfer_backfill_done = 1 WHERE id = 1`,
+      )
+      .run();
   } catch (e) {
     console.error("[db] Orphan-transfer backfill failed:", e);
   }

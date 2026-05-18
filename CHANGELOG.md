@@ -9,6 +9,17 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.160.0 — 2026-05-18
+
+### Changed
+- **Investments page Month/Week/Day/Return toggle now persists.**
+  The gain-window picker on the stock + paper-trade tables was
+  using local component state, so a reload reset the choice to
+  the default ("Return") even after the operator had flicked it
+  to "Day". Stored as `display_prefs.investmentsGainRange` so the
+  selection survives reload, route changes, and follows the
+  operator between devices.
+
 ## 0.159.0 — 2026-05-18
 
 ### Added

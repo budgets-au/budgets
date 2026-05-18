@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Trash2, Pencil, TrendingUp, Gift, Zap, Eye, Dices } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD, formatDate, amountClass } from "@/lib/utils";
 import { InvestmentDetailPanel } from "./investment-detail-panel";
 import { EditInvestmentDialog } from "./edit-investment-dialog";
@@ -336,8 +337,13 @@ function InvestmentTable({
   // Single dynamic gain column for stock-like panels. Non-stock-like
   // groups (RSUs, options) have no per-period closes so the picker is
   // hidden and the column is always "Return". Defaults to Return —
-  // that's the highest-signal cell at a glance.
-  const [gainRange, setGainRange] = useState<GainRange>("return");
+  // that's the highest-signal cell at a glance. Persisted via
+  // display-prefs so the operator's flick to day/week/month
+  // survives a reload (and follows them between devices).
+  const { prefs: displayPrefs, setPref } = useDisplayPrefs();
+  const gainRange = displayPrefs.investmentsGainRange;
+  const setGainRange = (next: GainRange) =>
+    setPref("investmentsGainRange", next);
   const effectiveRange: GainRange = isStockLike ? gainRange : "return";
   const gainLabel =
     GAIN_RANGES.find((g) => g.id === effectiveRange)?.label ?? "Return";

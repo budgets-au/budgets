@@ -159,6 +159,14 @@ export interface DisplayPrefs {
    * see the rule apply) was the original reason this toggle exists. */
   importAutoApplyRules: boolean;
 
+  // ── Investments ───────────────────────────────────────────────
+  /** Which gain-window the Investments page's stock/paper-trade
+   *  table column shows. `return` is the lifetime total; `day`,
+   *  `week`, `month` are rolling. Default `return` — highest-signal
+   *  cell at a glance — and persisted so the operator's flick to
+   *  `day` survives a reload. */
+  investmentsGainRange: "day" | "week" | "month" | "return";
+
   // ── Dashboard widgets ─────────────────────────────────────────
   /** Show budget caps (kind="budget") in the Upcoming widget.
    * Off by default so the list stays focused on planned outflows;
@@ -235,6 +243,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   featureInvestments: true,
   featureSuper: true,
   importAutoApplyRules: true,
+  investmentsGainRange: "return",
   dashboardUpcomingShowBudgets: false,
   dashboardRecentShowNotes: false,
   dashboardLayout: [],
@@ -520,6 +529,10 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     featureInvestments: bool("featureInvestments"),
     featureSuper: bool("featureSuper"),
     importAutoApplyRules: bool("importAutoApplyRules"),
+    investmentsGainRange: pickEnum(
+      "investmentsGainRange",
+      ["day", "week", "month", "return"] as const,
+    ),
     dashboardUpcomingShowBudgets: bool("dashboardUpcomingShowBudgets"),
     dashboardRecentShowNotes: bool("dashboardRecentShowNotes"),
     dashboardLayout: layoutArray("dashboardLayout"),

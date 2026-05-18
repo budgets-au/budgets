@@ -260,8 +260,32 @@ export function assertWithinBackupDir(p: string): string {
   if (candidate !== root && !candidate.startsWith(root + sep)) {
     throw new Error(`Path is not inside the backup dir: ${p}`);
   }
+  // Belt-and-braces: enforce a basename allow-list directly on the
+  // resolved path. The API routes already validate via
+  // `isSafeBackupFilename` and the staging file pattern is server-
+  // generated — but a hard regex here is what CodeQL's
+  // `js/path-injection` checker treats as a sanitiser (alert #14
+  // raised because the previous version only did the containment
+  // check; same fix shape that resolved alert #13 on `assertLivePath`).
+  const bn = basename(candidate);
+  if (!BACKUP_BASENAME_RE.test(bn)) {
+    throw new Error(`Backup filename fails the allow-list: ${bn}`);
+  }
   return candidate;
 }
+
+/** Allow-list for filenames that may appear in the backup directory.
+ *  Two shapes are produced by the app itself:
+ *    - `budgets_(manual|scheduled|pre-restore)_<ISO-ish-ts>.sqlite`
+ *      — the canonical backup output, also enforced by
+ *      `isSafeBackupFilename` on the user-input path.
+ *    - `budgets_pre-restore_upload-<digits>.staging` — the
+ *      server-generated staging name used when an operator uploads
+ *      a file to restore. The path is built from `Date.now()` so
+ *      no user input flows in, but pinning it here matches CodeQL's
+ *      taint analysis. */
+const BACKUP_BASENAME_RE =
+  /^budgets_(?:manual|scheduled|pre-restore)_[0-9TZ.\-]+\.sqlite$|^budgets_pre-restore_upload-\d+\.staging$/;
 
 /** Sanitised resolver for the live DB path. The path is derived from
  * `livePath()` → active profile's filename → registry JSON, all of

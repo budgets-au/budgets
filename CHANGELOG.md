@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.157.0 — 2026-05-18
+
+### Fixed
+- **CodeQL `js/path-injection` alert #14** on `swapLive()` →
+  `renameSync(safe, safeLive)` at
+  `src/lib/backup/sqlite-backup.ts:516`. `assertWithinBackupDir`
+  only did a containment check; CodeQL's taint analysis didn't
+  recognise that as a sanitiser. Added the same basename
+  allow-list pattern that resolved alert #13 on `assertLivePath`
+  in 0.143 — the resolved basename must match
+  `^budgets_(manual|scheduled|pre-restore)_<ts>\.sqlite$` or
+  `^budgets_pre-restore_upload-<digits>\.staging$`. Behaviour is
+  unchanged for any code path that wasn't already broken; the
+  fix is purely about making the sanitiser visible to the
+  static-analysis checker.
+
 ## 0.156.0 — 2026-05-18
 
 ### Added

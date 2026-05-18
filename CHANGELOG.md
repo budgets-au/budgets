@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.156.0 — 2026-05-18
+
+### Added
+- **Archive a database.** Settings → Database files grew an
+  Archive button per row. Archived databases are hidden from the
+  sidebar switcher dropdown (the field that lists "every DB you
+  might want to jump to") but remain listed and manageable in
+  Settings, with their file + backups untouched on disk.
+  Unarchive from the same row to restore. The active DB can't be
+  archived — switch to another first.
+- **Delete a database.** New trash button per row in the same
+  manager. Gated by a typed-confirmation dialog: the operator has
+  to retype the database's label exactly before the destructive
+  action is allowed. On confirm the registry entry is removed,
+  the encrypted SQLCipher file is deleted, and the per-DB backup
+  subdirectory is swept. Server-side guards prevent deleting the
+  active DB and the last remaining DB.
+  New API: `DELETE /api/databases/[id]` (admin-only). The existing
+  PATCH endpoint now also accepts `{ archived: boolean }`.
+
 ## 0.155.0 — 2026-05-18
 
 ### Added

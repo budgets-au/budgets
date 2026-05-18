@@ -29,6 +29,7 @@ interface DbProfile {
   label: string;
   filename: string;
   createdAt: string;
+  archived?: boolean;
 }
 
 interface DatabasesResponse {
@@ -101,7 +102,11 @@ export function DatabaseSwitcher() {
           <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
-          {data.profiles.map((p) => {
+          {/* Archived profiles are hidden from the dropdown so they
+              read as "out of the way" while remaining manageable in
+              Settings → Database files. The active profile is never
+              archived (server-side guard in archiveProfile()). */}
+          {data.profiles.filter((p) => !p.archived).map((p) => {
             const isActive = p.id === data.activeProfileId;
             return (
               <DropdownMenuItem

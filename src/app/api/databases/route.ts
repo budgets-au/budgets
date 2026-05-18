@@ -28,6 +28,7 @@ export async function GET() {
       label: p.label,
       filename: p.filename,
       createdAt: p.createdAt,
+      archived: p.archived === true,
     })),
     activeProfileId: reg.activeProfileId,
     activeProfile: getActiveProfile(),

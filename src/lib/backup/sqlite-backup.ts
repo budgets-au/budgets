@@ -117,6 +117,17 @@ export function backupDir(): string {
   return join(baseRoot, getActiveProfile().id);
 }
 
+/** Like `backupDir()` but for an arbitrary profile id, not just the
+ *  active one. Used by the Databases manager when deleting a
+ *  non-active profile — its backup subdir has to be cleaned up
+ *  alongside the encrypted file. */
+export function backupDirForProfile(profileId: string): string {
+  const baseRoot = resolve(
+    process.env.BACKUP_DIR ?? join(dirname(livePath()), "backups"),
+  );
+  return join(baseRoot, profileId);
+}
+
 /** Root of the backup hierarchy — parent of every per-profile subdir.
  *  Used by the legacy-layout migration. */
 function backupRootDir(): string {

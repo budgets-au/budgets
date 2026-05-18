@@ -52,6 +52,13 @@ export interface DbProfile {
    *  legacy default profile that points at the existing file. */
   filename: string;
   createdAt: string;
+  /** Hidden from the sidebar switcher dropdown when true. The DB
+   *  file and its backups still exist on disk; flipping back to
+   *  false restores it to the switcher. Settings → Databases lists
+   *  archived profiles regardless so the operator can manage them.
+   *  Optional in the type because legacy registry entries written
+   *  before this field landed don't carry it. */
+  archived?: boolean;
 }
 
 export interface BackupScheduleConfig {
@@ -152,11 +159,12 @@ function parseRegistry(raw: string): DbRegistry | null {
       typeof pr.createdAt === "string"
         ? pr.createdAt
         : new Date().toISOString();
+    const archived = pr.archived === true;
     if (!isValidProfileId(id) || seenIds.has(id)) continue;
     if (!label) continue;
     if (!isValidFilename(filename)) continue;
     seenIds.add(id);
-    cleaned.push({ id, label, filename, createdAt });
+    cleaned.push({ id, label, filename, createdAt, archived });
   }
   if (cleaned.length === 0) return null;
   const activeRaw = obj.activeProfileId;
@@ -327,6 +335,54 @@ export function renameProfile(id: string, nextLabel: string): DbProfile {
     profiles: reg.profiles.map((p) => (p.id === id ? updated : p)),
   });
   return updated;
+}
+
+/** Toggle the `archived` flag on a profile. Archived profiles are
+ *  hidden from the sidebar switcher dropdown but still listed in
+ *  Settings → Databases so the operator can manage them.
+ *
+ *  Refuses to archive the active profile — there'd be no live DB
+ *  for the request handlers to read from. The caller must switch
+ *  to another profile first. */
+export function archiveProfile(id: string, archived: boolean): DbProfile {
+  const reg = readRegistry();
+  const target = reg.profiles.find((p) => p.id === id);
+  if (!target) throw new Error(`Unknown profile id: ${id}`);
+  if (archived && reg.activeProfileId === id) {
+    throw new Error(
+      "Can't archive the active database. Switch to another first.",
+    );
+  }
+  if ((target.archived === true) === archived) return target;
+  const updated: DbProfile = { ...target, archived };
+  writeRegistry({
+    ...reg,
+    profiles: reg.profiles.map((p) => (p.id === id ? updated : p)),
+  });
+  return updated;
+}
+
+/** Remove a profile from the registry. Caller is responsible for
+ *  also deleting the DB file and its backup subdirectory — those
+ *  live outside the registry's pure-metadata concerns. Refuses to
+ *  delete the active profile or the last remaining profile. */
+export function deleteProfile(id: string): DbProfile {
+  const reg = readRegistry();
+  const target = reg.profiles.find((p) => p.id === id);
+  if (!target) throw new Error(`Unknown profile id: ${id}`);
+  if (reg.activeProfileId === id) {
+    throw new Error(
+      "Can't delete the active database. Switch to another first.",
+    );
+  }
+  if (reg.profiles.length <= 1) {
+    throw new Error("Can't delete the only registered database.");
+  }
+  writeRegistry({
+    ...reg,
+    profiles: reg.profiles.filter((p) => p.id !== id),
+  });
+  return target;
 }
 
 /** Read the global scheduled-backup config. Returns the registry's

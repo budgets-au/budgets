@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.159.0 — 2026-05-18
+
+### Added
+- **Watched-stock dashboard widget.** 2×2, multi-instance,
+  gated by the Investments feature flag. Same shape as
+  Tracked-stock — in edit mode the card surfaces a selector
+  dropdown of every watchlist entry; out of edit mode it
+  renders symbol + current price + day-change + a 1-month
+  sparkline. Day-change is derived client-side from the tail
+  of the history series since the watchlist list endpoint
+  doesn't carry a prior-close column. Per-instance config:
+  `{ watchlistId: "<uuid>" }`.
+
 ## 0.158.0 — 2026-05-18
 
 ### Changed

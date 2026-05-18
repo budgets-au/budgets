@@ -13,6 +13,7 @@ import { RecentTransactionsCard } from "@/components/dashboard/recent-transactio
 import { AccountSummaryCard } from "@/components/dashboard/account-summary-card";
 import { CategorySpendCard } from "@/components/dashboard/category-spend-card";
 import { TrackedStockCard } from "@/components/dashboard/tracked-stock-card";
+import { WatchedStockCard } from "@/components/dashboard/watched-stock-card";
 
 /** Props every widget renderer receives. `config` is the
  * per-instance bag stored alongside x/y/w/h in the saved layout;
@@ -75,6 +76,15 @@ export const WIDGETS: WidgetSpec[] = [
     multiInstance: true,
     feature: "investments",
     render: (props) => <TrackedStockCard {...props} />,
+  },
+  {
+    id: "watched-stock",
+    title: "Watched stock",
+    defaultLayout: { w: 2, h: 2 },
+    minSize: { w: 2, h: 2 },
+    multiInstance: true,
+    feature: "investments",
+    render: (props) => <WatchedStockCard {...props} />,
   },
   {
     id: "income-30d",

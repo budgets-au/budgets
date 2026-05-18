@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { formatAUD } from "@/lib/utils";
 import { NotesCell } from "@/components/transactions/notes-cell";
+import { CategoryPicker } from "@/components/transactions/category-picker";
+import type { CategoryLike } from "@/components/categories/category-dropdown";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -38,6 +40,7 @@ interface Txn {
   notes: string | null;
   amount: string;
   accountName: string | null;
+  categoryId: string | null;
   categoryName: string | null;
 }
 
@@ -74,6 +77,23 @@ export function CashflowCellDialog({
     ? `/api/transactions?${buildQuery(query, accountIds, hideTransfers).toString()}&limit=500&sort=date&order=desc`
     : null;
   const { data: txns = [], isLoading } = useSWR<Txn[]>(apiUrl, fetcher);
+  const { data: categories = [] } = useSWR<CategoryLike[]>(
+    open ? "/api/categories" : null,
+    fetcher,
+  );
+
+  function handleCategoryChanged() {
+    if (apiUrl) globalMutate(apiUrl);
+    // The cashflow report's totals partition transactions by
+    // category, so a recategorise here must refresh the parent
+    // report's SWR cache too — otherwise the cell the popup is
+    // drilled into stays out of sync until a hard reload.
+    globalMutate(
+      (key) => typeof key === "string" && key.startsWith("/api/reports/cashflow"),
+      undefined,
+      { revalidate: true },
+    );
+  }
 
   const fullPageHref = query
     ? `/transactions?${buildQuery(query, accountIds, hideTransfers).toString()}`
@@ -117,6 +137,7 @@ export function CashflowCellDialog({
                   <th className="text-left px-3 py-2 font-medium">Date</th>
                   <th className="text-left px-3 py-2 font-medium">Payee</th>
                   <th className="text-left px-3 py-2 font-medium">Account</th>
+                  <th className="text-left px-3 py-2 font-medium">Category</th>
                   <th className="text-right px-3 py-2 font-medium">Amount</th>
                 </tr>
               </thead>
@@ -140,6 +161,15 @@ export function CashflowCellDialog({
                       </td>
                       <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">
                         {t.accountName ?? "—"}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <CategoryPicker
+                          transactionId={t.id}
+                          categoryId={t.categoryId}
+                          categoryName={t.categoryName}
+                          categories={categories}
+                          onChanged={handleCategoryChanged}
+                        />
                       </td>
                       <td
                         className={`px-3 py-1.5 text-right tabular-nums whitespace-nowrap ${

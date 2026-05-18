@@ -13,6 +13,7 @@ export function CategoryPicker({
   categoryId,
   categoryName,
   categories,
+  onChanged,
 }: {
   transactionId: string;
   categoryId: string | null;
@@ -20,6 +21,12 @@ export function CategoryPicker({
   // resolves the trigger label from the categories list now.
   categoryName?: string | null;
   categories: CategoryLike[];
+  /** Fires after a successful PATCH. Lets callers invalidate any
+   * SWR caches that depend on this transaction's category (e.g. the
+   * cashflow report's category-cell drill-through, whose transaction
+   * list would otherwise still include a row that just moved to a
+   * different category). */
+  onChanged?: (newCategoryId: string | null) => void;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -59,6 +66,7 @@ export function CategoryPicker({
       setValue(prev);
       return;
     }
+    onChanged?.(newValue);
     startTransition(() => router.refresh());
   }
 

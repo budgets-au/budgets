@@ -10,6 +10,49 @@ import {
 } from "@/components/ui/searchable-combobox";
 import { SavedFilters } from "@/components/transactions/saved-filters";
 
+type ScheduledOpt = "all" | "only" | "none";
+type TransfersOpt = "all" | "only" | "none";
+
+/** Flat list of mutually-exclusive view presets. Each preset maps to a
+ *  pair of (scheduledFilter, transfersFilter); picking one resets the
+ *  other dimension to "all" so the UI stays a simple single-select. */
+type ViewKey =
+  | "all"
+  | "scheduled"
+  | "unscheduled"
+  | "transfers"
+  | "no-transfers";
+
+const VIEW_OPTIONS: { id: ViewKey; label: string }[] = [
+  { id: "all", label: "All transactions" },
+  { id: "scheduled", label: "Scheduled only" },
+  { id: "unscheduled", label: "Unscheduled only" },
+  { id: "transfers", label: "Transfers only" },
+  { id: "no-transfers", label: "Hide transfers" },
+];
+
+function viewKeyFromFilters(s: ScheduledOpt, t: TransfersOpt): ViewKey {
+  if (s === "only") return "scheduled";
+  if (s === "none") return "unscheduled";
+  if (t === "only") return "transfers";
+  if (t === "none") return "no-transfers";
+  return "all";
+}
+
+function filtersFromViewKey(k: ViewKey): {
+  scheduled: ScheduledOpt;
+  transfers: TransfersOpt;
+} {
+  switch (k) {
+    case "scheduled": return { scheduled: "only", transfers: "all" };
+    case "unscheduled": return { scheduled: "none", transfers: "all" };
+    case "transfers": return { scheduled: "all", transfers: "only" };
+    case "no-transfers": return { scheduled: "all", transfers: "none" };
+    case "all":
+    default: return { scheduled: "all", transfers: "all" };
+  }
+}
+
 interface Props {
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string; parentId: string | null }[];
@@ -131,6 +174,10 @@ export function TransactionFilters({ accounts, categories, current }: Props) {
         triggerClassName="text-sm border rounded-md px-3 py-2 bg-background h-auto min-w-[160px] w-auto inline-flex items-center justify-between gap-2"
       />
 
+      <div className="self-center shrink-0">
+        <SavedFilters />
+      </div>
+
       {categoryId && categoryId !== "__uncat__" && (
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0 self-center cursor-pointer">
           <Switch
@@ -191,82 +238,24 @@ export function TransactionFilters({ accounts, categories, current }: Props) {
         Clear
       </a>
 
-      <div
-        role="radiogroup"
-        aria-label="Scheduled filter"
-        className="flex rounded-md border overflow-hidden text-xs shrink-0 self-center ml-auto"
-      >
-        {([
-          { value: "all", label: "All" },
-          { value: "only", label: "Scheduled" },
-          { value: "none", label: "Unscheduled" },
-        ] as const).map((opt) => {
-          const active = scheduledFilter === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => {
-                setScheduledFilter(opt.value);
-                patchParams({
-                  scheduledFilter: opt.value === "all" ? null : opt.value,
-                });
-              }}
-              className={`px-2.5 py-1 transition-colors ${
-                active
-                  ? "bg-indigo-600 text-white font-medium"
-                  : "bg-background text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div
-        role="radiogroup"
-        aria-label="Transfer filter"
-        className="flex rounded-md border overflow-hidden text-xs shrink-0 self-center"
-      >
-        {([
-          { value: "all", label: "All" },
-          { value: "only", label: "Transfers" },
-          { value: "none", label: "No transfers" },
-        ] as const).map((opt) => {
-          const active = transfersFilter === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => {
-                setTransfersFilter(opt.value);
-                patchParams({
-                  transfersFilter: opt.value === "all" ? null : opt.value,
-                });
-              }}
-              className={`px-2.5 py-1 transition-colors ${
-                active
-                  ? "bg-indigo-600 text-white font-medium"
-                  : "bg-background text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Sit Saved Filters to the right of the radio toggles when
-          there's room (it wraps below otherwise). Anchored here
-          rather than as a sibling in the parent flex wrap so it
-          rides the same line as the filter affordances. */}
-      <div className="self-center shrink-0">
-        <SavedFilters />
+      <div className="shrink-0 self-center ml-auto">
+        <SearchableCombobox
+          value={viewKeyFromFilters(scheduledFilter, transfersFilter)}
+          onChange={(next) => {
+            const { scheduled, transfers } = filtersFromViewKey(
+              (next || "all") as ViewKey,
+            );
+            setScheduledFilter(scheduled);
+            setTransfersFilter(transfers);
+            patchParams({
+              scheduledFilter: scheduled === "all" ? null : scheduled,
+              transfersFilter: transfers === "all" ? null : transfers,
+            });
+          }}
+          items={VIEW_OPTIONS}
+          searchPlaceholder="Search views…"
+          emptyTriggerLabel="All transactions"
+        />
       </div>
     </div>
   );

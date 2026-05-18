@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.161.0 — 2026-05-18
+
+### Added
+- **Inline category picker in the cashflow drill-through popup.**
+  Clicking a category × month cell on the cashflow report opens a
+  list of the underlying transactions; each row now exposes the
+  same `CategoryPicker` the main `/transactions` list uses, so the
+  operator can recategorise without leaving the report. Picking a
+  new category PATCHes the row and revalidates both the popup's
+  transaction list and any `/api/reports/cashflow*` SWR cache, so
+  the parent report's totals reshape immediately.
+
+### Changed
+- **Transactions toolbar consolidates the four toggles into a
+  single "View" dropdown.** Replaces the old pair of segmented
+  Scheduled / Transfers radio rows with a `SearchableCombobox`
+  (same component as Accounts / Categories) exposing five
+  mutually-exclusive presets — All transactions, Scheduled only,
+  Unscheduled only, Transfers only, Hide transfers. The Saved
+  filters button moves up to share the first line with Accounts /
+  Categories instead of trailing the toggle cluster.
+- **Always-visible indigo icon moves from the link to the unlink
+  control.** On the transactions list, the link-as-transfer (Link2)
+  icon on unlinked rows is now hover-only and muted; the unlink
+  (Unlink) icon on linked rows is always visible in indigo (rose on
+  hover). Linked rows are the special case worth surfacing
+  prominently — the previous treatment had the colour on the wrong
+  side.
+
 ## 0.160.0 — 2026-05-18
 
 ### Changed

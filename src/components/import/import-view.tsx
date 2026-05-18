@@ -13,6 +13,7 @@ import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { useAddAccount } from "@/hooks/use-add-account-dialog";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD, amountClass, cn } from "@/lib/utils";
 import { stashPendingUndoImport } from "@/lib/import-undo";
 
@@ -194,12 +195,14 @@ export function ImportView() {
   const [accountOverrides, setAccountOverrides] = useState<
     Map<string, { accountId: string; accountName: string }>
   >(new Map());
-  /** When on, creating a category rule via the in-row picker also
-   *  applies the same category to every OTHER pending row with the
-   *  same normalised payee. Avoids hand-categorising twenty Coles
-   *  rows when one rule covers them all. Default off so the
-   *  operator opts in deliberately. */
-  const [autoApplyRules, setAutoApplyRules] = useState(false);
+  /** Persisted across devices via display-prefs (default ON). When
+   *  on, creating a category rule via the in-row picker also rewrites
+   *  every OTHER pending row that shares the same normalised payee
+   *  — categorise one Coles transaction, categorise them all.
+   *  Operators who want strict per-row picks can flip the toggle off
+   *  and the choice follows them between sessions. */
+  const { prefs: displayPrefs, setPref } = useDisplayPrefs();
+  const autoApplyRules = displayPrefs.importAutoApplyRules;
   // Refs so the (potentially-stale-closure) handleRuleCreated reads
   // the latest values at call time — the callback chain that lands
   // here goes through async POSTs in RuleCreator, so the closure
@@ -438,7 +441,7 @@ export function ImportView() {
             </div>
             <Switch
               checked={autoApplyRules}
-              onCheckedChange={setAutoApplyRules}
+              onCheckedChange={(v) => setPref("importAutoApplyRules", v)}
               aria-label="Toggle apply-new-rules-to-pending-rows"
             />
           </label>

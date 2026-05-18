@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.153.0 — 2026-05-18
+
+### Changed
+- **"Apply new rules to pending rows" toggle now defaults ON and
+  persists.** 0.151 introduced the toggle but defaulted it to OFF,
+  so a user who categorised a row during import didn't see the
+  rule recategorise the rest of the pending file — they had to
+  cancel + re-upload to see the rule take effect. That defeated
+  the point. The toggle now defaults ON, and the operator's
+  choice is stored in `display_prefs.importAutoApplyRules` so it
+  follows them between sessions and devices.
+
 ## 0.152.0 — 2026-05-17
 
 ### Fixed

@@ -150,6 +150,15 @@ export interface DisplayPrefs {
    * the /superannuation page + the super-summary widget. */
   featureSuper: boolean;
 
+  // ── CSV import ────────────────────────────────────────────────
+  /** When on, picking a category in the in-row picker on the import
+   * page also rewrites every other pending row that shares the same
+   * normalised payee — so categorising one Coles transaction
+   * categorises every other Coles row in the same import. On by
+   * default because the alternative (canceling + re-importing to
+   * see the rule apply) was the original reason this toggle exists. */
+  importAutoApplyRules: boolean;
+
   // ── Dashboard widgets ─────────────────────────────────────────
   /** Show budget caps (kind="budget") in the Upcoming widget.
    * Off by default so the list stays focused on planned outflows;
@@ -225,6 +234,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   scheduledMissedGraceDays: 4,
   featureInvestments: true,
   featureSuper: true,
+  importAutoApplyRules: true,
   dashboardUpcomingShowBudgets: false,
   dashboardRecentShowNotes: false,
   dashboardLayout: [],
@@ -509,6 +519,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     scheduledMissedGraceDays: num("scheduledMissedGraceDays"),
     featureInvestments: bool("featureInvestments"),
     featureSuper: bool("featureSuper"),
+    importAutoApplyRules: bool("importAutoApplyRules"),
     dashboardUpcomingShowBudgets: bool("dashboardUpcomingShowBudgets"),
     dashboardRecentShowNotes: bool("dashboardRecentShowNotes"),
     dashboardLayout: layoutArray("dashboardLayout"),

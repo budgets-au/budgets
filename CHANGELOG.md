@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.162.0 — 2026-05-18
+
+### Changed
+- **Accounts report drill-through popup gains the inline category
+  picker** by sharing a single `TransactionCellDialog` component
+  with the cashflow report. Both popups now render the same Date /
+  Payee / Account / Category-picker / Amount table, the same SWR
+  fetch + recat-revalidation behaviour, and the same footer
+  "Open in transactions →" link. Per-report concerns (the query-
+  param mapping and the cache key to invalidate after a
+  recategorise) stay in each thin wrapper. Picking a new category
+  from the accounts popup now reshapes the parent report's totals
+  immediately, matching how the cashflow popup already worked.
+
 ## 0.161.0 — 2026-05-18
 
 ### Added

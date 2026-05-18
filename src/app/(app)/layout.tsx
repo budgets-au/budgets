@@ -7,6 +7,7 @@ import { ConfirmDialogProvider } from "@/hooks/use-confirm-dialog";
 import { AddCategoryProvider } from "@/hooks/use-add-category-dialog";
 import { AddAccountProvider } from "@/hooks/use-add-account-dialog";
 import { AddScheduledProvider } from "@/hooks/use-add-scheduled-dialog";
+import { AddTransactionProvider } from "@/hooks/use-add-transaction-dialog";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <AddCategoryProvider>
         <AddAccountProvider>
         <AddScheduledProvider>
+        <AddTransactionProvider>
         <div className="flex min-h-screen bg-muted/30">
           <Sidebar />
           {/* min-w-0 / min-w-0 down the chain: flex children default to
@@ -30,6 +32,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <main className="flex-1 min-w-0 pt-14 lg:pt-0">{children}</main>
           </div>
         </div>
+        </AddTransactionProvider>
         </AddScheduledProvider>
         </AddAccountProvider>
         </AddCategoryProvider>

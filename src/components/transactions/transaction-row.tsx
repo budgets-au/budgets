@@ -484,7 +484,7 @@ export interface TransactionRowProps {
   match?: RowScheduledMatch | null;
 
   /** Unlink callback — invoked from the linked-details cell. */
-  onUnpair?: (txnId: string) => void;
+  onUnpair?: (txnId: string, pairTxnId: string | null) => void;
 
   /** Manual transfer-link callback. When provided AND the row is
    *  unpaired, a small chain-link icon button appears in the payee
@@ -770,7 +770,7 @@ export function TransactionRow({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onUnpair(t.id);
+                    onUnpair(t.id, t.transferPairId);
                   }}
                   className="shrink-0 p-1 -my-1 rounded text-indigo-600 dark:text-indigo-400 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-muted transition-colors"
                   title="Unlink this transfer pair"
@@ -886,7 +886,7 @@ export function TransactionRow({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onUnpair(t.id);
+                            onUnpair(t.id, t.transferPairId);
                           }}
                           className="ml-auto lg:opacity-0 lg:group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                           title="Unlink transfer"

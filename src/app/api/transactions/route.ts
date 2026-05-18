@@ -65,22 +65,39 @@ export async function GET(request: Request) {
     : [];
 
   const conditions = [];
-  // The page-level `accountId` (the visible dropdown) takes precedence —
-  // when it's set, ignore the global sidebar's `accountIds` filter so the
-  // user can drill into a specific account without it being intersected
-  // with the sidebar's multi-select. The dropdown is the more specific
-  // intent.
-  if (accountId) {
-    conditions.push(eq(transactions.accountId, accountId));
-  } else if (accountIdsList.length > 0) {
-    conditions.push(inArray(transactions.accountId, accountIdsList));
-  } else {
-    // No explicit account filter → default to non-archived accounts only.
-    // Archived accounts are hidden in the UI; "All accounts" should mean
-    // "all visible accounts", not "actually all".
+  // Explicit id filter — comma-separated UUIDs. Short-circuits the
+  // default account/date scope so a short-list popup (e.g. the
+  // unlink-confirmation dialog) gets exactly the rows it asked for
+  // even when one leg lives in an archived account or sits outside
+  // the visible date window.
+  const idsRaw = searchParams.get("ids");
+  const idList = idsRaw
+    ? idsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  if (idList.length > 0) {
     conditions.push(
-      sql`${transactions.accountId} IN (SELECT id FROM accounts WHERE is_archived = false)`,
+      idList.length === 1
+        ? eq(transactions.id, idList[0])
+        : inArray(transactions.id, idList),
     );
+  } else {
+    // The page-level `accountId` (the visible dropdown) takes precedence —
+    // when it's set, ignore the global sidebar's `accountIds` filter so the
+    // user can drill into a specific account without it being intersected
+    // with the sidebar's multi-select. The dropdown is the more specific
+    // intent.
+    if (accountId) {
+      conditions.push(eq(transactions.accountId, accountId));
+    } else if (accountIdsList.length > 0) {
+      conditions.push(inArray(transactions.accountId, accountIdsList));
+    } else {
+      // No explicit account filter → default to non-archived accounts only.
+      // Archived accounts are hidden in the UI; "All accounts" should mean
+      // "all visible accounts", not "actually all".
+      conditions.push(
+        sql`${transactions.accountId} IN (SELECT id FROM accounts WHERE is_archived = false)`,
+      );
+    }
   }
   if (categoryId === "__uncat__") {
     // Sentinel value from the cashflow report's "Uncategorised" rows and the

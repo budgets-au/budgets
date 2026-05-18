@@ -434,9 +434,8 @@ export function CashflowCalendar({
     [byDate],
   );
 
-  // Frequency / payee / type lookup so matched real rows can render
-  // the schedule pill AND the bills-only filter can drop non-expense
-  // schedules. Keyed by scheduledTransaction.id; same SWR key the
+  // Frequency / payee lookup so matched real rows can render the
+  // schedule pill. Keyed by scheduledTransaction.id; same SWR key the
   // transactions list uses, so the response is cached across views.
   const { data: scheduledList = [] } = useSWR<
     {
@@ -444,32 +443,22 @@ export function CashflowCalendar({
       frequency: string;
       interval: number;
       payee: string | null;
-      type: string;
     }[]
   >("/api/scheduled", fetcher);
   const scheduledById = useMemo(() => {
     const m = new Map<
       string,
-      { frequency: string; interval: number; payee: string | null; type: string }
+      { frequency: string; interval: number; payee: string | null }
     >();
     for (const s of scheduledList) {
       m.set(s.id, {
         frequency: s.frequency,
         interval: s.interval,
         payee: s.payee,
-        type: s.type,
       });
     }
     return m;
   }, [scheduledList]);
-  // Filter predicate for the bills-only toggle: only expense schedules
-  // count as bills. Salary, internal transfers, and pure-income rows
-  // get dropped from the planned-dot count.
-  const billsOnly = displayPrefs.calendarBillsOnly;
-  function isBill(event: { id?: string }): boolean {
-    if (!event.id) return false;
-    return scheduledById.get(event.id)?.type === "expense";
-  }
 
   const monthDays = eachDayOfInterval({
     start: startOfMonth(month),
@@ -1031,15 +1020,6 @@ export function CashflowCalendar({
             </PopoverContent>
           </Popover>
           <Button
-            variant={billsOnly ? "default" : "outline"}
-            size="sm"
-            onClick={() => setPref("calendarBillsOnly", !billsOnly)}
-            className="h-7 text-xs"
-            title="When on, the planned-dot count only fires for expense schedules — hides salary, internal transfers, and other inflows."
-          >
-            Bills only
-          </Button>
-          <Button
             variant={viewMode === "month" ? "default" : "outline"}
             size="sm"
             onClick={() => setViewMode("month")}
@@ -1182,12 +1162,8 @@ export function CashflowCalendar({
                   const selected = dateStr === selectedDate;
                   // Drop already-matched scheduled occurrences so the
                   // planned dot only fires for genuinely-pending events.
-                  // When the operator's flipped Bills-only on, also drop
-                  // any non-expense schedule (salary, internal xfer).
-                  const unmatchedScheduled =
-                    (data?.scheduledEvents ?? [])
-                      .filter((_, i) => !claimedSched.has(`${dateStr}#${i}`))
-                      .filter((e) => !billsOnly || isBill(e));
+                  const unmatchedScheduled = (data?.scheduledEvents ?? [])
+                    .filter((_, i) => !claimedSched.has(`${dateStr}#${i}`));
                   // A real transaction that fulfilled a scheduled
                   // occurrence still shows the planned dot — the dot
                   // follows the money to the day it actually posted.

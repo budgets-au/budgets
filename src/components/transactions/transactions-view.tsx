@@ -8,7 +8,7 @@ import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useAddCategory } from "@/hooks/use-add-category-dialog";
 import { parseISO } from "date-fns";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Plus } from "lucide-react";
 import { expandRecurrence } from "@/lib/recurrence";
 import type { ScheduledTransaction } from "@/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,6 +22,8 @@ import { TransferSuggestionsPanel } from "@/components/transactions/transfer-sug
 import { MissedScheduledPanel } from "@/components/transactions/missed-scheduled-panel";
 import { TransactionRow } from "@/components/transactions/transaction-row";
 import { LinkTransferDialog } from "@/components/transactions/link-transfer-dialog";
+import { UnlinkConfirmDialog } from "@/components/transactions/unlink-confirm-dialog";
+import { useAddTransaction } from "@/hooks/use-add-transaction-dialog";
 import { toast } from "sonner";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
@@ -126,6 +128,13 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
     date: string;
     payee: string | null;
   } | null>(null);
+  // Pending unlink candidate — clicking the unlink icon stages both
+  // ids here and opens the confirmation popup. Null = popup closed.
+  const [unpairCandidate, setUnpairCandidate] = useState<{
+    txnId: string;
+    pairTxnId: string;
+  } | null>(null);
+  const { open: openAddTransaction } = useAddTransaction();
   // All three view-prefs (page size, show-notes, show-linked-details)
   // now live in the DB-backed display-prefs blob alongside the other
   // toggles so they follow the operator across systems instead of
@@ -490,7 +499,16 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
     }
   }
 
-  async function handleUnpair(txnId: string) {
+  /** Row callback fired by the unlink icon. Stages the pair into
+   *  `unpairCandidate` so the confirmation popup renders both legs;
+   *  the actual PATCH only fires after the user confirms inside the
+   *  dialog. */
+  function handleUnpair(txnId: string, pairTxnId: string | null) {
+    if (!pairTxnId) return;
+    setUnpairCandidate({ txnId, pairTxnId });
+  }
+
+  async function confirmUnpair(txnId: string) {
     const res = await fetch(`/api/transactions/${txnId}/transfer-pair`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -655,14 +673,21 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
         <CardContent className="p-0">
           {isLoading ? (
             <p className="text-sm text-muted-foreground py-12 text-center">Loading…</p>
-          ) : txns.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-12 text-center">
-              No transactions found. Use the Import button at the top to bring
-              some in.
-            </p>
           ) : (
             <>
             <div className="px-3 py-2 border-b flex items-center gap-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="indigo"
+                onClick={() =>
+                  openAddTransaction({ defaultAccountId: accountId || null })
+                }
+                className="h-7 text-xs"
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Add
+              </Button>
               <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer shrink-0">
                 <span>Show notes</span>
                 <Switch
@@ -677,6 +702,14 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                 </span>
               )}
             </div>
+            {txns.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-12 text-center">
+                No transactions found. Click <strong>Add</strong> above to
+                enter one manually, or use the Import button at the top of
+                the page to bring some in.
+              </p>
+            ) : (
+              <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
@@ -916,6 +949,8 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                 </div>
               );
             })()}
+              </>
+            )}
             </>
           )}
         </CardContent>
@@ -929,6 +964,11 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
         onPaired={() => {
           mutateTxns();
         }}
+      />
+      <UnlinkConfirmDialog
+        candidate={unpairCandidate}
+        onClose={() => setUnpairCandidate(null)}
+        onConfirm={(txnId) => confirmUnpair(txnId)}
       />
     </>
   );

@@ -20,7 +20,6 @@ import {
   PiggyBank,
   Menu,
   Plus,
-  Import,
   X,
   Lock,
   Loader2,
@@ -28,6 +27,7 @@ import {
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import { useAddCategory } from "@/hooks/use-add-category-dialog";
 import { useAddScheduled } from "@/hooks/use-add-scheduled-dialog";
+import { useAddTransaction } from "@/hooks/use-add-transaction-dialog";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useLockDatabase } from "@/hooks/use-lock-database";
 import { DatabaseSwitcher } from "./database-switcher";
@@ -60,6 +60,7 @@ export function Sidebar() {
   const { ids } = useAccountFilter();
   const { open: openAddCategory } = useAddCategory();
   const { open: openAddScheduled } = useAddScheduled();
+  const { open: openAddTransaction } = useAddTransaction();
   const { lock: lockDb, locking } = useLockDatabase();
   const { prefs } = useDisplayPrefs();
 
@@ -160,18 +161,19 @@ export function Sidebar() {
                   {label}
                 </Link>
                 {href === "/transactions" && (
-                  <Link
-                    href="/import"
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      openAddTransaction();
                       setOpen(false);
                     }}
-                    title="Import transactions"
-                    aria-label="Import transactions"
+                    title="Add transaction"
+                    aria-label="Add transaction"
                     className={NAV_AFFORDANCE_CLS}
                   >
-                    <Import className="h-3.5 w-3.5" />
-                  </Link>
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
                 )}
                 {href === "/categories" && (
                   <button

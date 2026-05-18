@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
@@ -33,8 +34,15 @@ export interface TransactionCellDialogProps {
   /** Fully-built `/api/transactions?...` URL the dialog should fetch.
    *  Null short-circuits SWR (used while the popup is closed). */
   apiUrl: string | null;
-  /** Destination of the "Open in transactions →" footer link. */
-  fullPageHref: string;
+  /** Destination of the "Open in transactions →" footer link. Omit
+   *  to hide the link entirely (e.g. for confirmation-style popups
+   *  where "open the full list" doesn't apply). */
+  fullPageHref?: string;
+  /** Extra content rendered on the left side of the footer, alongside
+   *  the "Open in transactions →" link. Used by callers that need to
+   *  surface a primary action (e.g. a destructive "Remove link"
+   *  button on the unlink-confirmation popup). */
+  extraFooter?: ReactNode;
   /** Header title — the cell's display name (e.g. "Food / Groceries"
    *  or "Checking · Credits"). */
   title: string;
@@ -60,6 +68,7 @@ export function TransactionCellDialog({
   fullPageHref,
   title,
   subtitle,
+  extraFooter,
   onCategoryChanged,
 }: TransactionCellDialogProps) {
   const { data: txns = [], isLoading } = useSWR<Txn[]>(
@@ -164,15 +173,20 @@ export function TransactionCellDialog({
             </table>
           )}
         </div>
-        <div className="border-t px-4 py-2 flex justify-end bg-muted/30">
-          <Link
-            href={fullPageHref}
-            onClick={onClose}
-            className="text-xs text-indigo-600 hover:underline"
-          >
-            Open in transactions →
-          </Link>
-        </div>
+        {(extraFooter || fullPageHref) && (
+          <div className="border-t px-4 py-2 flex items-center justify-between gap-3 bg-muted/30">
+            <div className="flex items-center gap-2">{extraFooter}</div>
+            {fullPageHref && (
+              <Link
+                href={fullPageHref}
+                onClick={onClose}
+                className="text-xs text-indigo-600 hover:underline"
+              >
+                Open in transactions →
+              </Link>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

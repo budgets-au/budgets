@@ -30,11 +30,6 @@ export interface DisplayPrefs {
   // ── Cashflow calendar ─────────────────────────────────────────
   /** "month" or "week" view on the calendar page. */
   calendarViewMode: "month" | "week";
-  /** When true, the calendar's "planned" dots only fire for bill-shaped
-   * schedules: expense category or transfer_kind=external (an outflow
-   * to an external loan/CC). Hides salary, internal transfers, and
-   * pure-income schedules — useful for an "what's due this month" view. */
-  calendarBillsOnly: boolean;
   /** Visual theme for the scheduled-occurrences chart. Either the
    * literal `"fabulous"` (per-segment lineage colours + hatched
    * delta fills) or a palette id — either the built-in `"standard"`
@@ -213,7 +208,6 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   transactionsRowExpandable: false,
   transactionsSavedFilters: [],
   calendarViewMode: "month",
-  calendarBillsOnly: false,
   chartScheduleTheme: "standard",
   chartSchedulePalettes: [],
   missedShowDismissed: false,
@@ -481,7 +475,6 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     transactionsRowExpandable: bool("transactionsRowExpandable"),
     transactionsSavedFilters: savedFilters("transactionsSavedFilters"),
     calendarViewMode: pickEnum("calendarViewMode", ["month", "week"] as const),
-    calendarBillsOnly: bool("calendarBillsOnly"),
     chartScheduleTheme:
       typeof obj.chartScheduleTheme === "string" && obj.chartScheduleTheme
         ? obj.chartScheduleTheme

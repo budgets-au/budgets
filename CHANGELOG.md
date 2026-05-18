@@ -9,6 +9,48 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.163.0 — 2026-05-18
+
+### Added
+- **Manual transaction entry.** New global Add-Transaction dialog
+  hosted at the app shell via `AddTransactionProvider`/`useAddTransaction`,
+  so the sidebar's right-anchored affordance on the Transactions nav
+  row and the toolbar on `/transactions` drive the same single
+  instance. The sidebar icon flipped from the Import shortcut to a
+  Plus button — Import is still reachable at `/import`. Form fields:
+  account (required, defaults to the page's currently-filtered
+  account), date (required, defaults today), amount (required —
+  negative outflow, positive inflow), payee, category, description,
+  notes. POSTs to `/api/transactions`, which mints the normalised
+  payee tokens and recomputes the account's running balance; on
+  success the dialog mutates all `/api/transactions*`,
+  `/api/cashflow*`, and `/api/reports/*` SWR caches so open views
+  reshape immediately.
+- **Unlink confirmation popup.** Clicking the unlink icon on a paired
+  row now stages the pair into a confirmation dialog (instead of
+  PATCHing inline). The dialog reuses the shared
+  `TransactionCellDialog` so both legs of the transfer render with
+  the same Date / Payee / Account / Category / Amount layout the
+  report drill-throughs use; the footer surfaces a destructive
+  rose-600 "Remove link" button. A new `ids=` query param on
+  `/api/transactions` short-circuits the default account scope so a
+  pair whose other leg lives in an archived account still resolves.
+- The Transactions toolbar now renders its Add / Show-notes controls
+  even when the list is empty, so first-time users have the Add
+  button visible. Empty-state copy mentions it explicitly.
+
+### Changed
+- **Shared `TransactionCellDialog` gains `extraFooter` + optional
+  `fullPageHref`.** Lets confirmation-style consumers (e.g. the new
+  unlink popup) surface a primary action alongside the standard
+  footer link, or hide the link entirely.
+
+### Removed
+- **"Bills only" toggle on the cashflow calendar** along with its
+  `calendarBillsOnly` display-pref. The planned-dot indicator now
+  fires for every unmatched scheduled occurrence regardless of type;
+  the bill / non-bill distinction wasn't earning its complexity.
+
 ## 0.162.0 — 2026-05-18
 
 ### Changed

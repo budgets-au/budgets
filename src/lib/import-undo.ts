@@ -15,9 +15,16 @@
  * Cleared on:
  *  - successful Undo click (the action consumed the IDs),
  *  - explicit Dismiss click,
+ *  - 60 seconds after `committedAt` (the topbar arms a timer; the
+ *    reader also drops a stale entry defensively so a different
+ *    tab returning to /transactions doesn't see a stale offer),
  *  - tab close (sessionStorage lifetime). */
 
 const KEY = "budgets:pending-undo-import";
+
+/** How long the Undo offer stays alive after a commit lands. Past
+ *  this, the entry is treated as gone (the operator's "moved on"). */
+export const UNDO_IMPORT_TTL_MS = 60_000;
 
 export interface PendingUndoImport {
   importLogIds: string[];
@@ -47,14 +54,27 @@ export function readPendingUndoImport(): PendingUndoImport | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (
-      parsed &&
-      typeof parsed === "object" &&
-      Array.isArray((parsed as PendingUndoImport).importLogIds) &&
-      typeof (parsed as PendingUndoImport).imported === "number"
+      !parsed ||
+      typeof parsed !== "object" ||
+      !Array.isArray((parsed as PendingUndoImport).importLogIds) ||
+      typeof (parsed as PendingUndoImport).imported !== "number"
     ) {
-      return parsed as PendingUndoImport;
+      return null;
     }
-    return null;
+    const value = parsed as PendingUndoImport;
+    // Drop entries past their TTL. The component arms a timer so
+    // the live tab clears them precisely on schedule; this branch
+    // covers the cross-tab case (a stale entry waiting in storage
+    // when the operator switches back to /transactions after the
+    // window has lapsed).
+    if (
+      typeof value.committedAt === "number" &&
+      Date.now() - value.committedAt > UNDO_IMPORT_TTL_MS
+    ) {
+      clearPendingUndoImport();
+      return null;
+    }
+    return value;
   } catch {
     return null;
   }

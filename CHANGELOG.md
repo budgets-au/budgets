@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.154.0 — 2026-05-18
+
+### Changed
+- **Undo-import offer auto-dismisses after 60 seconds.** Previously
+  the topbar "Undo import (N)" button stayed pinned indefinitely
+  until the operator either clicked Undo or hit the × — easy to
+  forget about, and the visual chrome lingered every time you
+  came back to /transactions in the same tab session. Now the
+  button arms a timer on mount and clears itself when the
+  `committedAt`-anchored window lapses. A defensive check in
+  `readPendingUndoImport()` also drops a stale sessionStorage
+  entry if a different tab returns to /transactions after the
+  window has already passed.
+
 ## 0.153.0 — 2026-05-18
 
 ### Changed

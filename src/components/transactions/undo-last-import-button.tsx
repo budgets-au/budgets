@@ -9,6 +9,7 @@ import { useConfirm } from "@/hooks/use-confirm-dialog";
 import {
   clearPendingUndoImport,
   readPendingUndoImport,
+  UNDO_IMPORT_TTL_MS,
   type PendingUndoImport,
 } from "@/lib/import-undo";
 
@@ -36,8 +37,27 @@ export function UndoLastImportButton() {
   // (the server can't see sessionStorage; the first render must
   // match what the server emitted). Matches the
   // feedback_hydration_localstorage.md convention.
+  //
+  // Once we've found a pending entry, schedule the auto-dismiss
+  // for the remaining time on its UNDO_IMPORT_TTL_MS window — the
+  // entry vanishes silently from the topbar instead of camping
+  // there until the next page nav.
   useEffect(() => {
-    setPending(readPendingUndoImport());
+    const found = readPendingUndoImport();
+    setPending(found);
+    if (!found) return;
+    const remaining =
+      found.committedAt + UNDO_IMPORT_TTL_MS - Date.now();
+    if (remaining <= 0) {
+      clearPendingUndoImport();
+      setPending(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      clearPendingUndoImport();
+      setPending(null);
+    }, remaining);
+    return () => clearTimeout(t);
   }, []);
 
   if (!pending) return null;

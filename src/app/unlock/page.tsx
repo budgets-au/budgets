@@ -7,6 +7,7 @@ import { Database as DatabaseIcon, ChevronDown } from "lucide-react";
 interface DbProfile {
   id: string;
   label: string;
+  archived?: boolean;
 }
 
 interface DatabasesResponse {
@@ -43,6 +44,11 @@ export default function UnlockPage() {
   const isFirstRun = dbExists === false;
   const [databases, setDatabases] = useState<DatabasesResponse | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  // Archived profiles are hidden from the switcher by default — same
+  // rule the sidebar dropdown follows. A nested chevron reveals them
+  // when the operator wants to switch to one (e.g. to unarchive
+  // before unlocking).
+  const [showArchived, setShowArchived] = useState(false);
 
   // If another tab/process already unlocked the server, skip ahead
   // immediately rather than making the user re-type.
@@ -144,8 +150,16 @@ export default function UnlockPage() {
   }
 
   const activeLabel = databases?.activeProfile?.label ?? null;
+  const visibleProfiles =
+    databases?.profiles.filter((p) => !p.archived) ?? [];
+  const archivedProfiles =
+    databases?.profiles.filter((p) => p.archived) ?? [];
+  // Hide the entire switcher when there's only one *visible* profile
+  // and no archived ones tucked away — the operator has nothing to
+  // pick from. (An archived-only second profile still warrants the
+  // expander since the user might want to unarchive it.)
   const showSwitcher =
-    !!databases && databases.profiles.length > 1;
+    !!databases && (visibleProfiles.length > 1 || archivedProfiles.length > 0);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
@@ -234,7 +248,7 @@ export default function UnlockPage() {
             </button>
             {switcherOpen && databases && (
               <div className="mt-2 space-y-1">
-                {databases.profiles.map((p) => (
+                {visibleProfiles.map((p) => (
                   <button
                     key={p.id}
                     type="button"
@@ -254,6 +268,40 @@ export default function UnlockPage() {
                     )}
                   </button>
                 ))}
+                {archivedProfiles.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setShowArchived((v) => !v)}
+                      className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                      aria-expanded={showArchived}
+                    >
+                      <span>
+                        {archivedProfiles.length} archived
+                      </span>
+                      <ChevronDown
+                        className={`h-3 w-3 transition-transform ${
+                          showArchived ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {showArchived &&
+                      archivedProfiles.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => switchTo(p.id)}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-left text-muted-foreground hover:bg-muted/60 transition-colors"
+                        >
+                          <DatabaseIcon className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{p.label}</span>
+                          <span className="ml-auto text-[10px] uppercase tracking-wider">
+                            archived
+                          </span>
+                        </button>
+                      ))}
+                  </>
+                )}
               </div>
             )}
           </div>

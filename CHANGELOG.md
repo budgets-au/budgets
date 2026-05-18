@@ -9,6 +9,17 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.158.0 — 2026-05-18
+
+### Changed
+- **Archived databases hidden on the /unlock switcher too.** The
+  Switch-database expander on the unlock screen was still
+  listing every profile including archived ones, which defeated
+  the point of archiving. Archived profiles now fold under a
+  secondary chevron ("X archived" → click to reveal) so the
+  primary list stays focused on what the operator actually
+  unlocks. Matches the sidebar-dropdown behaviour from 0.156.
+
 ## 0.157.0 — 2026-05-18
 
 ### Fixed

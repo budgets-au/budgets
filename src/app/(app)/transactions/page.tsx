@@ -6,6 +6,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { TransactionsView } from "@/components/transactions/transactions-view";
 import { ImportTransactionsButton } from "@/components/import/import-transactions-button";
 import { UndoLastImportButton } from "@/components/transactions/undo-last-import-button";
+import { SampleDataNotice } from "@/components/transactions/sample-data-notice";
 
 export default async function TransactionsPage() {
   const [allAccounts, allCategories] = await Promise.all([
@@ -28,6 +29,7 @@ export default async function TransactionsPage() {
         }
       />
       <div className="p-4 lg:p-6 space-y-4">
+        <SampleDataNotice />
         <Suspense fallback={null}>
           <TransactionsView accounts={allAccounts} initialCategories={allCategories} />
         </Suspense>

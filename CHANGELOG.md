@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.155.0 — 2026-05-18
+
+### Added
+- **Sample-data notice on the transactions page.** When the
+  database still has any rows tagged `isSample` (seeded on first
+  unlock so the app isn't empty out of the gate), a soft amber
+  banner sits above the transactions list with the counts of
+  sample accounts / transactions and a one-click "Remove →" link
+  to Settings → Security. Server-rendered — no client query, no
+  flash on hydrate. Renders nothing once the operator has run
+  the removal in Settings.
+
 ## 0.154.0 — 2026-05-18
 
 ### Changed

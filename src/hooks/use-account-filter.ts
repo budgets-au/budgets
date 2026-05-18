@@ -32,29 +32,54 @@ export function useAccountFilter() {
   const { data: accounts = [] } = useSWR<Account[]>("/api/accounts", fetcher);
   const { prefs, setPref } = useDisplayPrefs();
 
-  const urlIds = (searchParams.get("accountIds") ?? "")
+  const rawUrlIds = (searchParams.get("accountIds") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
   const visibleIds = accounts.filter((a) => !a.isArchived).map((a) => a.id);
+  // Drop any URL ids that don't match a visible account in this DB.
+  // After switching databases the URL can carry IDs that only existed
+  // in the previous profile — without this filter, all consumers
+  // query against stale ids and end up with empty result sets that
+  // look like "no accounts selected". Only the visible intersection
+  // is treated as a real selection.
+  const urlIds =
+    visibleIds.length > 0 && rawUrlIds.length > 0
+      ? rawUrlIds.filter((id) => visibleIds.includes(id))
+      : rawUrlIds;
   // When the URL filter is empty, expand to all visible accounts so
   // "All accounts" never silently includes archived ones. Once accounts
   // are loaded, every consumer sees an explicit list.
   const ids = urlIds.length > 0 ? urlIds : visibleIds;
 
   // On first mount: if the URL has no filter but we remembered one, push it
-  // back into the URL so all consumers see a consistent value.
+  // back into the URL so all consumers see a consistent value. Filter
+  // the saved selection against the current DB's visible accounts —
+  // same reason as the URL filter above: prefs may carry IDs that only
+  // existed in the previous profile, and restoring them would leave
+  // the operator staring at an empty filter on a fresh DB.
   const restored = useRef(false);
   useEffect(() => {
     if (restored.current) return;
     if (urlIds.length > 0) return;
     if (prefs.globalAccountIds.length === 0) return;
+    // Wait for /api/accounts to load before deciding what's stale.
+    if (visibleIds.length === 0) return;
+    const validSaved = prefs.globalAccountIds.filter((id) =>
+      visibleIds.includes(id),
+    );
     restored.current = true;
+    if (validSaved.length === 0) {
+      // Every saved id is stale (DB switch) — clear the pref so the
+      // operator lands on a clean "All accounts" state.
+      setPref("globalAccountIds", []);
+      return;
+    }
     const p = new URLSearchParams(searchParams.toString());
-    p.set("accountIds", prefs.globalAccountIds.join(","));
+    p.set("accountIds", validSaved.join(","));
     router.replace(`${pathname}?${p}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefs.globalAccountIds.join(",")]);
+  }, [prefs.globalAccountIds.join(","), visibleIds.join(",")]);
 
   // Persist whenever the URL ids change. Only the user's explicit
   // selection is stored — never the expanded "all visible" form, since

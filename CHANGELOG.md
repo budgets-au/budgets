@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.164.0 — 2026-05-18
+
+### Fixed
+- **"Create new database" failed with "Profile registered but
+  file init failed".** The raw INSERT into `users` inside
+  `initProfileFile()` was missing the `name` column, which is
+  `NOT NULL` in the schema (legacy of the `email` → `username`
+  migration in 0003). The init step crashed with the constraint
+  violation, leaving the registry entry orphaned — and because
+  the operator's label was now reserved, retrying the same
+  label hit the uniqueness guard and reported "duplicate".
+  Filled the column in (`'Admin'`), and the API route now also
+  rolls back the orphan registry entry on any init failure so
+  the operator can retry without a stale lock.
+- **Global account filter showed "no accounts" after switching
+  databases.** `useAccountFilter` was happily restoring the
+  saved `globalAccountIds` from the previous DB into the new
+  DB's URL even though those IDs don't exist in the new
+  profile, leaving every query filtered to a set of zero
+  matching accounts. The hook now intersects both the URL ids
+  and the persisted ids against the current DB's visible
+  accounts before applying them; if everything turns out to be
+  stale (typical post-switch case) the pref is reset and the
+  operator lands on a clean "All accounts" state.
+
 ## 0.163.0 — 2026-05-18
 
 ### Added

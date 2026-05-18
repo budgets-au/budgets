@@ -9,6 +9,7 @@ import {
 } from "@/db";
 import {
   createProfile,
+  deleteProfile,
   getActiveProfile,
   readRegistry,
 } from "@/lib/db-profiles";
@@ -76,8 +77,20 @@ export async function POST(request: Request) {
 
   const init = initProfileFile(profileId, passphrase);
   if (!init.ok) {
+    // Roll the registry entry back so the operator can retry with the
+    // same label — without this, the failed create leaves an
+    // orphaned profile and the next attempt hits the
+    // duplicate-label guard in createProfile.
+    try {
+      deleteProfile(profileId);
+    } catch (e) {
+      console.error(
+        `[databases] failed to roll back orphan profile ${profileId}:`,
+        e,
+      );
+    }
     return NextResponse.json(
-      { error: `Profile registered but file init failed: ${init.error}` },
+      { error: `Failed to initialise database: ${init.error}` },
       { status: 500 },
     );
   }

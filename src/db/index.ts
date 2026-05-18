@@ -671,8 +671,15 @@ export function initProfileFile(
     if (userCount.n === 0) {
       client
         .prepare(
-          `INSERT INTO users (id, username, password_hash, role, created_at)
-           VALUES (lower(hex(randomblob(16))), 'admin', ?, 'admin', strftime('%s','now')*1000)`,
+          // Match the columns drizzle's `users` schema marks NOT NULL.
+          // `name` was missing here — schema requires it (legacy column
+          // renamed from `email` in migration 0003) so this INSERT
+          // crashed with "NOT NULL constraint failed: users.name",
+          // leaving the registry entry orphaned. Matches the
+          // `seedDefaultUserIfMissing()` shape at the top of this
+          // module.
+          `INSERT INTO users (id, name, username, password_hash, role, created_at)
+           VALUES (lower(hex(randomblob(16))), 'Admin', 'admin', ?, 'admin', strftime('%s','now')*1000)`,
         )
         .run(hashSync("admin", 10));
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import Link from "next/link";
 import { parseISO } from "date-fns";
 import { Wallet } from "lucide-react";
@@ -11,7 +11,6 @@ import { formatAUD, amountClass, formatDate } from "@/lib/utils";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import type { UpcomingScheduleRow } from "@/lib/dashboard/upcoming-schedules";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface ApiPayload {
   rows: UpcomingScheduleRow[];
@@ -45,9 +44,8 @@ function relativeWord(today: Date, target: Date): string {
 export function UpcomingSchedulesCard() {
   const { prefs, setPref } = useDisplayPrefs();
   const showBudgets = prefs.dashboardUpcomingShowBudgets;
-  const { data } = useSWR<ApiPayload>(
+  const { data } = useSwrJson<ApiPayload>(
     `/api/dashboard/upcoming?includeBudgets=${showBudgets}`,
-    fetcher,
   );
   const rows = data?.rows ?? [];
   const horizonDays = data?.horizonDays ?? 30;

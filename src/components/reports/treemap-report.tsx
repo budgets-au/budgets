@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { ResponsiveContainer, Treemap } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,6 @@ import type {
   CashflowCategory,
 } from "@/app/api/reports/cashflow/route";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 /** Treemap report: category hierarchy at a glance.
  *
@@ -57,14 +56,14 @@ export function TreemapReport({
   // the parent pointer the tree carries.
   const [drillId, setDrillId] = useState<string | null>(null);
 
-  const { data: allCategories = [] } = useSWR<
+  const { data: allCategories = [] } = useSwrJson<
     { id: string; name: string; parentId: string | null; type: string }[]
-  >("/api/categories", fetcher, { revalidateOnFocus: false });
+  >("/api/categories", { revalidateOnFocus: false });
 
   const url = `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : ""
   }`;
-  const { data, isLoading } = useSWR<CashflowData>(url, fetcher);
+  const { data, isLoading } = useSwrJson<CashflowData>(url);
 
   const cats: CashflowCategory[] = useMemo(() => {
     if (!data) return [];

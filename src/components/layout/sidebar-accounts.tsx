@@ -1,10 +1,9 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { cn } from "@/lib/utils";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface Account {
   id: string;
@@ -24,7 +23,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export function SidebarAccounts({ onPick }: { onPick?: () => void }) {
-  const { data: accounts = [] } = useSWR<Account[]>("/api/accounts", fetcher);
+  const { data: accounts = [] } = useSwrJson<Account[]>("/api/accounts");
   const { selectedIds, allSelected, toggle, clear } = useAccountFilter();
 
   const visible = accounts.filter((a) => !a.isArchived);

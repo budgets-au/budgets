@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,6 @@ import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { InvestmentHistoryChart } from "./investment-history-chart";
 import { AnnouncementsPanel } from "./announcements-panel";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface DetailRow {
   id: string;
@@ -52,12 +52,12 @@ type ChartMode = "value" | "price";
 export function InvestmentDetailPanel({ id }: { id: string }) {
   const [range, setRange] = useState<Range>("1y");
   const [mode, setMode] = useState<ChartMode>("value");
-  const { data: detail } = useSWR<DetailRow>(`/api/investments/${id}`, fetcher);
+  const { data: detail } = useSwrJson<DetailRow>(`/api/investments/${id}`);
   const historyUrl =
     range === "all"
       ? `/api/investments/${id}/history`
       : `/api/investments/${id}/history?range=${range}`;
-  const { data: history } = useSWR<HistoryResponse>(historyUrl, fetcher);
+  const { data: history } = useSwrJson<HistoryResponse>(historyUrl);
 
   if (!detail) {
     return <p className="text-sm text-muted-foreground p-4">Loading…</p>;

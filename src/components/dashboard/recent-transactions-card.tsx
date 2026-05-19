@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import Link from "next/link";
 import { parseISO } from "date-fns";
 import { StickyNote } from "lucide-react";
@@ -10,7 +10,6 @@ import { formatAUD, amountClass, formatDate } from "@/lib/utils";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import type { RecentTransactionRow } from "@/lib/dashboard/recent-transactions";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface ApiPayload {
   rows: RecentTransactionRow[];
@@ -42,9 +41,8 @@ function relativeWord(today: Date, target: Date): string {
 export function RecentTransactionsCard() {
   const { prefs, setPref } = useDisplayPrefs();
   const showNotes = prefs.dashboardRecentShowNotes;
-  const { data } = useSWR<ApiPayload>(
+  const { data } = useSwrJson<ApiPayload>(
     "/api/dashboard/recent-transactions",
-    fetcher,
   );
   const rows = data?.rows ?? [];
   const today = new Date();

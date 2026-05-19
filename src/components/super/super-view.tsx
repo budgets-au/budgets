@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,6 @@ import { formatAUD, amountClass } from "@/lib/utils";
 import { formatFy } from "@/lib/tax/fy";
 import { SuperHistoryChart } from "./super-history-chart";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface Snapshot {
   id: string;
@@ -85,7 +85,7 @@ export function SuperView({
   onDelete?: (key: string) => void;
 }) {
   const swrKey = `/api/super?person=${encodeURIComponent(person)}`;
-  const { data: snapshots = [], isLoading } = useSWR<Snapshot[]>(swrKey, fetcher);
+  const { data: snapshots = [], isLoading } = useSwrJson<Snapshot[]>(swrKey);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 

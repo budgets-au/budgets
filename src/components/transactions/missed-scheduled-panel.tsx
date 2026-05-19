@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import Link from "next/link";
 import { parseISO, subDays } from "date-fns";
 import { AlertCircle, ChevronDown, ChevronRight, X, Undo2 } from "lucide-react";
@@ -20,7 +20,6 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { ScheduledTransaction } from "@/db/schema";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const WINDOW_DAYS = 30;
 /** Selectable grace-period values in the panel header. Spread covers
  * "alert immediately" (0d) through "weekend + long bank holiday"
@@ -152,21 +151,18 @@ export function MissedScheduledPanel({ accounts }: { accounts: Account[] }) {
   const [noteDraft, setNoteDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const { data: scheduled = [] } = useSWR<ScheduledRow[]>("/api/scheduled", fetcher);
-  const { data: txns = [], isLoading } = useSWR<TxRow[]>(
+  const { data: scheduled = [] } = useSwrJson<ScheduledRow[]>("/api/scheduled");
+  const { data: txns = [], isLoading } = useSwrJson<TxRow[]>(
     `/api/transactions?from=${txnFromISO}&to=${toISOStr}&limit=1000`,
-    fetcher,
   );
   // Categories are needed to expand a schedule's category to its
   // descendant subtree — the shared matcher uses that filter to avoid
   // claiming an unrelated same-amount txn for a range-mode schedule.
-  const { data: categories = [] } = useSWR<CategoryRow[]>(
+  const { data: categories = [] } = useSwrJson<CategoryRow[]>(
     "/api/categories",
-    fetcher,
   );
-  const { data: dismissals = [], mutate: mutateDismissals } = useSWR<Dismissal[]>(
+  const { data: dismissals = [], mutate: mutateDismissals } = useSwrJson<Dismissal[]>(
     "/api/scheduled/dismissed-missed",
-    fetcher,
   );
 
   const dismissalKey = (scheduledId: string, date: string) => `${scheduledId}#${date}`;

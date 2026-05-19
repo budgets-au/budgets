@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { TREND_DOWN } from "@/lib/colours";
@@ -145,7 +145,6 @@ import { PayeeParetoReport } from "./payee-pareto-report";
 import { AccountsCashflowReport } from "./accounts-cashflow-report";
 import { TransferFlowReport } from "./transfer-flow-report";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface CategoryRow {
   categoryId: string | null;
@@ -265,14 +264,12 @@ export function ReportsView({
   const { ids: accountIds } = useAccountFilter();
   const accountIdsParam = accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
 
-  const { data: catData = [] } = useSWR<CategoryRow[]>(
+  const { data: catData = [] } = useSwrJson<CategoryRow[]>(
     `/api/reports?groupBy=category&from=${from}&to=${to}${accountIdsParam}`,
-    fetcher
   );
 
-  const { data: monthData = [] } = useSWR<MonthRow[]>(
+  const { data: monthData = [] } = useSwrJson<MonthRow[]>(
     `/api/reports?groupBy=month&from=${from}&to=${to}${accountIdsParam}`,
-    fetcher
   );
 
   const incomes = catData

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,7 +13,6 @@ import {
   type AccountsCellQuery,
 } from "./accounts-cell-dialog";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 function monthLabel(m: string): string {
   return format(parseISO(`${m}-01`), "MMM ''yy");
@@ -110,9 +109,8 @@ export function AccountsCashflowReport({
 }) {
   const accountIdsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
-  const { data, isLoading } = useSWR<AccountsCashflowReport>(
+  const { data, isLoading } = useSwrJson<AccountsCashflowReport>(
     `/api/reports/accounts-cashflow?from=${from}&to=${to}${accountIdsParam}`,
-    fetcher,
   );
 
   // Default to expanded so the operator sees the credit/debit/balance

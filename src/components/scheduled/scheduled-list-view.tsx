@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { addMonths, addWeeks, addYears, format, parseISO, subMonths } from "date-fns";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -30,7 +30,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import type { ScheduledTransaction, Category } from "@/db/schema";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const MATCH_TOLERANCE_DAYS = 5;
 // Range-mode schedules (utilities, energy bills, etc.) bill on irregular
 // cycles, so the date drift tolerance is loosened when amountMin is set.
@@ -644,7 +643,7 @@ export function ScheduledListView({
   const txKey = selected && (accountIds.length > 0 || isAllAccountsBudget)
     ? `/api/transactions?${accountIds.length > 0 ? `accountIds=${accountIds.join(",")}&` : ""}from=${fromISO}&to=${toISOStr}&limit=10000`
     : null;
-  const { data: txns = [], isLoading: txLoading } = useSWR<TxRow[]>(txKey, fetcher);
+  const { data: txns = [], isLoading: txLoading } = useSwrJson<TxRow[]>(txKey);
 
   // When the schedule has a category, also fetch every txn in that category
   // (and its descendants) over the same window. The right-panel list is built
@@ -659,7 +658,7 @@ export function ScheduledListView({
   const catKey = selected && selected.categoryId
     ? `/api/transactions?categoryId=${selected.categoryId}&includeChildren=true&from=${fromISO}&to=${toISOStr}&limit=10000${catAccountFilter}`
     : null;
-  const { data: catTxns = [], isLoading: catLoading } = useSWR<TxRow[]>(catKey, fetcher);
+  const { data: catTxns = [], isLoading: catLoading } = useSwrJson<TxRow[]>(catKey);
 
   // Per-budget current-period progress, fetched once for all budgets in the
   // list. Keyed by scheduledId so a row can look up its own progress without
@@ -671,9 +670,8 @@ export function ScheduledListView({
     spent: string;
     cap: string;
   }
-  const { data: budgetProgressList = [] } = useSWR<BudgetProgress[]>(
+  const { data: budgetProgressList = [] } = useSwrJson<BudgetProgress[]>(
     "/api/scheduled/budget-progress",
-    fetcher,
   );
   const budgetProgressById = useMemo(() => {
     const m = new Map<string, BudgetProgress>();

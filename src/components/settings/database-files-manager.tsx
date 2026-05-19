@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import {
   Check,
   Database as DatabaseIcon,
@@ -23,7 +23,6 @@ import {
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface DbProfile {
   id: string;
@@ -58,9 +57,8 @@ interface DatabasesResponse {
  *  an action that wipes both the encrypted file AND every backup
  *  in its per-profile subdir. */
 export function DatabaseFilesManager() {
-  const { data, mutate } = useSWR<DatabasesResponse>(
+  const { data, mutate } = useSwrJson<DatabasesResponse>(
     "/api/databases",
-    fetcher,
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");

@@ -1,12 +1,12 @@
 "use client";
 
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { SuperView } from "./super-view";
 import type { SuperPerson } from "@/db/schema";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface PeopleResponse {
   people: SuperPerson[];
@@ -23,7 +23,7 @@ export function SuperPageBody({
 }: {
   initialPeople: SuperPerson[];
 }) {
-  const { data } = useSWR<PeopleResponse>("/api/super/people", fetcher, {
+  const { data } = useSwrJson<PeopleResponse>("/api/super/people", {
     fallbackData: { people: initialPeople },
     revalidateOnFocus: false,
   });

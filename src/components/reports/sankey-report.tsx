@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -51,7 +51,6 @@ import type {
 
 type SankeyScope = "all" | "income" | "expenses";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface CategoryDef {
   id: string;
@@ -351,13 +350,11 @@ export function SankeyReport({
   function changeScope(next: SankeyScope) {
     setPref("reportsSankeyScope", next);
   }
-  const { data, isLoading } = useSWR<CashflowData>(
+  const { data, isLoading } = useSwrJson<CashflowData>(
     `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
-    fetcher,
   );
-  const { data: allCategories = [] } = useSWR<CategoryDef[]>(
+  const { data: allCategories = [] } = useSwrJson<CategoryDef[]>(
     `/api/categories`,
-    fetcher,
   );
   const isDark = useDarkMode();
 

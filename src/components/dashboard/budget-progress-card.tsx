@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Target } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatAUD } from "@/lib/utils";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface ProgressRow {
   scheduledId: string;
@@ -44,19 +43,16 @@ const MAX_ROWS = 10;
  * budget schedules — most users never set one up, so we don't want
  * the card squatting empty. */
 export function BudgetProgressCard() {
-  const { data: progress = [] } = useSWR<ProgressRow[]>(
+  const { data: progress = [] } = useSwrJson<ProgressRow[]>(
     "/api/scheduled/budget-progress",
-    fetcher,
     { revalidateOnFocus: false },
   );
-  const { data: scheduled = [] } = useSWR<ScheduledRow[]>(
+  const { data: scheduled = [] } = useSwrJson<ScheduledRow[]>(
     "/api/scheduled",
-    fetcher,
     { revalidateOnFocus: false },
   );
-  const { data: cats = [] } = useSWR<CategoryRow[]>(
+  const { data: cats = [] } = useSwrJson<CategoryRow[]>(
     "/api/categories",
-    fetcher,
     { revalidateOnFocus: false },
   );
 

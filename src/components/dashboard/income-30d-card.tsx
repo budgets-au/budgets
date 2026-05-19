@@ -1,12 +1,11 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { ArrowUpRight } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatAUD } from "@/lib/utils";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface TxRow {
   amount: string;
@@ -17,9 +16,8 @@ interface TxRow {
  * card can move into the widget grid. */
 export function Income30dCard() {
   const from = format(subDays(new Date(), 30), "yyyy-MM-dd");
-  const { data: rows = [] } = useSWR<TxRow[]>(
+  const { data: rows = [] } = useSwrJson<TxRow[]>(
     `/api/transactions?from=${from}&limit=10000`,
-    fetcher,
   );
   // The transactions endpoint sometimes wraps results in
   // `{rows: [...], total: N}`; tolerate both shapes.

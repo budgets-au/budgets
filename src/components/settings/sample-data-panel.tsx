@@ -25,7 +25,6 @@ const fetcher = async (url: string) => {
 export function SampleDataPanel() {
   const { data, isLoading, error } = useSWR<SampleCounts>(
     "/api/sample-data/remove",
-    fetcher,
     { revalidateOnFocus: false },
   );
   const confirm = useConfirm();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useMemo, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Switch } from "@/components/ui/switch";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
@@ -29,7 +29,6 @@ import { toast } from "sonner";
 const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
 const DEFAULT_PAGE_SIZE = 200;
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface TxRow {
   id: string;
@@ -154,9 +153,8 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
   const setPageSize = (n: number) => setPref("transactionsPageSize", n);
 
   const { data: categories = initialCategories, mutate: mutateCategories } =
-    useSWR<{ id: string; name: string; parentId: string | null }[]>(
+    useSwrJson<{ id: string; name: string; parentId: string | null }[]>(
       "/api/categories",
-      fetcher,
       { fallbackData: initialCategories }
     );
 
@@ -211,7 +209,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
     return `/api/transactions?${p.toString()}`;
   }, [page, pageSize, accountId, accountIdsParam, categoryId, from, to, search, sort, order, includeChildren, transfersFilter, direction]);
 
-  const { data: txnsRaw = [], isLoading, mutate: mutateTxns } = useSWR<TxRow[]>(swrKey, fetcher, {
+  const { data: txnsRaw = [], isLoading, mutate: mutateTxns } = useSwrJson<TxRow[]>(swrKey, {
     keepPreviousData: true,
     // The transactions list is the heaviest query in the app. Tab-flip
     // shouldn't trigger a full refetch storm; user-driven mutations call
@@ -223,7 +221,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
   // Schedules barely change between page renders — long dedup window
   // collapses the multiple consumers (this view, missed panel,
   // calendar) into a single network round-trip.
-  const { data: scheduledData = [] } = useSWR<ScheduledRow[]>("/api/scheduled", fetcher, {
+  const { data: scheduledData = [] } = useSwrJson<ScheduledRow[]>("/api/scheduled", {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
@@ -344,7 +342,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
   if (includeChildren) countParams.set("includeChildren", "true");
   if (transfersFilter) countParams.set("transfersFilter", transfersFilter);
   if (direction) countParams.set("direction", direction);
-  const { data: countData } = useSWR<{ total: number }>(`/api/transactions/count?${countParams}`, fetcher);
+  const { data: countData } = useSwrJson<{ total: number }>(`/api/transactions/count?${countParams}`);
 
   const allVisibleSelected =
     txns.length > 0 && txns.every((t) => selectedIds.has(t.id));

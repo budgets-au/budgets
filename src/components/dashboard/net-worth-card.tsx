@@ -1,10 +1,9 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { amountClass, formatAUD } from "@/lib/utils";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface Account {
   id: string;
@@ -17,7 +16,7 @@ interface Account {
  * moves the computation client-side so the card can live as a
  * draggable widget rather than a server-rendered Tailwind cell. */
 export function NetWorthCard() {
-  const { data: accounts = [] } = useSWR<Account[]>("/api/accounts", fetcher);
+  const { data: accounts = [] } = useSwrJson<Account[]>("/api/accounts");
   const visible = accounts.filter((a) => !a.isArchived);
   const total = visible.reduce(
     (s, a) => s + (Number.isFinite(parseFloat(a.currentBalance)) ? parseFloat(a.currentBalance) : 0),

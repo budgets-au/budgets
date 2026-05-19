@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,6 @@ import { Plus, TrendingUp, Gift, Zap, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { OptionDateInput } from "./option-date-input";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface SearchResult {
   symbol: string;
@@ -62,11 +62,10 @@ function AddInvestmentDialog({
     return () => clearTimeout(t);
   }, [query]);
 
-  const { data: searchResults = [], isLoading: searching } = useSWR<SearchResult[]>(
+  const { data: searchResults = [], isLoading: searching } = useSwrJson<SearchResult[]>(
     open && debounced.length >= 1 && !picked
       ? `/api/investments/search?q=${encodeURIComponent(debounced)}`
       : null,
-    fetcher,
   );
 
   function reset() {

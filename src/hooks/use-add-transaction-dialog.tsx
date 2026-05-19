@@ -7,10 +7,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import useSWR, { mutate as globalMutate } from "swr";
+import { mutate as globalMutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { AddTransactionDialog } from "@/components/transactions/add-transaction-dialog";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface AccountLite {
   id: string;
@@ -54,13 +54,11 @@ export function AddTransactionProvider({ children }: { children: ReactNode }) {
 
   // Lazy-load reference data — the dialog only needs it while open,
   // and most pageviews never open it.
-  const { data: accounts = [] } = useSWR<AccountLite[]>(
+  const { data: accounts = [] } = useSwrJson<AccountLite[]>(
     isOpen ? "/api/accounts" : null,
-    fetcher,
   );
-  const { data: categories = [] } = useSWR<CategoryLite[]>(
+  const { data: categories = [] } = useSwrJson<CategoryLite[]>(
     isOpen ? "/api/categories" : null,
-    fetcher,
   );
 
   const open = useCallback<AddTransactionContext["open"]>((preset) => {

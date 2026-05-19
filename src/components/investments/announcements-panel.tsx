@@ -1,11 +1,10 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExternalLink, AlertCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface NewsItem {
   uuid: string;
@@ -27,9 +26,8 @@ interface NewsResponse {
  *  side. The list is read-only — clicking a row opens the source
  *  publisher's page in a new tab. */
 export function AnnouncementsPanel({ investmentId }: { investmentId: string }) {
-  const { data, isLoading } = useSWR<NewsResponse>(
+  const { data, isLoading } = useSwrJson<NewsResponse>(
     `/api/investments/${investmentId}/news`,
-    fetcher,
     {
       // Yahoo's news refreshes infrequently; refocus revalidation
       // would just hit our 24h server cache. Off.

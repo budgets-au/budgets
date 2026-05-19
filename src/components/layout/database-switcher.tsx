@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { ChevronDown, Database as DatabaseIcon, Plus } from "lucide-react";
 import {
   DropdownMenu,
@@ -22,7 +22,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface DbProfile {
   id: string;
@@ -50,9 +49,8 @@ interface DatabasesResponse {
  *  semantics per the user spec — no in-memory key cache. */
 export function DatabaseSwitcher() {
   const router = useRouter();
-  const { data, mutate } = useSWR<DatabasesResponse>(
+  const { data, mutate } = useSwrJson<DatabasesResponse>(
     "/api/databases",
-    fetcher,
   );
   const [createOpen, setCreateOpen] = useState(false);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { differenceInDays, parseISO } from "date-fns";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +15,6 @@ import type {
   CashflowCategory,
 } from "@/app/api/reports/cashflow/route";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface HierNode {
   id: string;
@@ -204,9 +203,8 @@ export function EnvelopeReport({
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
   const { prefs, setPref } = useDisplayPrefs();
   const hideTransfers = prefs.envelopeHideTransfers;
-  const { data, isLoading } = useSWR<CashflowData>(
+  const { data, isLoading } = useSwrJson<CashflowData>(
     `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
-    fetcher,
   );
 
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());

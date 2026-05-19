@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import useSWR, { mutate as globalMutate } from "swr";
+import { mutate as globalMutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +15,6 @@ import { toast } from "sonner";
 import { addDays, format, parseISO } from "date-fns";
 import { formatAUD, amountClass } from "@/lib/utils";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface SourceTxn {
   id: string;
@@ -70,9 +70,8 @@ export function LinkTransferDialog({
   // matching in the backend means typing the same name twice
   // (different case) resolves to the same account, but autocomplete
   // makes the consistency obvious.
-  const { data: allAccounts = [] } = useSWR<AccountLite[]>(
+  const { data: allAccounts = [] } = useSwrJson<AccountLite[]>(
     open ? "/api/accounts" : null,
-    fetcher,
   );
   const externalAccounts = useMemo(
     () =>
@@ -92,9 +91,8 @@ export function LinkTransferDialog({
     open && source
       ? `/api/transactions?transfersFilter=none&from=${fromIso}&to=${toIso}&limit=500`
       : null;
-  const { data: response } = useSWR<{ rows?: CandidateTxn[] } | CandidateTxn[]>(
+  const { data: response } = useSwrJson<{ rows?: CandidateTxn[] } | CandidateTxn[]>(
     swrKey,
-    fetcher,
   );
   // The endpoint returns either `rows: [...]` or an array depending on
   // the caller's `paginated` flag — accept both shapes defensively.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import {
   PieChart,
   Pie,
@@ -46,7 +46,6 @@ function ExpensesPieTooltip({
   );
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface CategoryRow {
   categoryId: string | null;
@@ -106,13 +105,11 @@ export function ExpensesDrilldown({
   const hideTransfers = prefs.expensesHideTransfers;
   const hideTransfersParam = hideTransfers ? `&hideTransfers=true` : "";
 
-  const { data: catData = [] } = useSWR<CategoryRow[]>(
+  const { data: catData = [] } = useSwrJson<CategoryRow[]>(
     `/api/reports?groupBy=category&from=${from}&to=${to}${hideTransfersParam}${accountIdsParam}`,
-    fetcher,
   );
-  const { data: allCategories = [] } = useSWR<CategoryDef[]>(
+  const { data: allCategories = [] } = useSwrJson<CategoryDef[]>(
     `/api/categories`,
-    fetcher,
   );
 
   // Drill-down stack — the path of category ids the user has clicked into.
@@ -346,11 +343,10 @@ export function ExpensesDrilldown({
     : "";
   const txnAccountsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
-  const { data: txns = [] } = useSWR<TxnRow[]>(
+  const { data: txns = [] } = useSwrJson<TxnRow[]>(
     currentNodeId && showTxns
       ? `/api/transactions?from=${from}&to=${to}${txnAccountsParam}${txnCategoryParam}&direction=out&limit=500`
       : null,
-    fetcher,
   );
 
   return (

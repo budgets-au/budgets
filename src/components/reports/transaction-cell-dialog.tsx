@@ -1,7 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import useSWR, { mutate as globalMutate } from "swr";
+import { mutate as globalMutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import {
@@ -15,7 +16,6 @@ import { NotesCell } from "@/components/transactions/notes-cell";
 import { CategoryPicker } from "@/components/transactions/category-picker";
 import type { CategoryLike } from "@/components/categories/category-dropdown";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface Txn {
   id: string;
@@ -71,13 +71,11 @@ export function TransactionCellDialog({
   extraFooter,
   onCategoryChanged,
 }: TransactionCellDialogProps) {
-  const { data: txns = [], isLoading } = useSWR<Txn[]>(
+  const { data: txns = [], isLoading } = useSwrJson<Txn[]>(
     open ? apiUrl : null,
-    fetcher,
   );
-  const { data: categories = [] } = useSWR<CategoryLike[]>(
+  const { data: categories = [] } = useSwrJson<CategoryLike[]>(
     open ? "/api/categories" : null,
-    fetcher,
   );
 
   function handleCategoryChanged() {

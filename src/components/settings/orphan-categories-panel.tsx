@@ -25,7 +25,6 @@ const fetcher = async (url: string) => {
 export function OrphanCategoriesPanel() {
   const { data, isLoading, error } = useSWR<OrphanResp>(
     "/api/categories/orphans",
-    fetcher,
     { revalidateOnFocus: false },
   );
   const confirm = useConfirm();

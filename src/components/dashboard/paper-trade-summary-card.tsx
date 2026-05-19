@@ -1,12 +1,11 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Beaker } from "lucide-react";
 import Link from "next/link";
 import { formatAUD, amountClass } from "@/lib/utils";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface InvestmentRow {
   kind: string;
@@ -22,9 +21,8 @@ interface InvestmentRow {
  * trading is "what if I had bought N positions?" so showing the N
  * matters). */
 export function PaperTradeSummaryCard() {
-  const { data: rows = [], isLoading } = useSWR<InvestmentRow[]>(
+  const { data: rows = [], isLoading } = useSwrJson<InvestmentRow[]>(
     "/api/investments",
-    fetcher,
   );
 
   const papers = rows.filter((r) => r.kind === "paper");

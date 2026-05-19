@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { ResponsiveContainer, BarChart, Bar, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PiggyBank } from "lucide-react";
@@ -8,7 +8,6 @@ import Link from "next/link";
 import { formatAUD, amountClass } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface SuperRow {
   fyEndYear: number;
@@ -18,7 +17,7 @@ interface SuperRow {
 
 export function SuperSummaryCard() {
   // Combined household super: both self + partner snapshots.
-  const { data: rows = [], isLoading } = useSWR<SuperRow[]>("/api/super", fetcher);
+  const { data: rows = [], isLoading } = useSwrJson<SuperRow[]>("/api/super");
 
   // Each person's snapshots sit on independent FY timelines — partner data
   // can lag self by a year. Group by person, then take each person's latest

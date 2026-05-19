@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -21,7 +21,6 @@ import { useDarkMode } from "@/hooks/use-dark-mode";
 import { formatAUD } from "@/lib/utils";
 import type { AccountsCashflowReport } from "@/app/api/reports/accounts-cashflow/route";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const EXTERNAL_ID = "__external__";
 const EXTERNAL_COLOR_LIGHT = "#94a3b8";
@@ -266,16 +265,14 @@ export function TransferFlowReport({
       : accountIds.length > 0
         ? `&accountIds=${accountIds.join(",")}`
         : "";
-  const { data, isLoading } = useSWR<AccountsCashflowReport>(
+  const { data, isLoading } = useSwrJson<AccountsCashflowReport>(
     `/api/reports/accounts-cashflow?from=${from}&to=${to}${fetchAccountIdsParam}`,
-    fetcher,
   );
   // The picker shows every non-archived account, not just the ones the
   // sidebar filter has restricted the report to — letting the operator
   // pivot to a specific account without first clearing the sidebar.
-  const { data: allAccounts = [] } = useSWR<AccountRow[]>(
+  const { data: allAccounts = [] } = useSwrJson<AccountRow[]>(
     `/api/accounts`,
-    fetcher,
   );
   const isDark = useDarkMode();
 

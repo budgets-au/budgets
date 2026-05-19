@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import Link from "next/link";
 import { Wallet } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
@@ -14,7 +14,6 @@ import { cn, formatAUD, amountClass } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 import type { Account } from "@/db/schema";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface BalanceTrendResp {
   series: { date: string; balance: number }[];
@@ -67,9 +66,8 @@ export function AccountSummaryCard({
   // visible) and so view-mode can still resolve a pinned-archived
   // selection back to its row. The default /api/accounts response
   // filters them out for sidebar / transaction-filter callers.
-  const { data: accountsData } = useSWR<Account[]>(
+  const { data: accountsData } = useSwrJson<Account[]>(
     "/api/accounts?includeArchived=true",
-    fetcher,
     { revalidateOnFocus: false },
   );
   const accounts: Account[] = Array.isArray(accountsData) ? accountsData : [];
@@ -87,11 +85,10 @@ export function AccountSummaryCard({
   // 7-day daily-end balance series. SWR keyed by id so switching
   // the picked account triggers a fresh fetch; skipped when nothing
   // is selected.
-  const { data: trendData } = useSWR<BalanceTrendResp>(
+  const { data: trendData } = useSwrJson<BalanceTrendResp>(
     selected
       ? `/api/dashboard/account-balance-trend?accountId=${selected.id}&days=7`
       : null,
-    fetcher,
     { revalidateOnFocus: false },
   );
   const trend = trendData?.series ?? [];

@@ -9,6 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.190.0 — 2026-05-19
+
+### Changed
+- **`useSwrJson<T>(key, config?)` hook replaces the
+  `const fetcher = (url) => fetch(url).then(r => r.json())`
+  lambda that was copy-pasted across 51 React files.** New
+  hook in [src/hooks/use-swr-json.ts](src/hooks/use-swr-json.ts)
+  bakes in a JSON fetcher that throws on non-2xx (so SWR
+  returns `undefined` for `data` instead of resolving an
+  error-shaped body that callers would then try to
+  `.filter()` against). Call sites collapse from 3 lines
+  to 1:
+
+  ```ts
+  // before
+  const fetcher = (url: string) => fetch(url).then((r) => r.json());
+  const { data, isLoading } = useSWR<T>(url, fetcher, { revalidateOnFocus: false });
+
+  // after
+  const { data, isLoading } = useSwrJson<T>(url, { revalidateOnFocus: false });
+  ```
+
+  Files that have **bespoke** fetchers stay on raw `useSWR` —
+  these were the three throwing-fetcher dashboard cards
+  (`tracked-stock-card`, `watched-stock-card`,
+  `github-stats-card`), [use-display-prefs](src/hooks/use-display-prefs.ts)
+  with its custom error handling, plus
+  [user-manager](src/components/settings/user-manager.tsx)
+  and a handful of settings panels that surface upstream
+  error messages.
+
+Mechanical-only change; all 316 tests stay green.
+
 ## 0.189.0 — 2026-05-19
 
 ### Changed

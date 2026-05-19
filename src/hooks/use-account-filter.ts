@@ -2,10 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface Account {
   id: string;
@@ -29,7 +28,7 @@ export function useAccountFilter() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { data: accounts = [] } = useSWR<Account[]>("/api/accounts", fetcher);
+  const { data: accounts = [] } = useSwrJson<Account[]>("/api/accounts");
   const { prefs, setPref } = useDisplayPrefs();
 
   const rawUrlIds = (searchParams.get("accountIds") ?? "")

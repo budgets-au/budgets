@@ -1,12 +1,11 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { ArrowDownRight } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatAUD } from "@/lib/utils";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface TxRow {
   amount: string;
@@ -15,9 +14,8 @@ interface TxRow {
 /** Magnitude of negative transaction amounts in the last 30 days. */
 export function Expenses30dCard() {
   const from = format(subDays(new Date(), 30), "yyyy-MM-dd");
-  const { data: rows = [] } = useSWR<TxRow[]>(
+  const { data: rows = [] } = useSwrJson<TxRow[]>(
     `/api/transactions?from=${from}&limit=10000`,
-    fetcher,
   );
   const txns: TxRow[] = Array.isArray(rows)
     ? rows

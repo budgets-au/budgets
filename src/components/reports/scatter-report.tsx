@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -27,7 +27,6 @@ import { useDarkMode } from "@/hooks/use-dark-mode";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { rollingMean } from "@/lib/reports/rolling-mean";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface PointRow {
   id: string;
@@ -73,16 +72,16 @@ export function ScatterReport({
 
   // Categories pulled in for the drill-down picker. SWR dedupes
   // against the same /api/categories fetch other reports do.
-  const { data: allCategories = [] } = useSWR<
+  const { data: allCategories = [] } = useSwrJson<
     { id: string; name: string; parentId: string | null; type: string }[]
-  >("/api/categories", fetcher, { revalidateOnFocus: false });
+  >("/api/categories", { revalidateOnFocus: false });
 
   const params = new URLSearchParams({ from, to, kind });
   if (accountIds.length > 0) params.set("accountIds", accountIds.join(","));
   if (hideTransfers) params.set("hideTransfers", "true");
   if (rootCategoryId) params.set("rootCategoryId", rootCategoryId);
   const url = `/api/reports/transactions-points?${params}`;
-  const { data, isLoading } = useSWR<ScatterResp>(url, fetcher);
+  const { data, isLoading } = useSwrJson<ScatterResp>(url);
 
   const points = data?.points ?? [];
 

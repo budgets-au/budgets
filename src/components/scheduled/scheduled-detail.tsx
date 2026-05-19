@@ -34,7 +34,6 @@ interface ScheduledRow {
   transferToAccountName: string | null;
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function ScheduledDetail({ row: initial, allAccounts, allCategories }: {
   row: ScheduledRow;

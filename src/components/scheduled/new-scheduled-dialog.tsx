@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,7 +10,6 @@ import { ScheduledEditForm, type ScheduledFormRow } from "@/components/scheduled
 import { invalidateCashflow } from "@/lib/invalidate-cashflow";
 import type { Account, Category } from "@/db/schema";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function blankScheduledRow(): ScheduledFormRow {
   const today = new Date().toISOString().slice(0, 10);
@@ -51,8 +50,8 @@ export function NewScheduledDialog({
   onCreated?: () => void | Promise<void>;
 }) {
   const router = useRouter();
-  const { data: allAccounts = [] } = useSWR<Account[]>(open ? "/api/accounts" : null, fetcher);
-  const { data: allCategories = [] } = useSWR<Category[]>(open ? "/api/categories" : null, fetcher);
+  const { data: allAccounts = [] } = useSwrJson<Account[]>(open ? "/api/accounts" : null);
+  const { data: allCategories = [] } = useSwrJson<Category[]>(open ? "/api/categories" : null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

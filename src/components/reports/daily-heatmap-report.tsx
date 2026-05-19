@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
@@ -12,7 +12,6 @@ import type {
   CashflowCategory,
 } from "@/app/api/reports/cashflow/route";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 /** Category × month heatmap.
  *
@@ -45,7 +44,7 @@ export function DailyHeatmapReport({
   const [scope, setScope] = useState<"expenses" | "income">("expenses");
   const [rootCategoryId, setRootCategoryId] = useState<string | null>(null);
 
-  const { data: allCategories = [] } = useSWR<
+  const { data: allCategories = [] } = useSwrJson<
     {
       id: string;
       name: string;
@@ -53,7 +52,7 @@ export function DailyHeatmapReport({
       type: string;
       transferKind?: "none" | "internal" | "external" | null;
     }[]
-  >("/api/categories", fetcher, { revalidateOnFocus: false });
+  >("/api/categories", { revalidateOnFocus: false });
 
   // Internal-transfer categories represent money moving between
   // the household's own accounts and aren't real spending; hiding
@@ -74,7 +73,7 @@ export function DailyHeatmapReport({
   const params = new URLSearchParams({ from, to });
   if (accountIds.length > 0) params.set("accountIds", accountIds.join(","));
   const url = `/api/reports/cashflow?${params}`;
-  const { data, isLoading } = useSWR<CashflowData>(url, fetcher);
+  const { data, isLoading } = useSwrJson<CashflowData>(url);
 
   const months = data?.months ?? [];
   const cats: CashflowCategory[] = useMemo(() => {

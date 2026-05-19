@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import {
   LineChart,
   Line,
@@ -57,7 +58,6 @@ function PriceTooltip({
   );
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface WatchRow {
   id: string;
@@ -89,7 +89,7 @@ export function WatchlistDetailPanel({
     range === "all"
       ? `/api/watchlist/${row.id}/history`
       : `/api/watchlist/${row.id}/history?range=${range}`;
-  const { data: history } = useSWR<HistoryResponse>(historyUrl, fetcher);
+  const { data: history } = useSwrJson<HistoryResponse>(historyUrl);
   const [buying, setBuying] = useState(false);
 
   // Yahoo can return an error body (e.g. 502 on flaky upstream); SWR resolves

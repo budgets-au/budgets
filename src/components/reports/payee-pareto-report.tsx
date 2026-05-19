@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import Link from "next/link";
 import {
   ResponsiveContainer,
@@ -24,7 +24,6 @@ import { formatAUD } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { chartGridStroke } from "@/lib/colours";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface PayeeRow {
   payee: string;
@@ -61,7 +60,7 @@ export function PayeeParetoReport({
   const params = new URLSearchParams({ from, to, kind, limit: "25" });
   if (accountIds.length > 0) params.set("accountIds", accountIds.join(","));
   const url = `/api/reports/payee-totals?${params}`;
-  const { data, isLoading } = useSWR<PayeeResp>(url, fetcher);
+  const { data, isLoading } = useSwrJson<PayeeResp>(url);
 
   const rows = data?.rows ?? [];
   const otherTotal = data?.otherTotal ?? 0;

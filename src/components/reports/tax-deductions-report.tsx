@@ -1,26 +1,26 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatAUD } from "@/lib/utils";
 import { currentFyEndYear, fyDateRange, formatFy } from "@/lib/tax/fy";
 import type { TaxReport } from "@/app/api/reports/tax/route";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function TaxDeductionsReport({ accountIds }: { accountIds: string[] }) {
   const [fyEndYear, setFyEndYear] = useState(() => currentFyEndYear());
 
   const accountIdsParam = accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
   const swrKey = `/api/reports/tax?fyEndYear=${fyEndYear}${accountIdsParam}`;
-  const { data, isLoading } = useSWR<TaxReport>(swrKey, fetcher);
+  const { data, isLoading } = useSwrJson<TaxReport>(swrKey);
 
   const settingsKey = "/api/settings";
-  const { data: settings } = useSWR<{
+  const { data: settings } = useSwrJson<{
     taxConfig: { wfhHoursByFy: Record<string, number>; categoryRules: Record<string, { workUsePct: number; bundledInWfh: boolean; note?: string }> };
-  }>(settingsKey, fetcher);
+  }>(settingsKey);
 
   const fyOptions = useMemo(() => {
     const cur = currentFyEndYear();

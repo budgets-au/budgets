@@ -8,7 +8,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import useSWR, { mutate as globalMutate } from "swr";
+import { mutate as globalMutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -32,7 +33,6 @@ import {
 } from "@/components/ui/searchable-combobox";
 import { buildCategoryMeta } from "@/lib/category-path";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface CategoryDef {
   id: string;
@@ -89,9 +89,8 @@ export function AddCategoryProvider({ children }: { children: ReactNode }) {
     undefined,
   );
 
-  const { data: categories = [] } = useSWR<CategoryDef[]>(
+  const { data: categories = [] } = useSwrJson<CategoryDef[]>(
     "/api/categories",
-    fetcher,
   );
 
   const open = useCallback<AddCategoryContext["open"]>((preset) => {

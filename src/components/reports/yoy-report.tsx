@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { useEffect, useMemo, useState } from "react";
 import { subYears, format } from "date-fns";
 import {
@@ -25,7 +25,6 @@ import type {
   CashflowCategory,
 } from "@/app/api/reports/cashflow/route";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const iso = (d: Date) => format(d, "yyyy-MM-dd");
 
@@ -267,13 +266,11 @@ export function YoYReport({
   const accountIdsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
 
-  const { data: thisData, isLoading: lt } = useSWR<CashflowData>(
+  const { data: thisData, isLoading: lt } = useSwrJson<CashflowData>(
     `/api/reports/cashflow?from=${thisFY.from}&to=${thisFY.to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
-    fetcher,
   );
-  const { data: lastData, isLoading: ll } = useSWR<CashflowData>(
+  const { data: lastData, isLoading: ll } = useSwrJson<CashflowData>(
     `/api/reports/cashflow?from=${lastFY.from}&to=${lastFY.to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
-    fetcher,
   );
 
   const tree = useMemo(

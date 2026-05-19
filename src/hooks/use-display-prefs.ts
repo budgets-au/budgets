@@ -31,7 +31,6 @@ export function useDisplayPrefs(): {
 } {
   const { data, mutate } = useSWR<DisplayPrefs>(
     "/api/display-prefs",
-    fetcher,
     {
       revalidateOnFocus: true,
       fallbackData: { ...DISPLAY_PREFS_DEFAULT },

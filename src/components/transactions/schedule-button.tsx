@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Repeat } from "lucide-react";
 import Link from "next/link";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import {
   Dialog,
   DialogContent,
@@ -49,7 +49,6 @@ interface Props {
   };
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function ScheduleButton({ transaction, accounts, categoriesProp, scheduledMatch }: Props) {
   const [open, setOpen] = useState(false);
@@ -58,9 +57,8 @@ export function ScheduleButton({ transaction, accounts, categoriesProp, schedule
 
   // Prefer the parent-supplied list (already loaded for the table) so the
   // transfer/payment heuristic resolves synchronously on first render.
-  const { data: fetchedCategories = [] } = useSWR<Category[]>(
+  const { data: fetchedCategories = [] } = useSwrJson<Category[]>(
     open && !categoriesProp ? "/api/categories" : null,
-    fetcher,
   );
   const categories = categoriesProp ?? fetchedCategories;
 

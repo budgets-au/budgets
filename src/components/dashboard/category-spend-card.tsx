@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import Link from "next/link";
 import { Tag } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar } from "recharts";
@@ -9,7 +9,6 @@ import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { cn, formatAUD, amountClass } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface CategoryOption {
   id: string;
@@ -45,20 +44,18 @@ export function CategorySpendCard({
   const categoryId =
     typeof config?.categoryId === "string" ? config.categoryId : null;
 
-  const { data: categoriesData } = useSWR<CategoryOption[]>(
+  const { data: categoriesData } = useSwrJson<CategoryOption[]>(
     "/api/categories",
-    fetcher,
     { revalidateOnFocus: false },
   );
   const categories: CategoryOption[] = Array.isArray(categoriesData)
     ? categoriesData
     : [];
 
-  const { data: spendData } = useSWR<SpendResp>(
+  const { data: spendData } = useSwrJson<SpendResp>(
     categoryId
       ? `/api/dashboard/category-spend?categoryId=${categoryId}&days=30&includeChildren=true`
       : null,
-    fetcher,
     { revalidateOnFocus: false },
   );
 

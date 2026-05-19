@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import useSWR, { mutate as globalMutate } from "swr";
+import { mutate as globalMutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import {
   ArrowLeftRight,
   ChevronDown,
@@ -15,7 +16,6 @@ import { formatAUD, formatDate, amountClass } from "@/lib/utils";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface Suggestion {
   id: string;
@@ -35,9 +35,8 @@ interface Suggestion {
 }
 
 export function TransferSuggestionsPanel({ onChanged }: { onChanged?: () => void }) {
-  const { data: suggestions = [], mutate } = useSWR<Suggestion[]>(
+  const { data: suggestions = [], mutate } = useSwrJson<Suggestion[]>(
     "/api/transfers/suggestions",
-    fetcher,
   );
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Switch } from "@/components/ui/switch";
 import {
   ChevronDown,
@@ -19,7 +19,6 @@ import { colourForFrequency, dimColour, freqLabel } from "@/lib/schedule-colours
 import { invalidateCashflow } from "@/lib/invalidate-cashflow";
 import { toast } from "sonner";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface Observation {
   id: string;
@@ -63,9 +62,8 @@ export function ScheduleSuggestionsPanel({
   onAdded?: () => void;
 }) {
   const router = useRouter();
-  const { data: suggestions = [], mutate, isLoading } = useSWR<Suggestion[]>(
+  const { data: suggestions = [], mutate, isLoading } = useSwrJson<Suggestion[]>(
     "/api/scheduled/suggestions",
-    fetcher,
   );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showCovered, setShowCovered] = useState(false);

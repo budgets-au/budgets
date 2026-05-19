@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { OptionDateInput } from "./option-date-input";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export interface EditableInvestment {
   id: string;
@@ -52,9 +52,8 @@ export function EditInvestmentDialog({
 
   // Fetch vests so we can edit the maturation date directly. Only when open
   // and only for option/rsu kinds.
-  const { data: detail } = useSWR<DetailResponse>(
+  const { data: detail } = useSwrJson<DetailResponse>(
     open && inv.kind !== "stock" ? `/api/investments/${inv.id}` : null,
-    fetcher,
   );
 
   const [quantity, setQuantity] = useState(inv.quantity);

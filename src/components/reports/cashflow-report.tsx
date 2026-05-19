@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, createContext, useContext, useEffect, useState } from "react";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
@@ -79,7 +79,6 @@ function totalRangeLabel(from: string, to: string): string {
   return a === b ? a : `${a} – ${b}`;
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 type CellResult = { text: string; className: string };
 
@@ -1240,9 +1239,8 @@ export function CashflowReport({
   const opts: ColOpts = { showCounts, showAvg, showPlan, showDiff, monthAxis };
 
   const accountIdsParam = accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
-  const { data, isLoading } = useSWR<CashflowData>(
+  const { data, isLoading } = useSwrJson<CashflowData>(
     `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
-    fetcher
   );
 
   if (isLoading) {

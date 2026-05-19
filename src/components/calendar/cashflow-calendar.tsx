@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useAccountFilter } from "@/hooks/use-account-filter";
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import {
   format,
   startOfMonth,
@@ -97,7 +97,6 @@ interface CashflowApi {
   perAccount: AccountSeries[];
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function toISO(d: Date) {
@@ -197,15 +196,13 @@ export function CashflowCalendar({
   const calFrom = toISO(viewMode === "month" ? startOfMonth(month) : weekStart);
   const calTo = toISO(viewMode === "month" ? endOfMonth(month) : addDays(weekStart, 6));
 
-  const { data: calData } = useSWR<CashflowApi>(
+  const { data: calData } = useSwrJson<CashflowApi>(
     cashflowUrl(calFrom, calTo, accountIds),
-    fetcher,
   );
   const calDaily = calData?.daily ?? [];
 
-  const { data: chartApi, isLoading: chartLoading } = useSWR<CashflowApi>(
+  const { data: chartApi, isLoading: chartLoading } = useSwrJson<CashflowApi>(
     cashflowUrl(chartFrom, chartTo, accountIds),
-    fetcher,
   );
   const chartDaily = chartApi?.daily ?? [];
   const perAccount = chartApi?.perAccount ?? [];
@@ -220,9 +217,8 @@ export function CashflowCalendar({
   // navigating through years of older data.
   const overviewFrom = useMemo(() => toISO(subMonths(new Date(), 9)), []);
   const overviewTo = useMemo(() => toISO(addMonths(new Date(), 3)), []);
-  const { data: overviewApi } = useSWR<CashflowApi>(
+  const { data: overviewApi } = useSwrJson<CashflowApi>(
     cashflowUrl(overviewFrom, overviewTo, accountIds),
-    fetcher,
     { keepPreviousData: true },
   );
   const overviewDaily = overviewApi?.daily ?? [];
@@ -437,14 +433,14 @@ export function CashflowCalendar({
   // Frequency / payee lookup so matched real rows can render the
   // schedule pill. Keyed by scheduledTransaction.id; same SWR key the
   // transactions list uses, so the response is cached across views.
-  const { data: scheduledList = [] } = useSWR<
+  const { data: scheduledList = [] } = useSwrJson<
     {
       id: string;
       frequency: string;
       interval: number;
       payee: string | null;
     }[]
-  >("/api/scheduled", fetcher);
+  >("/api/scheduled");
   const scheduledById = useMemo(() => {
     const m = new Map<
       string,
@@ -1532,9 +1528,8 @@ function DayDetailPanel({
     limit: "500",
   });
   if (accountIds.length) txQuery.set("accountIds", accountIds.join(","));
-  const { data: txnResp, mutate: mutateTxns } = useSWR<TransactionRowData[]>(
+  const { data: txnResp, mutate: mutateTxns } = useSwrJson<TransactionRowData[]>(
     `/api/transactions?${txQuery}`,
-    fetcher,
     { keepPreviousData: true },
   );
   const realTxns: TransactionRowData[] = useMemo(
@@ -1545,9 +1540,9 @@ function DayDetailPanel({
   // Categories list — driven by the same SWR key the main /transactions
   // view uses, so the inline CategoryPicker inside TransactionRow has
   // the full hierarchy to pick from (and the cache is shared).
-  const { data: categories = [] } = useSWR<
+  const { data: categories = [] } = useSwrJson<
     { id: string; name: string; parentId: string | null }[]
-  >("/api/categories", fetcher);
+  >("/api/categories");
 
   // Per-row expansion state — same single-row-at-a-time pattern the
   // main list uses, isolated to this panel so opening a day's row

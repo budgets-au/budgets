@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import useSWR, { mutate } from "swr";
+import { mutate } from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trash2, Pencil, TrendingUp, Gift, Zap, Eye, Dices } from "lucide-react";
 import { toast } from "sonner";
@@ -12,7 +13,6 @@ import { InvestmentDetailPanel } from "./investment-detail-panel";
 import { EditInvestmentDialog } from "./edit-investment-dialog";
 import { WatchlistDetailPanel } from "./watchlist-detail-panel";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface ListRow {
   id: string;
@@ -63,8 +63,8 @@ type Selection =
   | null;
 
 export function InvestmentsView() {
-  const { data: rows = [], isLoading } = useSWR<ListRow[]>("/api/investments", fetcher);
-  const { data: watchRows = [] } = useSWR<WatchRow[]>("/api/watchlist", fetcher);
+  const { data: rows = [], isLoading } = useSwrJson<ListRow[]>("/api/investments");
+  const { data: watchRows = [] } = useSwrJson<WatchRow[]>("/api/watchlist");
   const [selection, setSelection] = useState<Selection>(null);
   // Auto-select the top stock by currentValue on first load so the detail
   // panel populates immediately. One-shot via a ref — if the user later

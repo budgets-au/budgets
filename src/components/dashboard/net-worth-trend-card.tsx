@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +30,6 @@ function NetWorthTooltip({
   );
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface TrendResp {
   trend: Array<{ date: string; netWorth: number }>;
@@ -50,9 +49,8 @@ interface TrendResp {
  * exceeded" the moment any widget was dragged onto a layout that
  * contained this card. */
 export function NetWorthTrendCard({ editMode }: { editMode?: boolean } = {}) {
-  const { data } = useSWR<TrendResp>(
+  const { data } = useSwrJson<TrendResp>(
     "/api/dashboard/net-worth-trend",
-    fetcher,
     { revalidateOnFocus: false },
   );
 

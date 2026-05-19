@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import { useSwrJson } from "@/hooks/use-swr-json";
 import { ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Crosshair } from "lucide-react";
@@ -8,7 +8,6 @@ import Link from "next/link";
 import { formatAUD, amountClass } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 interface InvestmentRow {
   kind: string;
@@ -29,13 +28,11 @@ interface TrendResp {
  * a count of options whose expiry is within the next 30 days as a
  * quick "what's about to expire" signal. */
 export function OptionsSummaryCard() {
-  const { data: rows = [], isLoading } = useSWR<InvestmentRow[]>(
+  const { data: rows = [], isLoading } = useSwrJson<InvestmentRow[]>(
     "/api/investments",
-    fetcher,
   );
-  const { data: trend } = useSWR<TrendResp>(
+  const { data: trend } = useSwrJson<TrendResp>(
     "/api/dashboard/options-trend?range=1m",
-    fetcher,
     { revalidateOnFocus: false },
   );
   const history = trend?.series ?? [];

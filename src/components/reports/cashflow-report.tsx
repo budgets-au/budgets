@@ -13,6 +13,22 @@ import { CashflowCellDialog, type CashflowCellQuery } from "./cashflow-cell-dial
 const CellOpenerContext = createContext<((q: CashflowCellQuery) => void) | null>(null);
 const useCellOpener = () => useContext(CellOpenerContext);
 
+/** Column-options context. Avoids threading `opts: ColOpts`
+ *  through every row component and JSX call-site. The interface
+ *  itself is declared further down with the rest of the
+ *  rendering types — TS hoists interfaces so a forward reference
+ *  is fine here. */
+const ColOptsContext = createContext<ColOpts | null>(null);
+function useColOpts(): ColOpts {
+  const v = useContext(ColOptsContext);
+  if (v === null) {
+    throw new Error(
+      "useColOpts must be called inside a ColOptsContext.Provider",
+    );
+  }
+  return v;
+}
+
 /** Per-row "hide" toggle. Each LeafRow / SubParentHeaderRow /
  * GrandparentHeaderRow looks this up to render its eye icon. The
  * `isHidden` predicate is shared so a parent's exclusion cascades
@@ -120,9 +136,23 @@ function AmountCell({
       ? "text-muted-foreground"
       : className;
   const isClickable = onClick && value !== undefined && value !== 0;
+  const content = isClickable ? (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className="hover:underline hover:text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded -mx-0.5 px-0.5 transition-colors"
+    >
+      {text}
+    </button>
+  ) : (
+    text
+  );
   return (
     <td
-      className={`px-3 py-1.5 text-right tabular-nums ${compact ? "text-[11px]" : ""} ${
+      className={`pl-3 pr-1.5 py-1.5 text-right tabular-nums ${compact ? "text-[11px]" : ""} ${
         colHighlight
           ? "bg-indigo-500/10 print:bg-transparent"
           : computed
@@ -132,35 +162,11 @@ function AmountCell({
     >
       {trailing ? (
         <span className="inline-flex items-center gap-0.5 align-baseline">
-          {isClickable ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClick();
-              }}
-              className="hover:underline hover:text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded -mx-0.5 px-0.5 transition-colors"
-            >
-              {text}
-            </button>
-          ) : (
-            text
-          )}
+          {content}
           {trailing}
         </span>
-      ) : isClickable ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClick();
-          }}
-          className="hover:underline hover:text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded -mx-0.5 px-0.5 transition-colors"
-        >
-          {text}
-        </button>
       ) : (
-        text
+        content
       )}
     </td>
   );
@@ -237,7 +243,7 @@ function BudgetCell({ value }: { value?: number }) {
   // Plan/mo is always a computed column — left separator + muted bg
   // baked in so callers don't repeat the styling everywhere.
   return (
-    <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground/70 bg-muted/40 border-l border-border">
+    <td className="pl-3 pr-1.5 py-1.5 text-right tabular-nums text-muted-foreground/70 bg-muted/40 border-l border-border">
       {text}
     </td>
   );
@@ -256,21 +262,24 @@ function SectionHeader({ label, cols }: { label: string; cols: number }) {
   );
 }
 
-// Aggregate byMonth values from multiple categories
-function aggregateByMonth(cats: CashflowCategory[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const cat of cats) {
-    for (const [m, v] of Object.entries(cat.byMonth)) {
-      out[m] = (out[m] ?? 0) + v;
-    }
-  }
-  return out;
-}
+/** Sum any `Record<string, number>` field across a list of
+ *  categories — `byMonth`, `countByMonth`, `budgetByMonth`,
+ *  `scheduledByMonth` all collapse through one helper. The
+ *  typed `AggregableField` union keeps the field-name
+ *  parameter compile-checked. */
+type AggregableField =
+  | "byMonth"
+  | "countByMonth"
+  | "budgetByMonth"
+  | "scheduledByMonth";
 
-function aggregateCountByMonth(cats: CashflowCategory[]): Record<string, number> {
+function aggregateField(
+  cats: CashflowCategory[],
+  field: AggregableField,
+): Record<string, number> {
   const out: Record<string, number> = {};
   for (const cat of cats) {
-    for (const [m, v] of Object.entries(cat.countByMonth)) {
+    for (const [m, v] of Object.entries(cat[field] ?? {})) {
       out[m] = (out[m] ?? 0) + v;
     }
   }
@@ -322,24 +331,6 @@ type DisplayGroup = GrandparentGroup | StandaloneGroup;
 
 function sumBudget(cats: CashflowCategory[]): number { return cats.reduce((s, c) => s + c.budgetPerMonth, 0); }
 function sumScheduled(cats: CashflowCategory[]): number { return cats.reduce((s, c) => s + c.scheduledPerMonth, 0); }
-function aggregateBudgetByMonth(cats: CashflowCategory[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const c of cats) {
-    for (const [m, v] of Object.entries(c.budgetByMonth ?? {})) {
-      out[m] = (out[m] ?? 0) + v;
-    }
-  }
-  return out;
-}
-function aggregateScheduledByMonth(cats: CashflowCategory[]): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const c of cats) {
-    for (const [m, v] of Object.entries(c.scheduledByMonth ?? {})) {
-      out[m] = (out[m] ?? 0) + v;
-    }
-  }
-  return out;
-}
 
 function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
   const depth0 = cats.filter((c) => !c.parentId);
@@ -382,11 +373,11 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
       handledDepth1Ids.add(p1.id);
       const grandkids = (grandchildrenByParentId.get(p1.id) ?? []).sort((a, b) => a.name.localeCompare(b.name));
       const allInSub = depth1ById.has(p1.id) ? [p1, ...grandkids] : grandkids;
-      const byMonth = aggregateByMonth(allInSub);
-      const countByMonth = aggregateCountByMonth(allInSub);
+      const byMonth = aggregateField(allInSub, "byMonth");
+      const countByMonth = aggregateField(allInSub, "countByMonth");
       const total = Object.values(byMonth).reduce((s, v) => s + v, 0);
       const totalCount = Object.values(countByMonth).reduce((s, v) => s + v, 0);
-      parentSubs.push({ parentId: p1.id, parentName: p1.name, parentCat: p1, byMonth, countByMonth, total, totalCount, budgetPerMonth: sumBudget(allInSub), scheduledPerMonth: sumScheduled(allInSub), budgetByMonth: aggregateBudgetByMonth(allInSub), scheduledByMonth: aggregateScheduledByMonth(allInSub), children: grandkids });
+      parentSubs.push({ parentId: p1.id, parentName: p1.name, parentCat: p1, byMonth, countByMonth, total, totalCount, budgetPerMonth: sumBudget(allInSub), scheduledPerMonth: sumScheduled(allInSub), budgetByMonth: aggregateField(allInSub, "budgetByMonth"), scheduledByMonth: aggregateField(allInSub, "scheduledByMonth"), children: grandkids });
     }
 
     // depth-2 cats whose depth-1 parent has no own transactions
@@ -396,11 +387,11 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
       if (!coveredParentIds.has(c.parentId!)) {
         coveredParentIds.add(c.parentId!);
         const siblings = depth2UnderGp.filter((x) => x.parentId === c.parentId).sort((a, b) => a.name.localeCompare(b.name));
-        const byMonth = aggregateByMonth(siblings);
-        const countByMonth = aggregateCountByMonth(siblings);
+        const byMonth = aggregateField(siblings, "byMonth");
+        const countByMonth = aggregateField(siblings, "countByMonth");
         const total = Object.values(byMonth).reduce((s, v) => s + v, 0);
         const totalCount = Object.values(countByMonth).reduce((s, v) => s + v, 0);
-        parentSubs.push({ parentId: c.parentId!, parentName: c.parentName ?? "Unknown", byMonth, countByMonth, total, totalCount, budgetPerMonth: sumBudget(siblings), scheduledPerMonth: sumScheduled(siblings), budgetByMonth: aggregateBudgetByMonth(siblings), scheduledByMonth: aggregateScheduledByMonth(siblings), children: siblings });
+        parentSubs.push({ parentId: c.parentId!, parentName: c.parentName ?? "Unknown", byMonth, countByMonth, total, totalCount, budgetPerMonth: sumBudget(siblings), scheduledPerMonth: sumScheduled(siblings), budgetByMonth: aggregateField(siblings, "budgetByMonth"), scheduledByMonth: aggregateField(siblings, "scheduledByMonth"), children: siblings });
       }
     }
 
@@ -409,12 +400,12 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
     const gpOwnCat = depth0ById.get(gpId);
     const allForGp: CashflowCategory[] = gpOwnCat ? [gpOwnCat] : [];
     for (const sub of parentSubs) allForGp.push(...sub.children, ...(sub.parentCat ? [sub.parentCat] : []));
-    const gpByMonth = aggregateByMonth(allForGp);
-    const gpCountByMonth = aggregateCountByMonth(allForGp);
+    const gpByMonth = aggregateField(allForGp, "byMonth");
+    const gpCountByMonth = aggregateField(allForGp, "countByMonth");
     const gpTotal = Object.values(gpByMonth).reduce((s, v) => s + v, 0);
     const gpTotalCount = Object.values(gpCountByMonth).reduce((s, v) => s + v, 0);
 
-    grandparentGroups.set(gpId, { kind: "grandparent", grandparentId: gpId, grandparentName, hasDirect: gpOwnCat !== undefined, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetPerMonth: sumBudget(allForGp), scheduledPerMonth: sumScheduled(allForGp), budgetByMonth: aggregateBudgetByMonth(allForGp), scheduledByMonth: aggregateScheduledByMonth(allForGp), subGroups: parentSubs });
+    grandparentGroups.set(gpId, { kind: "grandparent", grandparentId: gpId, grandparentName, hasDirect: gpOwnCat !== undefined, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetPerMonth: sumBudget(allForGp), scheduledPerMonth: sumScheduled(allForGp), budgetByMonth: aggregateField(allForGp, "budgetByMonth"), scheduledByMonth: aggregateField(allForGp, "scheduledByMonth"), subGroups: parentSubs });
   }
 
   const depth0IdsAsGrandparents = new Set(grandparentGroups.keys());
@@ -440,18 +431,18 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
         .sort((a, b) => a.name.localeCompare(b.name))
         .map((k) => {
           handledDepth1Ids.add(k.id);
-          const byMonth = aggregateByMonth([k]);
-          const countByMonth = aggregateCountByMonth([k]);
+          const byMonth = aggregateField([k], "byMonth");
+          const countByMonth = aggregateField([k], "countByMonth");
           const total = Object.values(byMonth).reduce((s, v) => s + v, 0);
           const totalCount = Object.values(countByMonth).reduce((s, v) => s + v, 0);
           return { parentId: k.id, parentName: k.name, parentCat: k, byMonth, countByMonth, total, totalCount, budgetPerMonth: k.budgetPerMonth, scheduledPerMonth: k.scheduledPerMonth, budgetByMonth: { ...k.budgetByMonth }, scheduledByMonth: { ...k.scheduledByMonth }, children: [] };
         });
       const allForGp: CashflowCategory[] = [cat, ...subGroups.flatMap((s) => s.parentCat ? [s.parentCat] : [])];
-      const gpByMonth = aggregateByMonth(allForGp);
-      const gpCountByMonth = aggregateCountByMonth(allForGp);
+      const gpByMonth = aggregateField(allForGp, "byMonth");
+      const gpCountByMonth = aggregateField(allForGp, "countByMonth");
       const gpTotal = Object.values(gpByMonth).reduce((s, v) => s + v, 0);
       const gpTotalCount = Object.values(gpCountByMonth).reduce((s, v) => s + v, 0);
-      groups.push({ kind: "grandparent", grandparentId: cat.id, grandparentName: cat.name, hasDirect: true, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetPerMonth: sumBudget(allForGp), scheduledPerMonth: sumScheduled(allForGp), budgetByMonth: aggregateBudgetByMonth(allForGp), scheduledByMonth: aggregateScheduledByMonth(allForGp), subGroups });
+      groups.push({ kind: "grandparent", grandparentId: cat.id, grandparentName: cat.name, hasDirect: true, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetPerMonth: sumBudget(allForGp), scheduledPerMonth: sumScheduled(allForGp), budgetByMonth: aggregateField(allForGp, "budgetByMonth"), scheduledByMonth: aggregateField(allForGp, "scheduledByMonth"), subGroups });
     }
   }
 
@@ -471,8 +462,8 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
     const parentName = kids[0].parentName ?? "Unknown";
     const sorted = kids.sort((a, b) => a.name.localeCompare(b.name));
     const newSubGroups: ParentSubGroup[] = sorted.map((k) => {
-      const byMonth = aggregateByMonth([k]);
-      const countByMonth = aggregateCountByMonth([k]);
+      const byMonth = aggregateField([k], "byMonth");
+      const countByMonth = aggregateField([k], "countByMonth");
       const total = Object.values(byMonth).reduce((s, v) => s + v, 0);
       const totalCount = Object.values(countByMonth).reduce((s, v) => s + v, 0);
       return { parentId: k.id, parentName: k.name, parentCat: k, byMonth, countByMonth, total, totalCount, budgetPerMonth: k.budgetPerMonth, scheduledPerMonth: k.scheduledPerMonth, budgetByMonth: { ...k.budgetByMonth }, scheduledByMonth: { ...k.scheduledByMonth }, children: [] };
@@ -487,20 +478,20 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
       for (const sub of existing.subGroups) {
         allForGp.push(...sub.children, ...(sub.parentCat ? [sub.parentCat] : []));
       }
-      existing.byMonth = aggregateByMonth(allForGp);
-      existing.countByMonth = aggregateCountByMonth(allForGp);
+      existing.byMonth = aggregateField(allForGp, "byMonth");
+      existing.countByMonth = aggregateField(allForGp, "countByMonth");
       existing.total = Object.values(existing.byMonth).reduce((s, v) => s + v, 0);
       existing.totalCount = Object.values(existing.countByMonth).reduce((s, v) => s + v, 0);
       existing.budgetPerMonth = sumBudget(allForGp);
       existing.scheduledPerMonth = sumScheduled(allForGp);
-      existing.budgetByMonth = aggregateBudgetByMonth(allForGp);
-      existing.scheduledByMonth = aggregateScheduledByMonth(allForGp);
+      existing.budgetByMonth = aggregateField(allForGp, "budgetByMonth");
+      existing.scheduledByMonth = aggregateField(allForGp, "scheduledByMonth");
     } else {
-      const gpByMonth = aggregateByMonth(sorted);
-      const gpCountByMonth = aggregateCountByMonth(sorted);
+      const gpByMonth = aggregateField(sorted, "byMonth");
+      const gpCountByMonth = aggregateField(sorted, "countByMonth");
       const gpTotal = Object.values(gpByMonth).reduce((s, v) => s + v, 0);
       const gpTotalCount = Object.values(gpCountByMonth).reduce((s, v) => s + v, 0);
-      groups.push({ kind: "grandparent", grandparentId: parentId, grandparentName: parentName, hasDirect: false, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetPerMonth: sumBudget(sorted), scheduledPerMonth: sumScheduled(sorted), budgetByMonth: aggregateBudgetByMonth(sorted), scheduledByMonth: aggregateScheduledByMonth(sorted), subGroups: newSubGroups });
+      groups.push({ kind: "grandparent", grandparentId: parentId, grandparentName: parentName, hasDirect: false, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetPerMonth: sumBudget(sorted), scheduledPerMonth: sumScheduled(sorted), budgetByMonth: aggregateField(sorted, "budgetByMonth"), scheduledByMonth: aggregateField(sorted, "scheduledByMonth"), subGroups: newSubGroups });
     }
   }
 
@@ -548,9 +539,106 @@ function totalDiff(
   return total - planSum * (negate ? -1 : 1);
 }
 
+/** Per-month cell block shared by `ParentHeaderRow`,
+ *  `SubParentHeaderRow`, and `LeafRow`. Renders the
+ *  [Plan? · Actual · Diff? · Count?] fragment per month
+ *  with consistent column highlighting + border / muted /
+ *  overPlan behaviour. `TotalsRow` opts out and keeps its
+ *  own loop — its placeholder cells for Plan / Diff don't
+ *  fit this abstraction cleanly.
+ *
+ *  Pre-applied "no data" view: callers that want to hide
+ *  values (e.g. parent / sub-parent rows at a totalsLevel
+ *  that suppresses them) pass `byMonth={}` /
+ *  `budgetByMonth={}` / `scheduledByMonth={}` instead of a
+ *  separate `showValues` flag. Empty objects naturally
+ *  render every cell as `—` via `formatAmount`. */
+function MonthCells({
+  months,
+  thisMonth,
+  byMonth,
+  budgetByMonth,
+  scheduledByMonth,
+  countByMonth,
+  negate,
+  onOpenMonth,
+  mutedActual,
+}: {
+  months: string[];
+  thisMonth: string;
+  byMonth: Record<string, number>;
+  budgetByMonth?: Record<string, number>;
+  scheduledByMonth?: Record<string, number>;
+  /** Optional — when present, the Counts column renders a
+   *  `CountCell` with the per-month count. When absent (e.g.
+   *  on a parent / sub-parent header row where counts aren't
+   *  the row's own — they belong to its leaves), an empty
+   *  placeholder `<td>` is rendered to keep column alignment. */
+  countByMonth?: Record<string, number>;
+  negate?: boolean;
+  onOpenMonth?: (m: string) => void;
+  /** Parent / sub-parent rows render the Actual cell as
+   *  muted (de-emphasised vs leaf rows) when not over plan.
+   *  Leaf rows omit this so the actual amount reads in
+   *  foreground. */
+  mutedActual?: boolean;
+}) {
+  const opts = useColOpts();
+  return (
+    <>
+      {months.map((m) => {
+        const plan = planAt(budgetByMonth, scheduledByMonth, m);
+        const actual = byMonth[m];
+        const over = isOverPlan(actual, plan, !!negate);
+        const diff = monthDiff(actual, plan, !!negate);
+        return (
+          <Fragment key={m}>
+            {opts.showPlan && (
+              <MonthSubCell value={plan} colHighlight={m === thisMonth} borderLeft />
+            )}
+            <AmountCell
+              value={actual}
+              negate={negate}
+              colHighlight={m === thisMonth}
+              muted={mutedActual && !over}
+              overPlan={over}
+              borderLeft={!opts.showPlan}
+              onClick={onOpenMonth ? () => onOpenMonth(m) : undefined}
+            />
+            {opts.showDiff && (
+              <AmountCell
+                value={diff}
+                mode="plain"
+                compact
+                computed
+                colHighlight={m === thisMonth}
+              />
+            )}
+            {opts.showCounts &&
+              (countByMonth ? (
+                <CountCell
+                  value={countByMonth[m]}
+                  colHighlight={m === thisMonth}
+                />
+              ) : (
+                <td
+                  className={
+                    m === thisMonth
+                      ? "bg-indigo-500/10 print:bg-transparent"
+                      : ""
+                  }
+                />
+              ))}
+          </Fragment>
+        );
+      })}
+    </>
+  );
+}
+
 function ParentHeaderRow({
   name, months, byMonth, countByMonth, total, totalCount, thisMonth,
-  negate, href, grandparent, hasDirect, showValues = true, opts,
+  negate, href, grandparent, hasDirect, showValues = true,
   budgetPerMonth, scheduledPerMonth, budgetByMonth, scheduledByMonth,
   isCollapsed, onToggle, categoryIdForCell, fromForCell, toForCell,
   hideTargetId, isHidden,
@@ -567,7 +655,6 @@ function ParentHeaderRow({
   grandparent?: boolean;
   hasDirect?: boolean;
   showValues?: boolean;
-  opts: ColOpts;
   budgetPerMonth?: number;
   scheduledPerMonth?: number;
   budgetByMonth?: Record<string, number>;
@@ -584,6 +671,7 @@ function ParentHeaderRow({
   hideTargetId?: string;
   isHidden?: boolean;
 }) {
+  const opts = useColOpts();
   const display = (v: number | undefined) => (negate && v !== undefined ? -v : v);
   const Chevron = isCollapsed ? ChevronRight : ChevronDown;
   const nameColor = hasDirect ? "text-rose-500/70" : "text-muted-foreground";
@@ -628,40 +716,19 @@ function ParentHeaderRow({
           {hideTargetId && <HideEye catId={hideTargetId} isHidden={!!isHidden} />}
         </span>
       </td>
-      {opts.monthAxis &&
-        months.map((m) => {
-          const plan = showValues ? planAt(budgetByMonth, scheduledByMonth, m) : undefined;
-          const actual = showValues ? byMonth[m] : undefined;
-          const over = isOverPlan(actual, plan, !!negate);
-          const diff = showValues
-            ? monthDiff(byMonth[m], plan, !!negate)
-            : undefined;
-          return (
-            <Fragment key={m}>
-              {opts.showPlan && (
-                <MonthSubCell value={plan} colHighlight={m === thisMonth} borderLeft />
-              )}
-              <AmountCell
-                value={showValues ? display(byMonth[m]) : undefined}
-                colHighlight={m === thisMonth}
-                muted={!over}
-                overPlan={over}
-                borderLeft={!opts.showPlan}
-                onClick={showValues && openMonth ? () => openMonth(m) : undefined}
-              />
-              {opts.showDiff && (
-                <AmountCell
-                  value={diff}
-                  mode="plain"
-                  compact
-                  computed
-                  colHighlight={m === thisMonth}
-                />
-              )}
-              {opts.showCounts && <td className={m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""} />}
-            </Fragment>
-          );
-        })}
+      {opts.monthAxis && (
+        <MonthCells
+          months={months}
+          thisMonth={thisMonth}
+          byMonth={showValues ? byMonth : {}}
+          budgetByMonth={showValues ? budgetByMonth : undefined}
+          scheduledByMonth={showValues ? scheduledByMonth : undefined}
+          negate={negate}
+
+          onOpenMonth={showValues ? openMonth : undefined}
+          mutedActual
+        />
+      )}
       <AmountCell
         value={showValues ? display(total) : undefined}
         muted
@@ -691,7 +758,7 @@ function ParentHeaderRow({
 
 function SubParentHeaderRow({
   sub, months, thisMonth, negate, from, to,
-  showValues = true, opts, isCollapsed, onToggle, isHidden,
+  showValues = true, isCollapsed, onToggle, isHidden,
 }: {
   sub: ParentSubGroup;
   months: string[];
@@ -700,11 +767,11 @@ function SubParentHeaderRow({
   from: string;
   to: string;
   showValues?: boolean;
-  opts: ColOpts;
   isCollapsed?: boolean;
   onToggle?: () => void;
   isHidden?: boolean;
 }) {
+  const opts = useColOpts();
   const display = (v: number | undefined) => (negate && v !== undefined ? -v : v);
   // URL-encode every interpolated value even though they're DB-
   // controlled (UUIDs and ISO dates). Keeps the href provably safe
@@ -753,40 +820,19 @@ function SubParentHeaderRow({
           <HideEye catId={sub.parentId} isHidden={!!isHidden} />
         </span>
       </td>
-      {opts.monthAxis &&
-        months.map((m) => {
-          const plan = planAt(sub.budgetByMonth, sub.scheduledByMonth, m);
-          const actual = showValues ? sub.byMonth[m] : undefined;
-          const over = isOverPlan(actual, plan, !!negate);
-          const diff = showValues
-            ? monthDiff(sub.byMonth[m], plan, !!negate)
-            : undefined;
-          return (
-            <Fragment key={m}>
-              {opts.showPlan && (
-                <MonthSubCell value={plan} colHighlight={m === thisMonth} borderLeft />
-              )}
-              <AmountCell
-                value={showValues ? display(sub.byMonth[m]) : undefined}
-                colHighlight={m === thisMonth}
-                muted={!over}
-                overPlan={over}
-                borderLeft={!opts.showPlan}
-                onClick={showValues && openMonth ? () => openMonth(m) : undefined}
-              />
-              {opts.showDiff && (
-                <AmountCell
-                  value={diff}
-                  mode="plain"
-                  compact
-                  computed
-                  colHighlight={m === thisMonth}
-                />
-              )}
-              {opts.showCounts && <td className={m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""} />}
-            </Fragment>
-          );
-        })}
+      {opts.monthAxis && (
+        <MonthCells
+          months={months}
+          thisMonth={thisMonth}
+          byMonth={showValues ? sub.byMonth : {}}
+          budgetByMonth={sub.budgetByMonth}
+          scheduledByMonth={sub.scheduledByMonth}
+          negate={negate}
+
+          onOpenMonth={showValues ? openMonth : undefined}
+          mutedActual
+        />
+      )}
       <AmountCell
         value={showValues ? display(sub.total) : undefined}
         muted
@@ -813,7 +859,7 @@ function SubParentHeaderRow({
 }
 
 function LeafRow({
-  cat, months, thisMonth, negate, from, to, opts, indent, isHidden,
+  cat, months, thisMonth, negate, from, to, indent, isHidden,
 }: {
   cat: CashflowCategory;
   months: string[];
@@ -821,10 +867,10 @@ function LeafRow({
   negate?: boolean;
   from: string;
   to: string;
-  opts: ColOpts;
   indent: "none" | "child" | "grandchild";
   isHidden?: boolean;
 }) {
+  const opts = useColOpts();
   // Uncategorised synthetic rows ("uncategorised-income"/"uncategorised-expenses")
   // get a clickthrough to the transactions page filtered by NULL category, with
   // a direction filter so income and expense each open their own slice.
@@ -880,37 +926,19 @@ function LeafRow({
           {!isUncategorised && <HideEye catId={cat.id} isHidden={!!isHidden} />}
         </span>
       </td>
-      {opts.monthAxis &&
-        months.map((m) => {
-          const plan = planAt(cat.budgetByMonth, cat.scheduledByMonth, m);
-          const over = isOverPlan(cat.byMonth[m], plan, !!negate);
-          const diff = monthDiff(cat.byMonth[m], plan, !!negate);
-          return (
-            <Fragment key={m}>
-              {opts.showPlan && (
-                <MonthSubCell value={plan} colHighlight={m === thisMonth} borderLeft />
-              )}
-              <AmountCell
-                value={cat.byMonth[m]}
-                colHighlight={m === thisMonth}
-                negate={negate}
-                overPlan={over}
-                borderLeft={!opts.showPlan}
-                onClick={openMonth ? () => openMonth(m) : undefined}
-              />
-              {opts.showDiff && (
-                <AmountCell
-                  value={diff}
-                  mode="plain"
-                  compact
-                  computed
-                  colHighlight={m === thisMonth}
-                />
-              )}
-              {opts.showCounts && <CountCell value={cat.countByMonth[m]} colHighlight={m === thisMonth} />}
-            </Fragment>
-          );
-        })}
+      {opts.monthAxis && (
+        <MonthCells
+          months={months}
+          thisMonth={thisMonth}
+          byMonth={cat.byMonth}
+          budgetByMonth={cat.budgetByMonth}
+          scheduledByMonth={cat.scheduledByMonth}
+          countByMonth={cat.countByMonth}
+          negate={negate}
+
+          onOpenMonth={openMonth}
+        />
+      )}
       <AmountCell value={cat.total} negate={negate} computed onClick={openTotal} />
       {opts.showCounts && <CountCell value={cat.totalCount} computed />}
       {opts.showAvg && <AmountCell value={months.length > 0 ? cat.total / months.length : undefined} negate={negate} muted computed />}
@@ -927,12 +955,8 @@ function LeafRow({
   );
 }
 
-function ChildRow(p: Omit<Parameters<typeof LeafRow>[0], "indent">) { return <LeafRow {...p} indent="child" />; }
-function GrandchildRow(p: Omit<Parameters<typeof LeafRow>[0], "indent">) { return <LeafRow {...p} indent="grandchild" />; }
-function StandaloneRow(p: Omit<Parameters<typeof LeafRow>[0], "indent">) { return <LeafRow {...p} indent="none" />; }
-
 function TotalsRow({
-  label, months, values, thisMonth, mode, negate, opts,
+  label, months, values, thisMonth, mode, negate,
 }: {
   label: string;
   months: string[];
@@ -940,8 +964,8 @@ function TotalsRow({
   thisMonth: string;
   mode?: "plain" | "net" | "balance";
   negate?: boolean;
-  opts: ColOpts;
 }) {
+  const opts = useColOpts();
   const total = Object.values(values).reduce((s, v) => s + v, 0);
   const avg = months.length > 0 ? total / months.length : undefined;
   return (
@@ -959,18 +983,18 @@ function TotalsRow({
           </Fragment>
         ))}
       {mode === "balance" ? (
-        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums bg-muted/40 border-l border-border">—</td>
+        <td className="pl-3 pr-1.5 py-2 text-right text-muted-foreground tabular-nums bg-muted/40 border-l border-border">—</td>
       ) : (
         <AmountCell value={total} mode={mode} negate={negate} computed />
       )}
       {opts.showCounts && <td className="px-2 py-2 bg-muted/40 border-l border-border" />}
       {opts.showAvg && (mode === "balance" ? (
-        <td className="px-3 py-2 text-right text-muted-foreground tabular-nums bg-muted/40 border-l border-border">—</td>
+        <td className="pl-3 pr-1.5 py-2 text-right text-muted-foreground tabular-nums bg-muted/40 border-l border-border">—</td>
       ) : (
         <AmountCell value={avg} mode={mode} negate={negate} muted computed />
       ))}
-      {opts.showPlan && <td className="px-3 py-2 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>}
-      {opts.showDiff && <td className="px-3 py-2 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>}
+      {opts.showPlan && <td className="pl-3 pr-1.5 py-2 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>}
+      {opts.showDiff && <td className="pl-3 pr-1.5 py-2 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>}
     </tr>
   );
 }
@@ -1006,13 +1030,12 @@ function renderGroups(
   to: string,
   totalsLevel: TotalsLevel,
   collapse: CollapseState,
-  opts: ColOpts,
   isHiddenCat: (id: string) => boolean,
 ) {
   return groups.map((g) => {
     if (g.kind === "standalone") {
       return (
-        <StandaloneRow
+        <LeafRow
           key={g.cat.id}
           cat={g.cat}
           months={months}
@@ -1020,7 +1043,7 @@ function renderGroups(
           negate={negate}
           from={from}
           to={to}
-          opts={opts}
+          indent="none"
           isHidden={isHiddenCat(g.cat.id)}
         />
       );
@@ -1037,7 +1060,6 @@ function renderGroups(
         to={to}
         totalsLevel={totalsLevel}
         collapse={collapse}
-        opts={opts}
         isHiddenCat={isHiddenCat}
       />
     );
@@ -1045,7 +1067,7 @@ function renderGroups(
 }
 
 function GrandparentRows({
-  group, months, thisMonth, negate, from, to, totalsLevel, collapse, opts, isHiddenCat,
+  group, months, thisMonth, negate, from, to, totalsLevel, collapse, isHiddenCat,
 }: {
   group: GrandparentGroup;
   months: string[];
@@ -1055,7 +1077,6 @@ function GrandparentRows({
   to: string;
   totalsLevel: TotalsLevel;
   collapse: CollapseState;
-  opts: ColOpts;
   isHiddenCat: (id: string) => boolean;
 }) {
   const isGpCollapsed = collapse.collapsedGps.has(group.grandparentId);
@@ -1080,7 +1101,7 @@ function GrandparentRows({
             : undefined
         }
         showValues={totalsLevel === "grandparent"}
-        opts={opts}
+
         budgetPerMonth={group.budgetPerMonth}
         scheduledPerMonth={group.scheduledPerMonth}
         budgetByMonth={group.budgetByMonth}
@@ -1096,7 +1117,7 @@ function GrandparentRows({
       {!isGpCollapsed && group.subGroups.map((sub) => {
         if (sub.children.length === 0) {
           return sub.parentCat ? (
-            <ChildRow
+            <LeafRow
               key={sub.parentId}
               cat={sub.parentCat}
               months={months}
@@ -1104,7 +1125,8 @@ function GrandparentRows({
               negate={negate}
               from={from}
               to={to}
-              opts={opts}
+
+              indent="child"
               isHidden={gpHidden || isHiddenCat(sub.parentCat.id)}
             />
           ) : null;
@@ -1121,13 +1143,13 @@ function GrandparentRows({
               from={from}
               to={to}
               showValues={totalsLevel !== "none"}
-              opts={opts}
+
               isCollapsed={isSubCollapsed}
               onToggle={() => collapse.onToggleSub(sub.parentId)}
               isHidden={subHidden}
             />
             {!isSubCollapsed && sub.children.map((gc) => (
-              <GrandchildRow
+              <LeafRow
                 key={gc.id}
                 cat={gc}
                 months={months}
@@ -1135,7 +1157,8 @@ function GrandparentRows({
                 negate={negate}
                 from={from}
                 to={to}
-                opts={opts}
+
+                indent="grandchild"
                 isHidden={subHidden || isHiddenCat(gc.id)}
               />
             ))}
@@ -1283,8 +1306,8 @@ export function CashflowReport({
   // Recompute aggregate totals from visible cats so hidden cats don't
   // pollute Total Income / Total Expenses / Surplus.
   const totals = {
-    income: aggregateByMonth(visibleIncome),
-    expenses: aggregateByMonth(visibleExpenses),
+    income: aggregateField(visibleIncome, "byMonth"),
+    expenses: aggregateField(visibleExpenses, "byMonth"),
     net: {} as Record<string, number>,
   };
   for (const m of months) {
@@ -1310,6 +1333,7 @@ export function CashflowReport({
   return (
     <CellOpenerContext.Provider value={setCellQuery}>
     <HideToggleContext.Provider value={{ isHidden: (id) => excludedSet.has(id), toggle: toggleHideCat }}>
+    <ColOptsContext.Provider value={opts}>
     <div className="space-y-3 print-landscape">
       <div className="flex items-center justify-between gap-4 print:hidden">
         {/* Collapse all / Expand all */}
@@ -1429,7 +1453,7 @@ export function CashflowReport({
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-muted">
-            <th className="text-left px-3 py-2 font-semibold sticky top-0 left-0 bg-muted w-44 min-w-44 z-20 shadow-[inset_0_-1px_0_0_var(--border)]">
+            <th className="text-left px-3 py-2 font-semibold sticky top-0 left-0 bg-muted min-w-44 z-20 shadow-[inset_0_-1px_0_0_var(--border)]">
               Category
             </th>
             {monthAxis &&
@@ -1441,7 +1465,7 @@ export function CashflowReport({
                     </th>
                   )}
                   <th
-                    className={`text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${!showPlan ? "border-l border-border" : ""} ${
+                    className={`text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${!showPlan ? "border-l border-border" : ""} ${
                       m === thisMonth ? "bg-indigo-500/15 print:bg-transparent text-indigo-600 dark:text-indigo-400" : "bg-muted"
                     }`}
                   >
@@ -1453,30 +1477,30 @@ export function CashflowReport({
                     </th>
                   )}
                   {showCounts && (
-                    <th className={`text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
+                    <th className={`text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap w-[40px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
                       #
                     </th>
                   )}
                 </Fragment>
               ))}
-            <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
+            <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
               Total
             </th>
             {showCounts && (
-              <th className="text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">#</th>
+              <th className="text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap w-[40px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">#</th>
             )}
             {showAvg && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] text-muted-foreground bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Avg/mo
               </th>
             )}
             {showPlan && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground/70 bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] text-muted-foreground/70 bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Plan/mo
               </th>
             )}
             {showDiff && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Diff
               </th>
             )}
@@ -1486,8 +1510,8 @@ export function CashflowReport({
         <tbody>
           {/* ── SUMMARY ── */}
           <SectionHeader label="Summary" cols={totalCols} />
-          <TotalsRow label="Closing Balance" months={months} values={closingBalance} thisMonth={thisMonth} mode="balance" opts={opts} />
-          <TotalsRow label="Surplus / Deficit" months={months} values={totals.net} thisMonth={thisMonth} mode="net" opts={opts} />
+          <TotalsRow label="Closing Balance" months={months} values={closingBalance} thisMonth={thisMonth} mode="balance" />
+          <TotalsRow label="Surplus / Deficit" months={months} values={totals.net} thisMonth={thisMonth} mode="net" />
 
           {/* ── INCOME ── */}
           <SectionHeader label="Income Categories" cols={totalCols} />
@@ -1498,8 +1522,8 @@ export function CashflowReport({
               </td>
             </tr>
           )}
-          {renderGroups(incomeGroups, months, thisMonth, false, from, to, totalsLevel, collapse, opts, () => false)}
-          <TotalsRow label="Total Income" months={months} values={totals.income} thisMonth={thisMonth} mode="net" opts={opts} />
+          {renderGroups(incomeGroups, months, thisMonth, false, from, to, totalsLevel, collapse, () => false)}
+          <TotalsRow label="Total Income" months={months} values={totals.income} thisMonth={thisMonth} mode="net" />
 
           {/* ── EXPENSES ── */}
           <SectionHeader label="Expense Categories" cols={totalCols} />
@@ -1510,8 +1534,8 @@ export function CashflowReport({
               </td>
             </tr>
           )}
-          {renderGroups(expenseGroups, months, thisMonth, true, from, to, totalsLevel, collapse, opts, () => false)}
-          <TotalsRow label="Total Expenses" months={months} values={totals.expenses} thisMonth={thisMonth} negate opts={opts} />
+          {renderGroups(expenseGroups, months, thisMonth, true, from, to, totalsLevel, collapse, () => false)}
+          <TotalsRow label="Total Expenses" months={months} values={totals.expenses} thisMonth={thisMonth} negate />
 
           {/* ── HIDDEN CATEGORIES ── only when the operator has flipped
               showHidden on AND there's at least one hidden cat with
@@ -1523,8 +1547,8 @@ export function CashflowReport({
                 label="Hidden Categories (excluded from totals)"
                 cols={totalCols}
               />
-              {renderGroups(hiddenIncomeGroups, months, thisMonth, false, from, to, totalsLevel, collapse, opts, () => true)}
-              {renderGroups(hiddenExpenseGroups, months, thisMonth, true, from, to, totalsLevel, collapse, opts, () => true)}
+              {renderGroups(hiddenIncomeGroups, months, thisMonth, false, from, to, totalsLevel, collapse, () => true)}
+              {renderGroups(hiddenExpenseGroups, months, thisMonth, true, from, to, totalsLevel, collapse, () => true)}
             </>
           )}
         </tbody>
@@ -1537,6 +1561,7 @@ export function CashflowReport({
       onClose={() => setCellQuery(null)}
     />
     </div>
+    </ColOptsContext.Provider>
     </HideToggleContext.Provider>
     </CellOpenerContext.Provider>
   );

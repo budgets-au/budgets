@@ -9,6 +9,71 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.188.0 — 2026-05-19
+
+### Changed
+- **Cashflow renderer cleanup pass — `MonthCells` +
+  inlined `LeafRow` wrappers + generic `aggregateField` +
+  simpler `AmountCell` body + `ColOptsContext`.** Five
+  no-behaviour-change refactors in
+  [cashflow-report.tsx](src/components/reports/cashflow-report.tsx):
+  - The `months.map(...)` Fragment block was copy-pasted
+    across `ParentHeaderRow`, `SubParentHeaderRow`, and
+    `LeafRow` — extracted to a single `MonthCells`
+    component. The three call sites collapse from ~30
+    lines each to one ~10-line `<MonthCells>` invocation.
+    `TotalsRow` keeps its own loop because its
+    placeholder Plan / Diff cells and `mode`-aware
+    coloring don't fit the abstraction cleanly. The
+    `showValues` gate is now caller-side: passing
+    `byMonth={}` / `budgetByMonth={undefined}` naturally
+    renders every cell as `—`.
+  - `ChildRow` / `GrandchildRow` / `StandaloneRow` —
+    three one-line wrappers that just set the `indent`
+    prop on `LeafRow` — inlined at their (single) call
+    sites. Removes the
+    `Omit<Parameters<typeof LeafRow>[0], "indent">`
+    type gymnastics and the one-hop indirection.
+  - `aggregateByMonth` / `aggregateCountByMonth` /
+    `aggregateBudgetByMonth` / `aggregateScheduledByMonth`
+    — four near-identical helpers — collapse to one
+    `aggregateField(cats, field)` with a typed
+    `AggregableField` union so the field name is
+    compile-checked, not stringly-typed.
+  - `AmountCell` body had its button-or-text branch
+    duplicated (once inside the trailing-wrapper, once
+    standalone). Extracted to a single `content` const
+    so the trailing path just wraps the same content in
+    a flex span.
+  - `opts: ColOpts` was threaded through every row
+    component and call site — `ParentHeaderRow`,
+    `SubParentHeaderRow`, `LeafRow`, `TotalsRow`,
+    `MonthCells`, `renderGroups`, `GrandparentRows`. New
+    `ColOptsContext` + `useColOpts()` hook replaces the
+    prop-drilling, mirroring the existing
+    `CellOpenerContext` / `HideToggleContext` pattern.
+    Eliminates the `opts={opts}` noise at ~9 call sites
+    and the prop type at 7 component signatures.
+
+Pure-shape change; all 316 unit tests still pass and the
+renderer output is byte-for-byte equivalent.
+
+- **Category-mode column widths: value cells now narrow
+  + tightly stacked on the right; Category column
+  absorbs the slack.** The 0.187.0 `max-w-3xl` wrapper
+  cap alone wasn't enough — even within 768 px, browsers
+  distributed remaining width across the value columns
+  because their TH widths were `min-w-[*]` (a floor, not
+  a cap). Replaced with hard `w-[80px]` (or `w-[40px]`
+  for Counts) so the value columns hold a tight ~80 px
+  each; dropped the Category column's `w-44` hint
+  (keeping `min-w-44` as a floor) so it grows to absorb
+  the rest. Value-cell padding tightened to `pl-3 pr-1.5`
+  (~6 px right padding) so the number sits close to the
+  cell's right border. The Cashflow tab inherits the
+  same widths — its many-months table still scrolls
+  horizontally inside the wrapper.
+
 ## 0.187.0 — 2026-05-19
 
 ### Changed

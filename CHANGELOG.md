@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.181.0 — 2026-05-19
+
+### Removed
+- **Total toggle on Cashflow + Category.** The Total column is
+  too foundational to hide — the report's whole point is "what
+  did I do this period", and the Total cell is that answer.
+  Pref `cashflowShowTotal` retired (interface field, default,
+  parser entry, toolbar Switch, six `opts.showTotal && ...`
+  guards in the row components, and the `showTotal` field on
+  `ColOpts`). Total now renders unconditionally.
+- **"Roll up budgeted parents" toggle.** Cashflow's
+  `buildGroups` already aggregates parent rows from
+  descendants by default — a parent row's `byMonth`, `total`,
+  and `Plan` are the family totals, not the parent's own
+  direct values. The explicit rollup pass was solving for an
+  edge case (separating a parent's own budget from descendants'
+  sums) that wasn't worth the toolbar real estate. Removed the
+  `cashflowRollupBudgetedParents` display-pref, the
+  `applyBudgetedParentRollupToGroups` function, the
+  `isRolledUp` field on `GrandparentGroup` / `ParentSubGroup`,
+  the `Σ` indicator next to rolled-up amounts, the
+  `anyBudgetedParent` toolbar gate, the toolbar Switch, and the
+  inline `hasOwnBudget` helper that only this feature
+  consumed.
+
 ## 0.180.0 — 2026-05-19
 
 ### Changed

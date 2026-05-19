@@ -61,8 +61,6 @@ export interface DisplayPrefs {
   cashflowTotalsLevel: "grandparent" | "parent" | "none";
   /** Show the count-of-transactions column on Reports → Cash Flow. */
   cashflowShowCounts: boolean;
-  /** Show the Total column on Reports → Cash Flow. */
-  cashflowShowTotal: boolean;
   /** Show the Average column on Reports → Cash Flow. */
   cashflowShowAvg: boolean;
   /** Show the Plan (scheduled + budget) overlay on Reports → Cash Flow.
@@ -89,13 +87,6 @@ export interface DisplayPrefs {
    * (greyed out) so the operator can un-hide them. They remain
    * excluded from totals regardless. */
   cashflowShowHidden: boolean;
-  /** When true, any parent category that has its own budget
-   *  attached folds its descendants' actual amounts up into the
-   *  parent row, and the children stop rendering. The parent's
-   *  Plan stays as just the parent's own budget (descendants'
-   *  individual budgets are ignored). Applies to both the
-   *  Cash Flow and the Category reports. */
-  cashflowRollupBudgetedParents: boolean;
   /** Sankey diagram scope on Reports → Sankey. */
   reportsSankeyScope: "all" | "income" | "expenses";
   /** Per-report toggle: when true, drops transfer-typed categories
@@ -238,13 +229,11 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   missedShowDismissed: false,
   cashflowTotalsLevel: "grandparent",
   cashflowShowCounts: false,
-  cashflowShowTotal: true,
   cashflowShowAvg: true,
   cashflowShowPlan: false,
   cashflowPlanMode: "off",
   cashflowExcludedCatIds: [],
   cashflowShowHidden: false,
-  cashflowRollupBudgetedParents: false,
   reportsSankeyScope: "all",
   cashflowHideTransfers: true,
   sankeyHideTransfers: true,
@@ -514,7 +503,6 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
       ["grandparent", "parent", "none"] as const,
     ),
     cashflowShowCounts: bool("cashflowShowCounts"),
-    cashflowShowTotal: bool("cashflowShowTotal"),
     cashflowShowAvg: bool("cashflowShowAvg"),
     cashflowShowPlan: bool("cashflowShowPlan"),
     // Migration: if the operator's stored prefs predate the
@@ -531,7 +519,6 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     })(),
     cashflowExcludedCatIds: stringArray("cashflowExcludedCatIds"),
     cashflowShowHidden: bool("cashflowShowHidden"),
-    cashflowRollupBudgetedParents: bool("cashflowRollupBudgetedParents"),
     reportsSankeyScope: pickEnum(
       "reportsSankeyScope",
       ["all", "income", "expenses"] as const,

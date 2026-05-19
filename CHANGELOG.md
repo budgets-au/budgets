@@ -9,6 +9,36 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.176.0 — 2026-05-19
+
+### Fixed
+- **Category report was missing parent rows whose only
+  contribution was through children.** The Cashflow API only
+  returns categories with direct transactions (or a
+  budget/schedule attached to the category itself), so a parent
+  like "Food" with no own transactions never came back — yet its
+  children (Groceries, Dining out) still rendered, indented but
+  visually orphaned. Added a hierarchy pass that synthesises
+  rows for any referenced parent that's missing, rolls up its
+  real descendants' totals / plan / count, and emits rows in
+  tree order (depth-0 → depth-1 → depth-2). Synthesised rows
+  render as italic muted group headers (no link, no hide
+  button — they exist as structural anchors only). New helper
+  + unit tests in
+  [src/lib/category-hierarchy.ts](src/lib/category-hierarchy.ts).
+- **Diff column on the Category report computed nonsense for
+  expenses.** The Cashflow API returns plan amounts as
+  unsigned absolutes (`Math.abs(...)` in both the budget and
+  scheduled aggregators), but Total arrives signed — negative
+  for expenses. The previous formula `Total − Plan` then
+  produced e.g. `−500 − 600 = −1100` for a category that
+  actually spent $500 of a $600 budget. Apply the sign from
+  `cat.type` so Plan matches Total's convention (negative for
+  expenses); Diff = Total − Plan then reads as expected —
+  positive when under-spent / outperforming, negative when
+  over-spent / shortfall. Same fix applied to the Total
+  income / Total expenses summary rows.
+
 ## 0.175.0 — 2026-05-19
 
 ### Fixed

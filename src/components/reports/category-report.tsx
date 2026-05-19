@@ -7,6 +7,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { amountClass, formatAUD } from "@/lib/utils";
+import { buildHierarchicalRows } from "@/lib/category-hierarchy";
 import type {
   CashflowReport as CashflowData,
   CashflowCategory,
@@ -208,49 +209,57 @@ export function CategoryReport({
           </thead>
           <tbody>
             <SectionHeader label="Income" colSpan={colCount} />
-            {sortCats(visibleIncome).map((cat) => (
-              <CategoryRow
-                key={cat.id}
-                cat={cat}
-                monthsInWindow={monthsInWindow}
-                showPlan={showPlan}
-                showCounts={showCounts}
-                onToggleHide={toggleHideCat}
-                isHidden={false}
-                from={from}
-                to={to}
-              />
-            ))}
+            {buildHierarchicalRows(visibleIncome, monthsInWindow).map(
+              ({ row, isSynthetic }) => (
+                <CategoryRow
+                  key={row.id}
+                  cat={row}
+                  monthsInWindow={monthsInWindow}
+                  showPlan={showPlan}
+                  showCounts={showCounts}
+                  onToggleHide={toggleHideCat}
+                  isHidden={false}
+                  isSynthetic={isSynthetic}
+                  from={from}
+                  to={to}
+                />
+              ),
+            )}
             <SummaryRow
               label="Total income"
               total={incomeTotals.total}
               count={incomeTotals.count}
               budget={incomeTotals.budget}
               scheduled={incomeTotals.scheduled}
+              type="income"
               showPlan={showPlan}
               showCounts={showCounts}
             />
 
             <SectionHeader label="Expenses" colSpan={colCount} />
-            {sortCats(visibleExpenses).map((cat) => (
-              <CategoryRow
-                key={cat.id}
-                cat={cat}
-                monthsInWindow={monthsInWindow}
-                showPlan={showPlan}
-                showCounts={showCounts}
-                onToggleHide={toggleHideCat}
-                isHidden={false}
-                from={from}
-                to={to}
-              />
-            ))}
+            {buildHierarchicalRows(visibleExpenses, monthsInWindow).map(
+              ({ row, isSynthetic }) => (
+                <CategoryRow
+                  key={row.id}
+                  cat={row}
+                  monthsInWindow={monthsInWindow}
+                  showPlan={showPlan}
+                  showCounts={showCounts}
+                  onToggleHide={toggleHideCat}
+                  isHidden={false}
+                  isSynthetic={isSynthetic}
+                  from={from}
+                  to={to}
+                />
+              ),
+            )}
             <SummaryRow
               label="Total expenses"
               total={expenseTotals.total}
               count={expenseTotals.count}
               budget={expenseTotals.budget}
               scheduled={expenseTotals.scheduled}
+              type="expense"
               showPlan={showPlan}
               showCounts={showCounts}
             />
@@ -296,6 +305,7 @@ export function CategoryReport({
                     showCounts={showCounts}
                     onToggleHide={toggleHideCat}
                     isHidden
+                    isSynthetic={false}
                     from={from}
                     to={to}
                   />
@@ -311,7 +321,9 @@ export function CategoryReport({
 
 /** Sort cats so children sit directly under their parent. The API
  *  returns a flat list; this stable sort keys on (grandparent name,
- *  parent name, own name) so the hierarchy reads top-down. */
+ *  parent name, own name) so the hierarchy reads top-down. Only used
+ *  by the hidden section now; visibleIncome / visibleExpenses go
+ *  through `buildHierarchicalRows` which also fills missing parents. */
 function sortCats(cats: CashflowCategory[]): CashflowCategory[] {
   return cats.slice().sort((a, b) => {
     const aGp = a.grandparentName ?? a.parentName ?? a.name;
@@ -337,6 +349,7 @@ function CategoryRow({
   showCounts,
   onToggleHide,
   isHidden,
+  isSynthetic,
   from,
   to,
 }: {
@@ -346,6 +359,7 @@ function CategoryRow({
   showCounts: boolean;
   onToggleHide: (id: string) => void;
   isHidden: boolean;
+  isSynthetic: boolean;
   from: string;
   to: string;
 }) {
@@ -355,17 +369,22 @@ function CategoryRow({
   // For bimonthly / quarterly / yearly schedules the smoothing
   // would overstate Plan for windows that don't actually contain
   // an occurrence.
-  let scheduled = 0;
-  let budget = 0;
+  let scheduledAbs = 0;
+  let budgetAbs = 0;
   for (const m of monthsInWindow) {
-    scheduled += cat.scheduledByMonth?.[m] ?? 0;
-    budget += cat.budgetByMonth?.[m] ?? 0;
+    scheduledAbs += cat.scheduledByMonth?.[m] ?? 0;
+    budgetAbs += cat.budgetByMonth?.[m] ?? 0;
   }
-  // Plan = budget + scheduled (treated as one expected-figure
-  // column). Diff = actual − plan; for expenses (negative actual,
-  // negative plan) this reads as "over" when positive and "under"
-  // when negative — same sign convention the amount cells follow.
-  const plan = budget + scheduled;
+  // The Cashflow API stores plan as `Math.abs(...)` regardless of
+  // direction, so a $600 expense budget arrives as +600. Total
+  // arrives signed: −500 for $500 spent. Subtracting unsigned plan
+  // from signed total gave nonsense (e.g. −500 − 600 = −1100).
+  // Apply the sign from `cat.type` so Plan matches Total's
+  // convention (negative for expenses); Diff = Total − Plan then
+  // reads as expected (positive = saved on expenses /
+  // outperformed on income, negative = over-spent / shortfall).
+  const sign = cat.type === "expense" ? -1 : 1;
+  const plan = sign * (budgetAbs + scheduledAbs);
   const diff = display - plan;
   const depth = depthOf(cat);
   // Indent classes mirror cashflow-report's LeafRow:
@@ -392,17 +411,26 @@ function CategoryRow({
     >
       <td className={`${namePad} py-1.5 text-sm whitespace-nowrap`}>
         <span className="flex items-center gap-1 min-w-0">
-          <Link
-            href={href}
-            className={
-              isUncategorised
-                ? "text-muted-foreground hover:underline hover:text-foreground transition-colors truncate"
-                : "hover:underline hover:text-indigo-600 transition-colors truncate"
-            }
-          >
-            {cat.name}
-          </Link>
-          {!isUncategorised && (
+          {isSynthetic ? (
+            // Structural header — no own transactions in this window,
+            // so there's nothing to link to. Mute slightly so the
+            // operator reads it as a group header rather than a leaf.
+            <span className="text-muted-foreground italic truncate">
+              {cat.name}
+            </span>
+          ) : (
+            <Link
+              href={href}
+              className={
+                isUncategorised
+                  ? "text-muted-foreground hover:underline hover:text-foreground transition-colors truncate"
+                  : "hover:underline hover:text-indigo-600 transition-colors truncate"
+              }
+            >
+              {cat.name}
+            </Link>
+          )}
+          {!isUncategorised && !isSynthetic && (
             <button
               type="button"
               onClick={() => onToggleHide(cat.id)}
@@ -477,6 +505,7 @@ function SummaryRow({
   count,
   budget,
   scheduled,
+  type,
   showPlan,
   showCounts,
 }: {
@@ -485,10 +514,16 @@ function SummaryRow({
   count: number;
   budget: number;
   scheduled: number;
+  type: "income" | "expense";
   showPlan: boolean;
   showCounts: boolean;
 }) {
-  const plan = budget + scheduled;
+  // Plan amounts roll up as positive absolutes from the API
+  // (Math.abs in both budget and scheduled aggregators). Apply the
+  // direction from `type` so Plan matches Total's sign convention,
+  // and Diff = Total − Plan reads correctly.
+  const sign = type === "expense" ? -1 : 1;
+  const plan = sign * (budget + scheduled);
   const diff = total - plan;
   return (
     <tr className="border-b bg-muted/20 font-medium">

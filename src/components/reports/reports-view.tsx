@@ -134,6 +134,7 @@ function buildRangePresets(now: Date): RangePreset[][] {
 import { CashflowReport } from "./cashflow-report";
 import { TaxDeductionsReport } from "./tax-deductions-report";
 import { ExpensesDrilldown } from "./expenses-drilldown";
+import { CategoryReport } from "./category-report";
 import { EnvelopeReport } from "./envelope-report";
 import { SankeyReport } from "./sankey-report";
 import { YoYReport } from "./yoy-report";
@@ -164,6 +165,7 @@ interface MonthRow {
 
 const REPORT_TABS = [
   "cashflow",
+  "category",
   "monthly",
   "yoy",
   "expenses",
@@ -232,6 +234,7 @@ export function ReportsView({
       // Other tabs default to "this month".
       const today = new Date();
       const longWindowTabs: ReportTab[] = [
+        "category",
         "envelope",
         "sankey",
         "treemap",
@@ -322,6 +325,7 @@ export function ReportsView({
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList data-print-hide>
           <TabsTrigger value="cashflow">Cash Flow</TabsTrigger>
+          <TabsTrigger value="category">Category</TabsTrigger>
           <TabsTrigger value="monthly">Monthly</TabsTrigger>
           <TabsTrigger value="yoy">Year over Year</TabsTrigger>
           <TabsTrigger value="expenses">Expenses by Category</TabsTrigger>
@@ -340,6 +344,12 @@ export function ReportsView({
         {/* Cash Flow Report */}
         <TabsContent value="cashflow">
           <CashflowReport from={from} to={to} accountIds={accountIds} />
+        </TabsContent>
+
+        {/* Category — same data as Cashflow, rolled up to one row per
+            category for the selected period (no monthly columns). */}
+        <TabsContent value="category">
+          <CategoryReport from={from} to={to} accountIds={accountIds} />
         </TabsContent>
 
         {/* Year over Year — owns its own FY scope (anchored to today's

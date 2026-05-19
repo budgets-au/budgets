@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.171.0 — 2026-05-19
+
+### Added
+- **Reports → Category** tab. Same data as Cash Flow rolled up
+  to one row per category for the selected period — no monthly
+  columns, just Total / Avg-per-month / Plan (Budget &
+  Scheduled) / Count. Income and Expense sections with
+  parent-child indentation, hide-category eye-toggle on each
+  row, hidden-cats reveal toggle, and the same Hide-transfers
+  switch every other report has. Reuses the existing
+  `cashflowShow*` / `cashflowHideTransfers` display-prefs so
+  the operator's preferences carry across between Cashflow and
+  the Category view (they're the same data summarised
+  differently). Reuses `/api/reports/cashflow` — no new
+  endpoint needed.
+
 ## 0.170.0 — 2026-05-19
 
 ### Added

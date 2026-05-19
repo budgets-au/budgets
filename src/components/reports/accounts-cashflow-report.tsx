@@ -7,13 +7,13 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { AccountsCashflowReport } from "@/app/api/reports/accounts-cashflow/route";
+import { numFmt } from "@/lib/utils";
 import {
   AccountsCellDialog,
   type AccountsCellQuery,
 } from "./accounts-cell-dialog";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-const numFmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 
 function monthLabel(m: string): string {
   return format(parseISO(`${m}-01`), "MMM ''yy");

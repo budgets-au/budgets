@@ -5,13 +5,9 @@ import Link from "next/link";
 import { Eye, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { ResponsiveContainer, AreaChart, Area, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  ChartTooltipCard,
-  ChartTooltipHeader,
-  ChartTooltipRow,
-} from "@/components/ui/chart-tooltip";
 import { cn } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
+import { StockTooltip } from "./stock-tooltip";
 
 /** Fetcher that throws on non-2xx so SWR returns `undefined` instead
  * of an error-shaped JSON body that consumers would try to
@@ -39,28 +35,6 @@ interface HistoryResp {
   series: HistoryPoint[];
 }
 
-function StockTooltip({
-  active,
-  payload,
-  currency,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload?: HistoryPoint }>;
-  currency: string;
-}) {
-  if (!active || !payload || payload.length === 0) return null;
-  const p = payload[0]?.payload;
-  if (!p) return null;
-  return (
-    <ChartTooltipCard className="min-w-[8rem]">
-      <ChartTooltipHeader title={p.date} />
-      <ChartTooltipRow
-        label="Close"
-        value={`${currency === "USD" ? "US$" : "A$"}${p.close.toFixed(2)}`}
-      />
-    </ChartTooltipCard>
-  );
-}
 
 /** Dashboard widget that surfaces a single user-picked WATCHLIST
  *  entry (i.e. a stock the operator is observing without holding).

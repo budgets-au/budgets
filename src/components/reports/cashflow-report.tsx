@@ -7,6 +7,7 @@ import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
+import { numFmt } from "@/lib/utils";
 import type { CashflowReport as CashflowData, CashflowCategory } from "@/app/api/reports/cashflow/route";
 import { CashflowCellDialog, type CashflowCellQuery } from "./cashflow-cell-dialog";
 
@@ -79,7 +80,6 @@ function totalRangeLabel(from: string, to: string): string {
 }
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-const numFmt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 
 type CellResult = { text: string; className: string };
 

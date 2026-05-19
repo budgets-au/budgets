@@ -5,10 +5,7 @@ import {
   addYears,
   parseISO,
 } from "date-fns";
-
-function toISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { toISO } from "./utils";
 
 const SUPPORTED_FREQUENCIES = new Set(["weekly", "monthly", "quarterly", "yearly"]);
 

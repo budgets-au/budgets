@@ -1,6 +1,7 @@
 import { addDays, isAfter } from "date-fns";
 import type { Account, Transaction, ScheduledTransaction } from "@/db/schema";
 import { expandRecurrence } from "./recurrence";
+import { toISO } from "./utils";
 
 export interface CashflowEvent {
   date: string;
@@ -38,10 +39,6 @@ export interface AccountSeries {
 export interface CashflowResult {
   daily: DailyBalance[];
   perAccount: AccountSeries[];
-}
-
-function toISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 /**

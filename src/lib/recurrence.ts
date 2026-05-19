@@ -11,7 +11,7 @@ import {
   parseISO,
 } from "date-fns";
 import type { ScheduledTransaction } from "@/db/schema";
-import { formatAmount } from "@/lib/utils";
+import { formatAmount, toISO } from "@/lib/utils";
 
 /** Subset of the scheduled-transactions row that recurrence projection
  * actually reads. Declared structurally so callers can pass a trimmed
@@ -42,10 +42,6 @@ export interface ProjectedEvent {
   description: string;
   isProjected: true;
   scheduledId: string;
-}
-
-function toISO(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function inRange(d: Date, from: Date, to: Date): boolean {

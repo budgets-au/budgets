@@ -9,6 +9,38 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.189.0 — 2026-05-19
+
+### Changed
+- **Lib consolidation pass 1 — `toISO`, `numFmt`,
+  `StockTooltip`.** Three textbook duplicates removed in
+  preparation for the larger simplification sweep:
+  - `toISO(d: Date): string` was defined identically in
+    `lib/recurrence.ts`, `lib/cashflow.ts`, and
+    `lib/budget-period.ts` — all three using **local**
+    calendar components, NOT UTC. Moved to
+    [src/lib/utils.ts](src/lib/utils.ts) with a load-bearing
+    comment about the local-vs-UTC distinction so a future
+    swap to `toISOString().slice(0, 10)` doesn't silently
+    shift dates by ±1 day in non-UTC timezones.
+  - `Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 })`
+    was duplicated in `cashflow-report.tsx` and
+    `accounts-cashflow-report.tsx`. Exported as `numFmt` from
+    `lib/utils.ts`.
+  - `StockTooltip` (the recharts tooltip used by the
+    tracked-stock + watched-stock dashboard cards) was a
+    23-line copy-paste in both files. Extracted to
+    [src/components/dashboard/stock-tooltip.tsx](src/components/dashboard/stock-tooltip.tsx).
+  - `AccountLite` / `CategoryLite` interface dedup was on
+    the candidate list but turned out to be a false
+    positive — the five declarations have meaningfully
+    different shapes (some require `color`, others add
+    `isExternal`, `isArchived`, account `type`, etc.).
+    Each file's "Lite" represents what its specific API
+    endpoint returns; sharing would create false coupling.
+
+Pure-shape change; all 316 tests stay green.
+
 ## 0.188.0 — 2026-05-19
 
 ### Changed

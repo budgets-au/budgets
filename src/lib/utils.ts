@@ -59,3 +59,21 @@ export function diffDaysISO(a: string, b: string): number {
       86_400_000,
   );
 }
+
+/** Date → `YYYY-MM-DD` using the **local** calendar
+ *  (matches what the user sees in the UI). The canonical form
+ *  for the `transactions.date` text column and every other
+ *  user-facing ISO-date field that crosses the JS / SQLite
+ *  boundary. Don't swap for `toISOString().slice(0, 10)` —
+ *  that's UTC and shifts by ±1 day in non-UTC timezones. */
+export function toISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Compact thousands-separated integer formatter used by the
+ *  report tables — kept locale-aware (en-AU) so the separator
+ *  stays a comma. Heavy enough to warrant a single instance
+ *  rather than recreating per render. */
+export const numFmt = new Intl.NumberFormat("en-AU", {
+  maximumFractionDigits: 0,
+});

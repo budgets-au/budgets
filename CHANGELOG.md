@@ -9,6 +9,36 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.180.0 — 2026-05-19
+
+### Changed
+- **Category report is now the Cashflow report with the
+  per-month axis turned off.** Both tabs render through the
+  same component — `CashflowReport` gained a `monthAxis` prop;
+  the Category tab is `<CashflowReport monthAxis={false} />`.
+  Every feature added to Cashflow (collapse, hierarchy synth,
+  parent rollup, Plan three-way, Diff column, this-month
+  highlight in the months that *do* render) lights up on
+  Category automatically. Two reports collapse to one.
+- **Diff column drops the green/red colour coding** on both
+  reports. The Diff is a derived number, not a status
+  indicator, so it now reads in plain foreground; negatives
+  use the `(N)` parens convention via Cashflow's `mode="plain"`
+  formatter. The bottom Surplus / Total Income / Total
+  Expenses rows keep their colour — sign is meaningful there.
+- **Plan + Diff body cells render a notch smaller**
+  (`text-[11px]`) so the derived sub-columns read as quieter
+  than the primary actual amount.
+
+### Removed
+- **`src/lib/category-hierarchy.ts` and its tests**
+  (`buildHierarchicalRows`, `applyBudgetedParentRollup`,
+  `hasOwnBudget`). The first two duplicated Cashflow's
+  `buildGroups` + `applyBudgetedParentRollupToGroups`; the
+  third was a 6-line helper moved inline into
+  `cashflow-report.tsx`. Test count: 318 → 307 (11 cases
+  retired with the file).
+
 ## 0.179.0 — 2026-05-19
 
 ### Added

@@ -76,6 +76,13 @@ export interface DisplayPrefs {
    * (greyed out) so the operator can un-hide them. They remain
    * excluded from totals regardless. */
   cashflowShowHidden: boolean;
+  /** When true, any parent category that has its own budget
+   *  attached folds its descendants' actual amounts up into the
+   *  parent row, and the children stop rendering. The parent's
+   *  Plan stays as just the parent's own budget (descendants'
+   *  individual budgets are ignored). Applies to both the
+   *  Cash Flow and the Category reports. */
+  cashflowRollupBudgetedParents: boolean;
   /** Sankey diagram scope on Reports → Sankey. */
   reportsSankeyScope: "all" | "income" | "expenses";
   /** Per-report toggle: when true, drops transfer-typed categories
@@ -223,6 +230,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   cashflowShowPlan: false,
   cashflowExcludedCatIds: [],
   cashflowShowHidden: false,
+  cashflowRollupBudgetedParents: false,
   reportsSankeyScope: "all",
   cashflowHideTransfers: true,
   sankeyHideTransfers: true,
@@ -497,6 +505,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     cashflowShowPlan: bool("cashflowShowPlan"),
     cashflowExcludedCatIds: stringArray("cashflowExcludedCatIds"),
     cashflowShowHidden: bool("cashflowShowHidden"),
+    cashflowRollupBudgetedParents: bool("cashflowRollupBudgetedParents"),
     reportsSankeyScope: pickEnum(
       "reportsSankeyScope",
       ["all", "income", "expenses"] as const,

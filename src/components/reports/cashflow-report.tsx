@@ -4,10 +4,11 @@ import { Fragment, createContext, useContext, useEffect, useState } from "react"
 import useSWR from "swr";
 import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
-import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Sigma } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import type { CashflowReport as CashflowData, CashflowCategory } from "@/app/api/reports/cashflow/route";
+import { hasOwnBudget } from "@/lib/category-hierarchy";
 import { CashflowCellDialog, type CashflowCellQuery } from "./cashflow-cell-dialog";
 
 const CellOpenerContext = createContext<((q: CashflowCellQuery) => void) | null>(null);
@@ -83,6 +84,7 @@ function AmountCell({
   borderLeft,
   computed,
   onClick,
+  trailing,
 }: {
   value: number | undefined;
   colHighlight?: boolean;
@@ -102,6 +104,9 @@ function AmountCell({
   /** When set and the value is non-zero, the rendered amount becomes a
    * button that opens the cell-drilldown dialog. */
   onClick?: () => void;
+  /** Optional indicator rendered after the number (e.g. a Σ marker
+   *  on rolled-up parent rows). */
+  trailing?: React.ReactNode;
 }) {
   const display = negate && value !== undefined ? -value : value;
   const { text, className } = formatAmount(display, mode);
@@ -121,7 +126,25 @@ function AmountCell({
             : ""
       } ${borderLeft || computed ? "border-l border-border" : ""} ${colour}`}
     >
-      {isClickable ? (
+      {trailing ? (
+        <span className="inline-flex items-center gap-0.5 align-baseline">
+          {isClickable ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClick();
+              }}
+              className="hover:underline hover:text-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 rounded -mx-0.5 px-0.5 transition-colors"
+            >
+              {text}
+            </button>
+          ) : (
+            text
+          )}
+          {trailing}
+        </span>
+      ) : isClickable ? (
         <button
           type="button"
           onClick={(e) => {
@@ -271,6 +294,11 @@ interface ParentSubGroup {
   budgetByMonth: Record<string, number>;
   scheduledByMonth: Record<string, number>;
   children: CashflowCategory[]; // grandchildren (depth-2)
+  /** Set by `applyBudgetedParentRollupToGroups` when the rollup
+   *  toggle is on AND this sub-parent's cat has its own budget.
+   *  The renderer shows a Σ marker next to the parent's amount
+   *  to flag "this row's Total includes its descendants". */
+  isRolledUp?: boolean;
 }
 
 interface GrandparentGroup {
@@ -287,6 +315,9 @@ interface GrandparentGroup {
   budgetByMonth: Record<string, number>;
   scheduledByMonth: Record<string, number>;
   subGroups: ParentSubGroup[];
+  /** Set by `applyBudgetedParentRollupToGroups` when the rollup
+   *  toggle is on AND the grandparent cat has its own budget. */
+  isRolledUp?: boolean;
 }
 
 interface StandaloneGroup { kind: "standalone"; cat: CashflowCategory }
@@ -486,12 +517,57 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
   return groups;
 }
 
+/** "Roll up budgeted parents" mode (matches the Category report
+ *  toggle). For any parent whose original cat has its own budget
+ *  attached, override the parent row's Plan with the parent's own
+ *  budget / scheduled — the children's individual budgets are
+ *  intentionally excluded (the parent's budget is the family
+ *  target). The aggregated totals (byMonth / total / count) stay
+ *  rolled up so the row shows the full descendant spend, and the
+ *  group / sub-group is tagged with `isRolledUp` so the renderer
+ *  can show a Σ-style marker next to the amount. Children stay
+ *  visible — the operator can still see the breakdown. */
+function applyBudgetedParentRollupToGroups(
+  groups: DisplayGroup[],
+  cats: CashflowCategory[],
+  monthsInWindow: string[],
+): DisplayGroup[] {
+  const byId = new Map(cats.map((c) => [c.id, c]));
+  function ownPlan(c: CashflowCategory) {
+    return {
+      budgetPerMonth: c.budgetPerMonth ?? 0,
+      scheduledPerMonth: c.scheduledPerMonth ?? 0,
+      budgetByMonth: { ...(c.budgetByMonth ?? {}) },
+      scheduledByMonth: { ...(c.scheduledByMonth ?? {}) },
+    };
+  }
+  return groups.map((g) => {
+    if (g.kind === "standalone") return g;
+    const next: GrandparentGroup = { ...g, subGroups: [...g.subGroups] };
+    const gp = byId.get(g.grandparentId);
+    const gpQualifies =
+      gp && hasOwnBudget(gp, monthsInWindow) && next.subGroups.length > 0;
+    if (gpQualifies) {
+      Object.assign(next, ownPlan(gp));
+      next.isRolledUp = true;
+    }
+    next.subGroups = next.subGroups.map((sub) => {
+      const p = sub.parentCat;
+      if (!p || !hasOwnBudget(p, monthsInWindow) || sub.children.length === 0) {
+        return sub;
+      }
+      return { ...sub, ...ownPlan(p), isRolledUp: true };
+    });
+    return next;
+  });
+}
+
 function ParentHeaderRow({
   name, months, byMonth, countByMonth, total, totalCount, thisMonth,
   negate, href, grandparent, hasDirect, showValues = true, opts,
   budgetPerMonth, scheduledPerMonth, budgetByMonth, scheduledByMonth,
   isCollapsed, onToggle, categoryIdForCell, fromForCell, toForCell,
-  hideTargetId, isHidden,
+  hideTargetId, isHidden, isRolledUp,
 }: {
   name: string;
   months: string[];
@@ -521,6 +597,10 @@ function ParentHeaderRow({
    * exclusion from the report. Synthetic rows (no DB id) omit it. */
   hideTargetId?: string;
   isHidden?: boolean;
+  /** Marks a row whose Total has been folded up from descendants
+   *  because the parent carries its own budget. Renders a Σ
+   *  indicator next to the Total amount. */
+  isRolledUp?: boolean;
 }) {
   const display = (v: number | undefined) => (negate && v !== undefined ? -v : v);
   const Chevron = isCollapsed ? ChevronRight : ChevronDown;
@@ -593,6 +673,16 @@ function ParentHeaderRow({
           muted
           computed
           onClick={showValues ? openTotal : undefined}
+          trailing={
+            isRolledUp ? (
+              <Sigma
+                className="h-2.5 w-2.5 -translate-y-1 text-muted-foreground"
+                aria-label="Total rolled up from children"
+              >
+                <title>Total rolled up from descendants</title>
+              </Sigma>
+            ) : undefined
+          }
         />
       )}
       {opts.showTotal && opts.showCounts && <td className="bg-muted/40 border-l border-border" />}
@@ -695,6 +785,16 @@ function SubParentHeaderRow({
           muted
           computed
           onClick={showValues ? openTotal : undefined}
+          trailing={
+            sub.isRolledUp ? (
+              <Sigma
+                className="h-2.5 w-2.5 -translate-y-1 text-muted-foreground"
+                aria-label="Total rolled up from children"
+              >
+                <title>Total rolled up from descendants</title>
+              </Sigma>
+            ) : undefined
+          }
         />
       )}
       {opts.showTotal && opts.showCounts && <td className="bg-muted/40 border-l border-border" />}
@@ -949,6 +1049,7 @@ function GrandparentRows({
         toForCell={to}
         hideTargetId={group.grandparentId}
         isHidden={gpHidden}
+        isRolledUp={group.isRolledUp}
       />
       {!isGpCollapsed && group.subGroups.map((sub) => {
         if (sub.children.length === 0) {
@@ -1024,6 +1125,7 @@ export function CashflowReport({
   const showHidden = displayPrefs.cashflowShowHidden;
   const excludedIds = displayPrefs.cashflowExcludedCatIds;
   const hideTransfers = displayPrefs.cashflowHideTransfers;
+  const rollupBudgetedParents = displayPrefs.cashflowRollupBudgetedParents;
 
   function toggleShowCounts() {
     setPref("cashflowShowCounts", !showCounts);
@@ -1111,10 +1213,26 @@ export function CashflowReport({
   // rendered when showHidden is on — keeps the main tree's aggregates
   // free of hidden cats while still letting the operator see what's
   // been excluded.
-  const incomeGroups = buildGroups(visibleIncome);
-  const expenseGroups = buildGroups(visibleExpenses);
+  const rawIncomeGroups = buildGroups(visibleIncome);
+  const rawExpenseGroups = buildGroups(visibleExpenses);
+  const incomeGroups = rollupBudgetedParents
+    ? applyBudgetedParentRollupToGroups(rawIncomeGroups, visibleIncome, months)
+    : rawIncomeGroups;
+  const expenseGroups = rollupBudgetedParents
+    ? applyBudgetedParentRollupToGroups(rawExpenseGroups, visibleExpenses, months)
+    : rawExpenseGroups;
   const hiddenIncomeGroups = buildGroups(hiddenIncome);
   const hiddenExpenseGroups = buildGroups(hiddenExpenses);
+  // Surface the toggle only when at least one parent in the
+  // current scope has its own budget AND has descendants — no
+  // point cluttering the toolbar otherwise.
+  const anyBudgetedParent = [...visibleIncome, ...visibleExpenses].some(
+    (c) =>
+      hasOwnBudget(c, months) &&
+      [...visibleIncome, ...visibleExpenses].some(
+        (d) => d.parentId === c.id || d.grandparentId === c.id,
+      ),
+  );
 
   // Recompute aggregate totals from visible cats so hidden cats don't
   // pollute Total Income / Total Expenses / Surplus.
@@ -1216,6 +1334,26 @@ export function CashflowReport({
             aria-label="Hide transfer-typed categories"
           />
         </div>
+
+        {/* Roll up budgeted parents — for any parent whose own
+            cat carries a budget, fold descendants' actuals into the
+            parent row and stop rendering the children. Plan stays
+            as the parent's own budget. Same toggle key the Category
+            report uses so the choice carries between tabs. */}
+        {anyBudgetedParent && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Roll up budgeted parents
+            </span>
+            <Switch
+              checked={rollupBudgetedParents}
+              onCheckedChange={(v) =>
+                setPref("cashflowRollupBudgetedParents", v)
+              }
+              aria-label="Roll children into any parent with its own budget"
+            />
+          </div>
+        )}
 
         {/* Show hidden categories — only rendered when there's
             actually something hidden to reveal; otherwise the toggle

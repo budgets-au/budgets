@@ -141,3 +141,96 @@ export function buildHierarchicalRows(
   }
   return out;
 }
+
+/** Does a category carry its own budget — set directly on the
+ *  parent, not aggregated from children? Either the per-month
+ *  monthly-normalised figure is non-zero, or any per-month
+ *  bucket in the selected window is. */
+export function hasOwnBudget(
+  c: CashflowCategory,
+  monthsInWindow: string[],
+): boolean {
+  if ((c.budgetPerMonth ?? 0) > 0) return true;
+  for (const m of monthsInWindow) {
+    if ((c.budgetByMonth?.[m] ?? 0) > 0) return true;
+  }
+  return false;
+}
+
+/** When the operator turns on "roll children into budgeted
+ *  parents", any parent category that has its OWN budget folds
+ *  every descendant's actual amounts up into the parent row. The
+ *  parent's Plan stays as just the parent's own budget
+ *  (descendants' individual budgets are intentionally not added —
+ *  the parent's budget is the family target). Descendants stay
+ *  visible so the operator can still see the breakdown; the
+ *  parent row carries an `isRolledUp` flag the renderer uses to
+ *  show a Σ-style indicator next to the rolled-up total. The
+ *  parent's Total then visually exceeds the sum of its children's
+ *  Totals — the Σ communicates "this row already contains its
+ *  children".
+ *
+ *  Inputs:
+ *    rows          - `buildHierarchicalRows` output (real + synth)
+ *    cats          - the original flat cat list (real only —
+ *                    synthesised rows can't have an "own budget"
+ *                    so they never qualify as rollup targets)
+ *    monthsInWindow - the report's month list, used to detect
+ *                    per-month budgets in `budgetByMonth`
+ *
+ *  Returns the same rows with the rolled-up parents transformed
+ *  (a new `CashflowCategory` instance per rolled-up row so the
+ *  original objects aren't mutated) and each row tagged with
+ *  `isRolledUp`. */
+export function applyBudgetedParentRollup(
+  rows: Array<{ row: CashflowCategory; isSynthetic: boolean }>,
+  cats: CashflowCategory[],
+  monthsInWindow: string[],
+): Array<{
+  row: CashflowCategory;
+  isSynthetic: boolean;
+  isRolledUp: boolean;
+}> {
+  const catsById = new Map(cats.map((c) => [c.id, c]));
+
+  const rollupIds = new Set<string>();
+  for (const { row, isSynthetic } of rows) {
+    if (isSynthetic) continue;
+    const orig = catsById.get(row.id);
+    if (!orig || !hasOwnBudget(orig, monthsInWindow)) continue;
+    const hasDescendant = cats.some(
+      (c) => c.parentId === row.id || c.grandparentId === row.id,
+    );
+    if (!hasDescendant) continue;
+    rollupIds.add(row.id);
+  }
+
+  return rows.map(({ row, isSynthetic }) => {
+    if (!rollupIds.has(row.id)) {
+      return { row, isSynthetic, isRolledUp: false };
+    }
+    const orig = catsById.get(row.id)!;
+    let total = orig.total;
+    let totalCount = orig.totalCount;
+    const byMonth: Record<string, number> = { ...(orig.byMonth ?? {}) };
+    const countByMonth: Record<string, number> = {
+      ...(orig.countByMonth ?? {}),
+    };
+    for (const c of cats) {
+      if (c.parentId !== row.id && c.grandparentId !== row.id) continue;
+      total += c.total;
+      totalCount += c.totalCount;
+      for (const [m, v] of Object.entries(c.byMonth ?? {})) {
+        byMonth[m] = (byMonth[m] ?? 0) + v;
+      }
+      for (const [m, v] of Object.entries(c.countByMonth ?? {})) {
+        countByMonth[m] = (countByMonth[m] ?? 0) + v;
+      }
+    }
+    return {
+      row: { ...row, total, totalCount, byMonth, countByMonth },
+      isSynthetic,
+      isRolledUp: true,
+    };
+  });
+}

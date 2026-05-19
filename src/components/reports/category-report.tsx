@@ -3,11 +3,21 @@
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Sigma,
+} from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { amountClass, formatAUD } from "@/lib/utils";
-import { buildHierarchicalRows } from "@/lib/category-hierarchy";
+import {
+  applyBudgetedParentRollup,
+  buildHierarchicalRows,
+  hasOwnBudget,
+} from "@/lib/category-hierarchy";
 import type {
   CashflowReport as CashflowData,
   CashflowCategory,
@@ -42,6 +52,7 @@ export function CategoryReport({
   const showHidden = prefs.cashflowShowHidden;
   const excludedIds = prefs.cashflowExcludedCatIds;
   const hideTransfers = prefs.cashflowHideTransfers;
+  const rollupBudgetedParents = prefs.cashflowRollupBudgetedParents;
 
   const url = `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`;
   const { data, isLoading } = useSWR<CashflowData>(url, fetcher);
@@ -151,9 +162,32 @@ export function CategoryReport({
 
   // Build the hierarchical row lists once so the "Expand/Collapse
   // all" button can target the exact parent IDs that have
-  // descendants (without re-walking the tree).
-  const incomeRows = buildHierarchicalRows(visibleIncome, monthsInWindow);
-  const expenseRows = buildHierarchicalRows(visibleExpenses, monthsInWindow);
+  // descendants (without re-walking the tree). When the operator
+  // turns on "roll up budgeted parents", every parent that
+  // carries its own budget folds its descendants' actuals into
+  // its own row and the descendants stop rendering — see
+  // `applyBudgetedParentRollup` for the math.
+  const rawIncomeRows = buildHierarchicalRows(visibleIncome, monthsInWindow);
+  const rawExpenseRows = buildHierarchicalRows(visibleExpenses, monthsInWindow);
+  // applyBudgetedParentRollup always returns the `isRolledUp`
+  // shape; when the toggle is off we still walk the rows so the
+  // render side has one consistent shape to consume.
+  const incomeRows = rollupBudgetedParents
+    ? applyBudgetedParentRollup(rawIncomeRows, visibleIncome, monthsInWindow)
+    : rawIncomeRows.map((r) => ({ ...r, isRolledUp: false }));
+  const expenseRows = rollupBudgetedParents
+    ? applyBudgetedParentRollup(rawExpenseRows, visibleExpenses, monthsInWindow)
+    : rawExpenseRows.map((r) => ({ ...r, isRolledUp: false }));
+  // Surface the toggle only when at least one parent has its own
+  // budget in the current window — no point cluttering the toolbar
+  // when there's nothing to roll up.
+  const anyBudgetedParent = [...visibleIncome, ...visibleExpenses].some(
+    (c) =>
+      hasOwnBudget(c, monthsInWindow) &&
+      [...visibleIncome, ...visibleExpenses].some(
+        (d) => d.parentId === c.id || d.grandparentId === c.id,
+      ),
+  );
   // A row has descendants iff any other row in the same section
   // names it as a parent or grandparent. Synthesised parent rows
   // qualify too — they exist precisely *because* they have
@@ -222,6 +256,20 @@ export function CategoryReport({
             aria-label="Hide transfer-typed categories"
           />
         </div>
+        {anyBudgetedParent && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Roll up budgeted parents
+            </span>
+            <Switch
+              checked={rollupBudgetedParents}
+              onCheckedChange={(v) =>
+                setPref("cashflowRollupBudgetedParents", v)
+              }
+              aria-label="Roll children into any parent with its own budget"
+            />
+          </div>
+        )}
         {hasHidden && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
@@ -269,7 +317,7 @@ export function CategoryReport({
             <SectionHeader label="Income" colSpan={colCount} />
             {incomeRows
               .filter(({ row }) => !isCollapsedByAncestor(row))
-              .map(({ row, isSynthetic }) => (
+              .map(({ row, isSynthetic, isRolledUp }) => (
                 <CategoryRow
                   key={row.id}
                   cat={row}
@@ -279,6 +327,7 @@ export function CategoryReport({
                   onToggleHide={toggleHideCat}
                   isHidden={false}
                   isSynthetic={isSynthetic}
+                  isRolledUp={isRolledUp}
                   hasDescendants={parentIds.has(row.id)}
                   isCollapsed={collapsedIds.has(row.id)}
                   onToggleCollapsed={() => toggleCollapsed(row.id)}
@@ -300,7 +349,7 @@ export function CategoryReport({
             <SectionHeader label="Expenses" colSpan={colCount} />
             {expenseRows
               .filter(({ row }) => !isCollapsedByAncestor(row))
-              .map(({ row, isSynthetic }) => (
+              .map(({ row, isSynthetic, isRolledUp }) => (
                 <CategoryRow
                   key={row.id}
                   cat={row}
@@ -310,6 +359,7 @@ export function CategoryReport({
                   onToggleHide={toggleHideCat}
                   isHidden={false}
                   isSynthetic={isSynthetic}
+                  isRolledUp={isRolledUp}
                   hasDescendants={parentIds.has(row.id)}
                   isCollapsed={collapsedIds.has(row.id)}
                   onToggleCollapsed={() => toggleCollapsed(row.id)}
@@ -370,6 +420,7 @@ export function CategoryReport({
                     onToggleHide={toggleHideCat}
                     isHidden
                     isSynthetic={false}
+                    isRolledUp={false}
                     hasDescendants={false}
                     isCollapsed={false}
                     onToggleCollapsed={() => {}}
@@ -417,6 +468,7 @@ function CategoryRow({
   onToggleHide,
   isHidden,
   isSynthetic,
+  isRolledUp,
   hasDescendants,
   isCollapsed,
   onToggleCollapsed,
@@ -430,6 +482,7 @@ function CategoryRow({
   onToggleHide: (id: string) => void;
   isHidden: boolean;
   isSynthetic: boolean;
+  isRolledUp: boolean;
   hasDescendants: boolean;
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
@@ -536,7 +589,21 @@ function CategoryRow({
       <td
         className={`px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 ${amountClass(display)}`}
       >
-        {formatAUD(display)}
+        <span className="inline-flex items-center gap-0.5 align-baseline">
+          {formatAUD(display)}
+          {isRolledUp && (
+            // Σ flag — the row's Total has been folded up from
+            // descendants because the parent carries its own
+            // budget. Sits as a small superscript so the number
+            // remains the primary read.
+            <Sigma
+              className="h-2.5 w-2.5 -translate-y-1 text-muted-foreground"
+              aria-label="Total rolled up from children"
+            >
+              <title>Total rolled up from descendants</title>
+            </Sigma>
+          )}
+        </span>
       </td>
       {showPlan && (
         <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">

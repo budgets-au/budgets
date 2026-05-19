@@ -9,6 +9,34 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.178.0 — 2026-05-19
+
+### Added
+- **"Roll up budgeted parents" toggle on Cashflow + Category
+  reports.** When a parent category carries its own budget,
+  flipping this toggle treats the parent's budget as the
+  family target. The parent row's Total folds in every
+  descendant's actuals; the children stay visible underneath
+  (no hiding); a small Σ marker sits next to the parent's
+  Total amount to flag "this number already includes the
+  rows below". The parent's Plan is held to just the parent's
+  own budget — descendants' individual budgets aren't summed
+  in, since the parent's budget is meant to cover the family.
+  Toggle only appears in the toolbar when at least one parent
+  in scope qualifies. The display-pref
+  `cashflowRollupBudgetedParents` is shared between the two
+  reports, so flipping it on one tab carries to the other.
+
+### Fixed
+- **Category-report print view flattened the hierarchy
+  indentation.** The print CSS's universal `table td { padding-left:
+  4px !important }` rule won the specificity battle against
+  Tailwind's `pl-9` / `pl-16` on the category-name cell, so on
+  paper every depth-1 and depth-2 row sat flush with depth-0.
+  Added scoped rules (`table td.pl-9`, `table td.pl-16`) that
+  restore the indents at print-appropriate sizes (16 px / 32
+  px to match the 9 pt body font).
+
 ## 0.177.0 — 2026-05-19
 
 ### Added

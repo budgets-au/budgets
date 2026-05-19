@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildHierarchicalRows } from "./category-hierarchy";
+import {
+  applyBudgetedParentRollup,
+  buildHierarchicalRows,
+  hasOwnBudget,
+} from "./category-hierarchy";
 import type { CashflowCategory } from "@/app/api/reports/cashflow/route";
 
 function cat(over: Partial<CashflowCategory> & { id: string }): CashflowCategory {
@@ -134,6 +138,26 @@ describe("buildHierarchicalRows", () => {
     expect(synth!.row.scheduledByMonth["2026-02"]).toBe(20);
   });
 
+  it("hasOwnBudget detects budget from either field", () => {
+    expect(hasOwnBudget(cat({ id: "X" }), ["2026-01"])).toBe(false);
+    expect(
+      hasOwnBudget(cat({ id: "X", budgetPerMonth: 50 }), ["2026-01"]),
+    ).toBe(true);
+    expect(
+      hasOwnBudget(
+        cat({ id: "X", budgetByMonth: { "2026-01": 100 } }),
+        ["2026-01"],
+      ),
+    ).toBe(true);
+    // Budget on an out-of-window month doesn't count.
+    expect(
+      hasOwnBudget(
+        cat({ id: "X", budgetByMonth: { "2025-12": 100 } }),
+        ["2026-01"],
+      ),
+    ).toBe(false);
+  });
+
   it("orders synthesised depth-0 parents alphabetically alongside real ones", () => {
     const realA = cat({ id: "A", name: "Apples", total: -10 });
     const childZ = cat({
@@ -154,5 +178,140 @@ describe("buildHierarchicalRows", () => {
     // Top-level order: Apples, Bananas (synth), Zoo (synth)
     const tops = out.filter((r) => !r.row.parentId);
     expect(tops.map((r) => r.row.name)).toEqual(["Apples", "Bananas", "Zoo"]);
+  });
+});
+
+describe("applyBudgetedParentRollup", () => {
+  it("tags every row with isRolledUp:false when no parent has its own budget", () => {
+    const parent = cat({ id: "P", total: -10 });
+    const child = cat({
+      id: "C",
+      parentId: "P",
+      parentName: "P",
+      total: -50,
+    });
+    const rows = buildHierarchicalRows([parent, child], ["2026-01"]);
+    const out = applyBudgetedParentRollup(
+      rows,
+      [parent, child],
+      ["2026-01"],
+    );
+    expect(out.map((r) => r.row.id)).toEqual(rows.map((r) => r.row.id));
+    expect(out.every((r) => r.isRolledUp === false)).toBe(true);
+  });
+
+  it("rolls descendants' actuals into a budgeted parent + keeps the descendants visible", () => {
+    const parent = cat({
+      id: "FOOD",
+      name: "Food",
+      total: -50,
+      totalCount: 1,
+      byMonth: { "2026-01": -50 },
+      countByMonth: { "2026-01": 1 },
+      budgetByMonth: { "2026-01": 1000 },
+      budgetPerMonth: 1000,
+    });
+    const groceries = cat({
+      id: "GROC",
+      name: "Groceries",
+      parentId: "FOOD",
+      parentName: "Food",
+      total: -500,
+      totalCount: 4,
+      byMonth: { "2026-01": -500 },
+      countByMonth: { "2026-01": 4 },
+    });
+    const dining = cat({
+      id: "DINE",
+      name: "Dining",
+      parentId: "FOOD",
+      parentName: "Food",
+      total: -300,
+      totalCount: 2,
+      byMonth: { "2026-01": -300 },
+      countByMonth: { "2026-01": 2 },
+    });
+    const cats = [parent, groceries, dining];
+    const rows = buildHierarchicalRows(cats, ["2026-01"]);
+    const out = applyBudgetedParentRollup(rows, cats, ["2026-01"]);
+
+    // Children stay in the output so the operator can still see
+    // the breakdown; the parent gets the rolled-up total + the
+    // isRolledUp flag the renderer uses to draw the Σ indicator.
+    expect(out.map((r) => r.row.id)).toEqual(["FOOD", "DINE", "GROC"]);
+    const folded = out.find((r) => r.row.id === "FOOD")!;
+    expect(folded.isRolledUp).toBe(true);
+    expect(folded.row.total).toBe(-850);
+    expect(folded.row.totalCount).toBe(7);
+    expect(folded.row.byMonth["2026-01"]).toBe(-850);
+    expect(folded.row.countByMonth["2026-01"]).toBe(7);
+    expect(folded.row.budgetByMonth["2026-01"]).toBe(1000);
+    expect(folded.row.budgetPerMonth).toBe(1000);
+    // Children untouched.
+    const groc = out.find((r) => r.row.id === "GROC")!;
+    expect(groc.isRolledUp).toBe(false);
+    expect(groc.row.total).toBe(-500);
+  });
+
+  it("rolls grandchildren up through their budgeted grandparent", () => {
+    const food = cat({
+      id: "FOOD",
+      name: "Food",
+      total: 0,
+      budgetPerMonth: 1000,
+      budgetByMonth: { "2026-01": 1000 },
+    });
+    const fruit = cat({
+      id: "FRUIT",
+      name: "Fruit",
+      parentId: "FOOD",
+      parentName: "Food",
+      total: -100,
+      byMonth: { "2026-01": -100 },
+      totalCount: 2,
+      countByMonth: { "2026-01": 2 },
+    });
+    const apples = cat({
+      id: "APPLES",
+      name: "Apples",
+      parentId: "FRUIT",
+      parentName: "Fruit",
+      grandparentId: "FOOD",
+      grandparentName: "Food",
+      total: -80,
+      byMonth: { "2026-01": -80 },
+      totalCount: 1,
+      countByMonth: { "2026-01": 1 },
+    });
+    const cats = [food, fruit, apples];
+    const rows = buildHierarchicalRows(cats, ["2026-01"]);
+    const out = applyBudgetedParentRollup(rows, cats, ["2026-01"]);
+    const folded = out.find((r) => r.row.id === "FOOD")!;
+    expect(folded.isRolledUp).toBe(true);
+    expect(folded.row.total).toBe(-180);
+    expect(folded.row.totalCount).toBe(3);
+    // Fruit + Apples still appear.
+    expect(out.map((r) => r.row.id).sort()).toEqual(
+      ["APPLES", "FOOD", "FRUIT"].sort(),
+    );
+  });
+
+  it("ignores synthesised parents — they have no own budget by construction", () => {
+    const apples = cat({
+      id: "APPLES",
+      name: "Apples",
+      parentId: "FRUIT",
+      parentName: "Fruit",
+      grandparentId: "FOOD",
+      grandparentName: "Food",
+      total: -80,
+    });
+    const cats = [apples];
+    const rows = buildHierarchicalRows(cats, ["2026-01"]);
+    // Both FOOD and FRUIT are synthesised; neither qualifies
+    // for rollup. Expect every row tagged isRolledUp:false.
+    const out = applyBudgetedParentRollup(rows, cats, ["2026-01"]);
+    expect(out.map((r) => r.row.id)).toEqual(rows.map((r) => r.row.id));
+    expect(out.every((r) => r.isRolledUp === false)).toBe(true);
   });
 });

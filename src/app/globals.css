@@ -360,6 +360,18 @@
     padding-bottom: 2px !important;
     font-size: 9pt !important;
   }
+  /* Preserve the category-name indentation in print. The universal
+     padding rule above would otherwise flatten `pl-9` (depth 1) and
+     `pl-16` (depth 2) to 4 px, killing the hierarchy on paper. The
+     class-selector specificity wins over `table td`; shrink the
+     indents to match the 9 pt page font (the on-screen 36 / 64 px
+     values feel oversized at print scale). */
+  table td.pl-9 {
+    padding-left: 16px !important;
+  }
+  table td.pl-16 {
+    padding-left: 32px !important;
+  }
   /* Let category names wrap instead of truncating. The on-screen
      report uses `truncate` + `whitespace-nowrap` to keep tight rows;
      on print we'd rather see the full name on two lines than an

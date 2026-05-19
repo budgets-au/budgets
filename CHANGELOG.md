@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.167.0 — 2026-05-19
+
+### Docs
+- **`AGENTS.md` grew into a real contributor primer.** It used
+  to be a single-line "this is not the Next.js you know" note;
+  now it covers local dev quickstart, commit + version policy,
+  CHANGELOG style, file / naming conventions, schema migration
+  shape, the display-prefs persistence pattern, the multi-DB
+  profile model, the codebase's real gotchas (Base UI vs Radix
+  idiom, theme `--primary` being near-black, `useState(prop)`
+  stale-closure trap, hover-only controls needing `lg:`, the
+  TDZ cycle into `src/db/index.ts`), testing, and the release
+  flow. `CLAUDE.md` still just `@AGENTS.md`s into it, so Claude
+  picks up the same context.
+
 ## 0.166.0 — 2026-05-19
 
 ### Changed

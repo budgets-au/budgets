@@ -2,7 +2,8 @@
 
 import { useMemo } from "react";
 import useSWR from "swr";
-import { ChevronRight, Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { amountClass, formatAUD } from "@/lib/utils";
@@ -15,14 +16,14 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 /** "Category totals" report — the Cashflow report's data without
  *  the per-month matrix. Renders one row per category for the
- *  selected period; Total / Avg-per-month / Plan / Count columns
- *  driven by the same display-prefs the Cashflow tab uses so the
- *  operator's toggle state carries across between the two views.
+ *  selected period; Total / Plan (Budget + Scheduled) / Count
+ *  columns driven by the same display-prefs the Cashflow tab uses.
  *
- *  Hide-transfers, hidden-category visibility, and Show-counts /
- *  Show-avg / Show-plan all share the Cashflow tab's persisted
- *  state — they're conceptually the same data summarised
- *  differently. */
+ *  Visual rhythm mirrors Cashflow: depth-based indents on the
+ *  name column, vertical separator lines between numeric columns,
+ *  muted "computed" background on aggregate cells, hover row
+ *  highlight. Section headers wrap Income and Expenses; a Net row
+ *  closes out the table. */
 export function CategoryReport({
   from,
   to,
@@ -36,18 +37,10 @@ export function CategoryReport({
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
   const { prefs, setPref } = useDisplayPrefs();
   const showCounts = prefs.cashflowShowCounts;
-  const showAvg = prefs.cashflowShowAvg;
   const showPlan = prefs.cashflowShowPlan;
   const showHidden = prefs.cashflowShowHidden;
   const excludedIds = prefs.cashflowExcludedCatIds;
   const hideTransfers = prefs.cashflowHideTransfers;
-
-  function toggle<K extends keyof typeof prefs>(
-    key: K,
-    value: (typeof prefs)[K],
-  ) {
-    setPref(key, value);
-  }
 
   const url = `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`;
   const { data, isLoading } = useSWR<CashflowData>(url, fetcher);
@@ -87,12 +80,12 @@ export function CategoryReport({
     );
   }
 
-  const monthsCount = data.months.length;
   const visibleIncome = data.income.filter((c) => !excludedSet.has(c.id));
   const visibleExpenses = data.expenses.filter((c) => !excludedSet.has(c.id));
   const hiddenIncome = data.income.filter((c) => excludedSet.has(c.id));
   const hiddenExpenses = data.expenses.filter((c) => excludedSet.has(c.id));
   const hasHidden = hiddenIncome.length + hiddenExpenses.length > 0;
+  const monthsCount = data.months.length;
 
   function aggregate(cats: CashflowCategory[]) {
     let total = 0;
@@ -112,29 +105,23 @@ export function CategoryReport({
   const expenseTotals = aggregate(visibleExpenses);
   const net = incomeTotals.total + expenseTotals.total;
   const colCount =
-    1 /* category */ +
+    1 /* name */ +
     1 /* total */ +
-    (showAvg ? 1 : 0) +
-    (showPlan ? 2 : 0) /* budget + scheduled */ +
+    (showPlan ? 2 : 0) +
     (showCounts ? 1 : 0) +
-    1; /* hide toggle column */
+    1; /* hide-toggle column */
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end gap-4 flex-wrap" data-print-hide>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Avg/mo</span>
-          <Switch
-            checked={showAvg}
-            onCheckedChange={(v) => toggle("cashflowShowAvg", v)}
-            aria-label="Show monthly average column"
-          />
-        </div>
+      <div
+        className="flex items-center justify-end gap-4 flex-wrap"
+        data-print-hide
+      >
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Plan</span>
           <Switch
             checked={showPlan}
-            onCheckedChange={(v) => toggle("cashflowShowPlan", v)}
+            onCheckedChange={(v) => setPref("cashflowShowPlan", v)}
             aria-label="Show plan columns"
           />
         </div>
@@ -142,7 +129,7 @@ export function CategoryReport({
           <span className="text-xs text-muted-foreground">Show counts</span>
           <Switch
             checked={showCounts}
-            onCheckedChange={(v) => toggle("cashflowShowCounts", v)}
+            onCheckedChange={(v) => setPref("cashflowShowCounts", v)}
             aria-label="Show transaction counts"
           />
         </div>
@@ -150,7 +137,7 @@ export function CategoryReport({
           <span className="text-xs text-muted-foreground">Hide transfers</span>
           <Switch
             checked={hideTransfers}
-            onCheckedChange={(v) => toggle("cashflowHideTransfers", v)}
+            onCheckedChange={(v) => setPref("cashflowHideTransfers", v)}
             aria-label="Hide transfer-typed categories"
           />
         </div>
@@ -161,7 +148,7 @@ export function CategoryReport({
             </span>
             <Switch
               checked={showHidden}
-              onCheckedChange={(v) => toggle("cashflowShowHidden", v)}
+              onCheckedChange={(v) => setPref("cashflowShowHidden", v)}
               aria-label="Show hidden categories"
             />
           </div>
@@ -172,77 +159,101 @@ export function CategoryReport({
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b bg-muted/30">
-              <Th align="left">Category</Th>
-              <Th align="right">Total</Th>
-              {showAvg && <Th align="right">Avg/mo</Th>}
-              {showPlan && <Th align="right">Budget</Th>}
-              {showPlan && <Th align="right">Scheduled</Th>}
-              {showCounts && <Th align="right">#</Th>}
-              <Th align="right" />
+              <Th align="left" pad="px-3 py-2">
+                Category
+              </Th>
+              <Th align="right" computed>
+                Total
+              </Th>
+              {showPlan && (
+                <Th align="right" computed>
+                  Budget
+                </Th>
+              )}
+              {showPlan && (
+                <Th align="right" computed>
+                  Scheduled
+                </Th>
+              )}
+              {showCounts && (
+                <Th align="right" computed>
+                  #
+                </Th>
+              )}
+              <Th align="right" pad="w-8" />
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody>
             <SectionHeader label="Income" colSpan={colCount} />
-            {renderGroup(
-              visibleIncome,
-              monthsCount,
-              showAvg,
-              showPlan,
-              showCounts,
-              toggleHideCat,
-              excludedSet,
-            )}
+            {sortCats(visibleIncome).map((cat) => (
+              <CategoryRow
+                key={cat.id}
+                cat={cat}
+                monthsCount={monthsCount}
+                showPlan={showPlan}
+                showCounts={showCounts}
+                onToggleHide={toggleHideCat}
+                isHidden={false}
+                from={from}
+                to={to}
+              />
+            ))}
             <SummaryRow
               label="Total income"
               total={incomeTotals.total}
               count={incomeTotals.count}
               budget={incomeTotals.budget}
               scheduled={incomeTotals.scheduled}
-              monthsCount={monthsCount}
-              showAvg={showAvg}
               showPlan={showPlan}
               showCounts={showCounts}
             />
 
             <SectionHeader label="Expenses" colSpan={colCount} />
-            {renderGroup(
-              visibleExpenses,
-              monthsCount,
-              showAvg,
-              showPlan,
-              showCounts,
-              toggleHideCat,
-              excludedSet,
-            )}
+            {sortCats(visibleExpenses).map((cat) => (
+              <CategoryRow
+                key={cat.id}
+                cat={cat}
+                monthsCount={monthsCount}
+                showPlan={showPlan}
+                showCounts={showCounts}
+                onToggleHide={toggleHideCat}
+                isHidden={false}
+                from={from}
+                to={to}
+              />
+            ))}
             <SummaryRow
               label="Total expenses"
               total={expenseTotals.total}
               count={expenseTotals.count}
               budget={expenseTotals.budget}
               scheduled={expenseTotals.scheduled}
-              monthsCount={monthsCount}
-              showAvg={showAvg}
               showPlan={showPlan}
               showCounts={showCounts}
             />
 
-            <tr className="bg-muted/40 font-semibold">
+            <tr className="border-t bg-muted/40 font-semibold">
               <td className="px-3 py-2">Net (income + expenses)</td>
-              <td className={`px-3 py-2 text-right tabular-nums ${amountClass(net)}`}>
+              <td
+                className={`px-3 py-2 text-right tabular-nums border-l border-border bg-muted/40 ${amountClass(net)}`}
+              >
                 {formatAUD(net)}
               </td>
-              {showAvg && (
-                <td
-                  className={`px-3 py-2 text-right tabular-nums ${amountClass(
-                    net / Math.max(monthsCount, 1),
-                  )}`}
-                >
-                  {formatAUD(net / Math.max(monthsCount, 1))}
+              {showPlan && (
+                <td className="px-3 py-2 text-right border-l border-border bg-muted/40 text-muted-foreground">
+                  —
                 </td>
               )}
-              {showPlan && <td className="px-3 py-2 text-right">—</td>}
-              {showPlan && <td className="px-3 py-2 text-right">—</td>}
-              {showCounts && <td className="px-3 py-2 text-right">—</td>}
+              {showPlan && (
+                <td className="px-3 py-2 text-right border-l border-border bg-muted/40 text-muted-foreground">
+                  —
+                </td>
+              )}
+              {showCounts && (
+                <td className="px-3 py-2 text-right border-l border-border bg-muted/40 text-muted-foreground">
+                  —
+                </td>
+              )}
               <td />
             </tr>
 
@@ -253,26 +264,19 @@ export function CategoryReport({
                   colSpan={colCount}
                   muted
                 />
-                {renderGroup(
-                  hiddenIncome,
-                  monthsCount,
-                  showAvg,
-                  showPlan,
-                  showCounts,
-                  toggleHideCat,
-                  excludedSet,
-                  true,
-                )}
-                {renderGroup(
-                  hiddenExpenses,
-                  monthsCount,
-                  showAvg,
-                  showPlan,
-                  showCounts,
-                  toggleHideCat,
-                  excludedSet,
-                  true,
-                )}
+                {sortCats([...hiddenIncome, ...hiddenExpenses]).map((cat) => (
+                  <CategoryRow
+                    key={cat.id}
+                    cat={cat}
+                    monthsCount={monthsCount}
+                    showPlan={showPlan}
+                    showCounts={showCounts}
+                    onToggleHide={toggleHideCat}
+                    isHidden
+                    from={from}
+                    to={to}
+                  />
+                ))}
               </>
             )}
           </tbody>
@@ -282,170 +286,122 @@ export function CategoryReport({
   );
 }
 
-/** Renders a flat group of categories with parent/child indentation
- *  derived from `parentId`. Parents collapse their child subtotals
- *  into a "rolled-up" row when a child has the same parent id; the
- *  ordering relies on the API returning parents before children. */
-function renderGroup(
-  cats: CashflowCategory[],
-  monthsCount: number,
-  showAvg: boolean,
-  showPlan: boolean,
-  showCounts: boolean,
-  toggleHide: (id: string) => void,
-  excludedSet: Set<string>,
-  greyed = false,
-) {
-  // Group children under their parent so we can render
-  // parent | indented children. The API returns the rows already
-  // ordered by name+depth, so we walk twice: parents (no parentId),
-  // then each parent's direct children.
-  const byParent = new Map<string | null, CashflowCategory[]>();
-  for (const c of cats) {
-    const k = c.parentId;
-    const arr = byParent.get(k) ?? [];
-    arr.push(c);
-    byParent.set(k, arr);
-  }
+/** Sort cats so children sit directly under their parent. The API
+ *  returns a flat list; this stable sort keys on (grandparent name,
+ *  parent name, own name) so the hierarchy reads top-down. */
+function sortCats(cats: CashflowCategory[]): CashflowCategory[] {
+  return cats.slice().sort((a, b) => {
+    const aGp = a.grandparentName ?? a.parentName ?? a.name;
+    const bGp = b.grandparentName ?? b.parentName ?? b.name;
+    if (aGp !== bGp) return aGp.localeCompare(bGp);
+    const aP = a.parentName ?? a.name;
+    const bP = b.parentName ?? b.name;
+    if (aP !== bP) return aP.localeCompare(bP);
+    return a.name.localeCompare(b.name);
+  });
+}
 
-  const roots = byParent.get(null) ?? [];
-  const orphans = cats.filter(
-    (c) => c.parentId && !cats.some((p) => p.id === c.parentId),
-  );
-
-  const rows: React.ReactNode[] = [];
-  for (const parent of roots) {
-    rows.push(
-      <CategoryRow
-        key={parent.id}
-        cat={parent}
-        monthsCount={monthsCount}
-        showAvg={showAvg}
-        showPlan={showPlan}
-        showCounts={showCounts}
-        indent={0}
-        onToggleHide={toggleHide}
-        isHidden={excludedSet.has(parent.id)}
-        greyed={greyed}
-      />,
-    );
-    const kids = byParent.get(parent.id) ?? [];
-    for (const child of kids) {
-      rows.push(
-        <CategoryRow
-          key={child.id}
-          cat={child}
-          monthsCount={monthsCount}
-          showAvg={showAvg}
-          showPlan={showPlan}
-          showCounts={showCounts}
-          indent={1}
-          onToggleHide={toggleHide}
-          isHidden={excludedSet.has(child.id)}
-          greyed={greyed}
-        />,
-      );
-    }
-  }
-  // Orphans (child rows whose parent was filtered out) — render at
-  // the root level so they aren't silently dropped.
-  for (const orphan of orphans) {
-    rows.push(
-      <CategoryRow
-        key={orphan.id}
-        cat={orphan}
-        monthsCount={monthsCount}
-        showAvg={showAvg}
-        showPlan={showPlan}
-        showCounts={showCounts}
-        indent={0}
-        onToggleHide={toggleHide}
-        isHidden={excludedSet.has(orphan.id)}
-        greyed={greyed}
-      />,
-    );
-  }
-  return rows;
+function depthOf(cat: CashflowCategory): 0 | 1 | 2 {
+  if (cat.grandparentId) return 2;
+  if (cat.parentId) return 1;
+  return 0;
 }
 
 function CategoryRow({
   cat,
   monthsCount,
-  showAvg,
   showPlan,
   showCounts,
-  indent,
   onToggleHide,
   isHidden,
-  greyed,
+  from,
+  to,
 }: {
   cat: CashflowCategory;
   monthsCount: number;
-  showAvg: boolean;
   showPlan: boolean;
   showCounts: boolean;
-  indent: number;
   onToggleHide: (id: string) => void;
   isHidden: boolean;
-  greyed: boolean;
+  from: string;
+  to: string;
 }) {
-  // Render the value in its natural sign — outflows are already
-  // negative in the API payload, inflows positive. `amountClass`
-  // reads the sign to colour red / green; flipping the display sign
-  // would invert the colour assignment.
   const display = cat.total;
-  const avg = monthsCount > 0 ? display / monthsCount : 0;
   const scheduled = cat.scheduledPerMonth * monthsCount;
   const budget = cat.budgetPerMonth * monthsCount;
-  const pad = indent * 16;
+  const depth = depthOf(cat);
+  // Indent classes mirror cashflow-report's LeafRow:
+  //   depth 0 → px-3
+  //   depth 1 → pl-9 pr-3
+  //   depth 2 → pl-16 pr-3
+  const namePad =
+    depth === 2 ? "pl-16 pr-3" : depth === 1 ? "pl-9 pr-3" : "px-3";
+  const isUncategorised = cat.id.startsWith("uncategorised-");
+  const direction =
+    cat.id === "uncategorised-income"
+      ? "in"
+      : cat.id === "uncategorised-expenses"
+        ? "out"
+        : null;
+  const href = isUncategorised
+    ? `/transactions?categoryId=__uncat__&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${direction ? `&direction=${encodeURIComponent(direction)}` : ""}`
+    : `/transactions?categoryId=${encodeURIComponent(cat.id)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
   return (
-    <tr className={`group ${greyed ? "opacity-60" : ""} hover:bg-muted/30`}>
-      <td className="px-3 py-1.5">
-        <span style={{ paddingLeft: pad }} className="inline-block">
-          {indent > 0 && (
-            <ChevronRight className="inline h-3 w-3 mr-1 text-muted-foreground/60" />
+    <tr
+      className={`group border-b border-border/50 hover:bg-muted/30 ${
+        isHidden ? "opacity-50" : ""
+      }`}
+    >
+      <td className={`${namePad} py-1.5 text-sm whitespace-nowrap`}>
+        <span className="flex items-center gap-1 min-w-0">
+          <Link
+            href={href}
+            className={
+              isUncategorised
+                ? "text-muted-foreground hover:underline hover:text-foreground transition-colors truncate"
+                : "hover:underline hover:text-indigo-600 transition-colors truncate"
+            }
+          >
+            {cat.name}
+          </Link>
+          {!isUncategorised && (
+            <button
+              type="button"
+              onClick={() => onToggleHide(cat.id)}
+              className="lg:opacity-0 lg:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+              aria-label={isHidden ? "Show category" : "Hide category"}
+              title={isHidden ? "Show category" : "Hide category"}
+            >
+              {isHidden ? (
+                <Eye className="h-3 w-3" />
+              ) : (
+                <EyeOff className="h-3 w-3" />
+              )}
+            </button>
           )}
-          {cat.name}
         </span>
       </td>
-      <td className={`px-3 py-1.5 text-right tabular-nums ${amountClass(display)}`}>
+      <td
+        className={`px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 ${amountClass(display)}`}
+      >
         {formatAUD(display)}
       </td>
-      {showAvg && (
-        <td className={`px-3 py-1.5 text-right tabular-nums ${amountClass(avg)}`}>
-          {formatAUD(avg)}
-        </td>
-      )}
       {showPlan && (
-        <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+        <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
           {budget !== 0 ? formatAUD(budget) : "—"}
         </td>
       )}
       {showPlan && (
-        <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+        <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
           {scheduled !== 0 ? formatAUD(scheduled) : "—"}
         </td>
       )}
       {showCounts && (
-        <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+        <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
           {cat.totalCount || "—"}
         </td>
       )}
-      <td className="px-3 py-1.5 text-right">
-        <button
-          type="button"
-          onClick={() => onToggleHide(cat.id)}
-          className="lg:opacity-0 lg:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-          aria-label={isHidden ? "Show category" : "Hide category"}
-          title={isHidden ? "Show category" : "Hide category"}
-        >
-          {isHidden ? (
-            <Eye className="h-3.5 w-3.5" />
-          ) : (
-            <EyeOff className="h-3.5 w-3.5" />
-          )}
-        </button>
-      </td>
+      <td className="w-8" />
     </tr>
   );
 }
@@ -460,11 +416,11 @@ function SectionHeader({
   muted?: boolean;
 }) {
   return (
-    <tr className={muted ? "bg-muted/20" : "bg-muted/40"}>
+    <tr className={muted ? "border-b bg-muted/20" : "border-b bg-muted/30"}>
       <td
         colSpan={colSpan}
         className={`px-3 py-1.5 text-[11px] uppercase tracking-wider ${
-          muted ? "text-muted-foreground" : "font-medium"
+          muted ? "text-muted-foreground" : "font-medium text-muted-foreground"
         }`}
       >
         {label}
@@ -479,8 +435,6 @@ function SummaryRow({
   count,
   budget,
   scheduled,
-  monthsCount,
-  showAvg,
   showPlan,
   showCounts,
 }: {
@@ -489,39 +443,33 @@ function SummaryRow({
   count: number;
   budget: number;
   scheduled: number;
-  monthsCount: number;
-  showAvg: boolean;
   showPlan: boolean;
   showCounts: boolean;
 }) {
-  const avg = monthsCount > 0 ? total / monthsCount : 0;
   return (
-    <tr className="bg-muted/20 font-medium">
+    <tr className="border-b bg-muted/20 font-medium">
       <td className="px-3 py-1.5">{label}</td>
-      <td className={`px-3 py-1.5 text-right tabular-nums ${amountClass(total)}`}>
+      <td
+        className={`px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 ${amountClass(total)}`}
+      >
         {formatAUD(total)}
       </td>
-      {showAvg && (
-        <td className={`px-3 py-1.5 text-right tabular-nums ${amountClass(avg)}`}>
-          {formatAUD(avg)}
-        </td>
-      )}
       {showPlan && (
-        <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+        <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
           {budget !== 0 ? formatAUD(budget) : "—"}
         </td>
       )}
       {showPlan && (
-        <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+        <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
           {scheduled !== 0 ? formatAUD(scheduled) : "—"}
         </td>
       )}
       {showCounts && (
-        <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
+        <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
           {count || "—"}
         </td>
       )}
-      <td />
+      <td className="w-8" />
     </tr>
   );
 }
@@ -529,16 +477,21 @@ function SummaryRow({
 function Th({
   align,
   children,
+  computed,
+  pad = "px-3 py-2",
 }: {
   align: "left" | "right";
   children?: React.ReactNode;
+  computed?: boolean;
+  pad?: string;
 }) {
   return (
     <th
-      className={`px-3 py-2 text-[11px] uppercase tracking-wider text-muted-foreground font-medium text-${align}`}
+      className={`${pad} text-[11px] uppercase tracking-wider text-muted-foreground font-medium text-${align} ${
+        computed ? "border-l border-border bg-muted/40" : ""
+      }`}
     >
       {children}
     </th>
   );
 }
-

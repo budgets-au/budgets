@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.172.0 — 2026-05-19
+
+### Changed
+- **Reports → Category layout aligned with Cashflow.** First
+  pass of the report rendered as plain rows with no separation
+  rules. Now matches Cashflow's visual rhythm: depth-based
+  indentation on the name column (`px-3` / `pl-9` / `pl-16` for
+  root / child / grandchild), vertical `border-l` rules between
+  numeric columns, muted "computed" cell background on
+  aggregate cells, hover row highlight, `border-b border-border/50`
+  between rows. Category names are clickable links to the
+  filtered transactions list (same drill-through Cashflow uses).
+- **Avg/mo column removed from the Category report.** Cashflow
+  still has it; on a single-totals view it was redundant with
+  Total since the period is already visible in the date range.
+
 ## 0.171.0 — 2026-05-19
 
 ### Added

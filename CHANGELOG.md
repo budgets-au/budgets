@@ -9,6 +9,44 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.168.0 — 2026-05-19
+
+### Added
+- **Settings → Maintenance tab.** Surfaces transfer-pair
+  housekeeping that was previously buried elsewhere in the app:
+  - **Re-run transfer backfill** — clears
+    `app_settings.transfer_backfill_done` and runs the
+    orphan-transfer pass. Use after a partial delete, or when
+    restoring a DB where the backfill-already-done flag is stale.
+    New endpoint `POST /api/transfers/backfill` (admin-only).
+  - **Reset & re-scan** — same op as the button buried in the
+    transfer-suggestions panel on /transactions; deletes every
+    synthetic placeholder and re-runs the matcher. Discoverable
+    from Settings now without knowing where to look.
+  - **Run ANALYZE** — refreshes SQLite's query-planner
+    statistics. The planner picks indexes off
+    `sqlite_stat1` / `sqlite_stat4` and those numbers go stale
+    after big bulk mutations (large imports, sample-data removal,
+    restore). Cheap and side-effect-free apart from rewriting the
+    stats tables. New endpoint `POST /api/maintenance/analyze`.
+
+### Performance
+- **Three missing indexes filled in** (migration 0011):
+  - `payee_rules(normalized_payee)` — every CSV import runs
+    `batchLookupPayeeRules()` with `WHERE normalized_payee IN
+    (...)` across dozens of distinct payees in a single batch;
+    without the index that was a full table scan per payee.
+    Biggest user-visible win.
+  - `scheduled_transactions(is_active)` — dashboard
+    upcoming-schedules + several reports filter on this; tiny
+    table today, but the filter runs on every dashboard load.
+  - `transactions(transfer_pair_id, date)` — composite that
+    prunes `pairTransfersInWindow()`'s self-join to just the
+    unpaired rows in the relevant date window. Previously
+    ~O(n²) over the unpaired subset.
+  All three are `CREATE INDEX IF NOT EXISTS` so the migration is
+  safe on a DB that already has them.
+
 ## 0.167.0 — 2026-05-19
 
 ### Docs

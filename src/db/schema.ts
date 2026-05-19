@@ -265,12 +265,22 @@ export const transactions = sqliteTable(
     // each force a sort or filter pass; this composite lets SQLite
     // seek both bounds in one pass.
     index("transactions_account_date_idx").on(t.accountId, t.date),
+    // Composite that prunes the transfer-matcher self-join to just the
+    // unpaired (`transfer_pair_id IS NULL`) rows in the relevant date
+    // window. Without it, `pairTransfersInWindow()` scans the whole
+    // transactions table on both sides of the join.
+    index("transactions_transfer_pair_date_idx").on(
+      t.transferPairId,
+      t.date,
+    ),
   ],
 );
 
 // ─── Scheduled Transactions ───────────────────────────────────────────────────
 
-export const scheduledTransactions = sqliteTable("scheduled_transactions", {
+export const scheduledTransactions = sqliteTable(
+  "scheduled_transactions",
+  {
   id: text("id").primaryKey().$defaultFn(newUuid),
   // 'schedule' = single recurring occurrence (the original kind, matched
   // 1-to-1 against real transactions); 'budget' = per-period spending cap
@@ -318,7 +328,14 @@ export const scheduledTransactions = sqliteTable("scheduled_transactions", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),
-});
+  },
+  (t) => [
+    // Hot filter for the dashboard upcoming-schedules query + several
+    // reports; the table is small today but the filter runs on every
+    // dashboard load.
+    index("scheduled_transactions_is_active_idx").on(t.isActive),
+  ],
+);
 
 // ─── Budgets ──────────────────────────────────────────────────────────────────
 
@@ -444,7 +461,9 @@ export const transferSuggestions = sqliteTable(
 
 // ─── Payee Rules ──────────────────────────────────────────────────────────────
 
-export const payeeRules = sqliteTable("payee_rules", {
+export const payeeRules = sqliteTable(
+  "payee_rules",
+  {
   id: text("id").primaryKey().$defaultFn(newUuid),
   normalizedPayee: text("normalized_payee").notNull(),
   // Inclusive bounds. NULL = unbounded on that side. The matcher prefers
@@ -468,7 +487,14 @@ export const payeeRules = sqliteTable("payee_rules", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),
-});
+  },
+  (t) => [
+    // Every CSV import runs batchLookupPayeeRules() with
+    // `WHERE normalized_payee IN (?, …)` across the import's distinct
+    // payees. Without this index that's a full scan per payee.
+    index("payee_rules_normalized_payee_idx").on(t.normalizedPayee),
+  ],
+);
 
 // ─── Schedule Suggestion Dismissals ───────────────────────────────────────────
 

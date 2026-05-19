@@ -16,11 +16,12 @@ import { BackupSchedule } from "@/components/settings/backup-schedule";
 import { DatabaseFilesManager } from "@/components/settings/database-files-manager";
 import { UserManager } from "@/components/settings/user-manager";
 import { SampleDataPanel } from "@/components/settings/sample-data-panel";
+import { MaintenancePanel } from "@/components/settings/maintenance-panel";
 import { OrphanCategoriesPanel } from "@/components/settings/orphan-categories-panel";
 import { ResetBrowserData } from "@/components/settings/reset-browser-data";
 import { SchedulePaletteEditor } from "@/components/settings/schedule-palette-editor";
 
-const SETTINGS_TABS = ["general", "accounts", "rules", "backups", "databases", "security"] as const;
+const SETTINGS_TABS = ["general", "accounts", "rules", "backups", "databases", "maintenance", "security"] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 function isSettingsTab(value: string | null): value is SettingsTab {
@@ -56,6 +57,7 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
         <TabsTrigger value="rules">Rules</TabsTrigger>
         <TabsTrigger value="backups">Backups</TabsTrigger>
         <TabsTrigger value="databases">Databases</TabsTrigger>
+        <TabsTrigger value="maintenance">Maintenance</TabsTrigger>
         <TabsTrigger value="security">Security</TabsTrigger>
       </TabsList>
 
@@ -199,6 +201,10 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
 
       <TabsContent value="databases" className="space-y-6 max-w-2xl">
         <DatabaseFilesManager />
+      </TabsContent>
+
+      <TabsContent value="maintenance" className="space-y-6 max-w-2xl">
+        <MaintenancePanel />
       </TabsContent>
 
       <TabsContent value="security" className="space-y-6 max-w-2xl">

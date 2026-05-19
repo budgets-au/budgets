@@ -9,6 +9,38 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.174.0 — 2026-05-19
+
+### Changed
+- **More print-layout polish.** Round-two pass against the
+  print spec uncovered three more issues:
+  - The "this month" highlight on Cashflow + Accounts
+    (`bg-indigo-500/10` on the column-of-cells) was bleeding
+    through to paper as a lavender wash. The `@media print`
+    class-attribute selector didn't catch it (Tailwind v4
+    escape quirk); added `print:bg-transparent` directly at
+    each of the 10 sites in
+    [cashflow-report.tsx](src/components/reports/cashflow-report.tsx)
+    so the highlight is stripped at source.
+  - Table cell padding + font tightened in print (`4px / 9pt`)
+    so wide-month tables fit landscape A4 without spilling.
+  - Category-name truncation overridden — on paper the full
+    name wraps onto a second line rather than ellipsing, so
+    YoY / Expenses / Envelope no longer lose category labels
+    in narrow columns.
+- **Treemap and Tax Deductions now print on landscape A4.**
+  Both wanted the horizontal room — Treemap for its
+  rectangle layout, Tax for its 3-card Fixed / Actual / Total
+  row. Wrapper class `print-landscape` added on each.
+
+### Changed (Category report)
+- **Budget + Scheduled columns collapsed into a single Plan
+  column** plus a new **Diff** column (Total − Plan). Showing
+  two separate plan-shaped figures next to each other was
+  redundant — operators mostly think of "what I expected" as
+  one number, and the difference from actual is the key
+  insight the report's meant to surface.
+
 ## 0.173.0 — 2026-05-19
 
 ### Changed

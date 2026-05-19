@@ -104,10 +104,13 @@ export function CategoryReport({
   const incomeTotals = aggregate(visibleIncome);
   const expenseTotals = aggregate(visibleExpenses);
   const net = incomeTotals.total + expenseTotals.total;
+  // Plan is the sum of Budget + Scheduled — operators usually think
+  // of "what I expected" as a single number rather than two separate
+  // ones. Diff = Total − Plan; positive when actual outpaced plan.
   const colCount =
     1 /* name */ +
     1 /* total */ +
-    (showPlan ? 2 : 0) +
+    (showPlan ? 2 : 0) /* plan + diff */ +
     (showCounts ? 1 : 0) +
     1; /* hide-toggle column */
 
@@ -167,12 +170,12 @@ export function CategoryReport({
               </Th>
               {showPlan && (
                 <Th align="right" computed>
-                  Budget
+                  Plan
                 </Th>
               )}
               {showPlan && (
                 <Th align="right" computed>
-                  Scheduled
+                  Diff
                 </Th>
               )}
               {showCounts && (
@@ -329,6 +332,12 @@ function CategoryRow({
   const display = cat.total;
   const scheduled = cat.scheduledPerMonth * monthsCount;
   const budget = cat.budgetPerMonth * monthsCount;
+  // Plan = budget + scheduled (treated as one expected-figure
+  // column). Diff = actual − plan; for expenses (negative actual,
+  // negative plan) this reads as "over" when positive and "under"
+  // when negative — same sign convention the amount cells follow.
+  const plan = budget + scheduled;
+  const diff = display - plan;
   const depth = depthOf(cat);
   // Indent classes mirror cashflow-report's LeafRow:
   //   depth 0 → px-3
@@ -388,12 +397,16 @@ function CategoryRow({
       </td>
       {showPlan && (
         <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
-          {budget !== 0 ? formatAUD(budget) : "—"}
+          {plan !== 0 ? formatAUD(plan) : "—"}
         </td>
       )}
       {showPlan && (
-        <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
-          {scheduled !== 0 ? formatAUD(scheduled) : "—"}
+        <td
+          className={`px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 ${
+            plan === 0 ? "text-muted-foreground" : amountClass(diff)
+          }`}
+        >
+          {plan !== 0 ? formatAUD(diff) : "—"}
         </td>
       )}
       {showCounts && (
@@ -446,6 +459,8 @@ function SummaryRow({
   showPlan: boolean;
   showCounts: boolean;
 }) {
+  const plan = budget + scheduled;
+  const diff = total - plan;
   return (
     <tr className="border-b bg-muted/20 font-medium">
       <td className="px-3 py-1.5">{label}</td>
@@ -456,12 +471,16 @@ function SummaryRow({
       </td>
       {showPlan && (
         <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
-          {budget !== 0 ? formatAUD(budget) : "—"}
+          {plan !== 0 ? formatAUD(plan) : "—"}
         </td>
       )}
       {showPlan && (
-        <td className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-muted-foreground">
-          {scheduled !== 0 ? formatAUD(scheduled) : "—"}
+        <td
+          className={`px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 ${
+            plan === 0 ? "text-muted-foreground" : amountClass(diff)
+          }`}
+        >
+          {plan !== 0 ? formatAUD(diff) : "—"}
         </td>
       )}
       {showCounts && (

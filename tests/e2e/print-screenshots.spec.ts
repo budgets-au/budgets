@@ -46,11 +46,11 @@ const SHOTS: ReadonlyArray<PrintShot> = [
   { path: "/reports?tab=envelope", name: "envelope", orientation: "portrait", settleMs: 1500 },
   { path: "/reports?tab=expenses", name: "expenses-drilldown", orientation: "portrait", settleMs: 1500 },
   { path: "/reports?tab=sankey", name: "sankey", orientation: "landscape", settleMs: 1500 },
-  { path: "/reports?tab=treemap", name: "treemap", orientation: "portrait", settleMs: 1500 },
+  { path: "/reports?tab=treemap", name: "treemap", orientation: "landscape", settleMs: 1500 },
   { path: "/reports?tab=heatmap", name: "heatmap", orientation: "landscape", settleMs: 1500 },
   { path: "/reports?tab=scatter", name: "scatter", orientation: "landscape", settleMs: 1500 },
   { path: "/reports?tab=payees", name: "payees", orientation: "portrait", settleMs: 1500 },
-  { path: "/reports?tab=tax", name: "tax", orientation: "portrait", settleMs: 1500 },
+  { path: "/reports?tab=tax", name: "tax", orientation: "landscape", settleMs: 1500 },
   { path: "/reports?tab=flow", name: "flow", orientation: "landscape", settleMs: 1500 },
 ];
 

@@ -49,7 +49,7 @@ export function TaxDeductionsReport({ accountIds }: { accountIds: string[] }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 print-landscape">
       {/* Header row — input controls only useful on-screen. The
           per-FY summary card below carries the rendered FY label so
           the print stays self-describing. */}

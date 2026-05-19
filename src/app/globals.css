@@ -278,17 +278,30 @@
   tr {
     break-inside: avoid;
   }
-  /* Kill the on-screen muted cell backgrounds. They print as grey
+  /* Kill the on-screen chrome backgrounds. They print as grey
      ink that wastes toner and softens the contrast between row text
-     and the page — readers want crisp black-on-white. Note: do NOT
-     strip `bg-indigo-500/N` here — the heatmap encodes data via
-     `bg-indigo-500/15` … `bg-indigo-500/85` and would print as
-     empty cells otherwise. Tinted status backgrounds (amber/rose/
-     emerald/blue at low opacities) are reserved for the chrome
-     banners we already hide via data-print-hide, so they don't need
-     a global strip here. */
-  [class*="bg-muted"] {
+     and the page — readers want crisp black-on-white. Strips:
+       - bg-muted/* — every muted-tint wrapper (Cards, Th, computed
+         cell aggregate background).
+       - bg-background — the sticky-left first column on Cashflow /
+         Accounts uses this; on print it carried the theme
+         `--background` token which renders darker than the page in
+         some renderers, so we force it explicitly to white.
+       - bg-indigo-500/10 — the "this month" highlight on the
+         Cashflow column. Pure chrome, not data; do NOT widen to
+         the rest of bg-indigo-500/N because the Heatmap encodes
+         intensity via bg-indigo-500/15 … bg-indigo-500/85. */
+  [class*="bg-muted"],
+  [class*="bg-background"] {
+    background: white !important;
+  }
+  /* The on-screen "this month" highlight in Cashflow renders via
+     `bg-indigo-500/10`. The `~=` attribute matcher proved
+     unreliable across browsers / Tailwind escape variants — use
+     the literal escaped class selector so the rule lands. */
+  .bg-indigo-500\/10 {
     background: transparent !important;
+    background-color: transparent !important;
   }
   /* Strengthen tertiary text. text-muted-foreground prints as low-contrast
      grey, which loses fine column labels + secondary numbers on the
@@ -334,6 +347,32 @@
   }
   thead tr {
     border-bottom: 1px solid #9ca3af !important;
+  }
+  /* Tighten cell padding so 12-month wide tables fit on landscape A4
+     without spilling. The on-screen rhythm (px-3 py-1.5 + text-sm)
+     leaves the column count looking sparse on paper; 4 px / 9pt
+     matches the reduced page font set above. */
+  table th,
+  table td {
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    font-size: 9pt !important;
+  }
+  /* Let category names wrap instead of truncating. The on-screen
+     report uses `truncate` + `whitespace-nowrap` to keep tight rows;
+     on print we'd rather see the full name on two lines than an
+     ellipsis. */
+  table td .truncate,
+  table th .truncate {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+  }
+  table td.whitespace-nowrap,
+  table th.whitespace-nowrap {
+    white-space: normal !important;
   }
   /* The reports use a sticky-left first column on-screen. Sticky in
      print loses meaning + can create overlap artefacts; reset. */

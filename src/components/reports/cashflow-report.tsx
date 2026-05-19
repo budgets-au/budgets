@@ -114,7 +114,11 @@ function AmountCell({
   return (
     <td
       className={`px-3 py-1.5 text-right tabular-nums ${
-        colHighlight ? "bg-indigo-500/10" : computed ? "bg-muted/40" : ""
+        colHighlight
+          ? "bg-indigo-500/10 print:bg-transparent"
+          : computed
+            ? "bg-muted/40"
+            : ""
       } ${borderLeft || computed ? "border-l border-border" : ""} ${colour}`}
     >
       {isClickable ? (
@@ -161,7 +165,7 @@ function MonthSubCell({
   return (
     <td
       className={`px-2 py-1.5 text-right tabular-nums text-[11px] text-muted-foreground/70 whitespace-nowrap ${
-        colHighlight ? "bg-indigo-500/10" : ""
+        colHighlight ? "bg-indigo-500/10 print:bg-transparent" : ""
       } ${borderLeft ? "border-l border-border" : ""}`}
     >
       {text}
@@ -193,7 +197,7 @@ function CountCell({
   return (
     <td
       className={`px-2 py-1.5 text-right tabular-nums text-xs text-muted-foreground ${
-        colHighlight ? "bg-indigo-500/10" : computed ? "bg-muted/40" : ""
+        colHighlight ? "bg-indigo-500/10 print:bg-transparent" : computed ? "bg-muted/40" : ""
       } ${computed ? "border-l border-border" : ""}`}
     >
       {value ? value : "—"}
@@ -579,7 +583,7 @@ function ParentHeaderRow({
               borderLeft={!opts.showPlan}
               onClick={showValues && openMonth ? () => openMonth(m) : undefined}
             />
-            {opts.showCounts && <td className={m === thisMonth ? "bg-indigo-500/10" : ""} />}
+            {opts.showCounts && <td className={m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""} />}
           </Fragment>
         );
       })}
@@ -681,7 +685,7 @@ function SubParentHeaderRow({
               borderLeft={!opts.showPlan}
               onClick={showValues && openMonth ? () => openMonth(m) : undefined}
             />
-            {opts.showCounts && <td className={m === thisMonth ? "bg-indigo-500/10" : ""} />}
+            {opts.showCounts && <td className={m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""} />}
           </Fragment>
         );
       })}
@@ -818,9 +822,9 @@ function TotalsRow({
       <td className="px-3 py-2 text-sm sticky left-0 bg-muted/40 whitespace-nowrap">{label}</td>
       {months.map((m) => (
         <Fragment key={m}>
-          {opts.showPlan && <td className={`px-2 py-2 border-l border-border ${m === thisMonth ? "bg-indigo-500/10" : ""}`} />}
+          {opts.showPlan && <td className={`px-2 py-2 border-l border-border ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""}`} />}
           <AmountCell value={values[m]} colHighlight={m === thisMonth} mode={mode} negate={negate} borderLeft={!opts.showPlan} />
-          {opts.showCounts && <td className={`px-2 py-2 ${m === thisMonth ? "bg-indigo-500/10" : ""}`} />}
+          {opts.showCounts && <td className={`px-2 py-2 ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""}`} />}
         </Fragment>
       ))}
       {opts.showTotal && (mode === "balance" ? (
@@ -1249,19 +1253,19 @@ export function CashflowReport({
             {months.map((m) => (
               <Fragment key={m}>
                 {showPlan && (
-                  <th className={`text-right px-2 py-2 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wider whitespace-nowrap border-l border-border sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10" : "bg-muted"}`}>
+                  <th className={`text-right px-2 py-2 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wider whitespace-nowrap border-l border-border sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
                     Plan
                   </th>
                 )}
                 <th
                   className={`text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${!showPlan ? "border-l border-border" : ""} ${
-                    m === thisMonth ? "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400" : "bg-muted"
+                    m === thisMonth ? "bg-indigo-500/15 print:bg-transparent text-indigo-600 dark:text-indigo-400" : "bg-muted"
                   }`}
                 >
                   {format(parseISO(`${m}-01`), "MMM ''yy")}
                 </th>
                 {showCounts && (
-                  <th className={`text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10" : "bg-muted"}`}>
+                  <th className={`text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
                     #
                   </th>
                 )}

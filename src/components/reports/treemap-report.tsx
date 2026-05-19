@@ -90,7 +90,7 @@ export function TreemapReport({
   const drillNode = drillId != null ? tree.byId.get(drillId) : null;
 
   return (
-    <Card>
+    <Card className="print-landscape">
       <CardHeader className="space-y-2 pb-3">
         <div className="flex flex-row items-center justify-between gap-2">
           <CardTitle className="text-base">

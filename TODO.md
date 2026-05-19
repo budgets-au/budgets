@@ -25,7 +25,7 @@ shipped in 0.166.0._
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-19T02:38:13.280Z · 2 issues, 2 questions._
+_Last run: 2026-05-19T03:23:34.800Z · 2 issues, 2 questions._
 
 #### Issues
 

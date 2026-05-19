@@ -1421,7 +1421,11 @@ export function CashflowReport({
         the header row is the inset shadow under each <th> — putting
         the split visually at the BOTTOM of the header cells instead
         of doubling up with a wrapper-border line at the top. */}
-    <div className="overflow-auto rounded-lg border-x border-b max-h-[calc(100vh-220px)] max-w-7xl mx-auto">
+    <div
+      className={`overflow-auto rounded-lg border-x border-b max-h-[calc(100vh-220px)] mx-auto ${
+        monthAxis ? "max-w-7xl" : "max-w-3xl"
+      }`}
+    >
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-muted">

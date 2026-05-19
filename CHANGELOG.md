@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.187.0 — 2026-05-19
+
+### Changed
+- **Category-mode report table now caps at `max-w-3xl`
+  (≈ 768 px).** The previous 0.186.0 cap of `max-w-7xl`
+  (1280 px) was too generous — on a 1920 px screen the
+  table still spread across most of the viewport and the
+  column-spread complaint persisted. With the tighter cap
+  for `monthAxis=false`, four to six columns fit
+  comfortably and the category column reads as the
+  dominant column it should be. Cashflow mode keeps the
+  1280 px cap so its 14-month scrolling table still has
+  room to render.
+
 ## 0.186.0 — 2026-05-19
 
 ### Changed

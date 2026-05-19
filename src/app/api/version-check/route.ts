@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { compareSemver } from "@/lib/semver-compare";
+import { parseNextLink } from "./parse-next-link";
 
 const GHCR_PACKAGE = "budgets-au/budgets";
 const TOKEN_URL = `https://ghcr.io/token?service=ghcr.io&scope=repository:${GHCR_PACKAGE}:pull`;
@@ -79,16 +80,32 @@ async function tokenFetch(): Promise<string | null> {
 }
 
 async function listTags(token: string): Promise<string[] | null> {
-  const res = await fetch(TAGS_URL, {
-    headers: { Authorization: `Bearer ${token}` },
-    // Outer Next route segment cache handles repeat hits; the
-    // fetch call itself shouldn't be cached again at this layer.
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  const body = (await res.json()) as { tags?: string[] };
-  return body.tags ?? [];
+  // GHCR caps tags/list at 100 entries per response and signals
+  // "more available" via a `Link: <...?last=X&n=100>; rel="next"`
+  // header (per the OCI distribution spec). Without following it
+  // the indicator silently stops seeing new releases once the
+  // tag count crosses 100, which surfaces as "new release not
+  // detected". Walk pages until the next-link is absent. Cap at
+  // 50 pages so a broken registry loop can't hang the request —
+  // at 100/page that's 5000 tags before we give up, which is
+  // well past any realistic release history.
+  const all: string[] = [];
+  let url: string | null = TAGS_URL;
+  for (let i = 0; i < 50 && url; i++) {
+    const res: Response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      // Outer Next route segment cache handles repeat hits; the
+      // fetch call itself shouldn't be cached again at this layer.
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { tags?: string[] };
+    all.push(...(body.tags ?? []));
+    url = parseNextLink(res.headers.get("link"));
+  }
+  return all;
 }
+
 
 function pickLatest(tags: string[]): string | null {
   const semverOnly = tags.filter((t) => /^\d+\.\d+\.\d+$/.test(t));

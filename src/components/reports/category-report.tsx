@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { amountClass, formatAUD } from "@/lib/utils";
@@ -73,6 +73,20 @@ export function CategoryReport({
     setPref("cashflowExcludedCatIds", Array.from(next));
   }
 
+  // Collapsed parent IDs (any depth-0 or depth-1 row that has
+  // descendants and whose subtree the user has folded shut). Matches
+  // the Cashflow report's collapse UX — local state because per-id
+  // collapse is too granular to bother syncing across devices.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  function toggleCollapsed(id: string) {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   if (isLoading || !data) {
     return (
       <div className="rounded-md border p-6 text-sm text-muted-foreground">
@@ -135,12 +149,55 @@ export function CategoryReport({
     (showCounts ? 1 : 0) +
     1; /* hide-toggle column */
 
+  // Build the hierarchical row lists once so the "Expand/Collapse
+  // all" button can target the exact parent IDs that have
+  // descendants (without re-walking the tree).
+  const incomeRows = buildHierarchicalRows(visibleIncome, monthsInWindow);
+  const expenseRows = buildHierarchicalRows(visibleExpenses, monthsInWindow);
+  // A row has descendants iff any other row in the same section
+  // names it as a parent or grandparent. Synthesised parent rows
+  // qualify too — they exist precisely *because* they have
+  // descendants.
+  const parentIds = new Set<string>();
+  for (const { row } of [...incomeRows, ...expenseRows]) {
+    if (row.parentId) parentIds.add(row.parentId);
+    if (row.grandparentId) parentIds.add(row.grandparentId);
+  }
+  const allParentIds = [...parentIds];
+  const allCollapsed =
+    allParentIds.length > 0 &&
+    allParentIds.every((id) => collapsedIds.has(id));
+  function toggleCollapseAll() {
+    setCollapsedIds(allCollapsed ? new Set() : new Set(allParentIds));
+  }
+  // A row is hidden if any of its ancestors is collapsed.
+  function isCollapsedByAncestor(row: CashflowCategory): boolean {
+    if (row.parentId && collapsedIds.has(row.parentId)) return true;
+    if (row.grandparentId && collapsedIds.has(row.grandparentId))
+      return true;
+    return false;
+  }
+
   return (
     <div className="space-y-3">
       <div
-        className="flex items-center justify-end gap-4 flex-wrap"
+        className="flex items-center justify-between gap-4 flex-wrap"
         data-print-hide
       >
+        <button
+          type="button"
+          onClick={toggleCollapseAll}
+          className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 transition-colors print:hidden"
+          aria-label={allCollapsed ? "Expand all" : "Collapse all"}
+        >
+          {allCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )}
+          {allCollapsed ? "Expand all" : "Collapse all"}
+        </button>
+        <div className="flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Plan</span>
           <Switch
@@ -177,6 +234,7 @@ export function CategoryReport({
             />
           </div>
         )}
+        </div>
       </div>
 
       <div className="rounded-lg border overflow-x-auto">
@@ -209,8 +267,9 @@ export function CategoryReport({
           </thead>
           <tbody>
             <SectionHeader label="Income" colSpan={colCount} />
-            {buildHierarchicalRows(visibleIncome, monthsInWindow).map(
-              ({ row, isSynthetic }) => (
+            {incomeRows
+              .filter(({ row }) => !isCollapsedByAncestor(row))
+              .map(({ row, isSynthetic }) => (
                 <CategoryRow
                   key={row.id}
                   cat={row}
@@ -220,11 +279,13 @@ export function CategoryReport({
                   onToggleHide={toggleHideCat}
                   isHidden={false}
                   isSynthetic={isSynthetic}
+                  hasDescendants={parentIds.has(row.id)}
+                  isCollapsed={collapsedIds.has(row.id)}
+                  onToggleCollapsed={() => toggleCollapsed(row.id)}
                   from={from}
                   to={to}
                 />
-              ),
-            )}
+              ))}
             <SummaryRow
               label="Total income"
               total={incomeTotals.total}
@@ -237,8 +298,9 @@ export function CategoryReport({
             />
 
             <SectionHeader label="Expenses" colSpan={colCount} />
-            {buildHierarchicalRows(visibleExpenses, monthsInWindow).map(
-              ({ row, isSynthetic }) => (
+            {expenseRows
+              .filter(({ row }) => !isCollapsedByAncestor(row))
+              .map(({ row, isSynthetic }) => (
                 <CategoryRow
                   key={row.id}
                   cat={row}
@@ -248,11 +310,13 @@ export function CategoryReport({
                   onToggleHide={toggleHideCat}
                   isHidden={false}
                   isSynthetic={isSynthetic}
+                  hasDescendants={parentIds.has(row.id)}
+                  isCollapsed={collapsedIds.has(row.id)}
+                  onToggleCollapsed={() => toggleCollapsed(row.id)}
                   from={from}
                   to={to}
                 />
-              ),
-            )}
+              ))}
             <SummaryRow
               label="Total expenses"
               total={expenseTotals.total}
@@ -306,6 +370,9 @@ export function CategoryReport({
                     onToggleHide={toggleHideCat}
                     isHidden
                     isSynthetic={false}
+                    hasDescendants={false}
+                    isCollapsed={false}
+                    onToggleCollapsed={() => {}}
                     from={from}
                     to={to}
                   />
@@ -350,6 +417,9 @@ function CategoryRow({
   onToggleHide,
   isHidden,
   isSynthetic,
+  hasDescendants,
+  isCollapsed,
+  onToggleCollapsed,
   from,
   to,
 }: {
@@ -360,6 +430,9 @@ function CategoryRow({
   onToggleHide: (id: string) => void;
   isHidden: boolean;
   isSynthetic: boolean;
+  hasDescendants: boolean;
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
   from: string;
   to: string;
 }) {
@@ -403,14 +476,23 @@ function CategoryRow({
   const href = isUncategorised
     ? `/transactions?categoryId=__uncat__&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${direction ? `&direction=${encodeURIComponent(direction)}` : ""}`
     : `/transactions?categoryId=${encodeURIComponent(cat.id)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  const Chevron = isCollapsed ? ChevronRight : ChevronDown;
   return (
     <tr
       className={`group border-b border-border/50 hover:bg-muted/30 ${
         isHidden ? "opacity-50" : ""
-      }`}
+      } ${hasDescendants ? "cursor-pointer" : ""}`}
+      onClick={hasDescendants ? onToggleCollapsed : undefined}
     >
       <td className={`${namePad} py-1.5 text-sm whitespace-nowrap`}>
         <span className="flex items-center gap-1 min-w-0">
+          {hasDescendants ? (
+            <Chevron className="h-3 w-3 shrink-0 text-muted-foreground print:hidden" />
+          ) : (
+            // Reserve the chevron's slot so leaf and parent rows align
+            // at the same name-column x-position.
+            <span className="w-3 shrink-0 print:hidden" />
+          )}
           {isSynthetic ? (
             // Structural header — no own transactions in this window,
             // so there's nothing to link to. Mute slightly so the
@@ -421,6 +503,7 @@ function CategoryRow({
           ) : (
             <Link
               href={href}
+              onClick={(e) => e.stopPropagation()}
               className={
                 isUncategorised
                   ? "text-muted-foreground hover:underline hover:text-foreground transition-colors truncate"
@@ -433,7 +516,10 @@ function CategoryRow({
           {!isUncategorised && !isSynthetic && (
             <button
               type="button"
-              onClick={() => onToggleHide(cat.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleHide(cat.id);
+              }}
               className="lg:opacity-0 lg:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground print:hidden"
               aria-label={isHidden ? "Show category" : "Hide category"}
               title={isHidden ? "Show category" : "Hide category"}

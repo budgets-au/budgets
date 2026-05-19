@@ -9,6 +9,30 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.177.0 — 2026-05-19
+
+### Added
+- **Category report parents collapse like Cashflow.** Chevron
+  next to every row that has descendants; click the row to fold
+  its subtree (children + grandchildren) shut. "Collapse all"
+  / "Expand all" toggle in the top-left of the toolbar
+  mirrors the Cashflow report's button. Synthetic parent
+  headers are clickable for collapse but still don't link or
+  expose the hide-eye. Collapse state is local to the session
+  — per-id collapse is too granular to bother persisting.
+
+### Fixed
+- **In-app "New release" indicator stopped detecting tags past
+  the first GHCR page.** The version-check route fetched
+  `/v2/budgets-au/budgets/tags/list` with the default page
+  size (100) and ignored the `Link: <…>; rel="next"` header,
+  so once the repo crossed 100 tags the indicator silently
+  capped at whatever was on page 1 (which was `0.171.0` —
+  three releases stale before anyone noticed). Now walks the
+  pagination chain with a 50-page safety cap. Pure helper +
+  six unit tests at
+  [src/app/api/version-check/parse-next-link.ts](src/app/api/version-check/parse-next-link.ts).
+
 ## 0.176.0 — 2026-05-19
 
 ### Fixed

@@ -85,7 +85,26 @@ export function CategoryReport({
   const hiddenIncome = data.income.filter((c) => excludedSet.has(c.id));
   const hiddenExpenses = data.expenses.filter((c) => excludedSet.has(c.id));
   const hasHidden = hiddenIncome.length + hiddenExpenses.length > 0;
-  const monthsCount = data.months.length;
+  const monthsInWindow = data.months;
+
+  /** Sum a category's expected figures across the months the report
+   *  is scoped to. Uses the API's per-month maps (which reflect the
+   *  actual recurrence — a bimonthly schedule only contributes in
+   *  the months it fires) rather than `scheduledPerMonth * months`
+   *  (which smooths a non-monthly cadence over every month and
+   *  overstates plan for short windows). */
+  function periodPlan(cat: CashflowCategory): {
+    scheduled: number;
+    budget: number;
+  } {
+    let scheduled = 0;
+    let budget = 0;
+    for (const m of monthsInWindow) {
+      scheduled += cat.scheduledByMonth?.[m] ?? 0;
+      budget += cat.budgetByMonth?.[m] ?? 0;
+    }
+    return { scheduled, budget };
+  }
 
   function aggregate(cats: CashflowCategory[]) {
     let total = 0;
@@ -95,8 +114,9 @@ export function CategoryReport({
     for (const c of cats) {
       total += c.total;
       count += c.totalCount;
-      scheduled += c.scheduledPerMonth * monthsCount;
-      budget += c.budgetPerMonth * monthsCount;
+      const p = periodPlan(c);
+      scheduled += p.scheduled;
+      budget += p.budget;
     }
     return { total, count, scheduled, budget };
   }
@@ -192,7 +212,7 @@ export function CategoryReport({
               <CategoryRow
                 key={cat.id}
                 cat={cat}
-                monthsCount={monthsCount}
+                monthsInWindow={monthsInWindow}
                 showPlan={showPlan}
                 showCounts={showCounts}
                 onToggleHide={toggleHideCat}
@@ -216,7 +236,7 @@ export function CategoryReport({
               <CategoryRow
                 key={cat.id}
                 cat={cat}
-                monthsCount={monthsCount}
+                monthsInWindow={monthsInWindow}
                 showPlan={showPlan}
                 showCounts={showCounts}
                 onToggleHide={toggleHideCat}
@@ -271,7 +291,7 @@ export function CategoryReport({
                   <CategoryRow
                     key={cat.id}
                     cat={cat}
-                    monthsCount={monthsCount}
+                    monthsInWindow={monthsInWindow}
                     showPlan={showPlan}
                     showCounts={showCounts}
                     onToggleHide={toggleHideCat}
@@ -312,7 +332,7 @@ function depthOf(cat: CashflowCategory): 0 | 1 | 2 {
 
 function CategoryRow({
   cat,
-  monthsCount,
+  monthsInWindow,
   showPlan,
   showCounts,
   onToggleHide,
@@ -321,7 +341,7 @@ function CategoryRow({
   to,
 }: {
   cat: CashflowCategory;
-  monthsCount: number;
+  monthsInWindow: string[];
   showPlan: boolean;
   showCounts: boolean;
   onToggleHide: (id: string) => void;
@@ -330,8 +350,17 @@ function CategoryRow({
   to: string;
 }) {
   const display = cat.total;
-  const scheduled = cat.scheduledPerMonth * monthsCount;
-  const budget = cat.budgetPerMonth * monthsCount;
+  // Sum the actual per-month occurrence + budget values across the
+  // selected window rather than the smoothed `*PerMonth × months`.
+  // For bimonthly / quarterly / yearly schedules the smoothing
+  // would overstate Plan for windows that don't actually contain
+  // an occurrence.
+  let scheduled = 0;
+  let budget = 0;
+  for (const m of monthsInWindow) {
+    scheduled += cat.scheduledByMonth?.[m] ?? 0;
+    budget += cat.budgetByMonth?.[m] ?? 0;
+  }
   // Plan = budget + scheduled (treated as one expected-figure
   // column). Diff = actual − plan; for expenses (negative actual,
   // negative plan) this reads as "over" when positive and "under"

@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.175.0 — 2026-05-19
+
+### Fixed
+- **Category report's Plan column overstated non-monthly
+  scheduled transactions.** The previous formula was
+  `scheduledPerMonth × monthsCount`, which is a smoothed
+  average — a bimonthly $200 schedule was reported as "$100
+  every month", so a one-month window showed Plan = $100
+  even though no occurrence falls in that month. Same bug
+  affected budgets stored as non-monthly cadences. Switched
+  to summing the API's `scheduledByMonth[m]` and
+  `budgetByMonth[m]` across the months actually in the
+  selected window — these maps already reflect the real
+  recurrence (a bimonthly schedule only contributes in the
+  months it fires), so Plan now matches what'll actually
+  happen. Total / Diff line up again for
+  quarterly / yearly / fortnightly cadences in
+  [category-report.tsx](src/components/reports/category-report.tsx).
+
 ## 0.174.0 — 2026-05-19
 
 ### Changed

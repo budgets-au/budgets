@@ -66,10 +66,12 @@ function todayISO(): string {
 /** Manual transaction entry. Supports four types — Expense, Income,
  *  Transfer out, Transfer in — so the operator doesn't have to think
  *  about amount signs. Sign is derived from type; transfer types
- *  also surface the counterparty-account picker. Field order is
- *  Date → Account → Type → Other-account (transfer only) → Category
- *  → Payee → Amount → Notes, matching the operator's natural
- *  data-entry flow so plain Tab keystrokes navigate the form. */
+ *  surface a counterparty-account picker that may be left empty, in
+ *  which case the server mints a synthetic counterpart in the
+ *  "External" account (mirroring the orphan-transfer backfill
+ *  behaviour). Field layout is the 1/2/3-column responsive grid
+ *  the Scheduled-edit form uses so plain Tab keystrokes walk the
+ *  visible row in reading order. */
 export function AddTransactionDialog({
   open,
   onOpenChange,
@@ -126,34 +128,46 @@ export function AddTransactionDialog({
     amount.trim() !== "" &&
     Number.isFinite(amountNumeric) &&
     amountNumeric > 0 &&
-    (!isTransfer ||
-      (otherAccountId !== "" && otherAccountId !== accountId));
+    (!isTransfer || otherAccountId !== accountId);
+  // Note: an empty `otherAccountId` is allowed on transfers — the
+  // server mints a synthetic counterpart in External.
 
   async function submit() {
     if (!canSubmit) return;
     setSaving(true);
     try {
       const magnitude = Math.abs(amountNumeric).toFixed(2);
-      // Sign convention is server-facing: outflow = negative on the
-      // SOURCE leg. The dest leg (transfer) gets the inverted sign
-      // server-side.
+      // Compute the four primitives the server expects:
+      //   bodyAccountId     = the SOURCE leg's account
+      //   bodyTransferTo    = the DEST leg's account (if any)
+      //   bodySynthetic     = mint a synthetic dest in External (if no
+      //                       real destination)
+      //   bodyAmount        = signed source-leg amount
       let bodyAccountId = accountId;
       let bodyTransferTo: string | null = null;
-      let bodyAmount: string;
-      if (txType === "expense") {
-        bodyAmount = `-${magnitude}`;
-      } else if (txType === "income") {
+      let bodySyntheticTransfer = false;
+      // Source-leg sign rule: outflows negative, inflows positive.
+      // Expense + transfer-out + transfer-in-with-real-source all
+      // drive a NEGATIVE source amount. Income + transfer-in-with-
+      // synthetic-source drive POSITIVE.
+      let bodyAmount = `-${magnitude}`;
+      if (txType === "income") {
         bodyAmount = magnitude;
       } else if (txType === "transfer-out") {
-        bodyAccountId = accountId;
-        bodyTransferTo = otherAccountId;
-        bodyAmount = `-${magnitude}`;
-      } else {
-        // transfer-in: money flowing FROM other TO picked. Source
-        // leg is `other`, dest leg is `picked`.
-        bodyAccountId = otherAccountId;
-        bodyTransferTo = accountId;
-        bodyAmount = `-${magnitude}`;
+        if (otherAccountId) bodyTransferTo = otherAccountId;
+        else bodySyntheticTransfer = true;
+      } else if (txType === "transfer-in") {
+        // Money flowing FROM other TO picked. When the operator
+        // supplied a real source, picked is the dest; when they left
+        // it empty, the picked account is the SOURCE (inflow) and
+        // the synthetic stub is the dest (outflow).
+        if (otherAccountId) {
+          bodyAccountId = otherAccountId;
+          bodyTransferTo = accountId;
+        } else {
+          bodySyntheticTransfer = true;
+          bodyAmount = magnitude;
+        }
       }
       const body: Record<string, unknown> = {
         accountId: bodyAccountId,
@@ -164,6 +178,7 @@ export function AddTransactionDialog({
       if (notes.trim()) body.notes = notes.trim();
       if (categoryId) body.categoryId = categoryId;
       if (bodyTransferTo) body.transferToAccountId = bodyTransferTo;
+      if (bodySyntheticTransfer) body.syntheticTransfer = true;
       const res = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -184,8 +199,6 @@ export function AddTransactionDialog({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    // Submit on Cmd/Ctrl-Enter from any field — the form is small
-    // enough that this is a natural shortcut for keyboard entry.
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       submit();
@@ -194,91 +207,110 @@ export function AddTransactionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-3xl sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Add transaction</DialogTitle>
         </DialogHeader>
-        <div
-          className="grid grid-cols-1 gap-3 text-sm"
-          onKeyDown={handleKeyDown}
-        >
-          {/* Field order mirrors a natural data-entry flow:
-              date → account → type → (other account if transfer) →
-              category → payee → amount → notes. Tab moves through
-              the visible fields in that order. */}
-          <Field label="Date" required>
-            <Input
-              type="date"
-              min="1900-01-01"
-              max="2099-12-31"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </Field>
-          <Field label="Account" required>
-            <SearchableCombobox
-              value={accountId}
-              onChange={setAccountId}
-              items={accountItems}
-              searchPlaceholder="Search accounts…"
-              emptyTriggerLabel="Choose account…"
-              triggerClassName="h-9 w-full text-sm border rounded-md px-3 bg-background inline-flex items-center justify-between gap-2"
-            />
-          </Field>
-          <Field label="Type" required>
-            <select
-              value={txType}
-              onChange={(e) => setTxType(e.target.value as TxType)}
-              className="h-9 w-full text-sm border rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring/50"
-            >
-              {TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {isTransfer && (
-            <Field label={otherAccountLabel} required>
+        <div className="space-y-3" onKeyDown={handleKeyDown}>
+          {/* Row 1: date / account / type (+ other account when
+              transfer) — the "what is this and where does it sit"
+              row. Cmd/Ctrl-Enter from any input submits. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <Field label="Date" required>
+              <Input
+                type="date"
+                min="1900-01-01"
+                max="2099-12-31"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="h-9"
+              />
+            </Field>
+            <Field label="Account" required>
               <SearchableCombobox
-                value={otherAccountId}
-                onChange={setOtherAccountId}
-                items={otherAccountItems}
+                value={accountId}
+                onChange={setAccountId}
+                items={accountItems}
                 searchPlaceholder="Search accounts…"
-                emptyTriggerLabel={`Choose ${otherAccountLabel.toLowerCase()}…`}
+                emptyTriggerLabel="Choose account…"
                 triggerClassName="h-9 w-full text-sm border rounded-md px-3 bg-background inline-flex items-center justify-between gap-2"
               />
             </Field>
-          )}
-          <Field label="Category">
-            <CategoryDropdown
-              value={categoryId}
-              onChange={setCategoryId}
-              categories={categories}
-              triggerClassName="h-9 w-full text-sm border rounded-md px-3 bg-background inline-flex items-center justify-between gap-2"
-            />
-          </Field>
-          <Field label="Payee">
-            <Input
-              value={payee}
-              onChange={(e) => setPayee(e.target.value)}
-              placeholder="e.g. Woolworths"
-            />
-          </Field>
-          <Field label="Amount" required>
-            <Input
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </Field>
-          <p className="text-[11px] text-muted-foreground -mt-2">
-            Enter the magnitude — the sign is set by the selected type.
-          </p>
+            <Field label="Type" required>
+              <select
+                value={txType}
+                onChange={(e) => setTxType(e.target.value as TxType)}
+                className="h-9 w-full text-sm border rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring/50"
+              >
+                {TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {isTransfer && (
+              <Field
+                label={`${otherAccountLabel} (optional)`}
+                hint={
+                  otherAccountId
+                    ? undefined
+                    : "Empty → External (synthetic)"
+                }
+              >
+                <SearchableCombobox
+                  value={otherAccountId}
+                  onChange={setOtherAccountId}
+                  items={otherAccountItems}
+                  pinnedItems={[
+                    { id: "", label: "External (synthetic)", italic: true },
+                  ]}
+                  searchPlaceholder="Search accounts…"
+                  emptyTriggerLabel="External (synthetic)"
+                  triggerClassName="h-9 w-full text-sm border rounded-md px-3 bg-background inline-flex items-center justify-between gap-2"
+                />
+              </Field>
+            )}
+          </div>
+
+          {/* Row 2: category / payee / amount — the "what is this
+              for and how much" row. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <Field label="Category">
+              <CategoryDropdown
+                value={categoryId}
+                onChange={setCategoryId}
+                categories={categories}
+                triggerClassName="h-9 w-full text-sm border rounded-md px-3 bg-background inline-flex items-center justify-between gap-2"
+              />
+            </Field>
+            <Field label="Payee">
+              <Input
+                value={payee}
+                onChange={(e) => setPayee(e.target.value)}
+                placeholder="e.g. Woolworths"
+                className="h-9"
+              />
+            </Field>
+            <Field
+              label="Amount"
+              required
+              hint="Magnitude — sign is set by the type."
+            >
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="h-9"
+              />
+            </Field>
+          </div>
+
+          {/* Row 3: notes — full width, multi-line. */}
           <Field label="Notes">
             <textarea
               value={notes}
@@ -315,19 +347,24 @@ export function AddTransactionDialog({
 function Field({
   label,
   required,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1">
+    <label className="flex flex-col gap-1 min-w-0">
       <span className="text-xs font-medium text-muted-foreground">
         {label}
         {required && <span className="text-rose-500 ml-0.5">*</span>}
       </span>
       {children}
+      {hint && (
+        <span className="text-[11px] text-muted-foreground/80">{hint}</span>
+      )}
     </label>
   );
 }

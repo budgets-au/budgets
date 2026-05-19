@@ -24,7 +24,47 @@ const createSchema = z.object({
    *  `transferPairId`. Sharing date / payee / category / notes
    *  keeps the pair self-consistent in reports. */
   transferToAccountId: z.string().uuid().optional().nullable(),
+  /** Synthetic-leg transfer: when true and no
+   *  `transferToAccountId` is supplied, the server finds-or-creates
+   *  the default "External" account and uses it as the destination,
+   *  marking the dest leg `isSynthetic = true`. Mirrors the
+   *  backfill behaviour for orphan transfers — the operator records
+   *  a transfer whose counterparty isn't a tracked account. */
+  syntheticTransfer: z.boolean().optional(),
 });
+
+const DEFAULT_EXTERNAL_NAME = "External";
+
+/** Find-or-create the synthetic-counterparty account. Mirrors the
+ *  helper at the top of `src/lib/backfill-orphan-transfers.ts`,
+ *  duplicated here so the manual-add path can mint synthetic legs
+ *  without pulling that whole module's TDZ-prone export surface in. */
+async function findOrCreateExternalAccount(): Promise<string> {
+  const existing = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.isExternal, true),
+        sql`lower(${accounts.name}) = ${DEFAULT_EXTERNAL_NAME.toLowerCase()}`,
+      ),
+    )
+    .limit(1);
+  if (existing.length > 0) return existing[0].id;
+  const [created] = await db
+    .insert(accounts)
+    .values({
+      name: DEFAULT_EXTERNAL_NAME,
+      type: "cash",
+      currency: "AUD",
+      isExternal: true,
+      isArchived: false,
+      startingBalance: "0",
+      currentBalance: "0",
+    })
+    .returning({ id: accounts.id });
+  return created.id;
+}
 
 const pairTxn = alias(transactions, "pair_txn");
 const pairAcct = alias(accounts, "pair_acct");
@@ -306,20 +346,39 @@ export async function POST(request: Request) {
   const tokenFreq = await loadTokenFreq();
   const matchPayee = deriveMatchPayee(normalized, tokenFreq);
 
+  // Resolve the transfer destination. Three shapes are valid:
+  //   - real account id passed in transferToAccountId  → ordinary
+  //     two-leg transfer between tracked accounts.
+  //   - syntheticTransfer flag + no destination        → find-or-create
+  //     the "External" account and mark the dest leg `isSynthetic`,
+  //     matching the orphan-transfer backfill behaviour.
+  //   - neither                                         → not a transfer.
+  let resolvedTransferTo: string | null = data.transferToAccountId ?? null;
+  let destIsSynthetic = false;
+  if (!resolvedTransferTo && data.syntheticTransfer) {
+    resolvedTransferTo = await findOrCreateExternalAccount();
+    destIsSynthetic = true;
+  }
+
   // Transfer path: insert both legs in one transaction and cross-link
   // them via `transferPairId`. The dest leg gets the opposite sign so
   // the pair nets to zero in cashflow rollups; the rest of the
   // payload (date, payee, category, notes, description) is mirrored.
-  if (data.transferToAccountId) {
-    if (data.transferToAccountId === data.accountId) {
+  if (resolvedTransferTo) {
+    if (resolvedTransferTo === data.accountId) {
       return NextResponse.json(
         { error: "Transfer source and destination must differ" },
         { status: 400 },
       );
     }
     const destAmount = (-Number.parseFloat(data.amount)).toFixed(2);
-    const { transferToAccountId: _ignore, ...shared } = data;
-    void _ignore;
+    const {
+      transferToAccountId: _ignore1,
+      syntheticTransfer: _ignore2,
+      ...shared
+    } = data;
+    void _ignore1;
+    void _ignore2;
     const result = await db.transaction(async (tx) => {
       const [source] = await tx
         .insert(transactions)
@@ -333,8 +392,9 @@ export async function POST(request: Request) {
         .insert(transactions)
         .values({
           ...shared,
-          accountId: data.transferToAccountId!,
+          accountId: resolvedTransferTo!,
           amount: destAmount,
+          isSynthetic: destIsSynthetic,
           normalizedPayee: normalized,
           matchPayee,
         })
@@ -348,7 +408,7 @@ export async function POST(request: Request) {
         .set({ transferPairId: source.id, updatedAt: new Date() })
         .where(eq(transactions.id, dest.id));
       // Recompute both account balances.
-      for (const acctId of [data.accountId, data.transferToAccountId!]) {
+      for (const acctId of [data.accountId, resolvedTransferTo!]) {
         await tx
           .update(accounts)
           .set({
@@ -362,8 +422,13 @@ export async function POST(request: Request) {
     return NextResponse.json(result, { status: 201 });
   }
 
-  const { transferToAccountId: _ignored, ...singleData } = data;
-  void _ignored;
+  const {
+    transferToAccountId: _ignored1,
+    syntheticTransfer: _ignored2,
+    ...singleData
+  } = data;
+  void _ignored1;
+  void _ignored2;
   const [row] = await db
     .insert(transactions)
     .values({

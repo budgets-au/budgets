@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.169.0 — 2026-05-19
+
+### Changed
+- **Add-Transaction dialog reflowed horizontally.** The vertical
+  one-field-per-row layout from 0.165 matched
+  `useAddCategory()` but felt cramped for a form with eight
+  fields. Now uses the same 1/2/3/4-column responsive grid the
+  Scheduled-edit form uses — Row 1: Date / Account / Type
+  (+ optional counterparty), Row 2: Category / Payee / Amount,
+  Row 3: full-width Notes. Tab still walks fields in reading
+  order; Cmd/Ctrl-Enter still submits.
+- **Transfers can have an empty counterparty.** When Type is
+  Transfer-out or Transfer-in, the counterparty picker now also
+  carries an italic "External (synthetic)" sentinel; selecting
+  it (or leaving the picker empty) mints a synthetic destination
+  leg in the App's "External" account — the same shape the
+  orphan-transfer backfill creates. Lets the operator record
+  outgoing-to-cash / incoming-from-untracked-source transfers
+  without the picker forcing them to invent an account first.
+
+### API
+- `POST /api/transactions` accepts an optional `syntheticTransfer:
+  boolean` field. When `true` and `transferToAccountId` is empty,
+  the server finds-or-creates the default `External` account and
+  uses it as the destination, marking the dest leg
+  `isSynthetic = true`. Pair-linking + balance-recompute behaviour
+  is otherwise identical to the existing two-real-account
+  transfer path.
+
 ## 0.168.0 — 2026-05-19
 
 ### Added

@@ -117,7 +117,7 @@ export function TreemapReport({
             <div
               role="tablist"
               aria-label="Treemap scope"
-              className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
+              className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 print:hidden"
             >
               {(["expenses", "income"] as const).map((s) => (
                 <button
@@ -149,7 +149,7 @@ export function TreemapReport({
             </label>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground print:hidden">
           <span>Filter to:</span>
           <CategoryDropdown
             value={drillId}

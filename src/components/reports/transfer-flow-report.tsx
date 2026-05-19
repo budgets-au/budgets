@@ -502,7 +502,7 @@ export function TransferFlowReport({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Money between accounts
             </p>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 print:hidden">
               <label className="text-xs text-muted-foreground">Root</label>
               <Select
                 value={rootAccountId}

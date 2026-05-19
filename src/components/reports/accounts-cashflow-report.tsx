@@ -163,7 +163,7 @@ export function AccountsCashflowReport({
   }
 
   return (
-    <Card data-print-area>
+    <Card data-print-area className="print-landscape">
       <CardContent className="p-0">
         <div className="px-4 py-3 border-b flex flex-wrap items-start justify-between gap-3">
           <div>

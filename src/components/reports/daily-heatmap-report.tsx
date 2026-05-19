@@ -135,7 +135,7 @@ export function DailyHeatmapReport({
           </CardTitle>
           <div
             role="tablist"
-            className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
+            className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 print:hidden"
           >
             {(["expenses", "income"] as const).map((s) => (
               <button
@@ -154,7 +154,7 @@ export function DailyHeatmapReport({
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground print:hidden">
           <span>Filter to:</span>
           <CategoryDropdown
             value={rootCategoryId}

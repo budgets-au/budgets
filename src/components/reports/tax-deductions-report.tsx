@@ -50,8 +50,10 @@ export function TaxDeductionsReport({ accountIds }: { accountIds: string[] }) {
 
   return (
     <div className="space-y-4">
-      {/* Header row */}
-      <div className="flex flex-wrap items-end gap-4">
+      {/* Header row — input controls only useful on-screen. The
+          per-FY summary card below carries the rendered FY label so
+          the print stays self-describing. */}
+      <div className="flex flex-wrap items-end gap-4 print:hidden">
         <div>
           <label className="text-xs text-muted-foreground block mb-1">Financial year</label>
           <select

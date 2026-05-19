@@ -9,6 +9,62 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.173.0 — 2026-05-19
+
+### Changed
+- **Reports print layouts overhauled.** Driven through a new
+  Playwright `print-screenshots.spec.ts` that captures each
+  report's print-media render against A4-paper-shaped viewports
+  (portrait or landscape per-report). Iterated until each
+  printed render reads cleanly on paper.
+
+  - **Global `@media print`** in
+    [src/app/globals.css](src/app/globals.css) hardened: named
+    `@page report-landscape` rule (`size: A4 landscape`) so a
+    wrapper class can opt-in to landscape; muted backgrounds
+    stripped (kept the heatmap's data-bearing
+    `bg-indigo-500/N` cells intact); `text-muted-foreground`
+    promoted to near-black; the on-screen `text-emerald-500/600`
+    and `text-rose-500/600` print as the darker 700 shades so
+    income / expense reads on paper; `border-border` upgraded
+    to a mid-grey so table grid lines survive the printer;
+    `sticky` reset to `static`; `[data-slot="switch"]` and the
+    `<label>` that wraps it hidden by default.
+
+  - **Landscape mode** opted into on the three wide reports
+    via a `print-landscape` wrapper class:
+    [cashflow-report.tsx](src/components/reports/cashflow-report.tsx)
+    (many month columns), [accounts-cashflow-report.tsx](src/components/reports/accounts-cashflow-report.tsx)
+    (months × accounts), [yoy-report.tsx](src/components/reports/yoy-report.tsx)
+    (FY-vs-FY columns).
+
+  - **Per-report chrome hidden** on print across every
+    affected tab: page-level toolbars (Subtotals / Total /
+    Avg / Plan / Show counts / Hide transfers switches on
+    Cashflow), segmented controls (Sankey scope, Treemap
+    scope, Heatmap scope, Scatter kind+yScale, YoY scope,
+    Payee kind), "Filter to:" category dropdowns on
+    Treemap / Heatmap / Scatter, the Financial-year + WFH-
+    hours form row on Tax Deductions, and the Root-account
+    select on Flow.
+
+  - **Per-report drill-through eye toggles** (the
+    `lg:opacity-0 lg:group-hover:opacity-100` icons next to
+    category names in Cashflow + Category) marked
+    `print:hidden` so they don't sit at the end of every
+    category row in print.
+
+  - The on-screen data is preserved exactly — only chrome
+    (toggles, segmented controls, hover hints) is suppressed
+    for paper.
+
+### Added
+- **`tests/e2e/print-screenshots.spec.ts`** captures each
+  report's print-media render (portrait/landscape per-tab) so
+  any future style change that breaks print is visible in a
+  diff. Output lands under `tests/e2e/.data/print-shots/`
+  which the global teardown leaves alone.
+
 ## 0.172.0 — 2026-05-19
 
 ### Changed

@@ -693,7 +693,7 @@ export function SankeyReport({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Money flow
             </p>
-            <div className="flex rounded-md border overflow-hidden text-xs">
+            <div className="flex rounded-md border overflow-hidden text-xs print:hidden">
               {(["all", "income", "expenses"] as SankeyScope[]).map((s) => (
                 <button
                   key={s}
@@ -715,7 +715,7 @@ export function SankeyReport({
                 onClick={() =>
                   anyExpanded ? collapseAll() : expandAll(allExpandableCatIds)
                 }
-                className="text-xs px-2.5 py-1 border rounded-md hover:bg-muted transition-colors"
+                className="text-xs px-2.5 py-1 border rounded-md hover:bg-muted transition-colors print:hidden"
                 title="Click an outlined parent in the chart to expand its children, or use this to toggle all at once."
               >
                 {allExpanded
@@ -725,7 +725,7 @@ export function SankeyReport({
                     : "Expand all children"}
               </button>
             )}
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer print:hidden">
               <Switch
                 size="sm"
                 checked={hideTransfers}

@@ -27,7 +27,10 @@ export function MustChangePasswordBanner() {
       ?.mustChangePassword === true;
   if (!mustChange) return null;
   return (
-    <div className="border-b border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+    <div
+      data-print-hide
+      className="border-b border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+    >
       <div className="flex items-center justify-between gap-3 px-4 py-2 text-xs">
         <div className="flex items-center gap-2 min-w-0">
           <KeyRound className="h-3.5 w-3.5 shrink-0" />

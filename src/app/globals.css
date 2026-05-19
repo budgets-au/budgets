@@ -221,11 +221,22 @@
    paper. Marks for print are: data-print-hide on the chrome, data-print-area
    on the panel that should fill the page. */
 @media print {
+  /* Default page setup — portrait A4 with a tight margin. Reports
+     that need extra width use the `.print-landscape` wrapper below to
+     switch to a named landscape page. */
   @page {
-    margin: 12mm;
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  @page report-landscape {
+    size: A4 landscape;
+    margin: 10mm;
   }
   body {
     background: white !important;
+    color: black !important;
+    /* Slightly smaller body font on paper so wide tables breathe. */
+    font-size: 10pt;
   }
   /* Only hide elements explicitly opted out of printing. The previous rule
      hid every <nav>, <aside> and [role="tablist"] across the app, which
@@ -235,10 +246,21 @@
   [data-print-hide] {
     display: none !important;
   }
+  /* Reports flagged as wide → render on landscape A4. */
+  .print-landscape {
+    page: report-landscape;
+  }
   /* The app layout reserves space for the fixed sidebar with lg:ml-60 — drop
      it on print so the report fills the page. */
   .lg\:ml-60 {
     margin-left: 0 !important;
+  }
+  /* Page padding (p-4 lg:p-6) wastes margin on paper — kill it.
+     The @page margin above is the only padding the printed report
+     needs. */
+  .lg\:p-6,
+  .p-4 {
+    padding: 0 !important;
   }
   /* Drop card chrome — borders/shadows fight the printed page. */
   .print\:no-card,
@@ -256,10 +278,78 @@
   tr {
     break-inside: avoid;
   }
-  /* Force black body text — `text-foreground` resolves to near-white in
-     dark mode, which prints invisibly on a forced-white background. */
-  body {
-    color: black !important;
+  /* Kill the on-screen muted cell backgrounds. They print as grey
+     ink that wastes toner and softens the contrast between row text
+     and the page — readers want crisp black-on-white. Note: do NOT
+     strip `bg-indigo-500/N` here — the heatmap encodes data via
+     `bg-indigo-500/15` … `bg-indigo-500/85` and would print as
+     empty cells otherwise. Tinted status backgrounds (amber/rose/
+     emerald/blue at low opacities) are reserved for the chrome
+     banners we already hide via data-print-hide, so they don't need
+     a global strip here. */
+  [class*="bg-muted"] {
+    background: transparent !important;
+  }
+  /* Strengthen tertiary text. text-muted-foreground prints as low-contrast
+     grey, which loses fine column labels + secondary numbers on the
+     page. Bump to near-black so they read at glance distance. */
+  .text-muted-foreground,
+  [class*="text-muted-foreground/"] {
+    color: #1f2937 !important;
+  }
+  /* Strengthen status colours — the on-screen 500/600 tints are tuned
+     for an emissive display and print thin / pale. Use the 700 shades
+     instead so income / expense / over-plan reads in print. */
+  .text-emerald-500,
+  .text-emerald-600 {
+    color: #047857 !important;
+  }
+  .text-rose-500,
+  .text-rose-600,
+  .text-red-500 {
+    color: #b91c1c !important;
+  }
+  .text-amber-600,
+  .text-amber-700 {
+    color: #92400e !important;
+  }
+  /* Sharpen border-border. The CSS var resolves to a near-white grey in
+     light mode (oklch ≈ 0.94) and prints as nearly invisible. Force a
+     mid-grey so table grid lines actually appear on paper. */
+  .border,
+  .border-t,
+  .border-b,
+  .border-l,
+  .border-r,
+  .border-border,
+  [class*="border-border/"],
+  table {
+    border-color: #9ca3af !important;
+  }
+  /* Tables: collapse borders + ensure each cell has a thin grid line so
+     the multi-column reports stay legible. */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  thead tr {
+    border-bottom: 1px solid #9ca3af !important;
+  }
+  /* The reports use a sticky-left first column on-screen. Sticky in
+     print loses meaning + can create overlap artefacts; reset. */
+  .sticky {
+    position: static !important;
+  }
+  /* Belt-and-braces: every UI control that's only meaningful with a
+     mouse / keyboard hides on paper. Catches the per-report toggles
+     I haven't manually tagged with print:hidden (Switch components,
+     segmented-control wrappers, single-instance Buttons whose label
+     reads as a verb like "Expand all"). The label `<span>` that
+     usually precedes a Switch picks up the rule via the
+     parent-flex-with-switch :has() selector. */
+  [data-slot="switch"],
+  label:has([data-slot="switch"]) {
+    display: none !important;
   }
   /* Make sure colours print (Recharts pies, status text). */
   * {

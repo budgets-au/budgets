@@ -98,7 +98,7 @@ export function PayeeParetoReport({
         <CardTitle className="text-base">Payee Pareto</CardTitle>
         <div
           role="tablist"
-          className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
+          className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 print:hidden"
         >
           {(["expense", "income", "all"] as const).map((k) => (
             <button

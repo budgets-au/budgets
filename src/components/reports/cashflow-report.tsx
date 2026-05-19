@@ -33,7 +33,7 @@ function HideEye({ catId, isHidden }: { catId: string; isHidden: boolean }) {
         e.stopPropagation();
         ctx.toggle(catId);
       }}
-      className={`ml-auto p-0.5 rounded hover:bg-muted transition-opacity ${
+      className={`ml-auto p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
         isHidden
           ? "opacity-70 hover:opacity-100"
           : "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
@@ -1142,8 +1142,8 @@ export function CashflowReport({
   return (
     <CellOpenerContext.Provider value={setCellQuery}>
     <HideToggleContext.Provider value={{ isHidden: (id) => excludedSet.has(id), toggle: toggleHideCat }}>
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-4">
+    <div className="space-y-3 print-landscape">
+      <div className="flex items-center justify-between gap-4 print:hidden">
         {/* Collapse all / Expand all */}
         <button
           onClick={toggleCollapseAll}

@@ -368,7 +368,7 @@ function CategoryRow({
             <button
               type="button"
               onClick={() => onToggleHide(cat.id)}
-              className="lg:opacity-0 lg:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+              className="lg:opacity-0 lg:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground print:hidden"
               aria-label={isHidden ? "Show category" : "Hide category"}
               title={isHidden ? "Show category" : "Hide category"}
             >

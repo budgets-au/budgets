@@ -340,7 +340,7 @@ export function YoYReport({
   }
 
   return (
-    <Card>
+    <Card className="print-landscape">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-base">
           Year over year — {thisFY.label} vs {lastFY.label}
@@ -367,7 +367,7 @@ export function YoYReport({
               )}
             </Button>
           )}
-          <div className="flex rounded-md border overflow-hidden text-xs">
+          <div className="flex rounded-md border overflow-hidden text-xs print:hidden">
             {(["expense", "income", "all"] as const).map((s) => (
               <button
                 key={s}

@@ -9,6 +9,28 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.184.0 — 2026-05-19
+
+### Added
+- **"GitHub stats" dashboard widget.** Surfaces the budgets
+  container's total downloads + the repo's star count as a
+  small 2×2 tile. Both numbers come from a single public
+  scrape of
+  `https://github.com/budgets-au/budgets/pkgs/container/budgets`
+  — the page renders an `<h3 title="N">N</h3>` under
+  "Total downloads" plus a header `repo-stars-counter-star`
+  counter, so no `GITHUB_TOKEN` is required. The widget
+  links the header to the repo and the muted
+  `ghcr.io/budgets-au/budgets` footer to the package page.
+  Implementation: pure
+  [extractGithubStats](src/app/api/github-stats/extract.ts)
+  helper + a
+  [GET /api/github-stats](src/app/api/github-stats/route.ts)
+  route with `revalidate = 3600` so the upstream page is
+  pulled at most once an hour per node. Four colocated
+  unit tests cover happy / partial / missing / malformed
+  HTML.
+
 ## 0.183.0 — 2026-05-19
 
 ### Changed

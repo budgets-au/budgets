@@ -14,6 +14,7 @@ import { AccountSummaryCard } from "@/components/dashboard/account-summary-card"
 import { CategorySpendCard } from "@/components/dashboard/category-spend-card";
 import { TrackedStockCard } from "@/components/dashboard/tracked-stock-card";
 import { WatchedStockCard } from "@/components/dashboard/watched-stock-card";
+import { GithubStatsCard } from "@/components/dashboard/github-stats-card";
 
 /** Props every widget renderer receives. `config` is the
  * per-instance bag stored alongside x/y/w/h in the saved layout;
@@ -131,6 +132,13 @@ export const WIDGETS: WidgetSpec[] = [
     minSize: { w: 2, h: 2 },
     feature: "super",
     render: () => <SuperSummaryCard />,
+  },
+  {
+    id: "github-stats",
+    title: "GitHub stats",
+    defaultLayout: { w: 2, h: 2 },
+    minSize: { w: 2, h: 2 },
+    render: () => <GithubStatsCard />,
   },
   {
     id: "net-worth-trend",

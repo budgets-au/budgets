@@ -205,12 +205,13 @@ export const DEFAULT_DASHBOARD_LAYOUT: Array<{
   w: number;
   h: number;
 }> = [
-  // Row 1: five summary cards
+  // Row 1: six summary cards across the full 12-column width.
   { widgetId: "net-worth", x: 0, y: 0, w: 2, h: 2 },
   { widgetId: "income-30d", x: 2, y: 0, w: 2, h: 2 },
   { widgetId: "expenses-30d", x: 4, y: 0, w: 2, h: 2 },
   { widgetId: "stocks-summary", x: 6, y: 0, w: 2, h: 2 },
   { widgetId: "super-summary", x: 8, y: 0, w: 2, h: 2 },
+  { widgetId: "github-stats", x: 10, y: 0, w: 2, h: 2 },
   // Row 2: trend + budget (tighter — both cards have small
   // content; the chart + a few budget rows fit comfortably in 2)
   { widgetId: "net-worth-trend", x: 0, y: 2, w: 6, h: 2 },

@@ -9,6 +9,16 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.185.0 — 2026-05-19
+
+### Changed
+- **GitHub stats widget now ships in the new-user default
+  dashboard.** Slots into the gap on row 1 at `x=10` (the
+  previous five summary cards filled 0-10 of the 12-column
+  grid). Operators who've already customised their layout
+  keep theirs as-is — the default only applies when
+  `dashboardLayout` is empty.
+
 ## 0.184.0 — 2026-05-19
 
 ### Added

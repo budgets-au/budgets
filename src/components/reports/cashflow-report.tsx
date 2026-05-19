@@ -1328,7 +1328,7 @@ export function CashflowReport({
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Subtotals</span>
           <div className="flex rounded-md border overflow-hidden text-xs">
-            {(["grandparent", "parent", "none"] as TotalsLevel[]).map((level) => (
+            {(["none", "parent", "grandparent"] as TotalsLevel[]).map((level) => (
               <button
                 key={level}
                 onClick={() => changeTotalsLevel(level)}
@@ -1338,7 +1338,7 @@ export function CashflowReport({
                     : "bg-background text-muted-foreground hover:bg-muted"
                 }`}
               >
-                {level === "grandparent" ? "Full" : level === "parent" ? "Parent" : "None"}
+                {level === "grandparent" ? "Full" : level === "parent" ? "Parent" : "Off"}
               </button>
             ))}
           </div>

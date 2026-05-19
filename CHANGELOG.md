@@ -9,6 +9,15 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.182.0 — 2026-05-19
+
+### Changed
+- **Subtotals segmented control reordered + relabelled to
+  `Off | Parent | Full`** on the Cashflow / Category report
+  toolbar. Order now reads left-to-right by how much detail
+  the row tree shows; "None" was confusing alongside the
+  other off-state toggles, so it's now "Off".
+
 ## 0.181.0 — 2026-05-19
 
 ### Removed

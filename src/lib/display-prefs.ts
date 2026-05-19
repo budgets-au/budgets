@@ -89,6 +89,11 @@ export interface DisplayPrefs {
   scatterHideTransfers: boolean;
   yoyHideTransfers: boolean;
   envelopeHideTransfers: boolean;
+  /** Mirrors the other `*HideTransfers` toggles — when true, the
+   *  Reports → Expenses-by-Category drilldown drops transfer-typed
+   *  categories from its rollup. On by default; transfers usually
+   *  obscure the "where did the money actually go" picture. */
+  expensesHideTransfers: boolean;
   /** Which side(s) the Envelope report shows. `all` is income +
    * expenses with the net row; `income` / `expenses` focus the view
    * on one side and drop the net row (which has no meaning when only
@@ -225,6 +230,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   scatterHideTransfers: true,
   yoyHideTransfers: true,
   envelopeHideTransfers: true,
+  expensesHideTransfers: true,
   envelopeScope: "all",
   envelopeSortColumn: "name",
   envelopeSortDir: "asc",
@@ -501,6 +507,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     scatterHideTransfers: bool("scatterHideTransfers"),
     yoyHideTransfers: bool("yoyHideTransfers"),
     envelopeHideTransfers: bool("envelopeHideTransfers"),
+    expensesHideTransfers: bool("expensesHideTransfers"),
     envelopeScope: pickEnum(
       "envelopeScope",
       ["all", "income", "expenses"] as const,

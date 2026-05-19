@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import useSWR from "swr";
 import { format, parseISO, endOfMonth } from "date-fns";
-import { ChevronDown, ChevronRight, Printer } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { AccountsCashflowReport } from "@/app/api/reports/accounts-cashflow/route";
@@ -194,9 +194,8 @@ export function AccountsCashflowReport({
                 )}
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <Printer className="h-4 w-4 mr-1.5" /> Print
-            </Button>
+            {/* Print lives on the page-level Reports toolbar (next
+                to the global profile chip) — no second one here. */}
           </div>
         </div>
         <div className="overflow-x-auto">

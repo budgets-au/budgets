@@ -9,9 +9,10 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { ChevronDown, ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { amountClass, formatAUD, formatDate } from "@/lib/utils";
 import {
   ChartTooltipCard,
@@ -98,8 +99,15 @@ export function ExpensesDrilldown({
   const accountIdsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
 
+  // Per-report hide-transfers toggle. Defaults ON via display-prefs
+  // — transfer-typed categories usually obscure "where did the money
+  // go" in this drilldown. Operator can flip it off to include them.
+  const { prefs, setPref } = useDisplayPrefs();
+  const hideTransfers = prefs.expensesHideTransfers;
+  const hideTransfersParam = hideTransfers ? `&hideTransfers=true` : "";
+
   const { data: catData = [] } = useSWR<CategoryRow[]>(
-    `/api/reports?groupBy=category&from=${from}&to=${to}${accountIdsParam}`,
+    `/api/reports?groupBy=category&from=${from}&to=${to}${hideTransfersParam}${accountIdsParam}`,
     fetcher,
   );
   const { data: allCategories = [] } = useSWR<CategoryDef[]>(
@@ -373,14 +381,19 @@ export function ExpensesDrilldown({
             );
           })}
         </nav>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => window.print()}
-          className="print:hidden"
-        >
-          <Printer className="h-4 w-4 mr-1.5" /> Print
-        </Button>
+        {/* Hide transfers toggle — drops transfer-typed categories
+            from the underlying rollup query. Mirrors the per-report
+            toggle pattern on Cashflow / Sankey / Envelope / etc.
+            The page-level Print button on Reports → top toolbar
+            handles export; no second one here. */}
+        <div className="flex items-center gap-2 print:hidden">
+          <span className="text-xs text-muted-foreground">Hide transfers</span>
+          <Switch
+            checked={hideTransfers}
+            onCheckedChange={(v) => setPref("expensesHideTransfers", v)}
+            aria-label="Hide transfer-typed categories"
+          />
+        </div>
       </div>
 
       {/* Summary bar */}

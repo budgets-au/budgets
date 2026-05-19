@@ -1,5 +1,6 @@
 import { Topbar } from "@/components/layout/topbar";
 import { ReportsView } from "@/components/reports/reports-view";
+import { PrintReportButton } from "@/components/reports/print-report-button";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -12,7 +13,7 @@ export default async function ReportsPage() {
 
   return (
     <div>
-      <Topbar title="Reports" />
+      <Topbar title="Reports" actions={<PrintReportButton />} />
       <div className="p-4 lg:p-6">
         <ReportsView accounts={allAccounts} />
       </div>

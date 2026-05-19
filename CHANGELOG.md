@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.170.0 — 2026-05-19
+
+### Added
+- **Hide-transfers toggle on Reports → Expenses by Category.**
+  New `expensesHideTransfers` display-pref keys the toggle (on
+  by default — transfer-typed categories obscure "where did the
+  money actually go"). Same Switch styling every other report
+  uses; the operator's flick persists across reload and devices.
+
+### Changed
+- **Reports Print button is now a single Topbar action.** Lives
+  in the page Topbar to the left of the profile chip, in the
+  indigo variant. Was previously duplicated: a page-level
+  outline button on the Reports toolbar and a per-report
+  duplicate on the Expenses-by-Category and Accounts panels.
+  Both duplicates are gone; the single action covers every
+  report tab via the existing `data-print-hide` /
+  `print:hidden` machinery.
+
 ## 0.169.0 — 2026-05-19
 
 ### Changed

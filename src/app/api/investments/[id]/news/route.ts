@@ -47,7 +47,7 @@ export async function GET(
   // authenticated user is allowed to see news for any of their
   // tickers (no per-user scoping in the schema today).
   const [row] = await db
-    .select({ symbol: investments.symbol })
+    .select({ symbol: investments.symbol, name: investments.name })
     .from(investments)
     .where(eq(investments.id, id))
     .limit(1);
@@ -55,6 +55,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const symbol = row.symbol.toUpperCase();
+  const companyName = row.name;
 
   // Cache freshness check: pull the most recent fetched_at for this
   // symbol. If it's within TTL, serve from cache only.
@@ -70,7 +71,7 @@ export async function GET(
 
   if (cacheAgeMs >= NEWS_TTL_MS) {
     try {
-      const fresh = await getNews(symbol);
+      const fresh = await getNews(symbol, companyName);
       // Dedup-insert: only insert items whose (symbol, uuid) pair
       // isn't already cached. Bumping `fetched_at` on existing rows
       // keeps the staleness check honest even when nothing new

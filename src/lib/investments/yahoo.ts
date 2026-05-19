@@ -298,65 +298,111 @@ export async function persistPriceCache(
   await db.insert(investmentPrices).values(toInsert);
 }
 
+type RawNewsItem = NonNullable<YahooSearchResponse["news"]>[number];
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function toNewsItem(n: RawNewsItem): NewsItem {
+  const thumb = n.thumbnail?.resolutions ?? [];
+  const small =
+    thumb.find((t) => t.tag === "140x140") ?? thumb[thumb.length - 1] ?? null;
+  return {
+    uuid: n.uuid,
+    title: n.title,
+    publisher: n.publisher ?? null,
+    link: n.link,
+    publishedAt:
+      typeof n.providerPublishTime === "number"
+        ? n.providerPublishTime * 1000
+        : null,
+    thumbnail: small?.url ?? null,
+  };
+}
+
+/** Two-tier filter for Yahoo news. Pure helper so it can be unit
+ *  tested without a network mock.
+ *
+ *  Tier 1 — strict tag match. Keep items where `relatedTickers`
+ *  contains the searched symbol OR its bare form (e.g. "CBA.AX"
+ *  matches "CBA"). This is the v0.125 rule that drops Yahoo's
+ *  generic Wall-Street roundups.
+ *
+ *  Tier 2 — title-text rescue. For items that fail tier 1, check
+ *  whether the title mentions the bare ticker as a whole word
+ *  (e.g. "CBA shares jump"), OR contains the company name as a
+ *  substring. This rescues real coverage that arrives untagged
+ *  from Yahoo, without re-introducing the "any untagged item"
+ *  noise the v0.125 strictness was originally fixing.
+ *
+ *  Name match is guarded by `length >= 4` so 1-3 char company
+ *  names (rare but real, e.g. "X") don't sweep every headline.
+ *
+ *  Tier 1 results come first in the output; uuid-dedup catches
+ *  the rare case where the same item matches both. Cap at
+ *  `count`. */
+export function filterNewsItems(
+  raw: RawNewsItem[] | undefined,
+  symbol: string,
+  companyName: string | null,
+  count: number,
+): NewsItem[] {
+  const upper = symbol.toUpperCase();
+  const bare = upper.includes(".") ? upper.split(".")[0] : upper;
+  const nameLower = companyName?.toLowerCase().trim() || null;
+  const tickerRe = new RegExp(`\\b${escapeRegExp(bare)}\\b`, "i");
+
+  const tier1: RawNewsItem[] = [];
+  const tier2: RawNewsItem[] = [];
+
+  for (const n of raw ?? []) {
+    const tags = n.relatedTickers ?? [];
+    const matched1 = tags.some((t) => {
+      const tu = t.toUpperCase();
+      if (tu === upper || tu === bare) return true;
+      const tb = tu.includes(".") ? tu.split(".")[0] : tu;
+      return tb === bare;
+    });
+    if (matched1) {
+      tier1.push(n);
+      continue;
+    }
+    const titleLower = n.title.toLowerCase();
+    const matched2 =
+      tickerRe.test(n.title) ||
+      (nameLower !== null &&
+        nameLower.length >= 4 &&
+        titleLower.includes(nameLower));
+    if (matched2) tier2.push(n);
+  }
+
+  const seen = new Set<string>();
+  const out: NewsItem[] = [];
+  for (const n of [...tier1, ...tier2]) {
+    if (seen.has(n.uuid)) continue;
+    seen.add(n.uuid);
+    out.push(toNewsItem(n));
+    if (out.length === count) break;
+  }
+  return out;
+}
+
 /** Recent news for a ticker. Yahoo's search endpoint returns a mixed
- *  payload of quote matches + news headlines; we ask for news-only
- *  (quotesCount=0) and a generous `newsCount` window so the strict
- *  per-ticker filter below has a reasonable pool to draw from.
- *
- *  Filter rules — both must hold for an item to be kept:
- *    1. `relatedTickers` is present and non-empty (drops generic
- *       financial-news roundups Yahoo mixes in when a specific
- *       ticker has nothing recent).
- *    2. `relatedTickers` contains the searched symbol OR the bare
- *       ticker (e.g. "CBA.AX" matches "CBA" or "CBA.AX"). Yahoo
- *       sometimes drops exchange suffixes from the tags even when
- *       the search query had one.
- *
- *  This is stricter than v0.125's "accept untagged items" rule,
- *  which let generic Wall-Street stories through. The cost is fewer
- *  items per panel — when Yahoo has nothing tagged for the symbol,
- *  the panel correctly reports "no recent announcements" rather
- *  than showing irrelevant noise.
+ *  payload of quote matches + news headlines; ask for news-only
+ *  (quotesCount=0) and a generous `newsCount` window so the
+ *  two-tier filter has a reasonable pool. See `filterNewsItems`
+ *  for the match rules.
  *
  *  Picks the smallest thumbnail Yahoo offers (typically 140×140) so
  *  the JSON payload stays tight. */
 export async function getNews(
   symbol: string,
+  companyName: string | null,
   count = 20,
 ): Promise<NewsItem[]> {
   const url = `${SEARCH_URL}?q=${encodeURIComponent(symbol)}&quotesCount=0&newsCount=${count}`;
   const res = await yahooFetch(url);
   const data = (await res.json()) as YahooSearchResponse;
-  const upper = symbol.toUpperCase();
-  // Strip exchange suffix (".AX", ".L", etc.) so a request for
-  // "CBA.AX" still matches "CBA" in relatedTickers.
-  const bare = upper.includes(".") ? upper.split(".")[0] : upper;
-  return (data.news ?? [])
-    .filter((n) => {
-      if (!n.relatedTickers || n.relatedTickers.length === 0) return false;
-      return n.relatedTickers.some((t) => {
-        const tagUpper = t.toUpperCase();
-        if (tagUpper === upper || tagUpper === bare) return true;
-        const tagBare = tagUpper.includes(".")
-          ? tagUpper.split(".")[0]
-          : tagUpper;
-        return tagBare === bare;
-      });
-    })
-    .map((n) => {
-      const thumb = n.thumbnail?.resolutions ?? [];
-      const small =
-        thumb.find((t) => t.tag === "140x140") ?? thumb[thumb.length - 1] ?? null;
-      return {
-        uuid: n.uuid,
-        title: n.title,
-        publisher: n.publisher ?? null,
-        link: n.link,
-        publishedAt:
-          typeof n.providerPublishTime === "number"
-            ? n.providerPublishTime * 1000
-            : null,
-        thumbnail: small?.url ?? null,
-      };
-    });
+  return filterNewsItems(data.news, symbol, companyName, count);
 }

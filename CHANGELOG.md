@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.183.0 — 2026-05-19
+
+### Changed
+- **Investment news filter broadened — title-text fallback.**
+  The "Recent announcements" panel often rendered the empty
+  state because Yahoo's search-endpoint payload is sparse and
+  inconsistently tagged with `relatedTickers`. The v0.125
+  strict rule (drop everything without a matching tag) was
+  cutting real coverage that simply arrives untagged. Added a
+  second tier: items with no tag-match still get through if
+  their **title** mentions the bare ticker as a whole word
+  ("CBA shares jump") or contains the company name as a
+  substring ("Commonwealth Bank of Australia posts record
+  profit"). Tier-1 items still come first; dedup by uuid;
+  cap at the requested count. The pure
+  `filterNewsItems(raw, symbol, companyName, count)` helper
+  is extracted from
+  [src/lib/investments/yahoo.ts](src/lib/investments/yahoo.ts)
+  and covered by 5 colocated tests.
+
+### Fixed
+- **API route now passes the investment's company name** into
+  the news fetcher so the title-text fallback has the name
+  signal to work with. Read together with the broadened
+  filter, this rescues coverage Yahoo doesn't tag at all.
+
 ## 0.182.0 — 2026-05-19
 
 ### Changed

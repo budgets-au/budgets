@@ -338,14 +338,10 @@ export function SankeyReport({
   from,
   to,
   accountIds,
-  // hideTransfers prop is legacy (the global control was removed in
-  // 0.7.0). The Sankey now owns its own pref so the toggle in the
-  // header is independent of other tabs.
 }: {
   from: string;
   to: string;
   accountIds: string[];
-  hideTransfers: boolean;
 }) {
   const accountIdsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";

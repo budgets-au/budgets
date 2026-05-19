@@ -243,10 +243,8 @@ function flattenForDisplay(
  * uses so the comparison is apples-to-apples. */
 export function YoYReport({
   accountIds,
-  // hideTransfers prop is legacy — YoY now owns its own pref.
 }: {
   accountIds: string[];
-  hideTransfers: boolean;
 }) {
   const [scope, setScope] = useState<"expense" | "income" | "all">("expense");
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());

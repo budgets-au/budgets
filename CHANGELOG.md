@@ -9,6 +9,33 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.166.0 — 2026-05-19
+
+### Changed
+- **Calendar today-cell accent switched from blue to indigo** so
+  the "today" highlight matches the brand-accent convention every
+  other Indigo affordance in the app already follows.
+
+### Fixed
+- **Two hover-only icons now visible on touch devices.** The
+  announcements link arrow ([investments/announcements-panel.tsx](src/components/investments/announcements-panel.tsx))
+  and the backup-notes pencil ([settings/backup-list.tsx](src/components/settings/backup-list.tsx))
+  used bare `opacity-0 group-hover:opacity-100` without the
+  `lg:` prefix, so they stayed invisible on touch viewports
+  (no `:hover`). Both now gate the fade on `lg:` only.
+
+### Removed
+- **`hideTransfers` prop on every report dropped.** The shared
+  toggle was retired in 0.7.0 — each tab has owned its own
+  per-report pref since 0.131 — but the dead
+  `hideTransfers={false}` was still being threaded through
+  every sub-report's interface. Cleaned out of
+  [reports-view.tsx](src/components/reports/reports-view.tsx)
+  and every sub-report (Cashflow / YoY / Envelope / Sankey /
+  Treemap / Heatmap / Scatter / Pareto / Expense-drilldown).
+  No behaviour change (the const was hardcoded `false` for two
+  major versions); pure plumbing cleanup.
+
 ## 0.165.0 — 2026-05-19
 
 ### Changed

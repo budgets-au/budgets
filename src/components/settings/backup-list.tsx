@@ -530,7 +530,7 @@ function BackupNotesCell({
       <span className="truncate">
         {notes ?? <span className="italic opacity-60">Add note…</span>}
       </span>
-      <Pencil className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <Pencil className="h-3 w-3 shrink-0 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity" />
     </button>
   );
 }

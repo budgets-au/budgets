@@ -1003,15 +1003,10 @@ export function CashflowReport({
   from,
   to,
   accountIds,
-  // The shared `hideTransfers` prop on each report comp is legacy — the
-  // global toggle was removed in 0.7.0. The Cashflow tab now owns its
-  // own per-report pref (cashflowHideTransfers) so it can render a
-  // switch independent of the other tabs.
 }: {
   from: string;
   to: string;
   accountIds: string[];
-  hideTransfers: boolean;
 }) {
   // All view toggles for the Cash Flow report tab now live in the
   // DB-backed display-prefs blob, so they follow the operator across

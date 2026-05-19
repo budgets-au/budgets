@@ -37,12 +37,10 @@ export function DailyHeatmapReport({
   from,
   to,
   accountIds,
-  hideTransfers: _hideTransfers,
 }: {
   from: string;
   to: string;
   accountIds: string[];
-  hideTransfers: boolean;
 }) {
   const [scope, setScope] = useState<"expenses" | "income">("expenses");
   const [rootCategoryId, setRootCategoryId] = useState<string | null>(null);

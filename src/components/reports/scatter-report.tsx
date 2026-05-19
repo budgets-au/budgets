@@ -59,12 +59,10 @@ export function ScatterReport({
   from,
   to,
   accountIds,
-  // hideTransfers prop is legacy — see comment on similar reports.
 }: {
   from: string;
   to: string;
   accountIds: string[];
-  hideTransfers: boolean;
 }) {
   const [yScale, setYScale] = useState<"linear" | "log">("linear");
   const [kind, setKind] = useState<"expense" | "income" | "all">("expense");

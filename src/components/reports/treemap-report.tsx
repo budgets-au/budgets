@@ -41,13 +41,10 @@ export function TreemapReport({
   from,
   to,
   accountIds,
-  // hideTransfers prop is legacy — see comment on similar reports.
-  // Treemap now owns its own per-report pref.
 }: {
   from: string;
   to: string;
   accountIds: string[];
-  hideTransfers: boolean;
 }) {
   const [scope, setScope] = useState<"expenses" | "income">("expenses");
   const { prefs, setPref } = useDisplayPrefs();

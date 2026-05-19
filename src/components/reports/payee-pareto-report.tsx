@@ -50,19 +50,16 @@ export function PayeeParetoReport({
   from,
   to,
   accountIds,
-  hideTransfers,
 }: {
   from: string;
   to: string;
   accountIds: string[];
-  hideTransfers: boolean;
 }) {
   const [kind, setKind] = useState<"expense" | "income" | "all">("expense");
   const isDark = useDarkMode();
 
   const params = new URLSearchParams({ from, to, kind, limit: "25" });
   if (accountIds.length > 0) params.set("accountIds", accountIds.join(","));
-  if (hideTransfers) params.set("hideTransfers", "true");
   const url = `/api/reports/payee-totals?${params}`;
   const { data, isLoading } = useSWR<PayeeResp>(url, fetcher);
 

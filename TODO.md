@@ -16,11 +16,9 @@ section. Re-fill from the latest monkey crawl + ad-hoc finds._
 
 ### Small, in-flight (current session)
 
-- **Calendar `bg-blue-50` / `border-blue-400`** ([cashflow-calendar.tsx:999, 1221](src/components/calendar/cashflow-calendar.tsx#L999)) — cosmetic; switch to `indigo-50` / `indigo-400` to match the brand-accent convention. Low priority.
-- **Two stragglers on hover-only controls missing `lg:` prefix:**
-  - [announcements-panel.tsx:109](src/components/investments/announcements-panel.tsx#L109)
-  - [backup-list.tsx:533](src/components/settings/backup-list.tsx#L533) — the Pencil notes-edit icon.
-- **`hideTransfers` dead prop on /reports** ([reports-view.tsx:223](src/components/reports/reports-view.tsx#L223)) — `const hideTransfers = false;` still threaded through every sub-report; each report now owns its own per-tab toggle (0.131) so the prop is dead. Pure cleanup; do during the next reports refactor.
+_Cleared 2026-05-19 — the three items (calendar accent, two
+hover-only `lg:` stragglers, `hideTransfers` dead prop) all
+shipped in 0.166.0._
 
 ## Known bugs / regressions to investigate
 
@@ -143,10 +141,6 @@ X then verify X appears" flow below sits in this blind spot._
   "Reset & re-scan" button (currently only on `/transactions`).
 
 ### Multi-DB
-- Rename profile UI in Settings → Accounts (or a dedicated Profiles
-  panel). Currently rename requires hand-editing `databases.json`.
-- Delete profile UI. Big "this deletes the file + every backup of
-  it" guard, double-confirm.
 - Per-DB backup schedule (regression from "global" — would need a
   schema migration to move schedule back from `databases.json`
   into per-profile state. Defer until someone actually asks.)
@@ -200,7 +194,34 @@ X then verify X appears" flow below sits in this blind spot._
 
 ## Done / dropped
 
-### 2026-05-17 (today)
+### 2026-05-19
+
+- **Calendar today-cell switched from blue to indigo** — three
+  utility-class swaps in `cashflow-calendar.tsx` to match the
+  brand-accent convention (theme `--primary` is near-black, so
+  accents should be explicit indigo).
+- **Two hover-only icons got the `lg:` prefix** — the announcements
+  link arrow and the backup-notes pencil were stuck invisible on
+  touch devices because `opacity-0 group-hover:opacity-100`
+  without `lg:` left no way to surface them without a mouse.
+- **`hideTransfers` dead prop removed from every report.** The
+  global toggle was retired in 0.7.0; each tab has owned its own
+  per-report pref since 0.131. The shared
+  `hideTransfers={false}` thread through every sub-report was
+  pure plumbing-rot. Cleaned out of `reports-view.tsx` and every
+  sub-report's interface in one pass.
+
+### 2026-05-18
+
+- **Rename profile UI in Settings → Databases (0.146).** Inline
+  rename per row with case-insensitive uniqueness enforcement.
+- **Delete profile UI with typed-confirm gate (0.156).** Trash
+  button per row → modal that requires retyping the label
+  exactly; on confirm wipes the encrypted file + per-DB backup
+  subdir. Server-side guards block the active DB and the last
+  remaining DB.
+
+### 2026-05-17
 
 - **Multi-DB switcher dropdown menu items were no-ops** — used
   `onSelect` (Radix idiom) where Base UI's `MenuPrimitive.Item`

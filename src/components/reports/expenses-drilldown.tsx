@@ -90,18 +90,16 @@ export function ExpensesDrilldown({
   from,
   to,
   accountIds,
-  hideTransfers,
 }: {
   from: string;
   to: string;
   accountIds: string[];
-  hideTransfers: boolean;
 }) {
   const accountIdsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
 
   const { data: catData = [] } = useSWR<CategoryRow[]>(
-    `/api/reports?groupBy=category&from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
+    `/api/reports?groupBy=category&from=${from}&to=${to}${accountIdsParam}`,
     fetcher,
   );
   const { data: allCategories = [] } = useSWR<CategoryDef[]>(
@@ -340,10 +338,9 @@ export function ExpensesDrilldown({
     : "";
   const txnAccountsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
-  const txnHideTransfersParam = hideTransfers ? `&hideTransfers=true` : "";
   const { data: txns = [] } = useSWR<TxnRow[]>(
     currentNodeId && showTxns
-      ? `/api/transactions?from=${from}&to=${to}${txnAccountsParam}${txnCategoryParam}${txnHideTransfersParam}&direction=out&limit=500`
+      ? `/api/transactions?from=${from}&to=${to}${txnAccountsParam}${txnCategoryParam}&direction=out&limit=500`
       : null,
     fetcher,
   );

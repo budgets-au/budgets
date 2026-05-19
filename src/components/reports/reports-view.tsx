@@ -214,13 +214,6 @@ export function ReportsView({
   // Per-tab period persistence lives in the DB-backed displayPrefs
   // blob so the operator's choices follow them across devices.
   const { prefs: displayPrefs, setPref } = useDisplayPrefs();
-  // The old global "Hide transfers" toggle was removed in 0.7.0 — the
-  // cashflow report now does this via per-category eye icons (with
-  // internal-transfer cats hidden by default for new users), and the
-  // envelope report has its own equivalent. Other tabs see all rows,
-  // transfers included. Kept as a hardcoded `false` so subcomponents'
-  // prop signatures don't need to churn.
-  const hideTransfers = false;
 
   // On tab change (and initial mount): load that tab's stored range, or fall
   // back to a per-tab default so reports don't bleed periods into each other.
@@ -270,12 +263,12 @@ export function ReportsView({
   const accountIdsParam = accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
 
   const { data: catData = [] } = useSWR<CategoryRow[]>(
-    `/api/reports?groupBy=category&from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
+    `/api/reports?groupBy=category&from=${from}&to=${to}${accountIdsParam}`,
     fetcher
   );
 
   const { data: monthData = [] } = useSWR<MonthRow[]>(
-    `/api/reports?groupBy=month&from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
+    `/api/reports?groupBy=month&from=${from}&to=${to}${accountIdsParam}`,
     fetcher
   );
 
@@ -355,17 +348,17 @@ export function ReportsView({
 
         {/* Cash Flow Report */}
         <TabsContent value="cashflow">
-          <CashflowReport from={from} to={to} accountIds={accountIds} hideTransfers={hideTransfers} />
+          <CashflowReport from={from} to={to} accountIds={accountIds} />
         </TabsContent>
 
         {/* Year over Year — owns its own FY scope (anchored to today's
             financial year, not the page from/to), same as Tax. */}
         <TabsContent value="yoy">
-          <YoYReport accountIds={accountIds} hideTransfers={hideTransfers} />
+          <YoYReport accountIds={accountIds} />
         </TabsContent>
 
-        {/* Tax Deductions Report — owns its own FY scope, ignores the page-level
-            from/to/hideTransfers controls. */}
+        {/* Tax Deductions Report — owns its own FY scope, ignores the
+            page-level from/to controls. */}
         <TabsContent value="tax">
           <TaxDeductionsReport accountIds={accountIds} />
         </TabsContent>
@@ -376,7 +369,6 @@ export function ReportsView({
             from={from}
             to={to}
             accountIds={accountIds}
-            hideTransfers={hideTransfers}
           />
         </TabsContent>
 
@@ -401,7 +393,6 @@ export function ReportsView({
             from={from}
             to={to}
             accountIds={accountIds}
-            hideTransfers={hideTransfers}
           />
         </TabsContent>
 
@@ -412,7 +403,6 @@ export function ReportsView({
             from={from}
             to={to}
             accountIds={accountIds}
-            hideTransfers={hideTransfers}
           />
         </TabsContent>
 
@@ -423,7 +413,6 @@ export function ReportsView({
             from={from}
             to={to}
             accountIds={accountIds}
-            hideTransfers={hideTransfers}
           />
         </TabsContent>
 
@@ -434,7 +423,6 @@ export function ReportsView({
             from={from}
             to={to}
             accountIds={accountIds}
-            hideTransfers={hideTransfers}
           />
         </TabsContent>
 
@@ -445,7 +433,6 @@ export function ReportsView({
             from={from}
             to={to}
             accountIds={accountIds}
-            hideTransfers={hideTransfers}
           />
         </TabsContent>
 
@@ -505,7 +492,6 @@ export function ReportsView({
             from={from}
             to={to}
             accountIds={accountIds}
-            hideTransfers={hideTransfers}
           />
         </TabsContent>
 

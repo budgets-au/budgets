@@ -106,7 +106,7 @@ export function AnnouncementsPanel({ investmentId }: { investmentId: string }) {
                       )}
                     </span>
                   </span>
-                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity" />
                 </a>
               </li>
             ))}

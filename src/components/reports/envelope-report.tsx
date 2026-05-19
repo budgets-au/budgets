@@ -195,12 +195,10 @@ export function EnvelopeReport({
   from,
   to,
   accountIds,
-  // hideTransfers prop is legacy — envelope now owns its own pref.
 }: {
   from: string;
   to: string;
   accountIds: string[];
-  hideTransfers: boolean;
 }) {
   const accountIdsParam =
     accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";

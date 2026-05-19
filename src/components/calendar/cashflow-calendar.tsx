@@ -985,7 +985,7 @@ export function CashflowCalendar({
               <p className="font-semibold text-sm">Legend</p>
               <div className="space-y-1.5">
                 <span className="flex items-center gap-2">
-                  <span className="inline-block w-3 h-3 rounded border border-blue-400 bg-blue-50 dark:bg-blue-950/30" />
+                  <span className="inline-block w-3 h-3 rounded border border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30" />
                   Today
                 </span>
                 <span className="flex items-center gap-2">
@@ -1194,7 +1194,7 @@ export function CashflowCalendar({
                         selected
                           ? "border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500"
                           : today
-                            ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100/60 dark:hover:bg-blue-950/50"
+                            ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 hover:bg-indigo-100/60 dark:hover:bg-indigo-950/50"
                             : data?.hasProjected
                               ? "border-dashed border-border hover:bg-muted"
                               : "border-border hover:bg-muted",
@@ -1329,7 +1329,7 @@ export function CashflowCalendar({
                       className={cn(
                         "flex flex-col min-h-0 border rounded overflow-hidden",
                         today
-                          ? "border-blue-400 bg-blue-50/40 dark:bg-blue-950/20"
+                          ? "border-indigo-400 bg-indigo-50/40 dark:bg-indigo-950/20"
                           : "border-border",
                       )}
                     >

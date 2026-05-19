@@ -562,6 +562,41 @@ function applyBudgetedParentRollupToGroups(
   });
 }
 
+/** Signed Diff for a single month: (signed actual) − (signed plan).
+ *  Plan amounts arrive as unsigned positives from the API, so they
+ *  get the row's direction (negate=true ⇒ expense ⇒ negative)
+ *  applied before subtracting from the already-signed actual. The
+ *  result reads cleanly through `amountClass` / `mode="net"`:
+ *  positive = under (expense) or surplus (income); negative =
+ *  over / shortfall. Matches the Category report convention. */
+function monthDiff(
+  actual: number | undefined,
+  plan: number | undefined,
+  negate: boolean,
+): number | undefined {
+  if (actual === undefined && (plan === undefined || plan === 0)) return undefined;
+  const a = actual ?? 0;
+  const p = (plan ?? 0) * (negate ? -1 : 1);
+  return a - p;
+}
+
+/** Signed Diff total over the report window. Sums planAt across
+ *  the months (matches the Category report fix that prefers the
+ *  per-month sum over `planPerMonth × months.length`). */
+function totalDiff(
+  total: number,
+  budgetByMonth: Record<string, number> | undefined,
+  scheduledByMonth: Record<string, number> | undefined,
+  months: string[],
+  negate: boolean,
+): number {
+  const planSum = months.reduce(
+    (s, m) => s + (planAt(budgetByMonth, scheduledByMonth, m) ?? 0),
+    0,
+  );
+  return total - planSum * (negate ? -1 : 1);
+}
+
 function ParentHeaderRow({
   name, months, byMonth, countByMonth, total, totalCount, thisMonth,
   negate, href, grandparent, hasDirect, showValues = true, opts,
@@ -650,6 +685,9 @@ function ParentHeaderRow({
         const plan = showValues ? planAt(budgetByMonth, scheduledByMonth, m) : undefined;
         const actual = showValues ? byMonth[m] : undefined;
         const over = isOverPlan(actual, plan, !!negate);
+        const diff = showValues
+          ? monthDiff(byMonth[m], plan, !!negate)
+          : undefined;
         return (
           <Fragment key={m}>
             {opts.showPlan && (
@@ -663,6 +701,14 @@ function ParentHeaderRow({
               borderLeft={!opts.showPlan}
               onClick={showValues && openMonth ? () => openMonth(m) : undefined}
             />
+            {opts.showDiff && (
+              <AmountCell
+                value={diff}
+                mode="net"
+                computed
+                colHighlight={m === thisMonth}
+              />
+            )}
             {opts.showCounts && <td className={m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""} />}
           </Fragment>
         );
@@ -689,6 +735,17 @@ function ParentHeaderRow({
       {opts.showAvg && <AmountCell value={showValues && months.length > 0 ? display(total / months.length) : undefined} muted computed />}
       {opts.showPlan && (
         <BudgetCell value={(budgetPerMonth ?? 0) + (scheduledPerMonth ?? 0)} />
+      )}
+      {opts.showDiff && (
+        <AmountCell
+          value={
+            showValues
+              ? totalDiff(total, budgetByMonth, scheduledByMonth, months, !!negate)
+              : undefined
+          }
+          mode="net"
+          computed
+        />
       )}
     </tr>
   );
@@ -762,6 +819,9 @@ function SubParentHeaderRow({
         const plan = planAt(sub.budgetByMonth, sub.scheduledByMonth, m);
         const actual = showValues ? sub.byMonth[m] : undefined;
         const over = isOverPlan(actual, plan, !!negate);
+        const diff = showValues
+          ? monthDiff(sub.byMonth[m], plan, !!negate)
+          : undefined;
         return (
           <Fragment key={m}>
             {opts.showPlan && (
@@ -775,6 +835,14 @@ function SubParentHeaderRow({
               borderLeft={!opts.showPlan}
               onClick={showValues && openMonth ? () => openMonth(m) : undefined}
             />
+            {opts.showDiff && (
+              <AmountCell
+                value={diff}
+                mode="net"
+                computed
+                colHighlight={m === thisMonth}
+              />
+            )}
             {opts.showCounts && <td className={m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""} />}
           </Fragment>
         );
@@ -800,6 +868,17 @@ function SubParentHeaderRow({
       {opts.showTotal && opts.showCounts && <td className="bg-muted/40 border-l border-border" />}
       {opts.showAvg && <AmountCell value={showValues && months.length > 0 ? display(sub.total / months.length) : undefined} muted computed />}
       {opts.showPlan && <BudgetCell value={sub.budgetPerMonth + sub.scheduledPerMonth} />}
+      {opts.showDiff && (
+        <AmountCell
+          value={
+            showValues
+              ? totalDiff(sub.total, sub.budgetByMonth, sub.scheduledByMonth, months, !!negate)
+              : undefined
+          }
+          mode="net"
+          computed
+        />
+      )}
     </tr>
   );
 }
@@ -875,6 +954,7 @@ function LeafRow({
       {months.map((m) => {
         const plan = planAt(cat.budgetByMonth, cat.scheduledByMonth, m);
         const over = isOverPlan(cat.byMonth[m], plan, !!negate);
+        const diff = monthDiff(cat.byMonth[m], plan, !!negate);
         return (
           <Fragment key={m}>
             {opts.showPlan && (
@@ -888,6 +968,14 @@ function LeafRow({
               borderLeft={!opts.showPlan}
               onClick={openMonth ? () => openMonth(m) : undefined}
             />
+            {opts.showDiff && (
+              <AmountCell
+                value={diff}
+                mode="net"
+                computed
+                colHighlight={m === thisMonth}
+              />
+            )}
             {opts.showCounts && <CountCell value={cat.countByMonth[m]} colHighlight={m === thisMonth} />}
           </Fragment>
         );
@@ -896,6 +984,13 @@ function LeafRow({
       {opts.showTotal && opts.showCounts && <CountCell value={cat.totalCount} computed />}
       {opts.showAvg && <AmountCell value={months.length > 0 ? cat.total / months.length : undefined} negate={negate} muted computed />}
       {opts.showPlan && <BudgetCell value={cat.budgetPerMonth + cat.scheduledPerMonth} />}
+      {opts.showDiff && (
+        <AmountCell
+          value={totalDiff(cat.total, cat.budgetByMonth, cat.scheduledByMonth, months, !!negate)}
+          mode="net"
+          computed
+        />
+      )}
     </tr>
   );
 }
@@ -924,6 +1019,9 @@ function TotalsRow({
         <Fragment key={m}>
           {opts.showPlan && <td className={`px-2 py-2 border-l border-border ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""}`} />}
           <AmountCell value={values[m]} colHighlight={m === thisMonth} mode={mode} negate={negate} borderLeft={!opts.showPlan} />
+          {opts.showDiff && (
+            <td className={`px-2 py-2 bg-muted/40 border-l border-border ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""}`} />
+          )}
           {opts.showCounts && <td className={`px-2 py-2 ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : ""}`} />}
         </Fragment>
       ))}
@@ -939,13 +1037,22 @@ function TotalsRow({
         <AmountCell value={avg} mode={mode} negate={negate} muted computed />
       ))}
       {opts.showPlan && <td className="px-3 py-2 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>}
+      {opts.showDiff && <td className="px-3 py-2 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>}
     </tr>
   );
 }
 
 type TotalsLevel = "grandparent" | "parent" | "none";
 
-interface ColOpts { showCounts: boolean; showTotal: boolean; showAvg: boolean; showPlan: boolean; }
+interface ColOpts {
+  showCounts: boolean;
+  showTotal: boolean;
+  showAvg: boolean;
+  showPlan: boolean;
+  /** Per-month Diff cells + a row-end Diff total cell. Only set
+   *  when `cashflowPlanMode === "diff"`. */
+  showDiff: boolean;
+}
 
 interface CollapseState {
   collapsedGps: Set<string>;
@@ -1121,7 +1228,12 @@ export function CashflowReport({
   const showCounts = displayPrefs.cashflowShowCounts;
   const showTotal = displayPrefs.cashflowShowTotal;
   const showAvg = displayPrefs.cashflowShowAvg;
-  const showPlan = displayPrefs.cashflowShowPlan;
+  const planMode = displayPrefs.cashflowPlanMode;
+  // Derived flags keep the existing renderer code paths simple —
+  // every site that used to switch on `showPlan` keeps working,
+  // and the new `showDiff` cells light up only in `"diff"` mode.
+  const showPlan = planMode !== "off";
+  const showDiff = planMode === "diff";
   const showHidden = displayPrefs.cashflowShowHidden;
   const excludedIds = displayPrefs.cashflowExcludedCatIds;
   const hideTransfers = displayPrefs.cashflowHideTransfers;
@@ -1136,8 +1248,8 @@ export function CashflowReport({
   function toggleShowAvg() {
     setPref("cashflowShowAvg", !showAvg);
   }
-  function toggleShowPlan() {
-    setPref("cashflowShowPlan", !showPlan);
+  function setPlanMode(mode: "off" | "plan" | "diff") {
+    setPref("cashflowPlanMode", mode);
   }
   function toggleShowHidden() {
     setPref("cashflowShowHidden", !showHidden);
@@ -1164,7 +1276,7 @@ export function CashflowReport({
     setCollapsedSubs((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   }
 
-  const opts: ColOpts = { showCounts, showTotal, showAvg, showPlan };
+  const opts: ColOpts = { showCounts, showTotal, showAvg, showPlan, showDiff };
 
   const accountIdsParam = accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
   const { data, isLoading } = useSWR<CashflowData>(
@@ -1186,9 +1298,12 @@ export function CashflowReport({
     (showCounts ? months.length : 0) +
     // One per-month "Plan" sub-column when the toggle is on.
     (showPlan ? months.length : 0) +
+    // One per-month "Diff" sub-column when mode === "diff".
+    (showDiff ? months.length : 0) +
     (showTotal ? (showCounts ? 2 : 1) : 0) +
     (showAvg ? 1 : 0) +
-    (showPlan ? 1 : 0);
+    (showPlan ? 1 : 0) +
+    (showDiff ? 1 : 0);
 
   // Hidden-category logic. A cat is hidden when it (or any ancestor)
   // is in the excluded set — hiding "Food" should drop "Food /
@@ -1310,10 +1425,30 @@ export function CashflowReport({
           <Switch checked={showAvg} onCheckedChange={toggleShowAvg} aria-label="Show monthly average column" />
         </div>
 
-        {/* Show plan toggle (combined budget + scheduled) */}
+        {/* Plan three-way: Off | Plan | Diff. Plan shows the budget+
+            scheduled overlay per month + the row-end plan total. Diff
+            adds a per-month Diff cell (Total − Plan, signed by category
+            type) and a Diff total cell after the row-end plan total.
+            The Diff cells carry the computed-cell background so they
+            read as derived columns, same convention as the Total. */}
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Plan</span>
-          <Switch checked={showPlan} onCheckedChange={toggleShowPlan} aria-label="Show plan columns" />
+          <div className="flex rounded-md border overflow-hidden text-xs">
+            {(["off", "plan", "diff"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setPlanMode(mode)}
+                className={`px-2.5 py-1 transition-colors ${
+                  planMode === mode
+                    ? "bg-indigo-600 text-white font-medium"
+                    : "bg-background text-muted-foreground hover:bg-muted"
+                }`}
+                aria-label={`Plan mode: ${mode}`}
+              >
+                {mode === "off" ? "Off" : mode === "plan" ? "Plan" : "Diff"}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Show counts toggle */}
@@ -1402,6 +1537,11 @@ export function CashflowReport({
                 >
                   {format(parseISO(`${m}-01`), "MMM ''yy")}
                 </th>
+                {showDiff && (
+                  <th className={`text-right px-2 py-2 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wider whitespace-nowrap border-l border-border sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
+                    Diff
+                  </th>
+                )}
                 {showCounts && (
                   <th className={`text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap min-w-[40px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
                     #
@@ -1425,6 +1565,11 @@ export function CashflowReport({
             {showPlan && (
               <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] text-muted-foreground/70 bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Plan/mo
+              </th>
+            )}
+            {showDiff && (
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap min-w-[90px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
+                Diff
               </th>
             )}
           </tr>

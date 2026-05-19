@@ -65,8 +65,21 @@ export interface DisplayPrefs {
   cashflowShowTotal: boolean;
   /** Show the Average column on Reports → Cash Flow. */
   cashflowShowAvg: boolean;
-  /** Show the Plan (scheduled + budget) overlay on Reports → Cash Flow. */
+  /** Show the Plan (scheduled + budget) overlay on Reports → Cash Flow.
+   *  Kept as the legacy boolean for code paths that haven't moved to
+   *  the new three-way `cashflowPlanMode` yet — notably the Category
+   *  report still drives off this key. New code on the Cashflow tab
+   *  reads `cashflowPlanMode` instead. */
   cashflowShowPlan: boolean;
+  /** Three-way Plan/Diff mode on Reports → Cash Flow:
+   *    `off`  — no Plan or Diff columns.
+   *    `plan` — Plan column per month + Plan total at the row end.
+   *    `diff` — Plan + Diff: each month gets a Diff cell (Total −
+   *             Plan, signed by category type), plus a Diff total
+   *             cell after the row-end Plan total. The Diff cells
+   *             carry the muted computed-cell background to read
+   *             as derived columns. */
+  cashflowPlanMode: "off" | "plan" | "diff";
   /** Category IDs hidden on Reports → Cash Flow. Hidden categories
    * are excluded from every total / parent rollup; toggling them
    * back on only requires `cashflowShowHidden` so the user can find
@@ -228,6 +241,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   cashflowShowTotal: true,
   cashflowShowAvg: true,
   cashflowShowPlan: false,
+  cashflowPlanMode: "off",
   cashflowExcludedCatIds: [],
   cashflowShowHidden: false,
   cashflowRollupBudgetedParents: false,
@@ -503,6 +517,18 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     cashflowShowTotal: bool("cashflowShowTotal"),
     cashflowShowAvg: bool("cashflowShowAvg"),
     cashflowShowPlan: bool("cashflowShowPlan"),
+    // Migration: if the operator's stored prefs predate the
+    // three-way mode (cashflowPlanMode missing), derive it from
+    // the boolean — true → "plan", false → "off". Once the report
+    // writes back, the explicit key sticks.
+    cashflowPlanMode: ((): "off" | "plan" | "diff" => {
+      const v = obj.cashflowPlanMode;
+      if (v === "off" || v === "plan" || v === "diff") return v;
+      if (typeof obj.cashflowShowPlan === "boolean") {
+        return obj.cashflowShowPlan ? "plan" : "off";
+      }
+      return DISPLAY_PREFS_DEFAULT.cashflowPlanMode;
+    })(),
     cashflowExcludedCatIds: stringArray("cashflowExcludedCatIds"),
     cashflowShowHidden: bool("cashflowShowHidden"),
     cashflowRollupBudgetedParents: bool("cashflowRollupBudgetedParents"),

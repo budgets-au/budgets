@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.179.0 — 2026-05-19
+
+### Added
+- **Cashflow Plan toolbar is now a three-way segmented
+  control — Off / Plan / Diff.** Off and Plan match the
+  previous boolean toggle (no plan columns; per-month Plan +
+  row-end Plan total). Diff is new: each month gets a Diff
+  cell (Total − Plan, signed by category type, with the
+  `bg-muted/40` computed-cell background and `mode="net"`
+  green/red coding) and the row-end picks up a Diff total
+  next to the Plan total. The Diff math mirrors the Category
+  report's: positive = under-spent / extra income (green);
+  negative = over-spent / shortfall (red). New display-pref
+  `cashflowPlanMode` ("off" | "plan" | "diff"); the parser
+  migrates a legacy `cashflowShowPlan: true` to "plan" so
+  existing operators keep their setting on first load.
+
+### Changed
+- **Category report stops red/green-coloring per-row Total
+  amounts.** Matches Cashflow's leaf-row convention where
+  individual rows render in plain foreground and the color
+  encoding is reserved for aggregate / summary rows (Total
+  income, Total expenses, Net). The Diff column on Category
+  retains its green/red since it's a derived "how did I do"
+  indicator.
+
 ## 0.178.0 — 2026-05-19
 
 ### Added

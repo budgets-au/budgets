@@ -43,9 +43,27 @@ describe("parseDisplayPrefs", () => {
   it("accepts an already-parsed object (the API route path)", () => {
     // API route hands an object straight in rather than re-stringifying
     // the JSONB column. Same defaults-merge logic should apply.
+    // `cashflowShowPlan` is the legacy boolean. When no explicit
+    // `cashflowPlanMode` is present, the parser migrates a true
+    // value to "plan" so the new three-way control reflects the
+    // operator's prior setting.
     expect(parseDisplayPrefs({ cashflowShowPlan: true })).toEqual({
       ...DISPLAY_PREFS_DEFAULT,
       cashflowShowPlan: true,
+      cashflowPlanMode: "plan",
+    });
+    // An explicit `cashflowPlanMode` wins over the legacy boolean
+    // so once new code writes the explicit key it stays put even
+    // if the boolean drifts.
+    expect(
+      parseDisplayPrefs({
+        cashflowShowPlan: false,
+        cashflowPlanMode: "diff",
+      }),
+    ).toEqual({
+      ...DISPLAY_PREFS_DEFAULT,
+      cashflowShowPlan: false,
+      cashflowPlanMode: "diff",
     });
   });
 

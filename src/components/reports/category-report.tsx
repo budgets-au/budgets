@@ -587,7 +587,7 @@ function CategoryRow({
         </span>
       </td>
       <td
-        className={`px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 ${amountClass(display)}`}
+        className="px-3 py-1.5 text-right tabular-nums border-l border-border bg-muted/40 text-foreground"
       >
         <span className="inline-flex items-center gap-0.5 align-baseline">
           {formatAUD(display)}

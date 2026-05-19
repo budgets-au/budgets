@@ -17,6 +17,13 @@ const createSchema = z.object({
   description: z.string().optional(),
   categoryId: z.string().uuid().optional().nullable(),
   notes: z.string().optional(),
+  /** When set, the row is treated as the SOURCE leg of a transfer
+   *  and a paired destination leg is auto-created in the named
+   *  account. The dest leg gets the inverted sign (so a -100 source
+   *  spawns a +100 dest), and both rows are cross-linked via
+   *  `transferPairId`. Sharing date / payee / category / notes
+   *  keeps the pair self-consistent in reports. */
+  transferToAccountId: z.string().uuid().optional().nullable(),
 });
 
 const pairTxn = alias(transactions, "pair_txn");
@@ -297,12 +304,72 @@ export async function POST(request: Request) {
 
   const normalized = data.payee ? normalizePayee(data.payee) : null;
   const tokenFreq = await loadTokenFreq();
+  const matchPayee = deriveMatchPayee(normalized, tokenFreq);
+
+  // Transfer path: insert both legs in one transaction and cross-link
+  // them via `transferPairId`. The dest leg gets the opposite sign so
+  // the pair nets to zero in cashflow rollups; the rest of the
+  // payload (date, payee, category, notes, description) is mirrored.
+  if (data.transferToAccountId) {
+    if (data.transferToAccountId === data.accountId) {
+      return NextResponse.json(
+        { error: "Transfer source and destination must differ" },
+        { status: 400 },
+      );
+    }
+    const destAmount = (-Number.parseFloat(data.amount)).toFixed(2);
+    const { transferToAccountId: _ignore, ...shared } = data;
+    void _ignore;
+    const result = await db.transaction(async (tx) => {
+      const [source] = await tx
+        .insert(transactions)
+        .values({
+          ...shared,
+          normalizedPayee: normalized,
+          matchPayee,
+        })
+        .returning();
+      const [dest] = await tx
+        .insert(transactions)
+        .values({
+          ...shared,
+          accountId: data.transferToAccountId!,
+          amount: destAmount,
+          normalizedPayee: normalized,
+          matchPayee,
+        })
+        .returning();
+      await tx
+        .update(transactions)
+        .set({ transferPairId: dest.id, updatedAt: new Date() })
+        .where(eq(transactions.id, source.id));
+      await tx
+        .update(transactions)
+        .set({ transferPairId: source.id, updatedAt: new Date() })
+        .where(eq(transactions.id, dest.id));
+      // Recompute both account balances.
+      for (const acctId of [data.accountId, data.transferToAccountId!]) {
+        await tx
+          .update(accounts)
+          .set({
+            currentBalance: sql`(SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = ${acctId}) + ${accounts.startingBalance}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(accounts.id, acctId));
+      }
+      return { source, dest };
+    });
+    return NextResponse.json(result, { status: 201 });
+  }
+
+  const { transferToAccountId: _ignored, ...singleData } = data;
+  void _ignored;
   const [row] = await db
     .insert(transactions)
     .values({
-      ...data,
+      ...singleData,
       normalizedPayee: normalized,
-      matchPayee: deriveMatchPayee(normalized, tokenFreq),
+      matchPayee,
     })
     .returning();
 

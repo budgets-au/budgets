@@ -15,7 +15,6 @@ import {
   type ComboboxItem,
 } from "@/components/ui/searchable-combobox";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
-import { buildCategoryMeta } from "@/lib/category-path";
 
 interface AccountLite {
   id: string;
@@ -44,6 +43,15 @@ export interface AddTransactionDialogProps {
   onCreated?: () => void;
 }
 
+type TxType = "expense" | "income" | "transfer-out" | "transfer-in";
+
+const TYPE_OPTIONS: { value: TxType; label: string }[] = [
+  { value: "expense", label: "Expense" },
+  { value: "income", label: "Income" },
+  { value: "transfer-out", label: "Transfer out" },
+  { value: "transfer-in", label: "Transfer in" },
+];
+
 function todayISO(): string {
   // Use local-tz Y-M-D so the default lines up with what the user sees
   // on their calendar — UTC slicing would roll into yesterday at
@@ -55,10 +63,13 @@ function todayISO(): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Manual transaction entry — for users who don't have an OFX/CSV
- *  feed for a given account (cash, small side accounts, corrections).
- *  POSTs to `/api/transactions`, which mints normalised payee tokens
- *  and refreshes the account's running balance. */
+/** Manual transaction entry. Supports four types — Expense, Income,
+ *  Transfer out, Transfer in — so the operator doesn't have to think
+ *  about amount signs. Sign is derived from type; transfer types
+ *  also surface the counterparty-account picker. Field order is
+ *  Date → Account → Type → Other-account (transfer only) → Category
+ *  → Payee → Amount → Notes, matching the operator's natural
+ *  data-entry flow so plain Tab keystrokes navigate the form. */
 export function AddTransactionDialog({
   open,
   onOpenChange,
@@ -69,9 +80,10 @@ export function AddTransactionDialog({
 }: AddTransactionDialogProps) {
   const [accountId, setAccountId] = useState(defaultAccountId ?? "");
   const [date, setDate] = useState(todayISO());
+  const [txType, setTxType] = useState<TxType>("expense");
+  const [otherAccountId, setOtherAccountId] = useState("");
   const [amount, setAmount] = useState("");
   const [payee, setPayee] = useState("");
-  const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -83,39 +95,75 @@ export function AddTransactionDialog({
     if (!open) return;
     setAccountId(defaultAccountId ?? "");
     setDate(todayISO());
+    setTxType("expense");
+    setOtherAccountId("");
     setAmount("");
     setPayee("");
-    setDescription("");
     setCategoryId(null);
     setNotes("");
   }, [open, defaultAccountId]);
 
-  const { meta: catMeta } = buildCategoryMeta(categories);
-  const accountItems: ComboboxItem[] = accounts
+  const isTransfer = txType === "transfer-out" || txType === "transfer-in";
+  const otherAccountLabel =
+    txType === "transfer-out" ? "To account" : "From account";
+
+  const sortedAccounts = accounts
     .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const accountItems: ComboboxItem[] = sortedAccounts.map((a) => ({
+    id: a.id,
+    label: a.name,
+  }));
+  const otherAccountItems: ComboboxItem[] = sortedAccounts
+    .filter((a) => a.id !== accountId)
     .map((a) => ({ id: a.id, label: a.name }));
 
+  const amountNumeric = Number.parseFloat(amount);
   const canSubmit =
     !saving &&
     accountId !== "" &&
     /^\d{4}-\d{2}-\d{2}$/.test(date) &&
     amount.trim() !== "" &&
-    !Number.isNaN(parseFloat(amount));
+    Number.isFinite(amountNumeric) &&
+    amountNumeric > 0 &&
+    (!isTransfer ||
+      (otherAccountId !== "" && otherAccountId !== accountId));
 
   async function submit() {
     if (!canSubmit) return;
     setSaving(true);
     try {
+      const magnitude = Math.abs(amountNumeric).toFixed(2);
+      // Sign convention is server-facing: outflow = negative on the
+      // SOURCE leg. The dest leg (transfer) gets the inverted sign
+      // server-side.
+      let bodyAccountId = accountId;
+      let bodyTransferTo: string | null = null;
+      let bodyAmount: string;
+      if (txType === "expense") {
+        bodyAmount = `-${magnitude}`;
+      } else if (txType === "income") {
+        bodyAmount = magnitude;
+      } else if (txType === "transfer-out") {
+        bodyAccountId = accountId;
+        bodyTransferTo = otherAccountId;
+        bodyAmount = `-${magnitude}`;
+      } else {
+        // transfer-in: money flowing FROM other TO picked. Source
+        // leg is `other`, dest leg is `picked`.
+        bodyAccountId = otherAccountId;
+        bodyTransferTo = accountId;
+        bodyAmount = `-${magnitude}`;
+      }
       const body: Record<string, unknown> = {
-        accountId,
+        accountId: bodyAccountId,
         date,
-        amount: amount.trim(),
+        amount: bodyAmount,
       };
       if (payee.trim()) body.payee = payee.trim();
-      if (description.trim()) body.description = description.trim();
       if (notes.trim()) body.notes = notes.trim();
       if (categoryId) body.categoryId = categoryId;
+      if (bodyTransferTo) body.transferToAccountId = bodyTransferTo;
       const res = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -125,7 +173,7 @@ export function AddTransactionDialog({
         const detail = await res.text().catch(() => "");
         throw new Error(detail || `POST ${res.status}`);
       }
-      toast.success("Transaction added");
+      toast.success(isTransfer ? "Transfer added" : "Transaction added");
       onOpenChange(false);
       onCreated?.();
     } catch (e) {
@@ -135,10 +183,14 @@ export function AddTransactionDialog({
     }
   }
 
-  // catMeta is used implicitly via CategoryDropdown's own meta build;
-  // we keep the reference live so future refactors that need the
-  // breadcrumb path here have it on hand.
-  void catMeta;
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    // Submit on Cmd/Ctrl-Enter from any field — the form is small
+    // enough that this is a natural shortcut for keyboard entry.
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -146,7 +198,23 @@ export function AddTransactionDialog({
         <DialogHeader>
           <DialogTitle>Add transaction</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-1 gap-3 text-sm">
+        <div
+          className="grid grid-cols-1 gap-3 text-sm"
+          onKeyDown={handleKeyDown}
+        >
+          {/* Field order mirrors a natural data-entry flow:
+              date → account → type → (other account if transfer) →
+              category → payee → amount → notes. Tab moves through
+              the visible fields in that order. */}
+          <Field label="Date" required>
+            <Input
+              type="date"
+              min="1900-01-01"
+              max="2099-12-31"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </Field>
           <Field label="Account" required>
             <SearchableCombobox
               value={accountId}
@@ -157,37 +225,31 @@ export function AddTransactionDialog({
               triggerClassName="h-9 w-full text-sm border rounded-md px-3 bg-background inline-flex items-center justify-between gap-2"
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Date" required>
-              <Input
-                type="date"
-                min="1900-01-01"
-                max="2099-12-31"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </Field>
-            <Field label="Amount" required>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                placeholder="-12.34"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </Field>
-          </div>
-          <p className="text-[11px] text-muted-foreground -mt-2">
-            Negative for outflows, positive for inflows.
-          </p>
-          <Field label="Payee">
-            <Input
-              value={payee}
-              onChange={(e) => setPayee(e.target.value)}
-              placeholder="e.g. Woolworths"
-            />
+          <Field label="Type" required>
+            <select
+              value={txType}
+              onChange={(e) => setTxType(e.target.value as TxType)}
+              className="h-9 w-full text-sm border rounded-md px-3 bg-background focus:outline-none focus:ring-1 focus:ring-ring/50"
+            >
+              {TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </Field>
+          {isTransfer && (
+            <Field label={otherAccountLabel} required>
+              <SearchableCombobox
+                value={otherAccountId}
+                onChange={setOtherAccountId}
+                items={otherAccountItems}
+                searchPlaceholder="Search accounts…"
+                emptyTriggerLabel={`Choose ${otherAccountLabel.toLowerCase()}…`}
+                triggerClassName="h-9 w-full text-sm border rounded-md px-3 bg-background inline-flex items-center justify-between gap-2"
+              />
+            </Field>
+          )}
           <Field label="Category">
             <CategoryDropdown
               value={categoryId}
@@ -196,13 +258,27 @@ export function AddTransactionDialog({
               triggerClassName="h-9 w-full text-sm border rounded-md px-3 bg-background inline-flex items-center justify-between gap-2"
             />
           </Field>
-          <Field label="Description">
+          <Field label="Payee">
             <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional"
+              value={payee}
+              onChange={(e) => setPayee(e.target.value)}
+              placeholder="e.g. Woolworths"
             />
           </Field>
+          <Field label="Amount" required>
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </Field>
+          <p className="text-[11px] text-muted-foreground -mt-2">
+            Enter the magnitude — the sign is set by the selected type.
+          </p>
           <Field label="Notes">
             <textarea
               value={notes}

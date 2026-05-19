@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.165.0 — 2026-05-19
+
+### Changed
+- **Add-Transaction dialog reworked with a Type dropdown +
+  transfer support.** The "negative for outflows" hint is gone —
+  amount is now a positive magnitude and the sign is derived from
+  a Type select: **Expense**, **Income**, **Transfer out**, or
+  **Transfer in**. Picking a transfer type reveals an additional
+  "To account" / "From account" picker; on submit the server
+  creates BOTH legs in one transaction, cross-linked via
+  `transferPairId`, with the dest leg's sign inverted.
+- **Field order matches a natural data-entry flow.** Date (pre-
+  filled with today) → Account → Type → Other account (when
+  transfer) → Category → Payee → Amount → Notes, so plain Tab
+  keystrokes walk the operator through the form in the order
+  they'd think to enter values. Cmd/Ctrl-Enter submits from any
+  field.
+
+### API
+- `POST /api/transactions` accepts an optional
+  `transferToAccountId` field. When set, the row is treated as
+  the source leg and a paired destination leg is auto-created in
+  the named account; both legs are cross-linked via
+  `transferPairId` and the dest leg's sign is inverted.
+
 ## 0.164.0 — 2026-05-18
 
 ### Fixed

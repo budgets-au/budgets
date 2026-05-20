@@ -4,10 +4,11 @@ import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
+import { accountTypeEnum } from "@/lib/api/enums";
 
 const createSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(["checking", "savings", "credit", "loan", "cash"]),
+  type: accountTypeEnum,
   institution: z.string().optional(),
   accountNumberLast4: z.string().optional(),
   currency: z.string().default("AUD"),

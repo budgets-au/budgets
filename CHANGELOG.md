@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.192.0 — 2026-05-20
+
+### Added
+- **`parseAccountIds(searchParams)` + `accountIdSql(ids)` +
+  `isUuid(s)`** helpers in new
+  [src/lib/api/account-ids.ts](src/lib/api/account-ids.ts).
+  Replace the
+  `accountIdsRaw.split(",").map(...).filter((id) => UUID_RE.test(id))`
+  block and the matching `sql.join` setup that five report
+  routes had copy-pasted alongside a local `UUID_RE`.
+- **Shared zod enums** in
+  [src/lib/api/enums.ts](src/lib/api/enums.ts):
+  - `accountTypeEnum` — replaces the three inline
+    `z.enum(["checking", "savings", "credit", "loan", "cash"])`
+    declarations across accounts routes.
+  - `transferKindEnum` — replaces the two inline
+    `z.enum(["none", "internal", "external"])` declarations
+    in the categories routes.
+
+### Changed
+- Five report routes (`cashflow`, `accounts-cashflow`,
+  `payee-totals`, `transactions-points`, `tax`) and five
+  CRUD routes (`accounts`, `accounts/[id]`,
+  `accounts/import/commit`, `categories`,
+  `categories/[id]`) now consume the shared helpers instead
+  of duplicating the boilerplate inline.
+
+Mechanical-only change; 316 tests stay green.
+
 ## 0.191.0 — 2026-05-20
 
 ### Added

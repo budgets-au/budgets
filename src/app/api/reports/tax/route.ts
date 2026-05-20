@@ -6,11 +6,11 @@ import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import type { TaxConfig } from "@/db/schema";
 import { calculateTaxReport, type TaxReport } from "@/lib/tax/calc";
 import { currentFyEndYear, fyDateRange } from "@/lib/tax/fy";
+import { parseAccountIds } from "@/lib/api/account-ids";
 
 export type { TaxReport };
 
 const EMPTY_TAX_CONFIG: TaxConfig = { wfhHoursByFy: {}, categoryRules: {} };
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -25,11 +25,7 @@ export async function GET(request: Request) {
   const fyRange = fyDateRange(fyEndYear);
 
   // accountIds — comma-separated UUIDs; same UUID-shape guard cashflow uses.
-  const accountIdsRaw = searchParams.get("accountIds");
-  const accountIds = (accountIdsRaw ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter((id) => UUID_RE.test(id));
+  const accountIds = parseAccountIds(searchParams);
 
   const [settings] = await db
     .select({ taxConfig: appSettings.taxConfig })

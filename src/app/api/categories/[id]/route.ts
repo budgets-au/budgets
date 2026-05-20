@@ -4,13 +4,14 @@ import { db } from "@/db";
 import { categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { transferKindEnum } from "@/lib/api/enums";
 import { wouldCreateCycle } from "@/lib/category-descendants";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   color: z.string().optional(),
   parentId: z.string().uuid().optional().nullable(),
-  transferKind: z.enum(["none", "internal", "external"]).optional(),
+  transferKind: transferKindEnum.optional(),
   sortOrder: z.number().int().min(0).optional(),
 });
 

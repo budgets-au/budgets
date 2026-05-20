@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
+import { accountIdSql, parseAccountIds } from "@/lib/api/account-ids";
 
 /** GET /api/reports/payee-totals
  *
@@ -34,20 +35,8 @@ export async function GET(request: Request) {
   const kind: "expense" | "income" | "all" =
     kindParam === "income" || kindParam === "all" ? kindParam : "expense";
 
-  const accountIdsRaw = searchParams.get("accountIds");
-  const accountIdsAll = accountIdsRaw
-    ? accountIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const accountIds = accountIdsAll.filter((id) => UUID_RE.test(id));
-  const idList = sql.join(
-    accountIds.map((id) => sql`${id}`),
-    sql`, `,
-  );
-  const accountFilter =
-    accountIds.length > 0
-      ? sql`AND t.account_id IN (${idList})`
-      : sql`AND t.account_id IN (SELECT id FROM accounts WHERE is_archived = 0)`;
+  const accountIds = parseAccountIds(searchParams);
+  const { accountFilterT: accountFilter } = accountIdSql(accountIds);
   // Internal transfers between own accounts aren't useful in a
   // payee Pareto — the "payee" is just the other account. Always
   // exclude. External transfers (real outflow) stay.

@@ -5,6 +5,7 @@ import { scheduledTransactions, categories } from "@/db/schema";
 import { sql, and, eq, ne, isNotNull, gte, lte, inArray, or, isNull } from "drizzle-orm";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from "date-fns";
 import { expandRecurrence } from "@/lib/recurrence";
+import { accountIdSql, parseAccountIds } from "@/lib/api/account-ids";
 
 export interface CashflowCategory {
   id: string;
@@ -58,31 +59,8 @@ export async function GET(request: Request) {
   const to = searchParams.get("to") ?? format(endOfMonth(now), "yyyy-MM-dd");
   const hideTransfers = searchParams.get("hideTransfers") === "true";
 
-  const accountIdsRaw = searchParams.get("accountIds");
-  const accountIdsAll = accountIdsRaw
-    ? accountIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
-  // UUID-shape guard so the filter can only ever contain canonical UUIDs;
-  // prevents any malformed input from sneaking into the SQL fragments below.
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const accountIds = accountIdsAll.filter((id) => UUID_RE.test(id));
-  // Apply the same accountIds filter to every transactions sub-query below.
-  // Each id is bound as its own parameter via sql.join — no string concat.
-  // When the user hasn't picked any accounts, default to non-archived
-  // accounts only — archived accounts are hidden in the UI and shouldn't
-  // be silently included by an "All accounts" selection.
-  const idList = sql.join(
-    accountIds.map((id) => sql`${id}`),
-    sql`, `,
-  );
-  const accountFilter =
-    accountIds.length > 0
-      ? sql`AND account_id IN (${idList})`
-      : sql`AND account_id IN (SELECT id FROM accounts WHERE is_archived = 0)`;
-  const accountFilterT =
-    accountIds.length > 0
-      ? sql`AND t.account_id IN (${idList})`
-      : sql`AND t.account_id IN (SELECT id FROM accounts WHERE is_archived = 0)`;
+  const accountIds = parseAccountIds(searchParams);
+  const { idList, accountFilter, accountFilterT } = accountIdSql(accountIds);
 
   const months = generateMonths(from, to);
 

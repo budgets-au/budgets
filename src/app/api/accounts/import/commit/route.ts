@@ -4,13 +4,14 @@ import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { accountTypeEnum } from "@/lib/api/enums";
 import { CATEGORICAL_PALETTE } from "@/lib/colours";
 
 const COLORS = CATEGORICAL_PALETTE;
 
 const rowSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(["checking", "savings", "credit", "loan", "cash"]),
+  type: accountTypeEnum,
   institution: z.string().optional(),
   accountNumberLast4: z.string().optional(),
   startingBalance: z.string().default("0"),

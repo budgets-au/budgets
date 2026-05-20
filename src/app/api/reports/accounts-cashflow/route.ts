@@ -4,6 +4,7 @@ import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { isTransferRow } from "@/lib/transfer-filter";
+import { parseAccountIds } from "@/lib/api/account-ids";
 
 export interface TransferCounterpartyBreakdown {
   /** Paired account's id, or null when the transfer's pair lives at an
@@ -100,12 +101,7 @@ export async function GET(request: Request) {
   const from = searchParams.get("from") ?? format(startOfMonth(subMonths(now, 5)), "yyyy-MM-dd");
   const to = searchParams.get("to") ?? format(endOfMonth(now), "yyyy-MM-dd");
 
-  const accountIdsRaw = searchParams.get("accountIds");
-  const accountIdsAll = accountIdsRaw
-    ? accountIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const accountIdFilter = accountIdsAll.filter((id) => UUID_RE.test(id));
+  const accountIdFilter = parseAccountIds(searchParams);
 
   const accountWhere =
     accountIdFilter.length > 0

@@ -4,10 +4,11 @@ import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { accountTypeEnum } from "@/lib/api/enums";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
-  type: z.enum(["checking", "savings", "credit", "loan", "cash"]).optional(),
+  type: accountTypeEnum.optional(),
   institution: z.string().nullable().optional(),
   accountNumberLast4: z.string().nullable().optional(),
   color: z.string().optional(),

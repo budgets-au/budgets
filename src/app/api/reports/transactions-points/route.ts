@@ -3,6 +3,11 @@ import { sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { categoryDescendantIds } from "@/lib/category-descendants";
+import {
+  accountIdSql,
+  isUuid,
+  parseAccountIds,
+} from "@/lib/api/account-ids";
 
 const MAX_POINTS = 5_000;
 
@@ -36,20 +41,8 @@ export async function GET(request: Request) {
   const kind: "expense" | "income" | "all" =
     kindParam === "income" || kindParam === "all" ? kindParam : "expense";
 
-  const accountIdsRaw = searchParams.get("accountIds");
-  const accountIdsAll = accountIdsRaw
-    ? accountIdsRaw.split(",").map((s) => s.trim()).filter(Boolean)
-    : [];
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const accountIds = accountIdsAll.filter((id) => UUID_RE.test(id));
-  const idList = sql.join(
-    accountIds.map((id) => sql`${id}`),
-    sql`, `,
-  );
-  const accountFilter =
-    accountIds.length > 0
-      ? sql`AND t.account_id IN (${idList})`
-      : sql`AND t.account_id IN (SELECT id FROM accounts WHERE is_archived = 0)`;
+  const accountIds = parseAccountIds(searchParams);
+  const { accountFilterT: accountFilter } = accountIdSql(accountIds);
   // Internal transfers (money moved between own accounts) are
   // never "spending" and pollute distribution / scatter views;
   // always exclude them. External transfers (CC payoff to an
@@ -70,7 +63,7 @@ export async function GET(request: Request) {
   // helper so the SQL just gets a flat IN-list.
   const rootCategoryId = searchParams.get("rootCategoryId");
   let categoryFilter = sql``;
-  if (rootCategoryId && UUID_RE.test(rootCategoryId)) {
+  if (rootCategoryId && isUuid(rootCategoryId)) {
     const subtree = await categoryDescendantIds(rootCategoryId);
     if (subtree.length > 0) {
       const subList = sql.join(

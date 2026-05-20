@@ -4,13 +4,14 @@ import { db } from "@/db";
 import { categories } from "@/db/schema";
 import { asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { transferKindEnum } from "@/lib/api/enums";
 
 const createSchema = z.object({
   name: z.string().min(1),
   type: z.enum(["income", "expense"]),
   color: z.string().default("#94a3b8"),
   parentId: z.string().uuid().optional().nullable(),
-  transferKind: z.enum(["none", "internal", "external"]).optional(),
+  transferKind: transferKindEnum.optional(),
 });
 
 export async function GET(request: Request) {

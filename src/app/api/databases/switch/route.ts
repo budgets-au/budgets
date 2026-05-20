@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { switchProfile } from "@/db";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const switchSchema = z.object({
   id: z.string().min(1).max(40),
@@ -16,14 +17,8 @@ const switchSchema = z.object({
  *  changes which encrypted file the next unlock attempt targets; the
  *  data in each file stays inaccessible without its passphrase. */
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null);
-  const parsed = switchSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid body", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
+  const parsed = await parseJsonBody(request, switchSchema);
+  if (!parsed.ok) return parsed.response;
   try {
     switchProfile(parsed.data.id);
     return NextResponse.json({ ok: true, redirect: "/unlock" });

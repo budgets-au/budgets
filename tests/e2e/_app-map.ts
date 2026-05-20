@@ -11,13 +11,13 @@ import { dirname, resolve } from "node:path";
  * Playwright is NOT imported here so the data ops can be unit-
  * tested under Vitest. */
 
-export const APP_MAP_PATH = resolve("./tests/e2e/.data/app-map.json");
+const APP_MAP_PATH = resolve("./tests/e2e/.data/app-map.json");
 
-export const APP_MAP_SCHEMA_VERSION = 1 as const;
+const APP_MAP_SCHEMA_VERSION = 1 as const;
 
 export type ControlKind = "button" | "switch" | "select" | "input" | "link";
 
-export interface ControlKnowledge {
+interface ControlKnowledge {
   kind: ControlKind;
   label: string;
   clicks: number;
@@ -32,7 +32,7 @@ export interface ControlKnowledge {
   errored?: number;
 }
 
-export interface RouteKnowledge {
+interface RouteKnowledge {
   firstSeen: string;
   lastVisited: string;
   visits: number;
@@ -84,7 +84,7 @@ export interface SuccessfulRun {
   verified: "dom" | "api";
 }
 
-export interface GoalState {
+interface GoalState {
   achieved: boolean;
   attempts: number;
   lastAttempt: string | null;

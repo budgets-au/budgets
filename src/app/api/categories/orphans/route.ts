@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { categories, transactions, scheduledTransactions } from "@/db/schema";
+import { withAdminAuth } from "@/lib/api/route-guards";
 
 /** A category is "orphan" when it has zero transactions, zero
  * scheduled rows, no child categories, and isn't a system seed.
@@ -49,22 +49,12 @@ async function findOrphans(): Promise<Array<{ id: string; name: string; parentId
     .map((c) => ({ id: c.id, name: c.name, parentId: c.parentId }));
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if ((session.user as { role?: string }).role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+export const GET = withAdminAuth(async () => {
   const orphans = await findOrphans();
   return NextResponse.json({ orphans, count: orphans.length });
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if ((session.user as { role?: string }).role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+export const POST = withAdminAuth(async () => {
   // Re-derive the list at delete time rather than trusting client IDs —
   // a client could otherwise pass in an in-use category.
   const orphans = await findOrphans();
@@ -74,5 +64,4 @@ export async function POST(request: Request) {
     await db.delete(categories).where(eq(categories.id, id));
   }
   return NextResponse.json({ ok: true, removed: ids.length });
-}
-
+});

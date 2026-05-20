@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { withAdminAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 import {
   initProfileFile,
   isUnlocked,
@@ -49,14 +50,8 @@ const createSchema = z.object({
  *  client to redirect to `/unlock` so the operator re-enters the
  *  same passphrase against the freshly-created file. */
 export const POST = withAdminAuth(async (request) => {
-  const body = await request.json().catch(() => null);
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid body", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
   const { label, passphrase } = parsed.data;
 
   let profileId: string;

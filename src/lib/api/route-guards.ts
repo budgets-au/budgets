@@ -14,11 +14,10 @@ import { auth, isAdmin } from "@/lib/auth";
  *    // handler body — auth confirmed before this runs
  *  });
  *  ```
- *  Almost no routes need anything from `session` itself (the one
- *  outlier, `/api/categories/orphans`, reads `session.user.role`
- *  and stays on the manual pattern). Skipping a session parameter
- *  here keeps the wrapper free of NextAuth's overloaded return-type
- *  gymnastics.
+ *  Almost no routes need anything from `session` itself (a handful
+ *  of user-management routes read `session.user.id` and stay on the
+ *  manual pattern). Skipping a session parameter here keeps the
+ *  wrapper free of NextAuth's overloaded return-type gymnastics.
  *
  *  The generic `TCtx` carries the second positional arg Next.js
  *  passes to dynamic routes (e.g. `{ params: Promise<{ id: string }> }`).

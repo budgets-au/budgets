@@ -25,7 +25,7 @@ shipped in 0.166.0._
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-20T13:20:36.174Z · 3 issues, 5 questions._
+_Last run: 2026-05-20T14:08:36.874Z · 3 issues, 5 questions._
 
 #### Smart Monkey expert system
 
@@ -42,7 +42,7 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 76.5s |
+| Total wall time | 86.5s |
 | Routes visited | 1 |
 | Button clicks | 8 |
 | Switch toggles | 0 |
@@ -87,8 +87,8 @@ _The crawl filled these forms and clicked their submit, but saw no network call,
 - ❓ **guardrail probe: frequency=once w/ no endDate** — → 201 ✅ accepted (cleaned up)
 
 ##### /transactions
-- ❓ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpe3946r-bulk-*".
-- ❓ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpe3946r-bulk-".
+- ❓ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpe4ynbb-bulk-*".
+- ❓ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpe4ynbb-bulk-".
 
 <!-- monkey:end -->
 

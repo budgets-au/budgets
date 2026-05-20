@@ -6,6 +6,7 @@ import {
 } from "@/lib/super-people";
 import { z } from "zod";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 /** GET /api/super/people
  *  Returns the ordered list of people tracked on the super page.
@@ -30,21 +31,19 @@ const POST_BODY = z.object({
  *  suffix so the operator can pick whatever label they want without
  *  worrying about uniqueness. */
 export const POST = withAuth(async (request) => {
-  const body = POST_BODY.safeParse(await request.json().catch(() => ({})));
-  if (!body.success) {
-    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(request, POST_BODY);
+  if (!parsed.ok) return parsed.response;
 
   const people = await loadSuperPeople();
   const taken = new Set(people.map((p) => p.key));
-  let key = body.data.key ?? slugifyPersonKey(body.data.label);
+  let key = parsed.data.key ?? slugifyPersonKey(parsed.data.label);
   if (taken.has(key)) {
     // Disambiguate with a numeric suffix until free.
     let n = 2;
     while (taken.has(`${key}-${n}`)) n += 1;
     key = `${key}-${n}`;
   }
-  const next = [...people, { key, label: body.data.label }];
+  const next = [...people, { key, label: parsed.data.label }];
   await saveSuperPeople(next);
   return NextResponse.json({ people: next });
 });

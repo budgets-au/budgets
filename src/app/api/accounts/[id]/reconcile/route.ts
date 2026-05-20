@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, transactions } from "@/db/schema";
 import { eq, and, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
 import { parseJsonBody } from "@/lib/api/parse-body";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 const schema = z.object({
   /** Bank statement ending date (YYYY-MM-DD). Reconciliation marks every
@@ -17,14 +17,7 @@ const schema = z.object({
   balance: numericString,
 });
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const POST = withAuthAndId(async (id, request) => {
   const parsed = await parseJsonBody(request, schema);
   if (!parsed.ok) return parsed.response;
   const { date, balance } = parsed.data;
@@ -76,4 +69,4 @@ export async function POST(
     .returning({ id: transactions.id });
 
   return NextResponse.json({ matched: true, reconciled: updated.length });
-}
+});

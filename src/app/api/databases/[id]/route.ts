@@ -11,6 +11,7 @@ import {
 } from "@/lib/db-profiles";
 import { backupDirForProfile } from "@/lib/backup/sqlite-backup";
 import { withAdminAuthAndId } from "@/lib/api/route-guards";
+import { badRequest, parseJsonBody } from "@/lib/api/parse-body";
 
 const patchSchema = z.object({
   label: z.string().min(1).max(80).optional(),
@@ -30,19 +31,10 @@ export const PATCH = withAdminAuthAndId(async (id, request) => {
       { status: 400 },
     );
   }
-  const body = await request.json().catch(() => null);
-  const parsed = patchSchema.safeParse(body);
-  if (
-    !parsed.success ||
-    (parsed.data.label === undefined && parsed.data.archived === undefined)
-  ) {
-    return NextResponse.json(
-      {
-        error: "Invalid body",
-        details: parsed.success ? null : parsed.error.flatten(),
-      },
-      { status: 400 },
-    );
+  const parsed = await parseJsonBody(request, patchSchema);
+  if (!parsed.ok) return parsed.response;
+  if (parsed.data.label === undefined && parsed.data.archived === undefined) {
+    return badRequest("At least one of label or archived must be supplied");
   }
   try {
     let updated;

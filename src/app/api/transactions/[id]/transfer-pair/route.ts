@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { manualPair, manualPairExternal, manualUnpair } from "@/lib/transfer-match";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 /** Three shapes accepted on this endpoint:
  *
@@ -24,14 +25,8 @@ const schema = z.union([
 ]);
 
 export const PATCH = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid body", details: parsed.error.flatten() },
-      { status: 400 },
-    );
-  }
+  const parsed = await parseJsonBody(request, schema);
+  if (!parsed.ok) return parsed.response;
 
   if ("external" in parsed.data) {
     const { syntheticId, externalAccountId } = await manualPairExternal(

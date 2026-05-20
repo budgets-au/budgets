@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { eq, and, ne, inArray, sql } from "drizzle-orm";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import {
   accounts,
@@ -10,6 +9,7 @@ import {
   transactions,
 } from "@/db/schema";
 import { takeBackup } from "@/lib/backup/sqlite-backup";
+import { withAdminAuth } from "@/lib/api/route-guards";
 
 /** Admin-only sample-data control plane. The Settings UI calls
  * GET → render the panel with current counts.
@@ -20,10 +20,6 @@ import { takeBackup } from "@/lib/backup/sqlite-backup";
  * The sample-data flag in app_settings is *not* reset — once removed,
  * the seeder won't repopulate even after the rows are gone. Re-seeding
  * is a dev workflow, available via `npm run db:seed -- --force`. */
-function isAdmin(session: unknown): boolean {
-  const role = (session as { user?: { role?: string } } | null)?.user?.role;
-  return role === "admin";
-}
 
 interface SampleCounts {
   sampleAccounts: number;
@@ -106,21 +102,12 @@ async function readCounts(): Promise<SampleCounts> {
   };
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAdminAuth(async () => {
   const counts = await readCounts();
   return NextResponse.json(counts);
-}
+});
 
-export async function POST() {
-  const session = await auth();
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAdminAuth(async () => {
   const counts = await readCounts();
   if (counts.sampleAccounts === 0 && counts.sampleTransactions === 0 && counts.sampleScheduled === 0 && counts.samplePayeeRules === 0) {
     return NextResponse.json({ ok: true, removed: counts });
@@ -186,4 +173,4 @@ export async function POST() {
     },
     counts: after,
   });
-}
+});

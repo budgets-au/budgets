@@ -9,6 +9,59 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.202.0 — 2026-05-20
+
+### Changed
+- **Library bumps:** `zod` 4.3.6 → 4.4.3 (now load-bearing
+  across 28 routes via `parseJsonBody`), `@base-ui/react`
+  1.4.1 → 1.5.0 (every dialog / dropdown / popover wraps
+  it), `react` / `react-dom` 19.2.4 → 19.2.6 (patch on
+  19.2; pairs naturally with the base-ui bump). All three
+  cleared `pnpm audit` + `tsc --noEmit` + the full unit
+  suite + the e2e goal sweep on a clean run.
+
+- **9 auth-helper stragglers migrated to
+  `withAuth` / `withAdminAuth` / `withAuthAndId`.** The bulk
+  migration in 0.193.0 left these on the manual
+  `await auth(); if (!session) return 401` preamble. The
+  code audit at start of this release flagged them as
+  stragglers, not exceptions. Migrated:
+  `super/people/[key]`, `investments/vests/[vestId]`,
+  `backup/[filename]` (+ `download`),
+  `accounts/[id]/reconcile`, `sample-data/remove` (also
+  dropped a local `isAdmin` re-implementation that
+  shadowed the one in `@/lib/auth`), `categories/orphans`.
+  One intentional hold-out: `users/[id]` reads
+  `session.user.id` for the `lastAdminGuard` requesterId
+  check, so it stays on the manual pattern (the wrappers
+  don't pass `session` through).
+
+- **7 `parseJsonBody` stragglers migrated.** These already
+  used `safeParse` but with their own
+  `{ error, details: flatten() }` response shape — meaning
+  the unified `BadRequestBody` envelope wasn't quite
+  unified. Now they emit the same
+  `{ error, issues: [{ path, message, code }] }` as
+  every other route, so a future client-side
+  `toastBadRequest()` helper can read one shape across
+  the entire API surface. Migrated: `super/people` (+
+  `[key]`), `transactions/[id]/transfer-pair`,
+  `backup/[filename]`, `databases` (+ `switch` + `[id]`).
+
+- **`tests/e2e/_app-map.ts`: 5 unused exports demoted to
+  module-private.** `APP_MAP_PATH`,
+  `APP_MAP_SCHEMA_VERSION`, `ControlKnowledge`,
+  `RouteKnowledge`, `GoalState` — all consumed only inside
+  the module itself; grep across `src/` and `tests/e2e/`
+  confirmed zero external consumers. Smaller public
+  surface = less to keep stable when the schema evolves.
+
+Suite total: 359 vitest passing, tsc clean, 4 e2e goal
+tests green on the clean run after the migration. No
+behaviour change for the happy path of any migrated route;
+schema-rejection paths now return the unified 400 envelope
+instead of the per-route `details.flatten()` shape.
+
 ## 0.201.0 — 2026-05-20
 
 ### Added

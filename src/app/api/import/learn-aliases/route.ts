@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { learnAccountAlias } from "@/lib/import/resolve-account";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const bodySchema = z.object({
   aliases: z
@@ -24,8 +25,9 @@ const bodySchema = z.object({
  * mapping.
  */
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const { aliases } = bodySchema.parse(body);
+  const parsed = await parseJsonBody(request, bodySchema);
+  if (!parsed.ok) return parsed.response;
+  const { aliases } = parsed.data;
 
   // Each alias upsert is independent — fire them in parallel so a 20-row
   // batch doesn't take 20 sequential round-trips.

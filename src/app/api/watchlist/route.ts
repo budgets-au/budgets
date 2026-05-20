@@ -5,6 +5,7 @@ import { asc } from "drizzle-orm";
 import { z } from "zod";
 import { getQuote } from "@/lib/investments/yahoo";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const createSchema = z.object({
   symbol: z.string().min(1).max(32),
@@ -55,8 +56,9 @@ export const GET = withAuth(async () => {
 });
 
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const data = createSchema.parse(body);
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   // Fill name from Yahoo when the client didn't supply one.
   let name = data.name ?? null;

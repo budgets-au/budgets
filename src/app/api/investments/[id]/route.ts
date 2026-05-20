@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 import { db } from "@/db";
 import { investments, investmentVests } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
@@ -37,8 +38,9 @@ export const GET = withAuthAndId(async (id) => {
 });
 
 export const PATCH = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const data = updateSchema.parse(body);
+  const parsed = await parseJsonBody(request, updateSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   // For paper trades, "what-if I bought on day X" is the whole point, so when
   // the user moves the purchase date we re-anchor the cost basis to that

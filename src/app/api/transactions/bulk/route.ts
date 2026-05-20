@@ -4,6 +4,7 @@ import { accounts, transactions } from "@/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 // Auto-learning has been removed — the trigram suggester reads
 // directly from the categorised history, so re-categorising a
 // transaction makes the next import smarter without spawning more
@@ -15,8 +16,9 @@ const bulkSchema = z.object({
 });
 
 export const PATCH = withAuth(async (request) => {
-  const body = await request.json();
-  const { ids, categoryId } = bulkSchema.parse(body);
+  const parsed = await parseJsonBody(request, bulkSchema);
+  if (!parsed.ok) return parsed.response;
+  const { ids, categoryId } = parsed.data;
 
   const updated = await db
     .update(transactions)
@@ -37,8 +39,9 @@ const deleteSchema = z.object({
  * `/api/transactions/[id]` but in a single round-trip.
  */
 export const DELETE = withAuth(async (request) => {
-  const body = await request.json();
-  const { ids } = deleteSchema.parse(body);
+  const parsed = await parseJsonBody(request, deleteSchema);
+  if (!parsed.ok) return parsed.response;
+  const { ids } = parsed.data;
 
   // Inside a transaction so partner-flag cleanup commits with the delete.
   // The FK's `ON DELETE SET NULL` on `transfer_pair_id` cleans

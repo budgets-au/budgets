@@ -4,6 +4,7 @@ import { scheduleSuggestionDismissals } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const createSchema = z.object({
   accountId: z.string().uuid(),
@@ -22,8 +23,9 @@ export const GET = withAuth(async () => {
 });
 
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const { accountId, normalizedPayee } = createSchema.parse(body);
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
+  const { accountId, normalizedPayee } = parsed.data;
 
   // Idempotent — re-dismissing just refreshes dismissedAt.
   const [row] = await db

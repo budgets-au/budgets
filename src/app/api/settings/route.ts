@@ -4,6 +4,7 @@ import { appSettings, type TaxConfig } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const taxConfigSchema = z.object({
   // Map keys arrive as strings via JSON; `Number(k)` on read.
@@ -34,8 +35,9 @@ export const GET = withAuth(async () => {
 });
 
 export const PATCH = withAuth(async (request) => {
-  const body = await request.json();
-  const data = updateSchema.parse(body);
+  const parsed = await parseJsonBody(request, updateSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   const updates: Partial<typeof appSettings.$inferInsert> = { updatedAt: new Date() };
 

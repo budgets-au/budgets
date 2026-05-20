@@ -4,6 +4,7 @@ import { missedScheduledDismissals } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const createSchema = z.object({
   occurrenceDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -11,8 +12,9 @@ const createSchema = z.object({
 });
 
 export const POST = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const data = createSchema.parse(body);
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   // Idempotent: if a dismissal already exists for this (schedule, date) the
   // user is amending the note rather than creating a duplicate.

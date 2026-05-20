@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { isoDateString, numericString } from "@/lib/zod-helpers";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const upsertSchema = z.object({
   occurrenceDate: isoDateString,
@@ -36,8 +37,9 @@ export const GET = withAuthAndId(async (id, request) => {
 // Upsert a forecast for one occurrence date. Amount is signed by the schedule's
 // type (expense/transfer → negative; income → positive).
 export const POST = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const { occurrenceDate, amount } = upsertSchema.parse(body);
+  const parsed = await parseJsonBody(request, upsertSchema);
+  if (!parsed.ok) return parsed.response;
+  const { occurrenceDate, amount } = parsed.data;
 
   // Look up the schedule to enforce sign convention.
   const [schedule] = await db
@@ -68,8 +70,9 @@ export const POST = withAuthAndId(async (id, request) => {
 // DELETE /api/scheduled/[id]/forecasts
 // Body: { occurrenceDate }. Removes a single forecast row.
 export const DELETE = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const { occurrenceDate } = deleteSchema.parse(body);
+  const parsed = await parseJsonBody(request, deleteSchema);
+  if (!parsed.ok) return parsed.response;
+  const { occurrenceDate } = parsed.data;
 
   await db
     .delete(scheduledForecasts)

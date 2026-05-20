@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { accounts, importLogs } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const bodySchema = z.object({
   format: z.string().min(1),
@@ -21,8 +22,9 @@ const bodySchema = z.object({
  * shape differs across formats and re-imports won't dedupe.
  */
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const { format, accountIds } = bodySchema.parse(body);
+  const parsed = await parseJsonBody(request, bodySchema);
+  if (!parsed.ok) return parsed.response;
+  const { format, accountIds } = parsed.data;
 
   // Per-format committed row counts — used by the dialog to show the
   // user the breakdown of their existing data before they confirm a new

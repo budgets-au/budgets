@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { investmentVests } from "@/db/schema";
 import { z } from "zod";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const createSchema = z.object({
   vestDate: z.string(),
@@ -12,8 +13,9 @@ const createSchema = z.object({
 });
 
 export const POST = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const data = createSchema.parse(body);
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   const [row] = await db
     .insert(investmentVests)

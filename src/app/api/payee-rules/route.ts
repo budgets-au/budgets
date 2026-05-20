@@ -6,6 +6,7 @@ import { z } from "zod";
 import { suggestCategoryByHistory, loadTokenFreq } from "@/lib/categorize";
 import { decidePayeeRuleAction } from "@/lib/payee-rule-decision";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 export const GET = withAuth(async () => {
   const rows = await db
@@ -40,8 +41,9 @@ const createSchema = z.object({
 });
 
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const data = createSchema.parse(body);
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   // Find a rule with the SAME (normalizedPayee, min, max) — if one
   // exists the picker treats it as the override layer that this pick

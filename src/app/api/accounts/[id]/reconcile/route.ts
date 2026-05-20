@@ -5,6 +5,7 @@ import { accounts, transactions } from "@/db/schema";
 import { eq, and, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const schema = z.object({
   /** Bank statement ending date (YYYY-MM-DD). Reconciliation marks every
@@ -24,8 +25,9 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const body = await request.json();
-  const { date, balance } = schema.parse(body);
+  const parsed = await parseJsonBody(request, schema);
+  if (!parsed.ok) return parsed.response;
+  const { date, balance } = parsed.data;
 
   const [account] = await db.select().from(accounts).where(eq(accounts.id, id)).limit(1);
   if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });

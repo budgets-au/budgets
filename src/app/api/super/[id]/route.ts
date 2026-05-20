@@ -4,6 +4,7 @@ import { superannuationSnapshots } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const updateSchema = z.object({
   fyEndYear: z.number().int().min(1990).max(2200).optional(),
@@ -16,8 +17,9 @@ const updateSchema = z.object({
 });
 
 export const PATCH = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const data = updateSchema.parse(body);
+  const parsed = await parseJsonBody(request, updateSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   const [row] = await db
     .update(superannuationSnapshots)

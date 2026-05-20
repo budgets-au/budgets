@@ -5,14 +5,16 @@ import { inArray } from "drizzle-orm";
 import { z } from "zod";
 import { normalizePayee } from "@/lib/categorize";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(500),
 });
 
 export const DELETE = withAuth(async (request) => {
-  const body = await request.json();
-  const { ids } = bulkDeleteSchema.parse(body);
+  const parsed = await parseJsonBody(request, bulkDeleteSchema);
+  if (!parsed.ok) return parsed.response;
+  const { ids } = parsed.data;
 
   // Returning columns we need to plant suggestion-dismissals — otherwise
   // the suggestion engine would re-detect each pattern from historical

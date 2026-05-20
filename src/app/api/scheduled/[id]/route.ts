@@ -6,6 +6,7 @@ import { z } from "zod";
 import { normalizePayee } from "@/lib/categorize";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const updateSchema = z.object({
   kind: z.enum(["schedule", "budget"]).optional(),
@@ -26,8 +27,9 @@ const updateSchema = z.object({
 });
 
 export const PATCH = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const parsed = updateSchema.parse(body);
+  const parseResult = await parseJsonBody(request, updateSchema);
+  if (!parseResult.ok) return parseResult.response;
+  const parsed = parseResult.data;
   // When the row is being saved as a budget (either now or already), strip
   // matcher-only fields so they can't carry stale values into the budget
   // semantics.

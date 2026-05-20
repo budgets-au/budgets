@@ -9,6 +9,74 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.200.0 — 2026-05-20
+
+### Added
+- **`parseJsonBody(request, schema)` + `badRequest(msg, field)`
+  helpers** at
+  [src/lib/api/parse-body.ts](src/lib/api/parse-body.ts).
+  Every API handler that used to do `schema.parse(body)`
+  unwrapped silently returned a Next.js 500 with an empty
+  body on any zod failure — the smart-monkey guardrail probes
+  (0.199.0) confirmed this on `/api/scheduled` for
+  `dayOfMonth=42`, `amount="monkey-goal"`, and a handful of
+  cross-field invariants. The helper does
+  `safeParse` + returns a 400 with the full zod issue tree
+  in a stable `BadRequestBody` shape:
+  ```json
+  {
+    "error": "Invalid request body",
+    "issues": [
+      { "path": "dayOfMonth", "message": "Too big: expected number to be <=31", "code": "too_big" }
+    ]
+  }
+  ```
+  `badRequest(message, field)` emits the same shape for
+  cross-field rules zod can't express (transfer needs a
+  destination, etc.) so the client can render schema and
+  hand-rolled errors uniformly.
+
+  6 unit tests cover happy path, schema failure with nested
+  paths, malformed JSON, and the cross-field convenience.
+
+### Changed
+- **Bulk migration: 27 API routes (29 `.parse(body)` sites)
+  swapped to `parseJsonBody`.** Mechanical 4-line change at
+  each call site, no behaviour change for the happy path —
+  but every former silent-500 zod failure now returns a
+  useful 400. Routes covered: super, investments
+  (+vests), settings, watchlist, transactions
+  (+bulk +[id]), accounts (+[id] +reconcile +import/commit),
+  payee-rules, import (learn-aliases, commit-batched,
+  format-check, undo-commit), categories (+[id]), scheduled
+  ([id] +dismiss-missed +replace +forecasts +bulk
+  +suggestions/dismissals). The pilot routes from
+  this release's first commit (`/api/scheduled`,
+  `/api/transactions`) are also on the helper.
+
+  Five routes are intentionally **out** of scope: the
+  databases/backup/transfer-pair endpoints already used
+  `safeParse` with their own `{ error, details: flatten() }`
+  response shape. Migrating those would be a client-visible
+  body-shape change — left for a follow-up that also
+  builds a `toastBadRequest()` client helper to consume the
+  new shape uniformly.
+
+- **`/api/scheduled` adds a `type=transfer` →
+  `transferToAccountId` cross-field guard.** The smart
+  monkey discovered the route accepted
+  `type=transfer` with no destination and returned 201,
+  leaving a dangling transfer schedule in the DB. The form's
+  submit-disabled guard catches it for human users; this is
+  defence-in-depth for direct API consumers (CSV import,
+  CLI, future integrations).
+
+  Suite total: 359 vitest passing (was 353; +6 from the
+  `parse-body.test.ts` cases). Smart-monkey e2e: 3/3 goals
+  still achieved end-to-end. The guardrail-probe matrix in
+  TODO.md now shows 400 responses with the actual zod
+  message instead of `500 [empty body]` for the bad cases.
+
 ## 0.199.0 — 2026-05-20
 
 ### Added

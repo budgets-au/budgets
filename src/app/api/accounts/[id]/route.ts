@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { accountTypeEnum } from "@/lib/api/enums";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -31,8 +32,9 @@ export const GET = withAuthAndId(async (id) => {
 });
 
 export const PATCH = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const data = updateSchema.parse(body);
+  const parsed = await parseJsonBody(request, updateSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   const [row] = await db
     .update(accounts)

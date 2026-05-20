@@ -6,6 +6,7 @@ import { z } from "zod";
 import { transferKindEnum } from "@/lib/api/enums";
 import { wouldCreateCycle } from "@/lib/category-descendants";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -16,8 +17,9 @@ const updateSchema = z.object({
 });
 
 export const PATCH = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const data = updateSchema.parse(body);
+  const parsed = await parseJsonBody(request, updateSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   // Cycle prevention: a category can't be its own parent, and can't be
   // moved under any of its own descendants. Either would create a loop

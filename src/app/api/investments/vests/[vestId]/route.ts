@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { investmentVests } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const updateSchema = z.object({
   vestDate: z.string().optional(),
@@ -23,8 +24,9 @@ export async function PATCH(
   const idParse = z.string().uuid().safeParse(rawId);
   if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-  const body = await request.json();
-  const data = updateSchema.parse(body);
+  const parsed = await parseJsonBody(request, updateSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   const [row] = await db
     .update(investmentVests)

@@ -5,6 +5,7 @@ import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { accountTypeEnum } from "@/lib/api/enums";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -36,8 +37,9 @@ export const GET = withAuth(async (request) => {
 });
 
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const data = createSchema.parse(body);
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   const [row] = await db
     .insert(accounts)

@@ -13,6 +13,7 @@ import { learnAccountAlias } from "@/lib/import/resolve-account";
 import { pairTransfersInWindow } from "@/lib/transfer-match";
 import { diffDaysISO } from "@/lib/utils";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const rowSchema = z.object({
   /** Where this row should land. Required — rows without a resolved
@@ -65,8 +66,9 @@ export const POST = withAuth(async (request) => {
 });
 
 async function runCommit(request: Request) {
-  const body = await request.json();
-  const { filename, format, rows } = bodySchema.parse(body);
+  const parsed = await parseJsonBody(request, bodySchema);
+  if (!parsed.ok) return parsed.response;
+  const { filename, format, rows } = parsed.data;
 
   // Guard: every accountId must reference an existing accounts row.
   const requestedAccountIds = Array.from(new Set(rows.map((r) => r.accountId)));

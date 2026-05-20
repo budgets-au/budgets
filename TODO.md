@@ -25,7 +25,7 @@ shipped in 0.166.0._
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-20T11:58:53.048Z · 2 issues, 3 questions._
+_Last run: 2026-05-20T12:24:22.007Z · 3 issues, 2 questions._
 
 #### Smart Monkey expert system
 
@@ -41,7 +41,7 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 57.5s |
+| Total wall time | 59.8s |
 | Routes visited | 0 |
 | Button clicks | 8 |
 | Switch toggles | 0 |
@@ -69,8 +69,9 @@ _Last run: 2026-05-20T09:26:06.823Z._
 #### Issues
 
 ##### /scheduled
-- 🟡 **guardrail probe: dayOfMonth=42 (exceeds zod max 31)** — → 500 ❌ [empty body]
-- 🟡 **guardrail probe: amount with letter (regex violation)** — → 500 ❌ [empty body]
+- 🟡 **guardrail probe: dayOfMonth=42 (exceeds zod max 31)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"dayOfMonth","message":"Too big: expected number to be <=31","code":"too_big"}]}
+- 🟡 **guardrail probe: type=transfer w/ no transferToAccountId** — → 400 ❌ {"error":"transferToAccountId is required when type=transfer","issues":[{"path":"transferToAccountId","message":"transferToAccountId is required when type=transfer","code":"cross_field"}]}
+- 🟡 **guardrail probe: amount with letter (regex violation)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"amount","message":"must be a numeric string","code":"invalid_format"}]}
 
 #### Questions for review
 
@@ -78,7 +79,6 @@ _The crawl filled these forms and clicked their submit, but saw no network call,
 
 ##### /scheduled
 - ❓ **guardrail probe: baseline (Account + defaults)** — → 201 ✅ accepted (cleaned up)
-- ❓ **guardrail probe: type=transfer w/ no transferToAccountId** — → 201 ✅ accepted (cleaned up)
 - ❓ **guardrail probe: frequency=once w/ no endDate** — → 201 ✅ accepted (cleaned up)
 
 <!-- monkey:end -->

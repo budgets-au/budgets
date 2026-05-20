@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getQuote, getDailyHistory, getPriceOnDate } from "@/lib/investments/yahoo";
 import { vestedQuantity, costBasis, currentValue, totalReturn } from "@/lib/investments/calc";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const createSchema = z.object({
   kind: z.enum(["stock", "rsu", "option", "paper"]),
@@ -167,8 +168,9 @@ export const GET = withAuth(async () => {
 });
 
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const data = createSchema.parse(body);
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   // Resolve missing metadata from Yahoo when the client didn't provide it.
   let name = data.name ?? null;

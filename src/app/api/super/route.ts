@@ -4,6 +4,7 @@ import { superannuationSnapshots } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 // `person` is a free-text key matching `superannuation_snapshots.person`.
 // Loosened from the legacy `z.enum(["self","partner"])` in 0.128.3
@@ -38,8 +39,9 @@ export const GET = withAuth(async (request) => {
 });
 
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const data = createSchema.parse(body);
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   const [row] = await db
     .insert(superannuationSnapshots)

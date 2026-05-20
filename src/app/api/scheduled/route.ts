@@ -5,6 +5,7 @@ import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
 import { withAuth } from "@/lib/api/route-guards";
+import { badRequest, parseJsonBody } from "@/lib/api/parse-body";
 
 const createSchema = z.object({
   kind: z.enum(["schedule", "budget"]).default("schedule"),
@@ -77,12 +78,36 @@ export const GET = withAuth(async () => {
 });
 
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const parsed = normaliseForKind(createSchema.parse(body));
+  // safeParse-via-helper so zod rejections come back as 400 with
+  // the issue tree, not unhandled 500's with empty bodies. The
+  // smart monkey's guardrail probes discovered the silent-500
+  // path on 2026-05-20 (dayOfMonth=42, amount=non-numeric).
+  const parseResult = await parseJsonBody(request, createSchema);
+  if (!parseResult.ok) return parseResult.response;
+  const parsed = normaliseForKind(parseResult.data);
+
+  // Cross-field invariants the schema can't express without
+  // contorting into discriminated-union refinements. Same 400
+  // shape as schema errors so the client renders them uniformly.
   if (parsed.kind !== "budget" && !parsed.accountId) {
-    return NextResponse.json(
-      { error: "accountId is required for non-budget schedules" },
-      { status: 400 },
+    return badRequest(
+      "accountId is required for non-budget schedules",
+      "accountId",
+    );
+  }
+  if (
+    parsed.kind !== "budget" &&
+    parsed.type === "transfer" &&
+    !parsed.transferToAccountId
+  ) {
+    // Found by the smart-monkey guardrail probes: server used to
+    // accept this (returned 201) and create a dangling transfer
+    // schedule. The form's submit-disabled guard catches it for
+    // human users; this is defence-in-depth for direct API
+    // consumers.
+    return badRequest(
+      "transferToAccountId is required when type=transfer",
+      "transferToAccountId",
     );
   }
   const [row] = await db.insert(scheduledTransactions).values(parsed).returning();

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { accounts, importLogs, transactions } from "@/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const bodySchema = z.object({
   importLogIds: z.array(z.string().uuid()).min(1),
@@ -22,8 +23,9 @@ const bodySchema = z.object({
  * were re-inserted as duplicates and they want them gone.
  */
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const { importLogIds } = bodySchema.parse(body);
+  const parsed = await parseJsonBody(request, bodySchema);
+  if (!parsed.ok) return parsed.response;
+  const { importLogIds } = parsed.data;
 
   // Collect the affected accounts BEFORE deleting so we can refresh
   // their currentBalance afterwards.

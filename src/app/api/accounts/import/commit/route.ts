@@ -6,6 +6,7 @@ import { z } from "zod";
 import { accountTypeEnum } from "@/lib/api/enums";
 import { CATEGORICAL_PALETTE } from "@/lib/colours";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 const COLORS = CATEGORICAL_PALETTE;
 
@@ -27,8 +28,9 @@ const bodySchema = z.object({
 });
 
 export const POST = withAuth(async (request) => {
-  const body = await request.json();
-  const { rows } = bodySchema.parse(body);
+  const parsed = await parseJsonBody(request, bodySchema);
+  if (!parsed.ok) return parsed.response;
+  const { rows } = parsed.data;
 
   if (!rows.length) {
     return NextResponse.json({ created: 0, updated: 0 });

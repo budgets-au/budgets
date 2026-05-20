@@ -5,6 +5,7 @@ import { and, eq, gte, ne } from "drizzle-orm";
 import { z } from "zod";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 
 // POST /api/scheduled/[id]/replace
 // Closes the predecessor schedule with an end_date and creates a successor
@@ -32,8 +33,9 @@ function isoMinusOneDay(iso: string): string {
 }
 
 export const POST = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const { newAmount, effectiveDate, payee } = schema.parse(body);
+  const parsed = await parseJsonBody(request, schema);
+  if (!parsed.ok) return parsed.response;
+  const { newAmount, effectiveDate, payee } = parsed.data;
 
   const [predecessor] = await db
     .select()

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { deriveMatchPayee, loadTokenFreq, normalizePayee } from "@/lib/categorize";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 // Auto-learning has been removed — the trigram suggester reads
 // directly from the categorised history, so re-categorising a
 // transaction is itself the training signal for future imports.
@@ -41,8 +42,9 @@ export const GET = withAuthAndId(async (id) => {
 });
 
 export const PATCH = withAuthAndId(async (id, request) => {
-  const body = await request.json();
-  const data = updateSchema.parse(body);
+  const parsed = await parseJsonBody(request, updateSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
 
   // When the payee text changes, recompute normalizedPayee + matchPayee in
   // lockstep — otherwise the trigram engine and rules lookup keep matching

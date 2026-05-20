@@ -9,6 +9,86 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.198.0 — 2026-05-20
+
+### Changed
+- **Smart monkey — sharper diagnostics on the two
+  still-unachieved goals.** 0.197.0 got `createTransaction`
+  to lock in a recipe; `createBudget` and `createSchedule`
+  remained silent dead-ends with just a generic "could not
+  complete this goal" finding. This release tightens the
+  monkey-goals helpers so the operator (and a future
+  iteration of the crawler) can see exactly where the
+  flow falls off the rails.
+
+  - **`drivePickers` locator switched from `:is(…)` to
+    comma syntax.** Playwright's locator composer treats
+    `[data-slot="select-trigger"]:visible,
+    [role="combobox"]:visible` correctly; the
+    `:is(…):visible` form silently matched nothing on
+    some BaseUI Select triggers in the wild. Cap also
+    reduced from 12 → 6 and per-click timeout from
+    1500ms → 800ms so a runaway picker can't burn the
+    per-test budget (saw 120s overshoots in pre-release
+    testing).
+  - **Double picker pass with 250ms wait.** Some forms
+    re-render after the first selection (e.g.
+    `type="transfer"` reveals a "To account" picker on
+    the transactions dialog); the second pass picks up
+    the newly-revealed triggers without rerunning the
+    slow input filler.
+  - **Dialog scope via `getByRole("dialog").last()`.** The
+    previous `[data-slot="dialog-content"]:visible,
+    [role="dialog"]:visible` locator + `.first()` could
+    match a wrapper that doesn't host the form's
+    buttons, particularly on `/scheduled` where the
+    inner Replace `<Dialog>` leaves shadow nodes around.
+    ARIA-correct entry plus `.last()` favours the
+    deepest stack frame.
+  - **Page-scoped submit fallback.** When
+    `findSubmitButton(dialog)` returns null, fall back
+    to `page.locator('button[type="submit"]:visible').last()`
+    — if the dialog scope drifted (saw this happen on
+    `/scheduled` between fillGoalDialog and the submit
+    check), the page-wide search still locks on. Only
+    if THAT also fails do we record the dead-end finding.
+  - **Submit-disabled detection.** Before clicking, check
+    `submit.isEnabled()`. If disabled, record a finding
+    listing `[aria-invalid="true"]` fields and the dialog
+    label inventory (`snapshotDialogLabels`) — so the
+    operator can see WHICH required fields the form
+    expects beyond what the generic filler covered.
+  - **Rich "no submit button" finding.** Dumps page-visible
+    dialog count + form count + button list (text/type/
+    disabled), capped at 10 entries. This is what
+    revealed the active bug on `/scheduled`: by the time
+    `findSubmitButton` runs, "0 dialog(s), 0 form(s)
+    visible" — the dialog has vanished out from under
+    the test between fillGoalDialog and the submit
+    check. The fix is 0.199.0+ work; the diagnostic
+    landing here narrows it from "mystery silent
+    failure" to "dialog closes on first picker click".
+  - **`triggerLabel` prefers `aria-label` over
+    `textContent`.** Icon-only `+` Add buttons stored
+    empty trigger labels in the recipe; now they record
+    "Add transaction" / "New Scheduled" properly so
+    replay can find the trigger by name.
+  - **Validation-error scraper** (`scrapeValidationErrors`)
+    feeds into both the "submit fired silent" and
+    "submit disabled" findings, surfacing
+    `[aria-invalid="true"]` field names + visible
+    `[role="alert"]` text inside the dialog.
+
+  After this release, `createTransaction` still achieves
+  on first run (recipe locked in). `createSchedule` +
+  `createBudget` still don't — but the findings now
+  point at the right root cause for the next iteration
+  ("dialog vanishes after the first Radix Select option
+  click on `/scheduled`") rather than the symptom.
+
+  Suite total: **353 vitest passing**, no new tests
+  this release.
+
 ## 0.197.0 — 2026-05-20
 
 ### Added

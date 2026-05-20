@@ -221,9 +221,13 @@ test.describe("smart monkey: goal-driven crawl", () => {
         runCounters.buttonClicks += 1;
         await page.waitForTimeout(500);
 
-        const dialog = page
-          .locator('[data-slot="dialog-content"]:visible, [role="dialog"]:visible')
-          .first();
+        // `getByRole("dialog")` is the ARIA-correct entry. BaseUI's
+        // DialogPrimitive.Popup sets role="dialog" and our
+        // shadcn wrapper adds data-slot="dialog-content" on the
+        // same node. `.last()` favours the deepest stack frame
+        // when a nested Dialog (e.g. the Replace dialog inside
+        // scheduled-edit-form) leaves a wrapper around.
+        const dialog = page.getByRole("dialog").last();
         if (!(await dialog.isVisible().catch(() => false))) {
           // Trigger didn't open a dialog — this candidate route
           // doesn't host the goal's form. Move on.
@@ -240,14 +244,14 @@ test.describe("smart monkey: goal-driven crawl", () => {
         }
 
         const fillSpec = await fillGoalDialog(dialog, goal.overrides);
-        // Drive every SearchableCombobox-style picker inside the
-        // dialog: click the trigger, pick the first listbox item.
-        // This is what shipped the createTransaction goal from
-        // "submit silently no-op" in 0.196.0 to actually firing
-        // a network call — the account + category fields aren't
-        // <select> elements and the generic input pass skipped
-        // them entirely.
-        const pickerCount = await drivePickers(dialog);
+        // Drive every picker. First pass selects values; some
+        // forms re-render based on those selections (e.g.
+        // type="transfer" reveals a "To account" picker). A short
+        // wait + second pass picks up the newly-revealed
+        // triggers without a full retry of the slow input pass.
+        let pickerCount = await drivePickers(dialog);
+        await page.waitForTimeout(250);
+        pickerCount += await drivePickers(dialog);
         runCounters.buttonClicks += pickerCount;
         if (Object.keys(fillSpec).length === 0 && pickerCount === 0) {
           // Dialog had nothing the crawler could drive — probably
@@ -257,13 +261,101 @@ test.describe("smart monkey: goal-driven crawl", () => {
         }
         runCounters.textInputsFilled += Object.keys(fillSpec).length;
 
-        const submit = await findSubmitButton(dialog);
+        // The dialog locator can drift between fillGoalDialog and
+        // findSubmitButton when the form re-renders (a kind toggle
+        // click on /scheduled re-mounts the FieldGroup). Fall back
+        // to a page-scoped search for the submit so we don't miss
+        // it if `dialog` ended up scoped to a stale wrapper. Prefer
+        // findSubmitButton first to keep behaviour stable when
+        // dialog scoping works.
+        let submit = await findSubmitButton(dialog);
         if (!submit) {
+          const visibleSubmit = page
+            .locator('button[type="submit"]:visible')
+            .last();
+          if (await visibleSubmit.isVisible().catch(() => false)) {
+            submit = visibleSubmit;
+          }
+        }
+        if (!submit) {
+          // True dead-end: dump every button visible on the page
+          // PLUS the count of visible dialogs / form elements at
+          // this exact moment so the operator can tell whether
+          // the dialog vanished out from under us.
+          const visibleDialogs = await page
+            .locator('[data-slot="dialog-content"]:visible')
+            .count()
+            .catch(() => 0);
+          const visibleForms = await page
+            .locator("form:visible")
+            .count()
+            .catch(() => 0);
+          const allButtons = await page
+            .locator("button:visible")
+            .evaluateAll((els) =>
+              els.map((el) => ({
+                text: (el.textContent ?? "")
+                  .replace(/\s+/g, " ")
+                  .trim()
+                  .slice(0, 40),
+                type: (el as HTMLButtonElement).type,
+                disabled: (el as HTMLButtonElement).disabled,
+              })),
+            )
+            .catch(
+              () =>
+                [] as Array<{
+                  text: string;
+                  type: string;
+                  disabled: boolean;
+                }>,
+            );
+          const summary = allButtons
+            .slice(0, 10)
+            .map(
+              (b) => `"${b.text}"[${b.type}${b.disabled ? "/disabled" : ""}]`,
+            )
+            .join(", ");
+          await recordFinding({
+            page: route,
+            action: `goal "${goal.label}"`,
+            severity: "warn",
+            kind: "issue",
+            message: `Filled ${Object.keys(fillSpec).length} fields + ${pickerCount} pickers but could not find a submit button. State: ${visibleDialogs} dialog(s), ${visibleForms} form(s) visible. Buttons (${allButtons.length}): ${summary || "(none)"}.`,
+          });
+          runCounters.findingsCount += 1;
           await dismissDialog(page);
           continue;
         }
         const submitLabel =
           (await submit.textContent().catch(() => null))?.trim() ?? "Submit";
+
+        // Submit may be disabled until the form validates — log
+        // a finding listing the remaining required fields so we
+        // know WHAT to fill on the next iteration. Don't bail —
+        // we still click in case the disabled state is stale.
+        const submitEnabled = await submit
+          .isEnabled()
+          .catch(() => true);
+        if (!submitEnabled) {
+          const validationHints = await scrapeValidationErrors(dialog);
+          const labels = await snapshotDialogLabels(dialog);
+          await recordFinding({
+            page: route,
+            action: `goal "${goal.label}" — submit "${submitLabel}" disabled`,
+            severity: "warn",
+            kind: "issue",
+            message:
+              `Form submit was disabled after filling ${Object.keys(fillSpec).length} fields + ${pickerCount} pickers. ` +
+              (validationHints
+                ? `Validation hints: ${validationHints}. `
+                : "") +
+              `Visible labels: ${labels.slice(0, 12).join(", ")}.`,
+          });
+          runCounters.findingsCount += 1;
+          await dismissDialog(page);
+          continue;
+        }
 
         const outcome = await observeSubmitOutcome(page, async () => {
           await submit.click({ timeout: 3_000 }).catch(() => {});
@@ -525,9 +617,12 @@ async function drivePickers(dialog: Locator): Promise<number> {
   // dialog.
   // Narrow the candidate set to actual picker-shaped triggers
   // BEFORE iterating — saves a round-trip-per-button to read
-  // attributes. The :is() lets one query do the union.
+  // attributes. Comma separator (not `:is()`) because Playwright
+  // composes locator selectors as a comma-list internally and
+  // `:is()` was silently matching nothing for some real triggers
+  // in the wild.
   const triggers = dialog.locator(
-    ':is([data-slot="select-trigger"], [role="combobox"]):visible',
+    '[data-slot="select-trigger"]:visible, [role="combobox"]:visible',
   );
   // Also pick up bare-button SearchableCombobox triggers whose
   // visible label starts with "Choose…" / "Select…" / "Pick…".
@@ -624,6 +719,24 @@ async function scrapeValidationErrors(
   return trimmed.join("; ") + (extra > 0 ? ` (+${extra} more)` : "");
 }
 
+/** Read the visible label texts on every form control in the
+ * dialog. Used in the "submit disabled" finding so the operator
+ * can see WHICH fields the form expects without having to open
+ * the dialog manually. Caps at the first dozen labels to keep
+ * TODO.md readable. */
+async function snapshotDialogLabels(dialog: Locator): Promise<string[]> {
+  return await dialog
+    .locator(
+      "label:visible, [data-slot='label']:visible, [data-slot='select-trigger']:visible",
+    )
+    .evaluateAll((els) =>
+      els
+        .map((el) => (el.textContent ?? "").replace(/\s+/g, " ").trim())
+        .filter((t) => t.length > 0 && t.length <= 60),
+    )
+    .catch(() => [] as string[]);
+}
+
 async function dismissDialog(page: Page): Promise<void> {
   await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(150);
@@ -655,7 +768,7 @@ async function attemptReplay(
 
     const dialog = page
       .locator('[data-slot="dialog-content"]:visible, [role="dialog"]:visible')
-      .first();
+      .last();
     if (!(await dialog.isVisible().catch(() => false))) {
       return { success: false };
     }

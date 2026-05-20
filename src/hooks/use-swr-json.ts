@@ -5,7 +5,7 @@ import useSWR, { type Key, type SWRConfiguration, type SWRResponse } from "swr";
  *  non-2xx so SWR returns `undefined` for `data` (instead of
  *  resolving an error-shaped body that callers would then try
  *  to `.filter()` / `.series` against). */
-async function jsonFetcher<T>(url: string): Promise<T> {
+export async function jsonFetcher<T>(url: string): Promise<T> {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`${url} → ${r.status}`);
   return r.json();

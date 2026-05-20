@@ -9,6 +9,47 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.195.0 — 2026-05-20
+
+### Added
+- **Unit tests for the four new shared helpers introduced in
+  0.190.0 – 0.192.0.** The sweep migrated 73 API routes and
+  ~51 SWR call-sites through three new helpers
+  ([route-guards.ts](src/lib/api/route-guards.ts),
+  [account-ids.ts](src/lib/api/account-ids.ts),
+  [use-swr-json.ts](src/hooks/use-swr-json.ts)) — but the
+  helpers themselves had no direct unit coverage, only
+  transitive coverage through the routes that use them. If a
+  regression slipped into one of them, every dependent
+  feature would break at once with no narrowing signal.
+  21 new tests in three colocated files now lock in:
+  - `withAuth` / `withAuthAndId` / `withAdminAuth` /
+    `withAdminAuthAndId` — gate ordering (401 before
+    UUID-parse, 401 before role-check, 403 before
+    UUID-parse), and that valid sessions pass the validated
+    id through to the inner handler. Uses `vi.hoisted` to
+    flip the mocked session per-test without spinning up
+    NextAuth.
+  - `parseAccountIds` / `isUuid` / `accountIdSql` — CSV
+    whitespace trimming, non-UUID segments dropped, empty
+    param → empty list, and the dual SQL-fragment shapes
+    (`AND account_id IN (...)` plus the bare /
+    `t.`-prefixed variants, with the non-archived fallback
+    subquery when ids is empty).
+  - `jsonFetcher` — happy-path JSON parse, throws on 404 /
+    500 with a `url → status` message that SWR surfaces to
+    callers, and propagates a `fetch()` rejection unchanged.
+  Total: 338 tests passing (was 317).
+
+### Security
+- **pnpm overrides bump `picomatch` to >=4.0.0 and
+  `brace-expansion` to >=5.0.6** to clear the two CVE
+  warnings `pnpm audit` was surfacing on transitive deps.
+  No direct dependency moves — the overrides force the
+  resolver to pull the patched versions for any transitive
+  user (mostly `chokidar` / `glob` chains). `pnpm audit`
+  now reports "No known vulnerabilities found".
+
 ## 0.194.0 — 2026-05-20
 
 ### Fixed

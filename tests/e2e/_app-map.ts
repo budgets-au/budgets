@@ -50,12 +50,14 @@ export interface RouteKnowledge {
 export type GoalKey =
   | "createTransaction"
   | "createBudget"
-  | "createSchedule";
+  | "createSchedule"
+  | "addTenToCategory";
 
 export const GOAL_KEYS: readonly GoalKey[] = [
   "createTransaction",
   "createBudget",
   "createSchedule",
+  "addTenToCategory",
 ];
 
 /** Recipe for repeating a previously-successful goal attempt. The
@@ -153,6 +155,7 @@ export function emptyAppMap(): AppMap {
       createTransaction: goal(),
       createBudget: goal(),
       createSchedule: goal(),
+      addTenToCategory: goal(),
     },
     runs: [],
   };

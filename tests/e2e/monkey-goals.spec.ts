@@ -491,6 +491,244 @@ test.describe("smart monkey: goal-driven crawl", () => {
       }
     });
   }
+
+  /** Compound goal: create 10 transactions all tagged with one
+   * category, then verify the **list** + **report total**. Tests
+   * the end-to-end accounting flow the previous single-action
+   * goals don't exercise — a bug between the POST endpoint and
+   * the cashflow aggregation would slip past the three create-*
+   * goals because each only writes one row.
+   *
+   * Verification has three steps and each is recorded as a
+   * finding so a partial pass still surfaces useful diagnostics:
+   *   - API list: GET /api/transactions returns 10 rows whose
+   *     payee contains this run's token.
+   *   - DOM list: navigating to /transactions renders rows
+   *     containing the token (proves the list query also picks
+   *     them up; a SWR cache regression would split this from
+   *     the API check).
+   *   - Report total: GET /api/reports/cashflow returns a
+   *     category entry whose totalCount = 10 and absolute
+   *     total = 10 × amount. Off-by-one bugs in the SQL aggregate
+   *     (the kind that breaks every dashboard widget at once)
+   *     fail HERE before reaching any user.
+   *
+   * Runs only when at least one expense category + one account
+   * already exist (e2e seed-data covers both); otherwise the
+   * test logs a skip finding. */
+  test("goal: add 10 transactions to a category, verify list + report total", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    // 1. Resolve a target expense category + account.
+    const categoriesRes = await request.get("/api/categories");
+    const accountsRes = await request.get("/api/accounts");
+    if (!categoriesRes.ok() || !accountsRes.ok()) {
+      await recordFinding({
+        page: "/transactions",
+        action: `goal "addTenToCategory" — setup`,
+        severity: "warn",
+        kind: "issue",
+        message: `Could not load categories (${categoriesRes.status()}) or accounts (${accountsRes.status()}) for setup.`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "addTenToCategory", null);
+      return;
+    }
+    const categories = (await categoriesRes.json()) as Array<{
+      id: string;
+      name: string;
+      type: string;
+      parentId: string | null;
+    }>;
+    const accounts = (await accountsRes.json()) as Array<{
+      id: string;
+      name: string;
+    }>;
+    const target = categories.find(
+      (c) =>
+        c.type === "expense" &&
+        c.parentId === null &&
+        !/uncategorised/i.test(c.name),
+    );
+    const account = accounts[0];
+    if (!target || !account) {
+      await recordFinding({
+        page: "/transactions",
+        action: `goal "addTenToCategory" — setup`,
+        severity: "warn",
+        kind: "issue",
+        message: `Skipping — need at least one named expense category (have ${categories.length}) and one account (have ${accounts.length}).`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "addTenToCategory", null);
+      return;
+    }
+
+    // 2. POST 10 transactions, all on the same date so the
+    // monthly cashflow window catches them in one bucket.
+    const TXN_AMOUNT = "-25.00";
+    const TXN_DATE = "2026-01-15";
+    const N = 10;
+    const createdIds: string[] = [];
+    let postFailures = 0;
+    for (let i = 0; i < N; i++) {
+      const res = await request.post("/api/transactions", {
+        data: {
+          accountId: account.id,
+          date: TXN_DATE,
+          amount: TXN_AMOUNT,
+          payee: `${RUN_TOKEN}-bulk-${i}`,
+          categoryId: target.id,
+        },
+      });
+      if (res.ok()) {
+        const row = (await res.json().catch(() => null)) as
+          | { id?: string }
+          | null;
+        if (row?.id) createdIds.push(row.id);
+      } else {
+        postFailures += 1;
+        if (postFailures === 1) {
+          // Record the FIRST failure with body so the operator
+          // can see WHY the POST broke — subsequent failures
+          // would just spam.
+          const body = (await res.text().catch(() => "")).slice(0, 200);
+          await recordFinding({
+            page: "/transactions",
+            action: `goal "addTenToCategory" — POST /api/transactions`,
+            severity: "error",
+            kind: "issue",
+            message: `Iteration ${i} returned ${res.status()}. Body: ${body || "[empty]"}`,
+          });
+          runCounters.findingsCount += 1;
+        }
+      }
+      runCounters.formSubmits += 1;
+    }
+
+    // 3. API list verification.
+    const listRes = await request.get("/api/transactions?limit=200");
+    const listOk = listRes.ok();
+    const listTxns = listOk
+      ? ((await listRes.json()) as Array<{ payee: string | null }>)
+      : [];
+    // Filter on the `-bulk-` suffix so we count ONLY this goal's
+    // rows. RUN_TOKEN alone would also match the createTransaction
+    // goal's row (which carries the same run token, different
+    // suffix) — that's where the false-positive came from in the
+    // 0.201.0 dev cycle (11/10 found).
+    const bulkPrefix = `${RUN_TOKEN}-bulk-`;
+    const apiMatches = listTxns.filter((t) =>
+      (t.payee ?? "").startsWith(bulkPrefix),
+    ).length;
+
+    // 4. DOM verification — load /transactions and look for
+    // tokens in the rendered table.
+    await page.goto("/transactions");
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(500);
+    runCounters.routesVisited += 1;
+    const bodyText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
+    // Count occurrences of `${RUN_TOKEN}-bulk-` (each token is
+    // unique per row).
+    const domMatches = (
+      bodyText.match(new RegExp(`${RUN_TOKEN}-bulk-`, "g")) ?? []
+    ).length;
+
+    // 5. Cashflow report total verification.
+    const cashflowRes = await request.get(
+      `/api/reports/cashflow?from=2026-01-01&to=2026-01-31&hideTransfers=false`,
+    );
+    let reportTotalCount: number | null = null;
+    let reportTotalAbs: number | null = null;
+    let reportCatName: string | null = null;
+    if (cashflowRes.ok()) {
+      const cashflow = (await cashflowRes.json()) as {
+        expenses?: Array<{
+          id: string;
+          name: string;
+          total: number;
+          totalCount: number;
+        }>;
+      };
+      const cat = cashflow.expenses?.find((c) => c.id === target.id);
+      if (cat) {
+        reportTotalCount = cat.totalCount;
+        reportTotalAbs = Math.abs(cat.total);
+        reportCatName = cat.name;
+      }
+    }
+
+    const expectedAbsTotal = Math.abs(parseFloat(TXN_AMOUNT)) * N;
+    const apiOK = apiMatches === N;
+    const domOK = domMatches >= N;
+    const reportOK =
+      reportTotalCount === N && reportTotalAbs === expectedAbsTotal;
+
+    // 6. Record each verification step as its own finding so a
+    // partial-pass run still tells the operator which leg
+    // diverged.
+    await recordFinding({
+      page: "/transactions",
+      action: `goal "addTenToCategory" — verify list (API)`,
+      severity: apiOK ? "info" : "error",
+      kind: apiOK ? "question" : "issue",
+      message: `GET /api/transactions found ${apiMatches}/${N} rows matching "${bulkPrefix}*".`,
+    });
+    runCounters.findingsCount += 1;
+    await recordFinding({
+      page: "/transactions",
+      action: `goal "addTenToCategory" — verify list (DOM)`,
+      severity: domOK ? "info" : "error",
+      kind: domOK ? "question" : "issue",
+      message: `DOM on /transactions contained ${domMatches} matches for "${RUN_TOKEN}-bulk-".`,
+    });
+    runCounters.findingsCount += 1;
+    await recordFinding({
+      page: "/reports",
+      action: `goal "addTenToCategory" — verify category report total`,
+      severity: reportOK ? "info" : "error",
+      kind: reportOK ? "question" : "issue",
+      message:
+        `Cashflow report for category "${reportCatName ?? target.name}" — ` +
+        `totalCount=${reportTotalCount ?? "n/a"} (expected ${N}), ` +
+        `|total|=${reportTotalAbs ?? "n/a"} (expected ${expectedAbsTotal.toFixed(2)}).`,
+    });
+    runCounters.findingsCount += 1;
+
+    const allOK = apiOK && domOK && reportOK && postFailures === 0;
+    if (allOK) {
+      recordGoalAttempt(appMap, "addTenToCategory", {
+        timestamp: new Date().toISOString(),
+        route: "/transactions",
+        triggerLabel: "POST /api/transactions × 10",
+        fillSpec: {
+          categoryId: target.id,
+          accountId: account.id,
+          amount: TXN_AMOUNT,
+          date: TXN_DATE,
+          count: String(N),
+        },
+        submitLabel: "POST /api/transactions",
+        verified: "api",
+      });
+      runCounters.goalsAchieved += 1;
+    } else {
+      recordGoalAttempt(appMap, "addTenToCategory", null);
+      // The compound test passes regardless — findings are the
+      // payload. Sanity-check that at least the POSTs landed,
+      // otherwise the seed data is broken and we want a hard
+      // failure.
+      expect(createdIds.length).toBeGreaterThan(0);
+    }
+  });
 });
 
 /** Locate an "Add" / "New" / "Create" trigger button on the

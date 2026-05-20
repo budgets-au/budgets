@@ -25,7 +25,7 @@ shipped in 0.166.0._
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-20T12:24:22.007Z · 3 issues, 2 questions._
+_Last run: 2026-05-20T13:20:36.174Z · 3 issues, 5 questions._
 
 #### Smart Monkey expert system
 
@@ -34,6 +34,7 @@ _Last run: 2026-05-20T12:24:22.007Z · 3 issues, 2 questions._
 | `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
 | `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
 | `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
+| `addTenToCategory` | ✅ | 1 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
 
 _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
@@ -41,24 +42,25 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 59.8s |
-| Routes visited | 0 |
+| Total wall time | 76.5s |
+| Routes visited | 1 |
 | Button clicks | 8 |
 | Switch toggles | 0 |
 | Select cycles | 0 |
 | Text inputs filled | 17 |
 | Dialogs opened | 3 |
-| Form submits | 3 |
+| Form submits | 13 |
 | Links discovered | 0 |
 | Console errors | 0 |
-| Goals attempted | 3 |
-| Goals achieved | 3 |
-| Findings logged | 0 |
+| Goals attempted | 4 |
+| Goals achieved | 4 |
+| Findings logged | 3 |
 
 ##### Workflows completed
 - ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
 - ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
 - ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
+- ✅ `addTenToCategory` — `/transactions` · click **POST /api/transactions × 10** → fill → click **POST /api/transactions** (verified via api)
 
 #### Vitest summary
 
@@ -77,9 +79,16 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 _The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
 
+##### /reports
+- ❓ **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=10 (expected 10), |total|=250 (expected 250.00).
+
 ##### /scheduled
 - ❓ **guardrail probe: baseline (Account + defaults)** — → 201 ✅ accepted (cleaned up)
 - ❓ **guardrail probe: frequency=once w/ no endDate** — → 201 ✅ accepted (cleaned up)
+
+##### /transactions
+- ❓ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpe3946r-bulk-*".
+- ❓ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpe3946r-bulk-".
 
 <!-- monkey:end -->
 

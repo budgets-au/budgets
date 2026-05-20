@@ -9,6 +9,50 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.201.0 — 2026-05-20
+
+### Added
+- **Smart monkey — new compound goal: "add 10 transactions to
+  a category, verify list + report total".** The three
+  pre-existing goals each write ONE row; a bug between the
+  POST endpoint and the cashflow aggregation could slip past
+  every single-row check while breaking every dashboard
+  widget at once. This goal closes that hole with a three-leg
+  end-to-end check on a single transaction batch:
+
+  1. POST `/api/transactions` × 10 with one shared category +
+     account + amount + date. Per-row payee carries an
+     identifiable `${RUN_TOKEN}-bulk-${i}` suffix so the
+     verification legs can distinguish this batch from other
+     goals' rows in the same run.
+  2. **API list check** — `GET /api/transactions?limit=200`
+     must return exactly 10 rows whose payee starts with
+     `${RUN_TOKEN}-bulk-`.
+  3. **DOM list check** — navigate to `/transactions`, count
+     occurrences of the bulk prefix in the rendered table.
+     A divergence between (2) and (3) means an SWR cache
+     regression in the list view itself.
+  4. **Cashflow report check** — `GET /api/reports/cashflow`
+     for January 2026 must return a category entry with
+     `totalCount === 10` and `Math.abs(total) === 10 × |amount|`.
+     This is where off-by-one bugs in the SQL aggregate fail
+     — before any user sees them.
+
+  Each verification leg records its own finding so a partial
+  pass surfaces useful diagnostics ("11/10 rows matched" → I
+  forgot to suffix-filter past the previous goal's row).
+  Goal-achieved only when all three legs pass.
+
+  Validation: ran cleanly on the first try after a token-
+  suffix tightening. All 4 goals now achieved on a fresh
+  run; recipe locked into `app-map.json`.
+
+  `GoalKey` union + `GOAL_KEYS` array + `emptyAppMap()`'s
+  goal-state factory updated to include the new key. No
+  separate Vitest tests since the new goal lives entirely
+  inside `monkey-goals.spec.ts` (the existing app-map ops
+  are already covered).
+
 ## 0.200.0 — 2026-05-20
 
 ### Added

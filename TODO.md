@@ -25,23 +25,26 @@ shipped in 0.166.0._
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-19T03:23:34.800Z · 2 issues, 2 questions._
+_Last run: 2026-05-20T08:57:41.484Z · 3 issues, 2 questions._
 
 #### Issues
 
-##### /settings
-- 🔴 **(console)** — Failed to load resource: the server responded with a status of 500 (Internal Server Error)
-- 🔴 **(console)** — Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+##### /scheduled
+- 🟡 **goal "create a schedule"** — Could not complete the "create a schedule" goal across 1 candidate route(s). Smart monkey will retry next run.
+- 🟡 **goal "create a budget"** — Could not complete the "create a budget" goal across 1 candidate route(s). Smart monkey will retry next run.
+
+##### /transactions
+- 🟡 **goal "create a transaction"** — Could not complete the "create a transaction" goal across 1 candidate route(s). Smart monkey will retry next run.
 
 #### Questions for review
 
 _The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
 
-##### /settings
-- ❓ **submit "Create"** — Filled 3 inputs and clicked **Create** — no network call, toast, or navigation fired. Should it have?
+##### /scheduled
+- ❓ **goal "create a schedule" — submit "Create"** — Filled 8 fields, submit fired no network call, toast, or navigation fired, but neither DOM nor API showed a row matching "monkey-goal-mpdtvp2k-sched".
 
-##### /superannuation
-- ❓ **submit "Save"** — Filled 3 inputs and clicked **Save** — no network call, toast, or navigation fired. Should it have?
+##### /transactions
+- ❓ **goal "create a transaction" — submit "Add"** — Filled 4 fields, submit fired no network call, toast, or navigation fired, but neither DOM nor API showed a row matching "monkey-goal-mpdtvp2k-tx".
 
 <!-- monkey:end -->
 

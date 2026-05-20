@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 
@@ -41,4 +41,18 @@ export default async function globalSetup(): Promise<void> {
   // on process.env (Playwright forwards it to the webServer).
   process.env.E2E_SQLITE_PATH = dbPath;
   process.env.E2E_SQLITE_KEY = key;
+
+  // Clear the previous run's monkey findings so this run starts
+  // fresh. Both monkey-goals.spec and monkey.spec append into the
+  // same report; wiping it here (instead of in either spec's
+  // beforeAll) keeps the two specs from clobbering each other
+  // regardless of alphabetical execution order.
+  //
+  // NOTE: tests/e2e/.data/app-map.json is NOT wiped — it accrues
+  // learning across runs by design. Schema-version bumps in
+  // _app-map.ts invalidate stale maps; everything else carries
+  // forward.
+  const reportPath = resolve("./tests/e2e/.data/monkey-report.json");
+  mkdirSync(dirname(reportPath), { recursive: true });
+  writeFileSync(reportPath, "[]");
 }

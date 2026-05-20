@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { MonkeyFinding } from "./_monkey-helpers";
+import { type AppMap, GOAL_KEYS, loadAppMap } from "./_app-map";
 
 /** After every Playwright run, fold the 1000-monkey findings into
  * TODO.md so the operator has one place to look. Replaces the
@@ -12,32 +13,40 @@ import type { MonkeyFinding } from "./_monkey-helpers";
  * No-op if no monkey crawl ran this session. */
 export default async function globalTeardown(): Promise<void> {
   const reportPath = resolve("./tests/e2e/.data/monkey-report.json");
-  if (!existsSync(reportPath)) return;
-  let findings: MonkeyFinding[];
-  try {
-    findings = JSON.parse(await readFile(reportPath, "utf8")) as MonkeyFinding[];
-  } catch {
-    return;
+  const haveReport = existsSync(reportPath);
+  let findings: MonkeyFinding[] = [];
+  if (haveReport) {
+    try {
+      findings = JSON.parse(
+        await readFile(reportPath, "utf8"),
+      ) as MonkeyFinding[];
+    } catch {
+      findings = [];
+    }
   }
-  if (findings.length === 0) {
-    // Still rewrite the block so a fresh "no findings" run clears
-    // stale entries.
-    await updateTodoBlock("_No monkey-crawl findings on the last run._");
-    return;
-  }
-
-  // Split into issues (real or suspected bugs) and questions
-  // (ambiguous outcomes — form-fill phase couldn't tell). Both
-  // render in the same TODO.md block but as distinct subsections
-  // so the operator can triage quickly.
-  const issues = findings.filter((f) => (f.kind ?? "issue") !== "question");
-  const questions = findings.filter((f) => f.kind === "question");
+  const map = await loadAppMap();
+  // "Have map" if EITHER the breadth-first crawl populated
+  // routes OR the goal-driven spec attempted a goal. Either
+  // alone is enough signal to emit the expert-system section.
+  const haveMap =
+    Object.keys(map.routes).length > 0 ||
+    Object.values(map.goals).some((g) => g.attempts > 0);
+  if (!haveReport && !haveMap) return;
 
   const lines: string[] = [];
+
+  // Run summary header.
+  const issues = findings.filter((f) => (f.kind ?? "issue") !== "question");
+  const questions = findings.filter((f) => f.kind === "question");
   lines.push(
     `_Last run: ${new Date().toISOString()} · ${issues.length} issue${issues.length === 1 ? "" : "s"}, ${questions.length} question${questions.length === 1 ? "" : "s"}._`,
   );
   lines.push("");
+
+  // Smart-monkey expert-system summary, if we have any map data.
+  if (haveMap) {
+    appendExpertSystem(lines, map);
+  }
 
   if (issues.length > 0) {
     lines.push("#### Issues");
@@ -56,7 +65,75 @@ export default async function globalTeardown(): Promise<void> {
     appendByPage(lines, questions);
   }
 
+  if (issues.length === 0 && questions.length === 0 && haveMap) {
+    lines.push(
+      "_No issues or questions on the last run — only the expert-system summary above._",
+    );
+    lines.push("");
+  }
+
   await updateTodoBlock(lines.join("\n"));
+}
+
+/** Render the AppMap's coverage + goal state as a "Smart Monkey
+ * expert system" subsection. Designed to be skimmable: one
+ * goal-status table, one coverage line, one delta callout for
+ * routes discovered but never deeply visited. */
+function appendExpertSystem(lines: string[], map: AppMap): void {
+  lines.push("#### Smart Monkey expert system");
+  lines.push("");
+
+  // Goal status table.
+  lines.push("| Goal | Achieved | Attempts | Last successful run |");
+  lines.push("| --- | --- | --- | --- |");
+  for (const key of GOAL_KEYS) {
+    const g = map.goals[key];
+    const recipe = g.successfulRun
+      ? `${g.successfulRun.route} · "${g.successfulRun.triggerLabel}" → "${g.successfulRun.submitLabel}" (${g.successfulRun.verified})`
+      : "_(not yet)_";
+    lines.push(
+      `| \`${key}\` | ${g.achieved ? "✅" : "❌"} | ${g.attempts} | ${recipe} |`,
+    );
+  }
+  lines.push("");
+
+  // Coverage line.
+  const routeCount = Object.keys(map.routes).length;
+  const controlCount = Object.values(map.routes).reduce(
+    (n, r) => n + Object.keys(r.controls).length,
+    0,
+  );
+  const linkCount = Object.values(map.routes).reduce(
+    (n, r) => n + r.linksOut.length,
+    0,
+  );
+  lines.push(
+    `_Coverage: ${routeCount} route${routeCount === 1 ? "" : "s"} mapped, ` +
+      `${controlCount} interactive control${controlCount === 1 ? "" : "s"} catalogued, ` +
+      `${linkCount} in-app link${linkCount === 1 ? "" : "s"} discovered._`,
+  );
+  lines.push("");
+
+  // Routes discovered but never visited deeply enough to harvest
+  // controls — drill-down candidates for the next run.
+  const drillTargets: string[] = [];
+  for (const [path, route] of Object.entries(map.routes)) {
+    if (route.visits > 0 && Object.keys(route.controls).length === 0) {
+      drillTargets.push(path);
+    }
+  }
+  if (drillTargets.length > 0) {
+    lines.push(
+      `_Drill-down candidates (${drillTargets.length}) — discovered but not yet exercised:_`,
+    );
+    for (const t of drillTargets.slice(0, 10)) {
+      lines.push(`- \`${t}\``);
+    }
+    if (drillTargets.length > 10) {
+      lines.push(`- _…and ${drillTargets.length - 10} more._`);
+    }
+    lines.push("");
+  }
 }
 
 /** Render a list of findings grouped by page, with severity

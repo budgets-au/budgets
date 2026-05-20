@@ -9,6 +9,83 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.196.0 — 2026-05-20
+
+### Added
+- **Smart monkey — the 1000-monkeys crawl learns across runs.**
+  The exploratory Playwright crawl that visits each page,
+  toggles every switch, fills every form, and writes findings
+  into TODO.md was stateless: every run started fresh, learned
+  nothing, and produced the same "filled 3 inputs, no toast
+  fired — is this a bug?" question for the same form every time.
+  This release gives it a persistent brain in three pieces:
+
+  1. **`tests/e2e/.data/app-map.json` — a learning store.**
+     One JSON file, gitignored, accumulates across runs. For
+     every route the crawl has visited it records visits +
+     timestamps, an inventory of every interactive control
+     observed (kind, accessible label, click count, whether the
+     click opened a dialog, errored), every in-app link seen,
+     and a rolling console-error tally. A schema-version stamp
+     on the file means a bumped data model invalidates stale
+     maps automatically without manual cleanup.
+
+  2. **Drill-down crawl.** A new test at the bottom of
+     `monkey.spec.ts` picks routes the map has discovered via
+     `linksOut` but never directly visited (e.g.
+     `/transactions/<uuid>`, account detail pages, report
+     drill-downs) and visits up to 8 of them per run with a
+     light inventory-only pass. Over successive runs the map
+     fills in the long tail of parameterized routes that a
+     hand-curated `CRAWL_PAGES` list would never enumerate.
+
+  3. **Goal-driven spec — `monkey-goals.spec.ts`.** Three
+     high-level user tasks (`createTransaction`, `createBudget`,
+     `createSchedule`) are encoded as goals. Each test:
+     - **Replays** the recipe stored in the map from the last
+       successful run (route + trigger button + fillSpec +
+       submit button label). If the replay still works it's a
+       near-zero-budget confirmation that nothing regressed.
+     - On replay miss / fresh runs: **explores** candidate
+       routes, hunts for "Add" / "New" / "Create" triggers,
+       opens the resulting dialog, fills it with identifiable
+       per-run tokens (`monkey-goal-<base36-ts>-tx`), submits.
+     - **Verifies DOM-first** (looks for the token in the
+       post-submit body), then falls back to the list API
+       (`GET /api/transactions?...`, `GET /api/scheduled`) for
+       a second opinion. A disagreement between DOM and API is
+       itself a finding.
+     - **Records the recipe** on success — next run's replay
+       skips the exploration entirely.
+
+  The teardown grows a "Smart Monkey expert system" subsection
+  in `TODO.md`'s `<!-- monkey -->` block: a goal-status table
+  (achieved / attempts / last successful recipe), a coverage
+  line (mapped routes, catalogued controls, discovered links),
+  and a "drill-down candidates" list of routes still unmapped.
+
+  Reusing the existing per-spec wipe of the findings file would
+  have made the goal spec and the breadth-first spec clobber
+  each other depending on alphabetical execution order; the
+  findings wipe moved to `global-setup.ts` (the app-map itself
+  is never wiped — it accrues by design).
+
+  Vitest gets a new entry in its `include` glob —
+  `tests/e2e/_*.test.ts` — so the pure-logic app-map ops can be
+  unit-tested without spinning up Playwright. 14 new tests
+  cover `emptyAppMap` shape, `ensureRoute` get-or-create +
+  visit counter, control-signature normalisation, repeat-merge
+  accumulation, link-set uniqueness + sort, ring-buffer-bounded
+  runs, and `isInternalPath`'s rejection of API / login /
+  protocol-relative / hash / external URLs. Suite total: 352
+  passing.
+
+### Changed
+- **Playwright `testMatch` restricted to `*.spec.ts`.** Stops
+  Playwright from trying to load the new Vitest-only
+  `tests/e2e/_app-map.test.ts` (which imports `vitest` and
+  would error in Playwright's runtime).
+
 ## 0.195.0 — 2026-05-20
 
 ### Added

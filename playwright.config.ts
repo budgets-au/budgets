@@ -23,6 +23,10 @@ const E2E_SQLITE_KEY =
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  // Restrict to .spec.ts so pure-logic helper tests under
+  // tests/e2e/_*.test.ts (run by Vitest) aren't picked up by
+  // Playwright too.
+  testMatch: /\.spec\.ts$/,
   globalSetup: "./tests/e2e/global-setup.ts",
   globalTeardown: "./tests/e2e/global-teardown.ts",
   fullyParallel: false,

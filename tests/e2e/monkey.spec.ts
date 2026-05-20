@@ -1,15 +1,25 @@
 import { test, type Locator, type Page } from "@playwright/test";
 import {
-  clearFindings,
   describeOutcome,
   fillInputSafely,
   findSubmitButton,
+  harvestControls,
+  harvestLinks,
   isDestructiveLabel,
   isNoiseMessage,
   observeSubmitOutcome,
   recordFinding,
   type MonkeyFinding,
 } from "./_monkey-helpers";
+import {
+  type AppMap,
+  appendRun,
+  bumpConsoleErrors,
+  ensureRoute,
+  loadAppMap,
+  recordControl as recordControlInMap,
+  saveAppMap,
+} from "./_app-map";
 import { signInAsAdmin } from "./_helpers";
 
 /** "1000 monkeys" — exploratory crawl. Visit each top-level page,
@@ -39,9 +49,45 @@ const CRAWL_PAGES: ReadonlyArray<{ path: string; label: string }> = [
   { path: "/settings", label: "Settings" },
 ];
 
+/** Shared app-map for this spec file. Loaded from disk in
+ * beforeAll, mutated by every test, written back in afterAll.
+ * Playwright runs this spec serially (`workers: 1`,
+ * `fullyParallel: false`), so a module-level singleton is safe.
+ *
+ * The map persists across runs — each crawl is layered on top of
+ * the prior one, so coverage and learning grow over time. */
+let appMap: AppMap;
+let runStartedAt = 0;
+let routesVisitedThisRun = 0;
+let controlsExercisedThisRun = 0;
+let linksDiscoveredThisRun = 0;
+
 test.describe("1000 monkeys exploratory crawl", () => {
   test.beforeAll(async () => {
-    await clearFindings();
+    // The monkey report is wiped in global-setup so this spec and
+    // monkey-goals.spec don't clobber each other.
+    appMap = await loadAppMap();
+    runStartedAt = Date.now();
+    routesVisitedThisRun = 0;
+    controlsExercisedThisRun = 0;
+    linksDiscoveredThisRun = 0;
+  });
+
+  test.afterAll(async () => {
+    appendRun(appMap, {
+      ts: new Date().toISOString(),
+      durationMs: Date.now() - runStartedAt,
+      routesVisited: routesVisitedThisRun,
+      controlsExercised: controlsExercisedThisRun,
+      linksDiscovered: linksDiscoveredThisRun,
+      // Goal achievements are recorded by monkey-goals.spec.ts;
+      // both specs share the same on-disk app-map, and the goal
+      // spec saves last. We log 0 here to indicate "this spec
+      // doesn't track goals" rather than a real zero.
+      goalsAchieved: 0,
+      findingsCount: 0,
+    });
+    await saveAppMap(appMap);
   });
 
   test.beforeEach(async ({ page }) => {
@@ -52,6 +98,8 @@ test.describe("1000 monkeys exploratory crawl", () => {
     test(`monkey: ${p.label}`, async ({ page }) => {
       test.setTimeout(60_000);
       const errors: MonkeyFinding[] = [];
+      ensureRoute(appMap, p.path);
+      routesVisitedThisRun += 1;
 
       page.on("console", (msg) => {
         if (msg.type() !== "error") return;
@@ -63,6 +111,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
           severity: "error",
           message: text,
         });
+        bumpConsoleErrors(appMap, p.path);
       });
       page.on("pageerror", (err) => {
         if (isNoiseMessage(err.message)) return;
@@ -78,6 +127,13 @@ test.describe("1000 monkeys exploratory crawl", () => {
       await page.goto(p.path);
       await page.waitForLoadState("networkidle");
       await page.waitForTimeout(400);
+
+      // Dry sweep: record everything visible into the app-map
+      // before the destructive poke phase. linksDiscovered ticks
+      // count only routes we haven't seen on this route before.
+      const newLinks = await harvestLinks(page, appMap, p.path);
+      linksDiscoveredThisRun += newLinks.length;
+      await harvestControls(page, appMap, p.path);
 
       // Toggle every Switch on the page, then reload and confirm
       // the state survived. Each toggle is also flipped back so
@@ -174,11 +230,92 @@ test.describe("1000 monkeys exploratory crawl", () => {
       }
     });
   }
+
+  /** Drill-down phase. The breadth-first crawl above visits 9
+   * top-level routes; every page typically links to ≥1 sub-route
+   * (transaction detail, account detail, etc.) that the
+   * top-level pass never sees. This test takes whatever fresh
+   * destinations the harvest discovered and visits up to N of
+   * them with a lightweight pass — page-load + control inventory
+   * only, no destructive clicks. The cap keeps the time budget
+   * honest; new routes accumulate across runs so over time the
+   * map covers the whole app.
+   *
+   * Errors caught here surface as findings; visited routes get
+   * added to the map (so a subsequent run's full poke phase can
+   * cover them). */
+  test("monkey: drill-down into discovered sub-routes", async ({ page }) => {
+    test.setTimeout(90_000);
+    const errors: MonkeyFinding[] = [];
+
+    page.on("console", (msg) => {
+      if (msg.type() !== "error") return;
+      const text = msg.text();
+      if (isNoiseMessage(text)) return;
+      errors.push({
+        page: page.url(),
+        action: "(console)",
+        severity: "error",
+        message: text,
+      });
+    });
+    page.on("pageerror", (err) => {
+      if (isNoiseMessage(err.message)) return;
+      errors.push({
+        page: page.url(),
+        action: "(page error)",
+        severity: "error",
+        message: err.message,
+      });
+    });
+
+    const knownRoots = new Set(CRAWL_PAGES.map((p) => p.path));
+    const unvisited = new Set<string>();
+    for (const route of Object.values(appMap.routes)) {
+      for (const link of route.linksOut) {
+        // Skip parameterized routes whose templates we already
+        // hit at the root level (e.g. /transactions covers the
+        // list page; /transactions/<uuid> is the drill target).
+        if (knownRoots.has(link)) continue;
+        if (appMap.routes[link] != null) continue;
+        unvisited.add(link);
+      }
+    }
+
+    const DRILL_CAP = 8;
+    let drilled = 0;
+    for (const path of Array.from(unvisited).sort()) {
+      if (drilled >= DRILL_CAP) break;
+      drilled += 1;
+      try {
+        await page.goto(path, { timeout: 10_000 });
+        await page.waitForLoadState("networkidle", { timeout: 10_000 });
+        await page.waitForTimeout(300);
+        // Light pass: inventory only. No destructive clicks at
+        // sub-route depth — those are 0.197.0+ territory.
+        await harvestLinks(page, appMap, path);
+        await harvestControls(page, appMap, path);
+        ensureRoute(appMap, path);
+        routesVisitedThisRun += 1;
+      } catch (e) {
+        errors.push({
+          page: path,
+          action: "drill-down navigate",
+          severity: "warn",
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    for (const f of errors) {
+      await recordFinding(f);
+    }
+  });
 });
 
 async function clickSafeButtons(
   page: Page,
-  _pagePath: string,
+  pagePath: string,
   _errors: MonkeyFinding[],
 ): Promise<void> {
   // Snapshot the button list — clicking some buttons opens modals
@@ -200,12 +337,29 @@ async function clickSafeButtons(
     try {
       await btn.click({ timeout: 1500, trial: false });
       await page.waitForTimeout(200);
+      // Detect whether the click opened a dialog — useful seed
+      // data for the goal-driven spec which hunts "Add X"
+      // affordances by looking up controls with opensDialog=true.
+      const dialogVisible = await page
+        .locator('[data-slot="dialog-content"]:visible, [role="dialog"]:visible')
+        .first()
+        .isVisible()
+        .catch(() => false);
+      recordControlInMap(appMap, pagePath, "button", label, {
+        clicks: 1,
+        opensDialog: dialogVisible || undefined,
+      });
+      controlsExercisedThisRun += 1;
       // Close any modal/dialog that opened so the next click
       // doesn't fall onto its content.
       await dismissOpenOverlay(page);
     } catch {
       // Element may have detached (clicked a tab that re-renders).
       // Not a fail unless the page itself errored.
+      recordControlInMap(appMap, pagePath, "button", label, {
+        clicks: 1,
+        errored: 1,
+      });
     }
   }
 }

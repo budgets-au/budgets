@@ -2,6 +2,13 @@ import type { Locator, Page, Request } from "@playwright/test";
 import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import {
+  type AppMap,
+  type ControlKind,
+  isInternalPath,
+  recordControl as recordControlInMap,
+  recordLink as recordLinkInMap,
+} from "./_app-map";
 
 /** A single finding from the 1000-monkeys exploratory crawl —
  * something that went wrong (or merits attention) while the test
@@ -289,6 +296,102 @@ export async function findSubmitButton(
     return b;
   }
   return null;
+}
+
+/* ──────────────────────────────────────────────────────────────
+ * Smart-monkey: harvest the page into the AppMap
+ *
+ * These helpers walk a Playwright `Page` and feed observations
+ * into the in-memory AppMap. Kept here (next to the rest of the
+ * Playwright-coupled helpers) rather than in `_app-map.ts` so the
+ * pure-logic module stays Vitest-testable.
+ * ────────────────────────────────────────────────────────────── */
+
+/** Snapshot the in-app links visible on `page` and merge them
+ * into the map's linksOut for `path`. Returns the new (not
+ * previously known) destinations so the caller can decide which
+ * to drill into. */
+export async function harvestLinks(
+  page: Page,
+  map: AppMap,
+  path: string,
+): Promise<string[]> {
+  const hrefs = await page
+    .locator('a[href]:visible')
+    .evaluateAll((els) =>
+      els.map((el) => (el as HTMLAnchorElement).getAttribute("href") ?? ""),
+    )
+    .catch(() => [] as string[]);
+  const seen = new Set(map.routes[path]?.linksOut ?? []);
+  const fresh: string[] = [];
+  for (const h of hrefs) {
+    const cleaned = h.split("#")[0].split("?")[0];
+    if (!isInternalPath(cleaned)) continue;
+    if (cleaned === path) continue;
+    recordLinkInMap(map, path, cleaned);
+    if (!seen.has(cleaned)) fresh.push(cleaned);
+  }
+  return fresh;
+}
+
+/** Inventory every visible button / switch / select on `page`,
+ * recording the kind + accessible label into the map. Does NOT
+ * click anything — this is the dry sweep that fills in the
+ * control catalogue. The poke phase in the spec calls
+ * `recordControl` separately when it actually exercises each
+ * affordance. */
+export async function harvestControls(
+  page: Page,
+  map: AppMap,
+  path: string,
+): Promise<void> {
+  const inventory: Array<{ kind: ControlKind; label: string }> = [];
+
+  const buttons = await page
+    .locator("button:visible, [role='button']:visible")
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const aria = el.getAttribute("aria-label");
+        const txt = (el.textContent ?? "").trim();
+        return aria && aria.length > 0 ? aria : txt;
+      }),
+    )
+    .catch(() => [] as string[]);
+  for (const lbl of buttons) {
+    if (!lbl) continue;
+    inventory.push({ kind: "button", label: lbl });
+  }
+
+  const switches = await page
+    .locator('[data-slot="switch"]:visible')
+    .evaluateAll((els) =>
+      els.map((el) => el.getAttribute("aria-label") ?? "(unlabeled)"),
+    )
+    .catch(() => [] as string[]);
+  for (const lbl of switches) {
+    inventory.push({ kind: "switch", label: lbl });
+  }
+
+  const selects = await page
+    .locator("select:visible")
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const aria = el.getAttribute("aria-label");
+        const name = (el as HTMLSelectElement).name;
+        return aria || name || "(unnamed select)";
+      }),
+    )
+    .catch(() => [] as string[]);
+  for (const lbl of selects) {
+    inventory.push({ kind: "select", label: lbl });
+  }
+
+  for (const { kind, label } of inventory) {
+    // Zero-delta record — establishes the affordance in the map
+    // without affecting click/error counters. Subsequent
+    // recordControl() calls from the poke phase accumulate.
+    recordControlInMap(map, path, kind, label, {});
+  }
 }
 
 /** Render a `FormOutcome` into the message text used in the

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { withAuth } from "@/lib/api/route-guards";
 import { db } from "@/db";
 import { endOfMonth, subMonths, format } from "date-fns";
 
@@ -12,12 +12,7 @@ import { endOfMonth, subMonths, format } from "date-fns";
  * Visible-account convention follows the dashboard: archived
  * accounts are excluded so the trend reflects what the operator
  * sees on the accounts list. */
-export async function GET() {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAuth(async () => {
   const now = new Date();
   // 12 month-ends, oldest first, anchored at end-of-current-month so
   // the rightmost point is "today's net worth" (well, today's
@@ -60,4 +55,4 @@ export async function GET() {
     trend,
     monthLabels: points.map((d) => format(new Date(d), "MMM")),
   });
-}
+});

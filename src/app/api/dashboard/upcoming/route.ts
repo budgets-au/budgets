@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { withAuth } from "@/lib/api/route-guards";
 import { getUpcomingSchedules } from "@/lib/dashboard/upcoming-schedules";
 
 /** Next-30-days upcoming scheduled-transaction occurrences, skipping
@@ -10,12 +10,8 @@ import { getUpcomingSchedules } from "@/lib/dashboard/upcoming-schedules";
  * `?includeBudgets=true` surfaces `kind="budget"` rows too. The
  * widget reflects the per-user `dashboardUpcomingShowBudgets`
  * pref. */
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const includeBudgets = searchParams.get("includeBudgets") === "true";
   return NextResponse.json(await getUpcomingSchedules({ includeBudgets }));
-}
+});

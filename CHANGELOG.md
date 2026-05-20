@@ -9,6 +9,34 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.191.0 — 2026-05-20
+
+### Added
+- **`withAuth` / `withAuthAndId` / `withAdminAuth` /
+  `withAdminAuthAndId` route guards** in new
+  [src/lib/api/route-guards.ts](src/lib/api/route-guards.ts).
+  Wraps Next.js route handlers with the
+  `const session = await auth(); if (!session) return Unauthorized`
+  preamble that 79 budgets routes had copy-pasted. The
+  `*AndId` variants also do the `z.string().uuid().safeParse`
+  parse of the `{ params: Promise<{ id: string }> }` arg.
+  The `*Admin*` variants add an `isAdmin(session)` gate
+  that's separate from the basic logged-in check (rejects
+  member-role users with 403).
+
+### Changed
+- **Migrated 12 routes to the new helpers** as the pilot
+  pass — the rest follow in 0.192.0+ when the per-area
+  edits can be reviewed in smaller groups:
+  - `api/transfers/*` (4 routes)
+  - `api/dashboard/*` (7 routes)
+  - `api/investments/[id]` (3 handlers — GET / PATCH /
+    DELETE)
+
+Mechanical-only change; route behaviour is byte-for-byte
+equivalent (auth still returns 401, invalid UUIDs still
+return 400, etc.). 316 tests stay green.
+
 ## 0.190.0 — 2026-05-19
 
 ### Changed

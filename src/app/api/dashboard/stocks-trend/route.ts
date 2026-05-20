@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { withAuth } from "@/lib/api/route-guards";
 import { getInvestmentTrend } from "@/lib/dashboard/stocks-trend";
 
 /** Aggregate daily value of every owned stock position for the
@@ -7,12 +7,8 @@ import { getInvestmentTrend } from "@/lib/dashboard/stocks-trend";
  * to 1m). Sources cached closes from `investment_prices`; if the
  * cache is empty the series is empty and the card falls back to
  * its number-only display. */
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const range = searchParams.get("range") ?? "1m";
   return NextResponse.json(await getInvestmentTrend("stock", range));
-}
+});

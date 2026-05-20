@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { withAuth } from "@/lib/api/route-guards";
 import { getAccountBalanceTrend } from "@/lib/dashboard/account-balance-trend";
 
 const querySchema = z.object({
@@ -11,11 +11,7 @@ const querySchema = z.object({
 /** Daily-end balance series for one account over the past N
  * days (default 7, capped at 60). Powers the dashboard Account
  * widget's running-balance sparkline. */
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const parsed = querySchema.safeParse({
     accountId: searchParams.get("accountId"),
@@ -30,4 +26,4 @@ export async function GET(request: Request) {
   return NextResponse.json(
     await getAccountBalanceTrend(parsed.data.accountId, parsed.data.days),
   );
-}
+});

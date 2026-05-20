@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { withAuth } from "@/lib/api/route-guards";
 import { getCategorySpend } from "@/lib/dashboard/category-spend";
 
 const querySchema = z.object({
@@ -12,11 +12,7 @@ const querySchema = z.object({
 /** Total + count for one category over the past N days (default
  * 30). Rolls up descendants by default, matching the cashflow
  * report's behaviour. Powers the dashboard Category-spend widget. */
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const parsed = querySchema.safeParse({
     categoryId: searchParams.get("categoryId"),
@@ -36,4 +32,4 @@ export async function GET(request: Request) {
       parsed.data.includeChildren,
     ),
   );
-}
+});

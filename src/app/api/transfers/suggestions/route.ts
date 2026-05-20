@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { withAuth } from "@/lib/api/route-guards";
 import { db } from "@/db";
 import { accounts, transactions, transferSuggestions } from "@/db/schema";
 import { alias } from "drizzle-orm/sqlite-core";
 import { and, desc, eq, isNull } from "drizzle-orm";
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async () => {
   const t1 = alias(transactions, "t1");
   const t2 = alias(transactions, "t2");
   const a1 = alias(accounts, "a1");
@@ -41,4 +38,4 @@ export async function GET() {
     .orderBy(desc(transferSuggestions.score), desc(transferSuggestions.createdAt));
 
   return NextResponse.json(rows);
-}
+});

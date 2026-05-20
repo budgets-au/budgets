@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { withAuth } from "@/lib/api/route-guards";
 import { db } from "@/db";
 import { transactions } from "@/db/schema";
 import { pairTransfersInWindow } from "@/lib/transfer-match";
@@ -27,12 +27,7 @@ import { pairTransfersInWindow } from "@/lib/transfer-match";
  *
  * Returns counts for the toast in the UI.
  */
-export async function POST() {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAuth(async () => {
   const deleted = await db
     .delete(transactions)
     .where(eq(transactions.isSynthetic, true))
@@ -45,4 +40,4 @@ export async function POST() {
     paired: matchResult.paired,
     suggested: matchResult.suggested,
   });
-}
+});

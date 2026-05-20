@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { withAuthAndId } from "@/lib/api/route-guards";
 import { db } from "@/db";
 import { investments, investmentVests } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
@@ -23,18 +23,7 @@ const updateSchema = z.object({
   isArchived: z.boolean().optional(),
 });
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const id = idParse.data;
-
+export const GET = withAuthAndId(async (id) => {
   const [row] = await db.select().from(investments).where(eq(investments.id, id)).limit(1);
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -45,20 +34,9 @@ export async function GET(
     .orderBy(asc(investmentVests.vestDate));
 
   return NextResponse.json({ ...row, vests });
-}
+});
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const id = idParse.data;
-
+export const PATCH = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const data = updateSchema.parse(body);
 
@@ -93,20 +71,9 @@ export async function PATCH(
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(row);
-}
+});
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const id = idParse.data;
-
+export const DELETE = withAuthAndId(async (id) => {
   await db.delete(investments).where(eq(investments.id, id));
   return NextResponse.json({ ok: true });
-}
+});

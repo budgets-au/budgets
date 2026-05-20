@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
-import { auth, isAdmin } from "@/lib/auth";
+import { withAdminAuth } from "@/lib/api/route-guards";
 import { db } from "@/db";
 import { appSettings } from "@/db/schema";
 import { backfillOrphanTransfers } from "@/lib/backfill-orphan-transfers";
@@ -19,18 +19,7 @@ import { backfillOrphanTransfers } from "@/lib/backfill-orphan-transfers";
  *
  * Admin-only — it mints rows and touches every transaction.
  */
-export async function POST() {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdmin(session)) {
-    return NextResponse.json(
-      { error: "Admin role required" },
-      { status: 403 },
-    );
-  }
-
+export const POST = withAdminAuth(async () => {
   // Reset the flag first so backfillOrphanTransfers (which the runner
   // gates on the flag) doesn't silently no-op. The function itself
   // doesn't read the flag — the gating lives in db/index.ts — but we
@@ -49,4 +38,4 @@ export async function POST() {
     .where(sql`${appSettings.id} = 1`);
 
   return NextResponse.json({ paired });
-}
+});

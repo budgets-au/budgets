@@ -9,6 +9,99 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.199.0 — 2026-05-20
+
+### Added
+- **Smart monkey — all three target workflows now achieved
+  end-to-end + a guardrail-probe matrix on `/api/scheduled`.**
+  Five test-refine-test-refine loops over the goal-driven
+  spec, each closing one specific failure mode the previous
+  loop's diagnostic surfaced. The user's intent for the
+  smart monkey ("learn what breaks so we can establish
+  guardrails") now drives the spec directly: every run
+  exercises a matrix of known-good + known-bad payloads on
+  the schedule API and records the results into TODO.md as
+  a backlog of UI-validation gaps to close.
+
+  Per-loop work:
+  - **L1 (instrumentation):** added a per-step dialog-count
+    checkpoint trace appended to "no submit found"
+    findings. Showed `opened=1 → after-setupDialog=1 →
+    after-fill=1 → after-pickers-1=0` — drivePickers
+    closed the dialog out from under the test.
+  - **L2 (Escape-bug fix):** drivePickers used to
+    `page.keyboard.press("Escape")` when an opened popover
+    didn't reveal an option. BaseUI Dialogs dismiss on Esc,
+    so on `/scheduled` (where some triggers don't open
+    listboxes immediately) the Escape ate the dialog
+    itself. Replaced the global Esc with a defensive
+    re-click on the same trigger to toggle-close any stray
+    popover.
+  - **L3 (budget overrides + response-body capture):**
+    `createBudget`'s override map was keyed `name` /
+    `description`, neither of which matches a label on the
+    scheduled form. The token landed in nowhere, the budget
+    submitted (POST → 201) but verification couldn't find
+    the row. Re-keyed to `payee` + `dates`. Also widened
+    `FormOutcome.network` with a `body?: string` and
+    captured `resp.text()` on 4xx/5xx so 500s now carry
+    their response payload (or `[empty body]`) into the
+    finding.
+  - **L4 (`data-placeholder` filter + direct-API probe):**
+    drivePickers was overwriting valid form defaults
+    (`Type=expense`, `Frequency=monthly`) with the first
+    `<SelectItem>` in DOM order. Scoped the trigger query
+    to `[data-slot="select-trigger"][data-placeholder]:visible`
+    — only drives Selects that still show their placeholder
+    (i.e. truly unset). Added a guardrail-probe stub that
+    hits `/api/scheduled` directly with a known-good payload
+    so we can tell whether a goal failure is form-driven
+    or genuinely server-side.
+  - **L5 (Day=42 fix + guardrail matrix):** the silent 500
+    on `createSchedule` traced to my generic
+    `defaultForType("number")` returning `"42"`, which
+    `dayOfMonth` (zod `min(1).max(31)`) rejects. Added an
+    explicit `day: "1"` override. Then formalised the
+    "probe what breaks" loop into
+    `runScheduleGuardrailProbes()` — a matrix of five
+    payload variants (baseline + 4 known-suspicious
+    combinations) that runs on every fresh
+    `createSchedule` attempt and logs each (status + body)
+    as a finding.
+
+  Validation run after L5: all 3 goals achieved on first
+  attempt, recipes locked into `app-map.json`.
+
+### Discovered (smart monkey → UI guardrail backlog)
+- **`POST /api/scheduled` 500's silently on zod
+  rejections** — the route's `createSchema.parse(body)`
+  call isn't wrapped, so any zod throw produces an
+  unhandled 500 with no JSON body. The client sees a bare
+  500 and has nothing to surface in a toast. Two concrete
+  paths the smart monkey hit:
+  - `dayOfMonth=42` (form's HTML5 `max="31"` catches it in
+    real browser input, but `.fill()` and any direct API
+    consumer bypass that) → 500 [empty body].
+  - `amount="monkey-goal"` (non-numeric string fails the
+    `numericString` regex) → 500 [empty body].
+
+  Suggested fix on a later release: wrap the handler in
+  `safeParse` + return a 400 with the zod issue tree, so
+  both the client toast and any third-party API consumer
+  get a useful error instead of a silent 500.
+- **`POST /api/scheduled` accepts `type=transfer` with no
+  `transferToAccountId`** — server creates a transfer
+  schedule with nowhere to transfer to. The probe returned
+  201 but the row is effectively a dangling pointer. The
+  form's submit-button `disabled` guard catches this for
+  human users (`disabled={type === "transfer" &&
+  !transferToAccountId}`); a defence-in-depth fix on the
+  route would mirror the accountId requirement.
+- **`POST /api/scheduled` accepts `frequency=once` with no
+  `endDate`** — almost certainly intended (a one-off has
+  no recurrence to bound). Logged so the operator can
+  confirm it's not a regression once the eyeball-pass runs.
+
 ## 0.198.0 — 2026-05-20
 
 ### Changed

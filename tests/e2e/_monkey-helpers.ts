@@ -124,7 +124,7 @@ export function isNoiseMessage(msg: string): boolean {
  * crawl saw no side-effect within the observation window — the
  * thing the operator probably wants to know about. */
 export type FormOutcome =
-  | { kind: "network"; method: string; url: string; status: number }
+  | { kind: "network"; method: string; url: string; status: number; body?: string }
   | { kind: "toast"; text: string }
   | { kind: "nav"; to: string }
   | { kind: "error"; message: string }
@@ -208,16 +208,25 @@ export async function observeSubmitOutcome(
   const reqListener = (req: Request) => {
     const method = req.method().toUpperCase();
     if (!["POST", "PATCH", "PUT", "DELETE"].includes(method)) return;
-    // Capture the request; status comes from the response.
+    // Capture the request; status comes from the response. For
+    // 4xx/5xx we also pull the response body (capped) so the
+    // operator can see WHY the server rejected without having
+    // to instrument the route by hand.
     req
       .response()
-      .then((resp) => {
+      .then(async (resp) => {
         if (!resp) return;
+        const status = resp.status();
+        let body: string | undefined;
+        if (status >= 400) {
+          body = (await resp.text().catch(() => "")).slice(0, 240);
+        }
         networkHits.push({
           kind: "network",
           method,
           url: req.url(),
-          status: resp.status(),
+          status,
+          body,
         });
       })
       .catch(() => {});
@@ -399,8 +408,21 @@ export async function harvestControls(
  * orchestrator. */
 export function describeOutcome(outcome: FormOutcome): string {
   switch (outcome.kind) {
-    case "network":
-      return `${outcome.method} ${outcome.url} → ${outcome.status}`;
+    case "network": {
+      const base = `${outcome.method} ${outcome.url} → ${outcome.status}`;
+      // For 4xx/5xx, show the response body so the operator can
+      // see WHY the server rejected (e.g. zod parse error
+      // citing the field that failed validation). An explicit
+      // `[empty body]` tail when the server returned status
+      // but no payload — distinguishes "we forgot to capture"
+      // from "the route really did 500 silently".
+      if (outcome.status >= 400) {
+        return outcome.body
+          ? `${base} — ${outcome.body}`
+          : `${base} — [empty body]`;
+      }
+      return base;
+    }
     case "toast":
       return `toast: ${outcome.text}`;
     case "nav":

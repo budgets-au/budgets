@@ -96,23 +96,47 @@ const GOALS: GoalDef[] = [
     candidateRoutes: ["/scheduled"],
     triggerPatterns: [/^\s*(add|new)\b.*(schedule|scheduled)/i, /^\s*\+\s*$/],
     setupDialog: async (dialog) => {
-      // The form opens defaulting to kind=schedule. Defensive:
-      // if a kind picker is present, click the "Schedule"
-      // button by accessible name (the buttons are icon-only
-      // with aria-label, so :has-text wouldn't find them).
+      // Defensive kind toggle — form opens defaulting to
+      // schedule, but clicking the "Schedule" button is a no-op
+      // when already selected. Belt + braces.
       const kindSchedule = dialog
         .getByRole("button", { name: "Schedule", exact: true })
         .first();
       if (await kindSchedule.isVisible().catch(() => false)) {
         await kindSchedule.click().catch(() => {});
       }
+      // Type and Frequency default to "expense" and "monthly"
+      // respectively, both of which submit cleanly. drivePickers
+      // used to overwrite them to the first <SelectItem> in
+      // DOM order ("expense" by chance for Type, "Once" for
+      // Frequency) — and `once` happens to trip a server-side
+      // path the goal-flow can't satisfy. The fix is in
+      // drivePickers (only drive triggers that still show their
+      // `data-placeholder`), not here — confirmed manually
+      // (user screenshot 2026-05-20): setting Account alone
+      // submits successfully.
       return true;
     },
     overrides: {
-      description: `${RUN_TOKEN}-sched`,
-      payee: `${RUN_TOKEN}-sched-payee`,
+      payee: `${RUN_TOKEN}-sched`,
       amount: "25.00",
-      startdate: "2026-02-01",
+      // Use the label words present on the scheduled form
+      // ("Dates *" for the start-date input).
+      dates: "2026-02-01",
+      // Day-of-month must be 1..31 per the zod schema on
+      // /api/scheduled — but the generic number filler defaults
+      // to "42", which 500's the route silently (zod throws,
+      // Next renders an empty-body error page, no client toast).
+      // Found via the smart-monkey crawl 2026-05-20 — recorded as
+      // a known-bad combination so it can be turned into a UI
+      // guardrail later (clamp the input, or show an inline
+      // error on >31 instead of letting the submit fail).
+      day: "1",
+      // Same family of trap: "Every <N>" (interval). Defaults to
+      // 1 in the form's blankScheduledRow but the generic filler
+      // would still overwrite it. Cap at a sane value so the
+      // recipe replays cleanly.
+      every: "1",
     },
     domToken: `${RUN_TOKEN}-sched`,
     verifyApi: "/api/scheduled",
@@ -134,11 +158,16 @@ const GOALS: GoalDef[] = [
       await kindBudget.click().catch(() => {});
       return true;
     },
+    // The scheduled form uses "Payee" as the searchable
+    // identifier field for both `kind=schedule` and
+    // `kind=budget`. 0.198.0 used `name`/`description` keys
+    // which never matched a label, so the token landed nowhere
+    // and the verification failed even after the API returned
+    // 201 Created.
     overrides: {
-      name: `${RUN_TOKEN}-budget`,
-      description: `${RUN_TOKEN}-budget`,
+      payee: `${RUN_TOKEN}-budget`,
       amount: "300.00",
-      startdate: "2026-02-01",
+      dates: "2026-02-01",
     },
     domToken: `${RUN_TOKEN}-budget`,
     verifyApi: "/api/scheduled",
@@ -173,6 +202,25 @@ test.describe("smart monkey: goal-driven crawl", () => {
       // beforeEach signInAsAdmin. The fresh `request` fixture
       // doesn't share cookies and would 401 against authed APIs.
       const request = page.context().request;
+
+      // Combinatorial guardrail probes — for createSchedule
+      // only, ON TOP OF the regular goal flow. The smart monkey's
+      // job isn't just "complete the task"; it's "discover which
+      // input combinations the server rejects so we can wire
+      // those rejections into UI guardrails before a real user
+      // hits them". The user's screenshot 2026-05-20 confirmed a
+      // minimum-viable submit (Account only) works, but the
+      // bare 500 on `dayOfMonth=42` is a silent failure mode
+      // worth pinning. Both the known-good baseline AND the
+      // known-bad permutation get logged as findings; the
+      // operator can convert these into client-side validation
+      // or zod-error toasts on a later release.
+      if (
+        goal.key === "createSchedule" &&
+        !appMap.goals.createSchedule.successfulRun
+      ) {
+        await runScheduleGuardrailProbes(request, RUN_TOKEN);
+      }
 
       // 1. Replay if we have a recipe.
       const prior = appMap.goals[goal.key].successfulRun;
@@ -235,6 +283,19 @@ test.describe("smart monkey: goal-driven crawl", () => {
         }
         runCounters.dialogsOpened += 1;
 
+        // Step-by-step dialog presence trace — surfaces in the
+        // finding when no submit is ultimately found, so we
+        // know which operation closed the dialog.
+        const trace: Array<{ step: string; dialogs: number }> = [];
+        const checkpoint = async (step: string) => {
+          const n = await page
+            .locator('[data-slot="dialog-content"]:visible')
+            .count()
+            .catch(() => 0);
+          trace.push({ step, dialogs: n });
+        };
+        await checkpoint("opened");
+
         if (goal.setupDialog) {
           const ok = await goal.setupDialog(dialog);
           if (!ok) {
@@ -242,16 +303,20 @@ test.describe("smart monkey: goal-driven crawl", () => {
             continue;
           }
         }
+        await checkpoint("after-setupDialog");
 
         const fillSpec = await fillGoalDialog(dialog, goal.overrides);
+        await checkpoint("after-fill");
         // Drive every picker. First pass selects values; some
         // forms re-render based on those selections (e.g.
         // type="transfer" reveals a "To account" picker). A short
         // wait + second pass picks up the newly-revealed
         // triggers without a full retry of the slow input pass.
         let pickerCount = await drivePickers(dialog);
+        await checkpoint("after-pickers-1");
         await page.waitForTimeout(250);
         pickerCount += await drivePickers(dialog);
+        await checkpoint("after-pickers-2");
         runCounters.buttonClicks += pickerCount;
         if (Object.keys(fillSpec).length === 0 && pickerCount === 0) {
           // Dialog had nothing the crawler could drive — probably
@@ -316,12 +381,15 @@ test.describe("smart monkey: goal-driven crawl", () => {
               (b) => `"${b.text}"[${b.type}${b.disabled ? "/disabled" : ""}]`,
             )
             .join(", ");
+          const traceStr = trace
+            .map((t) => `${t.step}=${t.dialogs}`)
+            .join(" → ");
           await recordFinding({
             page: route,
             action: `goal "${goal.label}"`,
             severity: "warn",
             kind: "issue",
-            message: `Filled ${Object.keys(fillSpec).length} fields + ${pickerCount} pickers but could not find a submit button. State: ${visibleDialogs} dialog(s), ${visibleForms} form(s) visible. Buttons (${allButtons.length}): ${summary || "(none)"}.`,
+            message: `Filled ${Object.keys(fillSpec).length} fields + ${pickerCount} pickers but could not find a submit button. State: ${visibleDialogs} dialog(s), ${visibleForms} form(s) visible. Trace: ${traceStr}. Buttons (${allButtons.length}): ${summary || "(none)"}.`,
           });
           runCounters.findingsCount += 1;
           await dismissDialog(page);
@@ -621,8 +689,27 @@ async function drivePickers(dialog: Locator): Promise<number> {
   // composes locator selectors as a comma-list internally and
   // `:is()` was silently matching nothing for some real triggers
   // in the wild.
+  //
+  // CRUCIAL: scope to triggers that still carry the
+  // `data-placeholder` attribute. BaseUI/shadcn Select sets it
+  // when no value is selected (the trigger shows the placeholder
+  // text); once the user picks something the attribute drops.
+  // This is what stops the goal-driven flow from overwriting
+  // sensible defaults (Type=expense, Frequency=monthly on the
+  // scheduled form) with the first SelectItem in DOM order —
+  // which the e2e proved silently 500's the POST. Without the
+  // filter we drive every picker every run, even ones already
+  // satisfied; with it, only the truly-unset Account dropdown
+  // gets clicked.
+  //
+  // role="combobox" controls (SearchableCombobox) don't always
+  // expose data-placeholder, but they do expose an
+  // `aria-expanded` baseline of false — we keep those in the
+  // candidate set since false-positive drives on them are
+  // benign (the existing trigger-click cycle dismisses any
+  // popover that doesn't reveal a real option).
   const triggers = dialog.locator(
-    '[data-slot="select-trigger"]:visible, [role="combobox"]:visible',
+    '[data-slot="select-trigger"][data-placeholder]:visible, [role="combobox"]:visible',
   );
   // Also pick up bare-button SearchableCombobox triggers whose
   // visible label starts with "Choose…" / "Select…" / "Pick…".
@@ -654,7 +741,18 @@ async function drivePickers(dialog: Locator): Promise<number> {
         )
         .first();
       if (!(await option.isVisible({ timeout: 800 }).catch(() => false))) {
-        await page.keyboard.press("Escape").catch(() => {});
+        // No option appeared — either the trigger wasn't a real
+        // picker or its popover loaded too slowly. DO NOT press
+        // Escape here — BaseUI Dialogs dismiss on Esc, and an
+        // empty popover means Esc goes to the dialog itself,
+        // closing the entire form. (This was the Loop 1
+        // /scheduled regression — trace went
+        // after-fill=1 → after-pickers-1=0 because every
+        // trigger that didn't immediately reveal a popover ate
+        // its own dialog.) Click the trigger again to
+        // toggle-close any stray popover instead. If that
+        // throws, the trigger is gone; just move on.
+        await t.click({ timeout: 300, force: true }).catch(() => {});
         continue;
       }
       await option.click({ timeout: 800 }).catch(() => {});
@@ -717,6 +815,96 @@ async function scrapeValidationErrors(
   const trimmed = hints.slice(0, 3);
   const extra = hints.length - trimmed.length;
   return trimmed.join("; ") + (extra > 0 ? ` (+${extra} more)` : "");
+}
+
+/** Smart-monkey discovery routine: probe `/api/scheduled` with a
+ * matrix of known-baseline + known-bad payloads, recording each
+ * response as a finding. The output rolls into TODO.md as a
+ * GUARDRAIL inventory — combinations the server rejects today but
+ * the UI doesn't catch up front. Each entry is one
+ * future-improvement TODO (clamp the input, surface a zod
+ * message, disable the submit until valid, etc.).
+ *
+ * Per the user's 2026-05-20 directive ("we should be handling
+ * these combinations that fail, that's the purpose of these
+ * tests"). Successful probes are cleaned up via DELETE so they
+ * don't pollute the user's API check downstream. */
+async function runScheduleGuardrailProbes(
+  request: import("@playwright/test").APIRequestContext,
+  runToken: string,
+): Promise<void> {
+  const accountsRes = await request.get("/api/accounts").catch(() => null);
+  if (!accountsRes || !accountsRes.ok()) return;
+  const accounts = (await accountsRes.json().catch(() => [])) as Array<{
+    id: string;
+  }>;
+  const accountId = accounts[0]?.id;
+  if (!accountId) return;
+
+  // Each probe: (label, payload override on top of the baseline).
+  // Baseline is the known-good combination from the user's
+  // screenshot: Account + Type=expense + Frequency=monthly.
+  const baseline = {
+    kind: "schedule" as const,
+    accountId,
+    payee: `${runToken}-probe`,
+    amount: "-25.00",
+    type: "expense" as const,
+    frequency: "monthly" as const,
+    interval: 1,
+    startDate: "2026-02-01",
+  };
+  const probes: Array<{ label: string; payload: Record<string, unknown> }> = [
+    { label: "baseline (Account + defaults)", payload: { ...baseline } },
+    {
+      label: "dayOfMonth=42 (exceeds zod max 31)",
+      payload: { ...baseline, dayOfMonth: 42 },
+    },
+    {
+      label: "type=transfer w/ no transferToAccountId",
+      payload: { ...baseline, type: "transfer" },
+    },
+    {
+      label: "frequency=once w/ no endDate",
+      payload: { ...baseline, frequency: "once" },
+    },
+    {
+      label: "amount with letter (regex violation)",
+      payload: { ...baseline, amount: "monkey-goal" },
+    },
+  ];
+
+  for (const probe of probes) {
+    const res = await request
+      .post("/api/scheduled", { data: probe.payload })
+      .catch(() => null);
+    if (!res) continue;
+    const status = res.status();
+    let summary: string;
+    if (res.ok()) {
+      // Clean up so this probe row doesn't pollute the goal's
+      // own DOM/API verification check below.
+      const created = (await res.json().catch(() => null)) as {
+        id?: string;
+      } | null;
+      if (created?.id) {
+        await request
+          .delete(`/api/scheduled/${created.id}`)
+          .catch(() => {});
+      }
+      summary = `→ ${status} ✅ accepted (cleaned up)`;
+    } else {
+      const body = (await res.text().catch(() => "")).slice(0, 200);
+      summary = `→ ${status} ❌ ${body || "[empty body]"}`;
+    }
+    await recordFinding({
+      page: "/scheduled",
+      action: `guardrail probe: ${probe.label}`,
+      severity: res.ok() ? "info" : "warn",
+      kind: res.ok() ? "question" : "issue",
+      message: summary,
+    });
+  }
 }
 
 /** Read the visible label texts on every form control in the

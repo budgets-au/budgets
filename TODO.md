@@ -25,15 +25,15 @@ shipped in 0.166.0._
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-20T10:49:49.757Z · 4 issues, 0 questions._
+_Last run: 2026-05-20T11:58:53.048Z · 2 issues, 3 questions._
 
 #### Smart Monkey expert system
 
 | Goal | Achieved | Attempts | Last successful run |
 | --- | --- | --- | --- |
 | `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
-| `createBudget` | ❌ | 1 | _(not yet)_ |
-| `createSchedule` | ❌ | 1 | _(not yet)_ |
+| `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
+| `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
 
 _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
@@ -41,24 +41,24 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 44.5s |
+| Total wall time | 57.5s |
 | Routes visited | 0 |
-| Button clicks | 5 |
+| Button clicks | 8 |
 | Switch toggles | 0 |
 | Select cycles | 0 |
 | Text inputs filled | 17 |
 | Dialogs opened | 3 |
-| Form submits | 1 |
+| Form submits | 3 |
 | Links discovered | 0 |
 | Console errors | 0 |
 | Goals attempted | 3 |
-| Goals achieved | 1 |
-| Findings logged | 4 |
+| Goals achieved | 3 |
+| Findings logged | 0 |
 
 ##### Workflows completed
 - ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
-- ❌ `createBudget` — _(not yet completed)_
-- ❌ `createSchedule` — _(not yet completed)_
+- ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
+- ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
 
 #### Vitest summary
 
@@ -69,10 +69,17 @@ _Last run: 2026-05-20T09:26:06.823Z._
 #### Issues
 
 ##### /scheduled
-- 🟡 **goal "create a schedule"** — Filled 8 fields + 1 pickers but could not find a submit button. State: 0 dialog(s), 0 form(s) visible. Buttons (21): "Default"[button], ""[button], ""[button], ""[button], "All accounts"[submit], "Everyday Checking"[submit], "High Interest Savings"[submit], "Lock database"[button], "All accounts"[button], "Selected accounts"[button].
-- 🟡 **goal "create a schedule"** — Could not complete the "create a schedule" goal across 1 candidate route(s). Smart monkey will retry next run.
-- 🟡 **goal "create a budget"** — Filled 5 fields + 0 pickers but could not find a submit button. State: 0 dialog(s), 0 form(s) visible. Buttons (21): "Default"[button], ""[button], ""[button], ""[button], "All accounts"[submit], "Everyday Checking"[submit], "High Interest Savings"[submit], "Lock database"[button], "All accounts"[button], "Selected accounts"[button].
-- 🟡 **goal "create a budget"** — Could not complete the "create a budget" goal across 1 candidate route(s). Smart monkey will retry next run.
+- 🟡 **guardrail probe: dayOfMonth=42 (exceeds zod max 31)** — → 500 ❌ [empty body]
+- 🟡 **guardrail probe: amount with letter (regex violation)** — → 500 ❌ [empty body]
+
+#### Questions for review
+
+_The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
+
+##### /scheduled
+- ❓ **guardrail probe: baseline (Account + defaults)** — → 201 ✅ accepted (cleaned up)
+- ❓ **guardrail probe: type=transfer w/ no transferToAccountId** — → 201 ✅ accepted (cleaned up)
+- ❓ **guardrail probe: frequency=once w/ no endDate** — → 201 ✅ accepted (cleaned up)
 
 <!-- monkey:end -->
 

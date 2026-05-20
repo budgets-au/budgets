@@ -15,6 +15,7 @@ import {
   type AppMap,
   appendRun,
   bumpConsoleErrors,
+  emptyRunCounters,
   ensureRoute,
   loadAppMap,
   recordControl as recordControlInMap,
@@ -58,9 +59,9 @@ const CRAWL_PAGES: ReadonlyArray<{ path: string; label: string }> = [
  * the prior one, so coverage and learning grow over time. */
 let appMap: AppMap;
 let runStartedAt = 0;
-let routesVisitedThisRun = 0;
-let controlsExercisedThisRun = 0;
-let linksDiscoveredThisRun = 0;
+/** Per-run counters; flushed into the map's runs ring buffer in
+ * afterAll. Granular fields back the TODO.md run-report table. */
+let runCounters = emptyRunCounters();
 
 test.describe("1000 monkeys exploratory crawl", () => {
   test.beforeAll(async () => {
@@ -68,24 +69,20 @@ test.describe("1000 monkeys exploratory crawl", () => {
     // monkey-goals.spec don't clobber each other.
     appMap = await loadAppMap();
     runStartedAt = Date.now();
-    routesVisitedThisRun = 0;
-    controlsExercisedThisRun = 0;
-    linksDiscoveredThisRun = 0;
+    runCounters = emptyRunCounters();
   });
 
   test.afterAll(async () => {
+    // The goal-driven spec (monkey-goals.spec.ts) appends its
+    // own RunSummary covering its slice of work. This spec
+    // covers the breadth-first + drill-down phases. Two entries
+    // in the runs ring per test execution is fine; the report
+    // renderer picks the latest as "this run" and reads them
+    // both off the ring for the per-spec trend.
     appendRun(appMap, {
       ts: new Date().toISOString(),
       durationMs: Date.now() - runStartedAt,
-      routesVisited: routesVisitedThisRun,
-      controlsExercised: controlsExercisedThisRun,
-      linksDiscovered: linksDiscoveredThisRun,
-      // Goal achievements are recorded by monkey-goals.spec.ts;
-      // both specs share the same on-disk app-map, and the goal
-      // spec saves last. We log 0 here to indicate "this spec
-      // doesn't track goals" rather than a real zero.
-      goalsAchieved: 0,
-      findingsCount: 0,
+      ...runCounters,
     });
     await saveAppMap(appMap);
   });
@@ -99,7 +96,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
       test.setTimeout(60_000);
       const errors: MonkeyFinding[] = [];
       ensureRoute(appMap, p.path);
-      routesVisitedThisRun += 1;
+      runCounters.routesVisited += 1;
 
       page.on("console", (msg) => {
         if (msg.type() !== "error") return;
@@ -112,6 +109,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
           message: text,
         });
         bumpConsoleErrors(appMap, p.path);
+        runCounters.consoleErrors += 1;
       });
       page.on("pageerror", (err) => {
         if (isNoiseMessage(err.message)) return;
@@ -132,7 +130,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
       // before the destructive poke phase. linksDiscovered ticks
       // count only routes we haven't seen on this route before.
       const newLinks = await harvestLinks(page, appMap, p.path);
-      linksDiscoveredThisRun += newLinks.length;
+      runCounters.linksDiscovered += newLinks.length;
       await harvestControls(page, appMap, p.path);
 
       // Toggle every Switch on the page, then reload and confirm
@@ -167,6 +165,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
             .getAttribute("aria-checked")
             .catch(() => null);
           await sw.click({ timeout: 2_000 });
+          runCounters.switchToggles += 1;
           await page.waitForTimeout(200);
           const after = await page
             .locator('[data-slot="switch"]')
@@ -227,6 +226,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
 
       for (const f of errors) {
         await recordFinding(f);
+        runCounters.findingsCount += 1;
       }
     });
   }
@@ -296,7 +296,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
         await harvestLinks(page, appMap, path);
         await harvestControls(page, appMap, path);
         ensureRoute(appMap, path);
-        routesVisitedThisRun += 1;
+        runCounters.routesVisited += 1;
       } catch (e) {
         errors.push({
           page: path,
@@ -309,6 +309,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
 
     for (const f of errors) {
       await recordFinding(f);
+      runCounters.findingsCount += 1;
     }
   });
 });
@@ -349,7 +350,8 @@ async function clickSafeButtons(
         clicks: 1,
         opensDialog: dialogVisible || undefined,
       });
-      controlsExercisedThisRun += 1;
+      runCounters.buttonClicks += 1;
+      if (dialogVisible) runCounters.dialogsOpened += 1;
       // Close any modal/dialog that opened so the next click
       // doesn't fall onto its content.
       await dismissOpenOverlay(page);
@@ -385,6 +387,7 @@ async function cycleSelects(
         const value = await opt.getAttribute("value");
         if (value == null) continue;
         await sel.selectOption(value).catch(() => {});
+        runCounters.selectChanges += 1;
         await page.waitForTimeout(100);
       }
       // Restore initial so the crawl is idempotent.
@@ -448,10 +451,12 @@ async function fillAndSubmitForms(
     // Fill every visible input/textarea/select inside the form.
     const filled = await fillContainerInputs(container);
     if (filled === 0) continue; // nothing to drive — skip
+    runCounters.textInputsFilled += filled;
 
     const outcome = await observeSubmitOutcome(page, async () => {
       await submit.click({ timeout: 2_000 }).catch(() => {});
     });
+    runCounters.formSubmits += 1;
 
     if (outcome.kind === "silent") {
       errors.push({

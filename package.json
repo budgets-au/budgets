@@ -10,6 +10,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:report": "vitest run --reporter=default --reporter=json --outputFile=tests/e2e/.data/vitest-report-raw.json; node scripts/vitest-summary.mjs",
     "test:e2e": "playwright test",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",

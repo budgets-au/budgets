@@ -93,10 +93,39 @@ export interface RunSummary {
   ts: string;
   durationMs: number;
   routesVisited: number;
-  controlsExercised: number;
+  /** Per-control-kind exercise counts. Sum gives the legacy
+   * `controlsExercised` number; the breakdown is what the TODO
+   * run-report table needs. */
+  buttonClicks: number;
+  switchToggles: number;
+  selectChanges: number;
+  textInputsFilled: number;
+  dialogsOpened: number;
+  formSubmits: number;
   linksDiscovered: number;
+  consoleErrors: number;
+  goalsAttempted: number;
   goalsAchieved: number;
   findingsCount: number;
+}
+
+/** Build a fresh per-run counter ledger. Each spec increments
+ * its slice during the run, then `appendRun` snapshots it. */
+export function emptyRunCounters(): Omit<RunSummary, "ts" | "durationMs"> {
+  return {
+    routesVisited: 0,
+    buttonClicks: 0,
+    switchToggles: 0,
+    selectChanges: 0,
+    textInputsFilled: 0,
+    dialogsOpened: 0,
+    formSubmits: 0,
+    linksDiscovered: 0,
+    consoleErrors: 0,
+    goalsAttempted: 0,
+    goalsAchieved: 0,
+    findingsCount: 0,
+  };
 }
 
 export interface AppMap {

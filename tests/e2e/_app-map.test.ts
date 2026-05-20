@@ -4,6 +4,7 @@ import {
   bumpConsoleErrors,
   controlSignature,
   emptyAppMap,
+  emptyRunCounters,
   ensureRoute,
   GOAL_KEYS,
   isInternalPath,
@@ -145,6 +146,24 @@ describe("recordGoalAttempt", () => {
   });
 });
 
+describe("emptyRunCounters", () => {
+  it("returns a zeroed ledger covering every RunSummary count field", () => {
+    const c = emptyRunCounters();
+    expect(c.routesVisited).toBe(0);
+    expect(c.buttonClicks).toBe(0);
+    expect(c.switchToggles).toBe(0);
+    expect(c.selectChanges).toBe(0);
+    expect(c.textInputsFilled).toBe(0);
+    expect(c.dialogsOpened).toBe(0);
+    expect(c.formSubmits).toBe(0);
+    expect(c.linksDiscovered).toBe(0);
+    expect(c.consoleErrors).toBe(0);
+    expect(c.goalsAttempted).toBe(0);
+    expect(c.goalsAchieved).toBe(0);
+    expect(c.findingsCount).toBe(0);
+  });
+});
+
 describe("appendRun", () => {
   it("bounds the ring buffer at 20 by dropping the oldest entries", () => {
     const m = emptyAppMap();
@@ -152,11 +171,8 @@ describe("appendRun", () => {
       appendRun(m, {
         ts: `2026-05-20T00:${String(i).padStart(2, "0")}:00.000Z`,
         durationMs: 1000,
+        ...emptyRunCounters(),
         routesVisited: 1,
-        controlsExercised: 1,
-        linksDiscovered: 0,
-        goalsAchieved: 0,
-        findingsCount: 0,
       });
     }
     expect(m.runs).toHaveLength(20);

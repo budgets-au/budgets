@@ -9,6 +9,116 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.197.0 — 2026-05-20
+
+### Added
+- **Smart monkey — first goal achieved end-to-end + per-run
+  report card.** The 0.196.0 release landed the persistent
+  AppMap + goal-driven crawl but the form-filler couldn't
+  actually drive any of the three target workflows
+  (createTransaction / createBudget / createSchedule)
+  because the dialogs use combobox-style pickers (the
+  shared `SearchableCombobox` primitive + Radix-style
+  `<Select>`) — not plain `<select>` elements — and the
+  text inputs in this codebase are named via their wrapping
+  `<Field>` label, not via `name` / `id` / `placeholder`.
+  This release closes both gaps and adds the run reporting
+  the operator asked for.
+
+  **Picker handling.** A new `drivePickers(dialog)` helper
+  walks every visible trigger that matches
+  `[data-slot="select-trigger"]`, `[role="combobox"]`, or
+  a button label starting with "Choose…" / "Select…" /
+  "Pick…". For each one it opens the popover, picks the
+  first visible `[role="option"]` or
+  `[data-slot="select-item"]` (Popover and SelectContent
+  both portal outside the dialog subtree, so the search
+  scopes to the page), and continues. Capped at 6
+  candidates with 800ms timeouts per click so the loop
+  can't blow the per-test budget.
+
+  **Label-based input matching.** The goal filler now
+  reads each input's accessible name via
+  `HTMLInputElement.labels` first (covers `<label
+  for="x">` + `<input id="x">`) and falls back to
+  `el.closest("label").textContent` (covers the
+  `<label><span>Foo</span><input/></label>` pattern used
+  by `<Field>` in the transactions / scheduled dialogs).
+  Override keys in each `GoalDef.overrides` were
+  re-keyed to match the visible label words (`date`,
+  `payee`, `amount`, `notes`) — that's what lets the
+  unique per-run token actually land in a field that
+  shows up on the rendered row.
+
+  **Validation-error scraping.** When a submit fires no
+  network call / toast / nav, the crawl now scrapes the
+  dialog for `[aria-invalid="true"]` controls and any
+  `[role="alert"]` text inside it, and tacks the result
+  onto the finding ("Validation hints: field "Account"
+  invalid; This field is required"). That turns
+  "submit went nowhere" — useless — into "submit went
+  nowhere because field X tripped" — actionable.
+
+  **Per-run report card in TODO.md.** The
+  `<!-- monkey -->` block grows three new subsections:
+  - **Smart Monkey expert system** — goal-status table
+    (achieved / attempts / route + trigger + submit
+    recipe) plus a coverage line.
+  - **Smart Monkey run report** — a metric table for the
+    LAST e2e cycle: total wall time, routes visited,
+    button clicks, switch toggles, select cycles, text
+    inputs filled, dialogs opened, form submits, links
+    discovered, console errors, goals
+    attempted / achieved, findings logged. Sums across
+    every `RunSummary` row appended in the last 5 minutes
+    so the breadth-first + drill-down + goal-driven specs
+    appear as one combined picture.
+  - **Workflows completed** — one bullet per goal with
+    ✅/❌ + the route, trigger label, and submit label
+    when achieved.
+
+  **Vitest summary.** A new `pnpm test:report` command
+  runs Vitest with the JSON reporter, then runs
+  `scripts/vitest-summary.mjs` to boil the raw output
+  (megabytes of per-assertion detail) down to a small
+  sidecar at `tests/e2e/.data/vitest-report.json` with
+  the counts only. The Playwright teardown reads that
+  sidecar (if present) and appends a "Vitest summary"
+  subsection — green checkmark + pass/fail/skip + suite
+  total + duration. Two-step rather than a Vitest
+  reporter plugin so `pnpm test` itself stays untouched
+  for spot-checks.
+
+  **Granular `RunSummary` shape.** The on-disk
+  `app-map.json`'s `runs` ring records the breakdown
+  (each kind of activity counted separately) instead of
+  the lumped `controlsExercised` field. An
+  `emptyRunCounters()` constructor returns a zeroed
+  ledger that each spec mutates as it runs and snapshots
+  in `afterAll`.
+
+  Validation run: **createTransaction goal achieved**
+  (verified via DOM) — recipe `/transactions` → click
+  **Add transaction** → fill date / payee / amount /
+  notes → click **Add**. createBudget + createSchedule
+  remain unachieved (the scheduled form has more
+  required fields than the generic filler covers today —
+  the multi-account picker plus the
+  amount-range / frequency / dates triplet). The map
+  will retry them next run.
+
+### Changed
+- **Triggers prefer `aria-label` when picking the label
+  for the recipe.** Icon-only "+" buttons (the
+  /transactions and /scheduled Add affordances) have
+  empty `textContent`. The recipe used to store an
+  empty `triggerLabel`, which broke replay because
+  `getByRole("button", { name: "" })` doesn't match.
+  Now we read `aria-label` first.
+- **Vitest tests for `emptyRunCounters`.** 1 new test
+  asserts the ledger covers every count field; total
+  suite: **353 passing**.
+
 ## 0.196.0 — 2026-05-20
 
 ### Added

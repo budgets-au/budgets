@@ -3,6 +3,8 @@ import {
   type AppMap,
   type GoalKey,
   type SuccessfulRun,
+  appendRun,
+  emptyRunCounters,
   loadAppMap,
   recordGoalAttempt,
   saveAppMap,
@@ -44,6 +46,8 @@ import { signInAsAdmin } from "./_helpers";
  * time as the expert system fills in. */
 
 let appMap: AppMap;
+let runStartedAt = 0;
+let runCounters = emptyRunCounters();
 const RUN_TOKEN = `monkey-goal-${Date.now().toString(36)}`;
 
 interface GoalDef {
@@ -73,11 +77,15 @@ const GOALS: GoalDef[] = [
     label: "create a transaction",
     candidateRoutes: ["/transactions"],
     triggerPatterns: [/^\s*(add|new)\b.*transaction/i, /^\s*\+\s*$/],
+    // Keys match the <Field label="..."> text on the dialog —
+    // see add-transaction-dialog.tsx. The token lands in BOTH
+    // Payee and Notes so the DOM check (row.payee) or the API
+    // check (notes column) can both succeed.
     overrides: {
-      description: `${RUN_TOKEN}-tx`,
-      payee: `${RUN_TOKEN}-payee`,
-      amount: "42.00",
       date: "2026-01-15",
+      payee: `${RUN_TOKEN}-tx`,
+      amount: "42.00",
+      notes: `${RUN_TOKEN}-tx`,
     },
     domToken: `${RUN_TOKEN}-tx`,
     verifyApi: "/api/transactions?limit=100",
@@ -88,12 +96,12 @@ const GOALS: GoalDef[] = [
     candidateRoutes: ["/scheduled"],
     triggerPatterns: [/^\s*(add|new)\b.*(schedule|scheduled)/i, /^\s*\+\s*$/],
     setupDialog: async (dialog) => {
-      // The form opens defaulting to kind=schedule. No setup
-      // needed; the toggle just needs to NOT be flipped to
-      // budget. Defensive: if a kind picker is present, ensure
-      // the schedule option is selected.
+      // The form opens defaulting to kind=schedule. Defensive:
+      // if a kind picker is present, click the "Schedule"
+      // button by accessible name (the buttons are icon-only
+      // with aria-label, so :has-text wouldn't find them).
       const kindSchedule = dialog
-        .locator('button:has-text("Schedule"), [role="radio"]:has-text("Schedule")')
+        .getByRole("button", { name: "Schedule", exact: true })
         .first();
       if (await kindSchedule.isVisible().catch(() => false)) {
         await kindSchedule.click().catch(() => {});
@@ -115,11 +123,12 @@ const GOALS: GoalDef[] = [
     candidateRoutes: ["/scheduled"],
     triggerPatterns: [/^\s*(add|new)\b.*(budget|schedule|scheduled)/i, /^\s*\+\s*$/],
     setupDialog: async (dialog) => {
-      // Budget is the "other" kind on the same form. The toggle
-      // is labelled "Budget" — flip to it. If the form has no
-      // such toggle, the goal can't be completed here.
+      // Budget is the "other" kind on the same form. Buttons
+      // are icon-only with aria-label="Budget" — getByRole picks
+      // up accessible names so it finds the toggle that
+      // :has-text("Budget") missed in 0.196.0.
       const kindBudget = dialog
-        .locator('button:has-text("Budget"), [role="radio"]:has-text("Budget")')
+        .getByRole("button", { name: "Budget", exact: true })
         .first();
       if (!(await kindBudget.isVisible().catch(() => false))) return false;
       await kindBudget.click().catch(() => {});
@@ -139,9 +148,16 @@ const GOALS: GoalDef[] = [
 test.describe("smart monkey: goal-driven crawl", () => {
   test.beforeAll(async () => {
     appMap = await loadAppMap();
+    runStartedAt = Date.now();
+    runCounters = emptyRunCounters();
   });
 
   test.afterAll(async () => {
+    appendRun(appMap, {
+      ts: new Date().toISOString(),
+      durationMs: Date.now() - runStartedAt,
+      ...runCounters,
+    });
     await saveAppMap(appMap);
   });
 
@@ -183,6 +199,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       }
 
       // 2. Exploration.
+      runCounters.goalsAttempted += 1;
       let achieved: SuccessfulRun | null = null;
       for (const route of goal.candidateRoutes) {
         await page.goto(route);
@@ -191,9 +208,17 @@ test.describe("smart monkey: goal-driven crawl", () => {
 
         const trigger = await findTrigger(page, goal.triggerPatterns);
         if (!trigger) continue;
+        // Prefer aria-label — the "+" icon-only triggers used on
+        // /transactions and /scheduled have no text content, so
+        // textContent() returns "" and the recipe ends up
+        // unreadable. aria-label always carries the accessible
+        // name in those cases.
         const triggerLabel =
-          (await trigger.textContent().catch(() => null))?.trim() ?? "(unnamed)";
+          (await trigger.getAttribute("aria-label").catch(() => null)) ||
+          (await trigger.textContent().catch(() => null))?.trim() ||
+          "(unnamed)";
         await trigger.click().catch(() => {});
+        runCounters.buttonClicks += 1;
         await page.waitForTimeout(500);
 
         const dialog = page
@@ -204,6 +229,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
           // doesn't host the goal's form. Move on.
           continue;
         }
+        runCounters.dialogsOpened += 1;
 
         if (goal.setupDialog) {
           const ok = await goal.setupDialog(dialog);
@@ -214,12 +240,22 @@ test.describe("smart monkey: goal-driven crawl", () => {
         }
 
         const fillSpec = await fillGoalDialog(dialog, goal.overrides);
-        if (Object.keys(fillSpec).length === 0) {
-          // Dialog had no fillable inputs — probably not the
-          // right form (or it's already in a confirm state).
+        // Drive every SearchableCombobox-style picker inside the
+        // dialog: click the trigger, pick the first listbox item.
+        // This is what shipped the createTransaction goal from
+        // "submit silently no-op" in 0.196.0 to actually firing
+        // a network call — the account + category fields aren't
+        // <select> elements and the generic input pass skipped
+        // them entirely.
+        const pickerCount = await drivePickers(dialog);
+        runCounters.buttonClicks += pickerCount;
+        if (Object.keys(fillSpec).length === 0 && pickerCount === 0) {
+          // Dialog had nothing the crawler could drive — probably
+          // not the right form (or it's already in a confirm state).
           await dismissDialog(page);
           continue;
         }
+        runCounters.textInputsFilled += Object.keys(fillSpec).length;
 
         const submit = await findSubmitButton(dialog);
         if (!submit) {
@@ -232,6 +268,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
         const outcome = await observeSubmitOutcome(page, async () => {
           await submit.click({ timeout: 3_000 }).catch(() => {});
         });
+        runCounters.formSubmits += 1;
 
         const verified = await verifyOutcome(
           page,
@@ -249,19 +286,28 @@ test.describe("smart monkey: goal-driven crawl", () => {
             submitLabel,
             verified,
           };
+          // The form often auto-closes the dialog on a successful
+          // submit, but the failure path of dialogHeader (or a
+          // form that leaves a confirmation dialog open) can
+          // leave the page in a non-clean state. Dismiss anyway —
+          // it's idempotent.
+          await dismissDialog(page);
           break;
         }
 
-        // Record an unverified outcome as a finding so the
-        // operator knows the form fired (or didn't) and what
-        // happened.
+        // Submit produced nothing observable. Scrape the dialog
+        // for visible validation messages so the finding tells
+        // the operator WHICH required field tripped — far more
+        // useful than the bare "no network call fired".
+        const validationHints = await scrapeValidationErrors(dialog);
         await recordFinding({
           page: route,
           action: `goal "${goal.label}" — submit "${submitLabel}"`,
           severity: outcome.kind === "error" ? "error" : "info",
           kind: outcome.kind === "error" ? "issue" : "question",
-          message: `Filled ${Object.keys(fillSpec).length} fields, submit fired ${describeOutcome(outcome)}, but neither DOM nor API showed a row matching "${goal.domToken}".`,
+          message: `Filled ${Object.keys(fillSpec).length} fields${pickerCount > 0 ? ` + ${pickerCount} picker${pickerCount === 1 ? "" : "s"}` : ""}, submit fired ${describeOutcome(outcome)}, but neither DOM nor API showed a row matching "${goal.domToken}".${validationHints ? ` Validation hints: ${validationHints}` : ""}`,
         });
+        runCounters.findingsCount += 1;
         await dismissDialog(page);
       }
 
@@ -277,7 +323,9 @@ test.describe("smart monkey: goal-driven crawl", () => {
           kind: "issue",
           message: `Could not complete the "${goal.label}" goal across ${goal.candidateRoutes.length} candidate route(s). Smart monkey will retry next run.`,
         });
+        runCounters.findingsCount += 1;
       } else {
+        runCounters.goalsAchieved += 1;
         // Sanity: assert we picked up a verification signal.
         expect(["dom", "api"]).toContain(achieved.verified);
       }
@@ -331,12 +379,37 @@ async function fillGoalDialog(
     const meta = await el
       .evaluate((node) => {
         const e = node as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+        // Field's accessible label — the user-visible identifier.
+        // The transactions/scheduled forms in this app wrap inputs
+        // in <label>Foo <input/></label> with NO `name` / `id`
+        // attributes, so name-based matching misses every override.
+        // `HTMLInputElement.labels` covers both wrapping <label>
+        // and explicit `for="id"` — when present we use the first.
+        // Otherwise fall back to text nodes of the closest <label>
+        // (skipping nested form-control text so the value doesn't
+        // pollute the label).
+        let labelText = "";
+        const labels = (e as HTMLInputElement).labels;
+        if (labels && labels.length > 0) {
+          labelText = (labels[0].textContent ?? "").trim();
+        } else {
+          // Field components in this repo render <label><span>Foo</span>
+          // <Input/></label>. Walking direct text-node children misses
+          // the span; full textContent is fine because <input>'s value
+          // doesn't appear in textContent, and <textarea>'s textContent
+          // is its initial child text (typically empty for fresh forms).
+          const closest = e.closest("label");
+          if (closest) {
+            labelText = (closest.textContent ?? "").trim();
+          }
+        }
         return {
           tag: e.tagName,
           type: "type" in e ? e.type : "",
           name: ("name" in e ? e.name : "") || "",
           id: e.id || "",
           placeholder: "placeholder" in e ? e.placeholder : "",
+          label: labelText,
           readOnly: "readOnly" in e ? e.readOnly : false,
           disabled: e.disabled,
         };
@@ -347,7 +420,16 @@ async function fillGoalDialog(
     if (meta.type === "hidden" || meta.type === "file" || meta.type === "password") {
       continue;
     }
-    const key = (meta.name || meta.id || meta.placeholder || "")
+    // Match the override by the field's user-visible label first
+    // (most reliable in this codebase), then fall back to name /
+    // id / placeholder for forms that use those.
+    const key = (
+      meta.label ||
+      meta.name ||
+      meta.id ||
+      meta.placeholder ||
+      ""
+    )
       .toLowerCase()
       .replace(/[^a-z]/g, "");
     const override = key
@@ -397,9 +479,149 @@ function defaultForType(meta: { type: string; tag: string }): string | null {
 }
 
 async function dialogHeader(dialog: Locator): Promise<string | undefined> {
-  const h = dialog.locator('h1, h2, h3, [role="heading"]').first();
-  const txt = await h.textContent().catch(() => null);
+  // Look for either an explicit dialog-title element (shadcn's
+  // `[data-slot="dialog-title"]` covers BaseUI / Radix variants)
+  // or any heading inside the dialog. Short timeout so a dialog
+  // that has neither doesn't stall the goal-driven test by
+  // 30s+ of Playwright auto-wait.
+  const h = dialog
+    .locator(
+      '[data-slot="dialog-title"], h1, h2, h3, [role="heading"]',
+    )
+    .first();
+  const txt = await h.textContent({ timeout: 500 }).catch(() => null);
   return txt?.trim() || undefined;
+}
+
+/** Drive every SearchableCombobox-style picker visible inside
+ * `dialog`. The shared primitive renders as a Popover wrapping a
+ * button trigger plus a `<ul role="listbox">` of `<li role="option">`
+ * items; the trigger button typically reads "Choose X…" or
+ * "Select X…" before any selection is made. For each one we
+ * find:
+ *   1. click the trigger
+ *   2. wait for the popover's listbox to render
+ *   3. click the first visible `[role="option"]`
+ *
+ * Returns the number of pickers actually driven (so the run-report
+ * can credit picker activity to button-click counts). Skips
+ * triggers whose accessible name looks destructive ("Delete X",
+ * "Archive", etc.) — defence in depth, even though no real picker
+ * uses those labels today. */
+async function drivePickers(dialog: Locator): Promise<number> {
+  let driven = 0;
+  // Triggers we recognise:
+  //   1. SearchableCombobox — bare <button> whose visible text
+  //      starts with "Choose…" / "Select…" / "Pick…"
+  //      (the `emptyTriggerLabel` convention).
+  //   2. Radix/BaseUI Select — `[data-slot="select-trigger"]`
+  //      with the SelectValue's placeholder (e.g. "Account",
+  //      "Destination").
+  //   3. Anything with `role="combobox"` — covers future
+  //      primitives that follow ARIA properly.
+  // Each opens a popover or listbox portaled OUTSIDE the dialog
+  // subtree, so we scope the post-click `[role="option"]` /
+  // `[data-slot="select-item"]` search to the page, not the
+  // dialog.
+  // Narrow the candidate set to actual picker-shaped triggers
+  // BEFORE iterating — saves a round-trip-per-button to read
+  // attributes. The :is() lets one query do the union.
+  const triggers = dialog.locator(
+    ':is([data-slot="select-trigger"], [role="combobox"]):visible',
+  );
+  // Also pick up bare-button SearchableCombobox triggers whose
+  // visible label starts with "Choose…" / "Select…" / "Pick…".
+  // These don't carry a `data-slot` or role.
+  const textTriggers = dialog
+    .locator("button:visible")
+    .filter({ hasText: /^\s*(choose|select|pick)\b/i });
+
+  const baseCount = await triggers.count().catch(() => 0);
+  const textCount = await textTriggers.count().catch(() => 0);
+  const total = Math.min(baseCount + textCount, 6);
+
+  for (let i = 0; i < total; i++) {
+    const t = i < baseCount ? triggers.nth(i) : textTriggers.nth(i - baseCount);
+    if (!(await t.isVisible().catch(() => false))) continue;
+    const label =
+      (await t.getAttribute("aria-label").catch(() => null)) ??
+      (await t.textContent().catch(() => null))?.trim() ??
+      "";
+    if (isDestructiveLabel(label)) continue;
+    try {
+      await t.click({ timeout: 800 });
+      const page = t.page();
+      // SelectContent and PopoverContent are both portaled
+      // outside the dialog subtree, so we search at page scope.
+      const option = page
+        .locator(
+          '[role="option"]:visible, [data-slot="select-item"]:visible',
+        )
+        .first();
+      if (!(await option.isVisible({ timeout: 800 }).catch(() => false))) {
+        await page.keyboard.press("Escape").catch(() => {});
+        continue;
+      }
+      await option.click({ timeout: 800 }).catch(() => {});
+      driven += 1;
+    } catch {
+      /* trigger didn't behave like a picker — skip */
+    }
+  }
+  return driven;
+}
+
+/** Look for visible validation-error signals inside `dialog`
+ * after a silent submit, and render them into a single short
+ * string for the finding message. Picks up:
+ *   - `[aria-invalid="true"]` on inputs (browser-native form
+ *     validation surfaces this automatically)
+ *   - error helper-text containers (shadcn's `[role="alert"]`
+ *     inside a form field, or any element with a class
+ *     containing "error" / "destructive")
+ *   - "required" / "is required" / "must" patterns in visible
+ *     text near a field
+ *
+ * Returns null when nothing was found — caller skips the
+ * "Validation hints:" tail in the finding message. */
+async function scrapeValidationErrors(
+  dialog: Locator,
+): Promise<string | null> {
+  const hints: string[] = [];
+
+  // `[aria-invalid="true"]` is the cleanest signal — modern
+  // forms expose it explicitly.
+  const invalidNames = await dialog
+    .locator('[aria-invalid="true"]:visible')
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const e = el as HTMLInputElement;
+        return e.getAttribute("aria-label") || e.name || e.id || "(unnamed)";
+      }),
+    )
+    .catch(() => [] as string[]);
+  for (const name of invalidNames) {
+    hints.push(`field "${name}" invalid`);
+  }
+
+  // Visible alert blocks. Filter to short, error-shaped text —
+  // anything longer than 120 chars is probably help copy.
+  const alerts = await dialog
+    .locator('[role="alert"]:visible')
+    .evaluateAll((els) =>
+      els
+        .map((el) => (el.textContent ?? "").trim().replace(/\s+/g, " "))
+        .filter((t) => t.length > 0 && t.length <= 120),
+    )
+    .catch(() => [] as string[]);
+  for (const t of alerts) hints.push(t);
+
+  // Cap output. More than 3 hints is signal-flood — the operator
+  // can read the dialog directly if they need the full list.
+  if (hints.length === 0) return null;
+  const trimmed = hints.slice(0, 3);
+  const extra = hints.length - trimmed.length;
+  return trimmed.join("; ") + (extra > 0 ? ` (+${extra} more)` : "");
 }
 
 async function dismissDialog(page: Page): Promise<void> {

@@ -25,26 +25,52 @@ shipped in 0.166.0._
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-20T08:57:41.484Z · 3 issues, 2 questions._
+_Last run: 2026-05-20T09:46:39.807Z · 2 issues, 0 questions._
+
+#### Smart Monkey expert system
+
+| Goal | Achieved | Attempts | Last successful run |
+| --- | --- | --- | --- |
+| `createTransaction` | ✅ | 1 | /transactions · "" → "Add" (dom) |
+| `createBudget` | ❌ | 1 | _(not yet)_ |
+| `createSchedule` | ❌ | 1 | _(not yet)_ |
+
+_Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
+
+#### Smart Monkey run report
+
+| Metric | Count |
+| --- | --- |
+| Total wall time | 38.6s |
+| Routes visited | 0 |
+| Button clicks | 4 |
+| Switch toggles | 0 |
+| Select cycles | 0 |
+| Text inputs filled | 17 |
+| Dialogs opened | 3 |
+| Form submits | 1 |
+| Links discovered | 0 |
+| Console errors | 0 |
+| Goals attempted | 3 |
+| Goals achieved | 1 |
+| Findings logged | 2 |
+
+##### Workflows completed
+- ✅ `createTransaction` — `/transactions` · click **** → fill → click **Add** (verified via dom)
+- ❌ `createBudget` — _(not yet completed)_
+- ❌ `createSchedule` — _(not yet completed)_
+
+#### Vitest summary
+
+_Last run: 2026-05-20T09:26:06.823Z._
+
+✅ **353 passed** across 38 files (13.3s).
 
 #### Issues
 
 ##### /scheduled
 - 🟡 **goal "create a schedule"** — Could not complete the "create a schedule" goal across 1 candidate route(s). Smart monkey will retry next run.
 - 🟡 **goal "create a budget"** — Could not complete the "create a budget" goal across 1 candidate route(s). Smart monkey will retry next run.
-
-##### /transactions
-- 🟡 **goal "create a transaction"** — Could not complete the "create a transaction" goal across 1 candidate route(s). Smart monkey will retry next run.
-
-#### Questions for review
-
-_The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
-
-##### /scheduled
-- ❓ **goal "create a schedule" — submit "Create"** — Filled 8 fields, submit fired no network call, toast, or navigation fired, but neither DOM nor API showed a row matching "monkey-goal-mpdtvp2k-sched".
-
-##### /transactions
-- ❓ **goal "create a transaction" — submit "Add"** — Filled 4 fields, submit fired no network call, toast, or navigation fired, but neither DOM nor API showed a row matching "monkey-goal-mpdtvp2k-tx".
 
 <!-- monkey:end -->
 

@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import type { MonkeyFinding } from "./_monkey-helpers";
 import { type AppMap, GOAL_KEYS, loadAppMap } from "./_app-map";
 
+const VITEST_REPORT_PATH = resolve("./tests/e2e/.data/vitest-report.json");
+
 /** After every Playwright run, fold the 1000-monkey findings into
  * TODO.md so the operator has one place to look. Replaces the
  * `<!-- monkey:start -->`/`<!-- monkey:end -->` block in TODO.md
@@ -46,7 +48,13 @@ export default async function globalTeardown(): Promise<void> {
   // Smart-monkey expert-system summary, if we have any map data.
   if (haveMap) {
     appendExpertSystem(lines, map);
+    appendRunReport(lines, map);
   }
+
+  // Vitest sidecar, if present. The report is written by the
+  // `pnpm test:report` command; we render the latest one we find
+  // (no recency cutoff — operators triage manually if it's stale).
+  await appendVitestReport(lines);
 
   if (issues.length > 0) {
     lines.push("#### Issues");
@@ -134,6 +142,140 @@ function appendExpertSystem(lines: string[], map: AppMap): void {
     }
     lines.push("");
   }
+}
+
+/** Render the latest run's granular counters + the list of
+ * workflows the crawl has completed (achieved goals). Two
+ * RunSummary rows can land per `pnpm test:e2e` invocation — one
+ * from monkey.spec.ts (breadth-first + drill-down) and one from
+ * monkey-goals.spec.ts (goal-driven). We sum them for the
+ * "Latest run" totals so the operator sees the full picture
+ * rather than half. */
+function appendRunReport(lines: string[], map: AppMap): void {
+  if (map.runs.length === 0) return;
+  lines.push("#### Smart Monkey run report");
+  lines.push("");
+
+  // Both specs save a RunSummary per pnpm test:e2e invocation.
+  // Walk back from the tail collecting rows that fell within
+  // the last 5 minutes (one e2e cycle is ≤3 min); anything older
+  // belongs to a previous run.
+  const cutoffMs = Date.now() - 5 * 60_000;
+  const recent = [...map.runs]
+    .reverse()
+    .filter((r) => Date.parse(r.ts) >= cutoffMs);
+  if (recent.length === 0) {
+    // Fall back to just the most recent row — better than
+    // emitting an empty table.
+    recent.push(map.runs[map.runs.length - 1]);
+  }
+  const sum = recent.reduce(
+    (acc, r) => ({
+      durationMs: acc.durationMs + r.durationMs,
+      routesVisited: acc.routesVisited + r.routesVisited,
+      buttonClicks: acc.buttonClicks + r.buttonClicks,
+      switchToggles: acc.switchToggles + r.switchToggles,
+      selectChanges: acc.selectChanges + r.selectChanges,
+      textInputsFilled: acc.textInputsFilled + r.textInputsFilled,
+      dialogsOpened: acc.dialogsOpened + r.dialogsOpened,
+      formSubmits: acc.formSubmits + r.formSubmits,
+      linksDiscovered: acc.linksDiscovered + r.linksDiscovered,
+      consoleErrors: acc.consoleErrors + r.consoleErrors,
+      goalsAttempted: acc.goalsAttempted + r.goalsAttempted,
+      goalsAchieved: acc.goalsAchieved + r.goalsAchieved,
+      findingsCount: acc.findingsCount + r.findingsCount,
+    }),
+    {
+      durationMs: 0,
+      routesVisited: 0,
+      buttonClicks: 0,
+      switchToggles: 0,
+      selectChanges: 0,
+      textInputsFilled: 0,
+      dialogsOpened: 0,
+      formSubmits: 0,
+      linksDiscovered: 0,
+      consoleErrors: 0,
+      goalsAttempted: 0,
+      goalsAchieved: 0,
+      findingsCount: 0,
+    },
+  );
+  const seconds = (sum.durationMs / 1000).toFixed(1);
+
+  lines.push("| Metric | Count |");
+  lines.push("| --- | --- |");
+  lines.push(`| Total wall time | ${seconds}s |`);
+  lines.push(`| Routes visited | ${sum.routesVisited} |`);
+  lines.push(`| Button clicks | ${sum.buttonClicks} |`);
+  lines.push(`| Switch toggles | ${sum.switchToggles} |`);
+  lines.push(`| Select cycles | ${sum.selectChanges} |`);
+  lines.push(`| Text inputs filled | ${sum.textInputsFilled} |`);
+  lines.push(`| Dialogs opened | ${sum.dialogsOpened} |`);
+  lines.push(`| Form submits | ${sum.formSubmits} |`);
+  lines.push(`| Links discovered | ${sum.linksDiscovered} |`);
+  lines.push(`| Console errors | ${sum.consoleErrors} |`);
+  lines.push(`| Goals attempted | ${sum.goalsAttempted} |`);
+  lines.push(`| Goals achieved | ${sum.goalsAchieved} |`);
+  lines.push(`| Findings logged | ${sum.findingsCount} |`);
+  lines.push("");
+
+  // Workflows-completed list. A workflow is "completed" if the
+  // smart monkey has EVER achieved it — `goals.<key>.achieved`
+  // sticks once flipped. The recipe in `successfulRun` is the
+  // proof; we surface its route + trigger + submit so the
+  // operator can read the exact path.
+  lines.push("##### Workflows completed");
+  for (const key of GOAL_KEYS) {
+    const g = map.goals[key];
+    if (g.achieved && g.successfulRun) {
+      const r = g.successfulRun;
+      lines.push(
+        `- ✅ \`${key}\` — \`${r.route}\` · click **${r.triggerLabel}** → fill → click **${r.submitLabel}** (verified via ${r.verified})`,
+      );
+    } else {
+      lines.push(`- ❌ \`${key}\` — _(not yet completed)_`);
+    }
+  }
+  lines.push("");
+}
+
+/** Vitest report sidecar — populated by `pnpm test:report`. The
+ * shape we render here is whatever `scripts/vitest-summary.mjs`
+ * boils the JSON reporter down to: pass/fail/skip counts,
+ * suite totals, duration. Silent if no sidecar exists. */
+interface VitestSummary {
+  ts: string;
+  totalFiles: number;
+  totalTests: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  durationMs: number;
+}
+
+async function appendVitestReport(lines: string[]): Promise<void> {
+  if (!existsSync(VITEST_REPORT_PATH)) return;
+  let summary: VitestSummary;
+  try {
+    summary = JSON.parse(
+      await readFile(VITEST_REPORT_PATH, "utf8"),
+    ) as VitestSummary;
+  } catch {
+    return;
+  }
+  lines.push("#### Vitest summary");
+  lines.push("");
+  lines.push(`_Last run: ${summary.ts}._`);
+  lines.push("");
+  const status = summary.failed === 0 ? "✅" : "🔴";
+  lines.push(
+    `${status} **${summary.passed} passed**` +
+      (summary.failed > 0 ? `, ${summary.failed} failed` : "") +
+      (summary.skipped > 0 ? `, ${summary.skipped} skipped` : "") +
+      ` across ${summary.totalFiles} files (${(summary.durationMs / 1000).toFixed(1)}s).`,
+  );
+  lines.push("");
 }
 
 /** Render a list of findings grouped by page, with severity

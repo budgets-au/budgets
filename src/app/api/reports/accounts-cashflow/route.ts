@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from "date-fns";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { isTransferRow } from "@/lib/transfer-filter";
 import { parseAccountIds } from "@/lib/api/account-ids";
+import { withAuth } from "@/lib/api/route-guards";
 
 export interface TransferCounterpartyBreakdown {
   /** Paired account's id, or null when the transfer's pair lives at an
@@ -90,12 +90,7 @@ function generateMonths(from: string, to: string): string[] {
  * `starting_balance` field + every transaction with `date < from` for
  * that account, matching how the calendar's per-account series is
  * back-computed. */
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const now = new Date();
   const from = searchParams.get("from") ?? format(startOfMonth(subMonths(now, 5)), "yyyy-MM-dd");
@@ -419,4 +414,4 @@ export async function GET(request: Request) {
     accounts,
     totals,
   } satisfies AccountsCashflowReport);
-}
+});

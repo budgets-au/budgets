@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { appSettings, type TaxConfig } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { withAuth } from "@/lib/api/route-guards";
 
 const taxConfigSchema = z.object({
   // Map keys arrive as strings via JSON; `Number(k)` on read.
@@ -26,20 +26,14 @@ const updateSchema = z.object({
 
 const EMPTY_TAX_CONFIG: TaxConfig = { wfhHoursByFy: {}, categoryRules: {} };
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async () => {
   const [row] = await db.select().from(appSettings).where(eq(appSettings.id, 1)).limit(1);
   return NextResponse.json({
     taxConfig: row?.taxConfig ?? EMPTY_TAX_CONFIG,
   });
-}
+});
 
-export async function PATCH(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const PATCH = withAuth(async (request) => {
   const body = await request.json();
   const data = updateSchema.parse(body);
 
@@ -69,4 +63,4 @@ export async function PATCH(request: Request) {
     .onConflictDoUpdate({ target: appSettings.id, set: updates });
 
   return NextResponse.json({ ok: true });
-}
+});

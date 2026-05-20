@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { z } from "zod";
 import { manualPair, manualPairExternal, manualUnpair } from "@/lib/transfer-match";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 /** Three shapes accepted on this endpoint:
  *
@@ -23,14 +23,7 @@ const schema = z.union([
   }),
 ]);
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const PATCH = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
@@ -59,4 +52,4 @@ export async function PATCH(
   }
 
   return NextResponse.json({ ok: true });
-}
+});

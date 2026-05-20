@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, importLogs, transactions } from "@/db/schema";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
@@ -13,6 +12,7 @@ import {
 import { learnAccountAlias } from "@/lib/import/resolve-account";
 import { pairTransfersInWindow } from "@/lib/transfer-match";
 import { diffDaysISO } from "@/lib/utils";
+import { withAuth } from "@/lib/api/route-guards";
 
 const rowSchema = z.object({
   /** Where this row should land. Required — rows without a resolved
@@ -54,10 +54,7 @@ const bodySchema = z.object({
  * each row's `bankAccountId` → resolved `accountId` so future
  * imports auto-route.
  */
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   try {
     return await runCommit(request);
   } catch (err: unknown) {
@@ -65,7 +62,7 @@ export async function POST(request: Request) {
     console.error("[commit-batched]", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
 async function runCommit(request: Request) {
   const body = await request.json();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { learnAccountAlias } from "@/lib/import/resolve-account";
+import { withAuth } from "@/lib/api/route-guards";
 
 const bodySchema = z.object({
   aliases: z
@@ -23,10 +23,7 @@ const bodySchema = z.object({
  * are NOT overwritten so a single bad heuristic doesn't trample a real
  * mapping.
  */
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const { aliases } = bodySchema.parse(body);
 
@@ -37,4 +34,4 @@ export async function POST(request: Request) {
   );
 
   return NextResponse.json({ saved: aliases.length });
-}
+});

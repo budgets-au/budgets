@@ -9,6 +9,40 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.193.0 — 2026-05-20
+
+### Changed
+- **Bulk migration of API routes to `withAuth` /
+  `withAuthAndId` / `withAdminAuth`.** 61 of the remaining
+  69 routes from the simplification sweep — accounts,
+  categories, transactions, scheduled, investments,
+  watchlist, super, reports, import, backup (non-filename),
+  databases, payee-rules, settings, lock, rekey,
+  github-stats, version-check, display-prefs,
+  cashflow, plus the rest of dashboard / super / transfers.
+  The handler bodies drop the
+  `await auth(); if (!session) return 401` preamble, the
+  `params + safeParse` block for `[id]` routes, and the
+  `isAdmin(session)` check on admin routes. The wrappers
+  own all three checks now.
+
+### Unchanged (legitimate hold-outs)
+- Eight routes keep the manual auth pattern: `users/[id]`,
+  `categories/orphans`, `sample-data/remove` (all need the
+  raw `session` for `session.user.id` or `session.user.role`
+  lookups beyond `isAdmin`), `backup/[filename]/route.ts`
+  and `backup/[filename]/download/route.ts`,
+  `super/people/[key]/route.ts`,
+  `investments/vests/[vestId]/route.ts` (non-id dynamic
+  params — the `withAuthAndId` helper is `[id]`-specific),
+  `accounts/[id]/reconcile/route.ts` (needs session for an
+  admin double-check beyond `isAdmin`).
+
+Mechanical-only — every wrapper preserves the same
+401/400/403 status codes, the same response shapes, and
+the same UUID validation as the inline code did. 316 tests
+stay green.
+
 ## 0.192.0 — 2026-05-20
 
 ### Added

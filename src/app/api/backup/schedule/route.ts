@@ -1,20 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth, isAdmin } from "@/lib/auth";
 import { readSchedule, writeSchedule } from "@/lib/backup/sqlite-backup";
+import { withAdminAuth } from "@/lib/api/route-guards";
 
 /** PATCH /api/backup/schedule — partial update of the singleton
  * schedule config. Admin-only; backup cadence is household-wide.
  * Validation is permissive: any subset of
  * {enabled, intervalDays, retain} is accepted, anything else is
  * dropped. The scheduler picks up the new values within ~60s. */
-export async function PATCH(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-  }
+export const PATCH = withAdminAuth(async (request) => {
   let body: unknown;
   try {
     body = await request.json();
@@ -51,4 +44,4 @@ export async function PATCH(request: Request) {
   }
   writeSchedule(patch);
   return NextResponse.json({ ok: true, schedule: readSchedule() });
-}
+});

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { categories } from "@/db/schema";
 import { asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { transferKindEnum } from "@/lib/api/enums";
+import { withAuth } from "@/lib/api/route-guards";
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -14,10 +14,7 @@ const createSchema = z.object({
   transferKind: transferKindEnum.optional(),
 });
 
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type");
 
@@ -32,15 +29,12 @@ export async function GET(request: Request) {
 
   const rows = await query;
   return NextResponse.json(rows);
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const data = createSchema.parse(body);
 
   const [row] = await db.insert(categories).values(data).returning();
   return NextResponse.json(row, { status: 201 });
-}
+});

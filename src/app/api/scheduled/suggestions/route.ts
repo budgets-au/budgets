@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import {
   transactions,
@@ -12,6 +11,7 @@ import { eq, gte } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { subMonths, format } from "date-fns";
 import { normalizePayee } from "@/lib/categorize";
+import { withAuth } from "@/lib/api/route-guards";
 
 // 24 months covers two yearly observations and three quarterly. Cheap enough
 // at household scale; the matcher in JS is the bottleneck, not the query.
@@ -136,10 +136,7 @@ interface Suggestion {
   }>;
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async () => {
   const since = format(subMonths(new Date(), LOOKBACK_MONTHS), "yyyy-MM-dd");
 
   // Pull transactions in the lookback window. We INCLUDE rows with transfer
@@ -442,4 +439,4 @@ export async function GET() {
   });
 
   return NextResponse.json(suggestions);
-}
+});

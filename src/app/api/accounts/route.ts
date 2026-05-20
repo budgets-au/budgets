@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { accountTypeEnum } from "@/lib/api/enums";
+import { withAuth } from "@/lib/api/route-guards";
 
 const createSchema = z.object({
   name: z.string().min(1),
@@ -17,10 +17,7 @@ const createSchema = z.object({
   color: z.string().optional(),
 });
 
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async (request) => {
   // `?includeArchived=true` returns archived accounts alongside
   // visible ones. The dashboard Account widget uses it (the whole
   // point of pinning is that a hidden account stays visible).
@@ -36,12 +33,9 @@ export async function GET(request: Request) {
     .orderBy(asc(accounts.name));
 
   return NextResponse.json(rows);
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const data = createSchema.parse(body);
 
@@ -54,4 +48,4 @@ export async function POST(request: Request) {
     .returning();
 
   return NextResponse.json(row, { status: 201 });
-}
+});

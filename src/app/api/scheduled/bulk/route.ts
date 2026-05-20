@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { scheduledTransactions, scheduleSuggestionDismissals } from "@/db/schema";
 import { inArray } from "drizzle-orm";
 import { z } from "zod";
 import { normalizePayee } from "@/lib/categorize";
+import { withAuth } from "@/lib/api/route-guards";
 
 const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(500),
 });
 
-export async function DELETE(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const DELETE = withAuth(async (request) => {
   const body = await request.json();
   const { ids } = bulkDeleteSchema.parse(body);
 
@@ -63,4 +60,4 @@ export async function DELETE(request: Request) {
   }
 
   return NextResponse.json({ deleted: deleted.length, dismissed: dismissals.length });
-}
+});

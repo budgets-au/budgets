@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { investments, investmentVests } from "@/db/schema";
 import { eq, asc, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getQuote, getDailyHistory, getPriceOnDate } from "@/lib/investments/yahoo";
 import { vestedQuantity, costBasis, currentValue, totalReturn } from "@/lib/investments/calc";
+import { withAuth } from "@/lib/api/route-guards";
 
 const createSchema = z.object({
   kind: z.enum(["stock", "rsu", "option", "paper"]),
@@ -55,10 +55,7 @@ interface ListRow {
   totalReturnPct: number | null;
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async () => {
   const rows = await db
     .select()
     .from(investments)
@@ -167,12 +164,9 @@ export async function GET() {
   });
 
   return NextResponse.json(out);
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const data = createSchema.parse(body);
 
@@ -222,4 +216,4 @@ export async function POST(request: Request) {
     .returning();
 
   return NextResponse.json(row, { status: 201 });
-}
+});

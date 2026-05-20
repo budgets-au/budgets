@@ -1,16 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { payeeRules, categories } from "@/db/schema";
 import { and, eq, asc, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { suggestCategoryByHistory, loadTokenFreq } from "@/lib/categorize";
 import { decidePayeeRuleAction } from "@/lib/payee-rule-decision";
+import { withAuth } from "@/lib/api/route-guards";
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async () => {
   const rows = await db
     .select({
       id: payeeRules.id,
@@ -26,7 +23,7 @@ export async function GET() {
     .orderBy(asc(payeeRules.normalizedPayee));
 
   return NextResponse.json(rows);
-}
+});
 
 const createSchema = z.object({
   normalizedPayee: z.string().min(1),
@@ -42,10 +39,7 @@ const createSchema = z.object({
   currentCategoryId: z.string().uuid().nullable().optional(),
 });
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const data = createSchema.parse(body);
 
@@ -125,4 +119,4 @@ export async function POST(request: Request) {
     })
     .returning({ id: payeeRules.id });
   return NextResponse.json({ id: row.id, updated: false });
-}
+});

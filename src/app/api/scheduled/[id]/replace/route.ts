@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { scheduledForecasts, scheduledTransactions } from "@/db/schema";
 import { and, eq, gte, ne } from "drizzle-orm";
 import { z } from "zod";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 // POST /api/scheduled/[id]/replace
 // Closes the predecessor schedule with an end_date and creates a successor
@@ -31,19 +31,7 @@ function isoMinusOneDay(iso: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  }
-  const id = idParse.data;
+export const POST = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const { newAmount, effectiveDate, payee } = schema.parse(body);
 
@@ -142,4 +130,4 @@ export async function POST(
   });
 
   return NextResponse.json({ predecessorId: id, successor });
-}
+});

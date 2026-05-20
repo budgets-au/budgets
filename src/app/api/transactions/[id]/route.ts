@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { transactions, accounts } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { deriveMatchPayee, loadTokenFreq, normalizePayee } from "@/lib/categorize";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
+import { withAuthAndId } from "@/lib/api/route-guards";
 // Auto-learning has been removed — the trigram suggester reads
 // directly from the categorised history, so re-categorising a
 // transaction is itself the training signal for future imports.
@@ -30,14 +30,7 @@ async function refreshBalance(accountId: string) {
     .where(eq(accounts.id, accountId));
 }
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const GET = withAuthAndId(async (id) => {
   const [row] = await db
     .select()
     .from(transactions)
@@ -45,16 +38,9 @@ export async function GET(
     .limit(1);
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(row);
-}
+});
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const PATCH = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const data = updateSchema.parse(body);
 
@@ -83,16 +69,9 @@ export async function PATCH(
   await refreshBalance(row.accountId);
 
   return NextResponse.json(row);
-}
+});
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const DELETE = withAuthAndId(async (id) => {
   // Inside a transaction so the partner-cleanup and the delete commit
   // together — half-applied state can leave a partner with a stale
   // is_transfer=true flag.
@@ -118,4 +97,4 @@ export async function DELETE(
   if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await refreshBalance(result.accountId);
   return NextResponse.json({ ok: true });
-}
+});

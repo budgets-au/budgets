@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { investments, investmentNews } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
 import { getNews } from "@/lib/investments/yahoo";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 /** Refetch from Yahoo if the most recent cache row for this symbol is
  *  older than this. Yahoo's news cadence isn't sub-hourly for most
@@ -27,22 +27,7 @@ const NEWS_TTL_MS = 24 * 60 * 60 * 1000;
  * Response: `{ news: NewsItem[]; fetchedAt: number; stale: boolean }`
  * where `fetchedAt` is the unix-ms of the newest cache row.
  */
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  }
-  const id = idParse.data;
-
+export const GET = withAuthAndId(async (id, request) => {
   // Look up the symbol to query. Investments are user-owned; an
   // authenticated user is allowed to see news for any of their
   // tickers (no per-user scoping in the schema today).
@@ -151,4 +136,4 @@ export async function GET(
     fetchedAt: newestFetch || null,
     stale,
   });
-}
+});

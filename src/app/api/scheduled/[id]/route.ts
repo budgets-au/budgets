@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { scheduledTransactions, scheduleSuggestionDismissals } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { normalizePayee } from "@/lib/categorize";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 const updateSchema = z.object({
   kind: z.enum(["schedule", "budget"]).optional(),
@@ -25,17 +25,7 @@ const updateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const id = idParse.data;
+export const PATCH = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const parsed = updateSchema.parse(body);
   // When the row is being saved as a budget (either now or already), strip
@@ -61,20 +51,9 @@ export async function PATCH(
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(row);
-}
+});
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const id = idParse.data;
-
+export const DELETE = withAuthAndId(async (id) => {
   // Capture the schedule's identity before deleting so we can plant a
   // suggestion-dismissal — otherwise the suggestion engine would re-detect the
   // same pattern from the surviving historical transactions and surface it
@@ -114,4 +93,4 @@ export async function DELETE(
   }
 
   return NextResponse.json({ ok: true });
-}
+});

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accountIdSql, parseAccountIds } from "@/lib/api/account-ids";
+import { withAuth } from "@/lib/api/route-guards";
 
 /** GET /api/reports/payee-totals
  *
@@ -17,12 +17,7 @@ import { accountIdSql, parseAccountIds } from "@/lib/api/account-ids";
  *
  * `?kind=expense|income|all` filters by the row's category type;
  * uncategorised rows are included only on `all`. */
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from") ?? "1970-01-01";
   const to = searchParams.get("to") ?? "9999-12-31";
@@ -81,4 +76,4 @@ export async function GET(request: Request) {
     otherTotal,
     otherCount,
   });
-}
+});

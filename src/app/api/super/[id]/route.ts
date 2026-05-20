@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { superannuationSnapshots } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 const updateSchema = z.object({
   fyEndYear: z.number().int().min(1990).max(2200).optional(),
@@ -15,42 +15,22 @@ const updateSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-
+export const PATCH = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const data = updateSchema.parse(body);
 
   const [row] = await db
     .update(superannuationSnapshots)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(superannuationSnapshots.id, idParse.data))
+    .where(eq(superannuationSnapshots.id, id))
     .returning();
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(row);
-}
+});
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-
+export const DELETE = withAuthAndId(async (id) => {
   await db
     .delete(superannuationSnapshots)
-    .where(eq(superannuationSnapshots.id, idParse.data));
+    .where(eq(superannuationSnapshots.id, id));
   return NextResponse.json({ ok: true });
-}
+});

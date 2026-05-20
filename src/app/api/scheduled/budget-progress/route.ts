@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { categories, scheduledTransactions, transactions } from "@/db/schema";
 import { eq, and, gte, inArray, lte, sql } from "drizzle-orm";
 import { currentBudgetPeriod } from "@/lib/budget-period";
+import { withAuth } from "@/lib/api/route-guards";
 import {
   buildChildrenByParent,
   descendantIdsFromMap,
@@ -17,10 +17,7 @@ interface ProgressRow {
   cap: string;
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async () => {
   const budgets = await db
     .select()
     .from(scheduledTransactions)
@@ -93,4 +90,4 @@ export async function GET() {
   );
 
   return NextResponse.json(out);
-}
+});

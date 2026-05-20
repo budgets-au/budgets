@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { accountTypeEnum } from "@/lib/api/enums";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -23,28 +23,14 @@ const updateSchema = z.object({
   currentBalance: z.string().optional(),
 });
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const GET = withAuthAndId(async (id) => {
   const [row] = await db.select().from(accounts).where(eq(accounts.id, id)).limit(1);
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json(row);
-}
+});
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const PATCH = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const data = updateSchema.parse(body);
 
@@ -72,16 +58,9 @@ export async function PATCH(
   }
 
   return NextResponse.json(row);
-}
+});
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const DELETE = withAuthAndId(async (id) => {
   await db.update(accounts).set({ isArchived: true }).where(eq(accounts.id, id));
   return NextResponse.json({ ok: true });
-}
+});

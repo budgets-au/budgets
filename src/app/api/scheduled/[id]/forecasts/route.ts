@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { scheduledForecasts, scheduledTransactions } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -11,6 +10,7 @@ import { z } from "zod";
 // removes the forecast and falls back to the schedule's standard amount.
 
 import { isoDateString, numericString } from "@/lib/zod-helpers";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 const upsertSchema = z.object({
   occurrenceDate: isoDateString,
@@ -23,39 +23,19 @@ const deleteSchema = z.object({
 
 // GET /api/scheduled/[id]/forecasts
 // Returns all stored forecasts for the schedule, oldest → newest.
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const id = idParse.data;
+export const GET = withAuthAndId(async (id, request) => {
   const rows = await db
     .select()
     .from(scheduledForecasts)
     .where(eq(scheduledForecasts.scheduledId, id))
     .orderBy(scheduledForecasts.occurrenceDate);
   return NextResponse.json({ forecasts: rows });
-}
+});
 
 // POST /api/scheduled/[id]/forecasts
 // Upsert a forecast for one occurrence date. Amount is signed by the schedule's
 // type (expense/transfer → negative; income → positive).
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const id = idParse.data;
+export const POST = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const { occurrenceDate, amount } = upsertSchema.parse(body);
 
@@ -83,21 +63,11 @@ export async function POST(
     .returning();
 
   return NextResponse.json(row, { status: 201 });
-}
+});
 
 // DELETE /api/scheduled/[id]/forecasts
 // Body: { occurrenceDate }. Removes a single forecast row.
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const id = idParse.data;
+export const DELETE = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const { occurrenceDate } = deleteSchema.parse(body);
 
@@ -110,4 +80,4 @@ export async function DELETE(
       ),
     );
   return NextResponse.json({ ok: true });
-}
+});

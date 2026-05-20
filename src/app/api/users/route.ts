@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { hash } from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { auth, isAdmin } from "@/lib/auth";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { validateUsername, validatePassword, validateRole } from "@/lib/user-rules";
+import { withAdminAuth } from "@/lib/api/route-guards";
 
-export async function GET() {
-  const session = await auth();
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAdminAuth(async () => {
   const rows = await db
     .select({
       id: users.id,
@@ -22,14 +18,9 @@ export async function GET() {
     .from(users)
     .orderBy(users.createdAt);
   return NextResponse.json(rows);
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAdminAuth(async (request) => {
   let body: { name?: unknown; username?: unknown; password?: unknown; role?: unknown };
   try {
     body = await request.json();
@@ -77,4 +68,4 @@ export async function POST(request: Request) {
     });
 
   return NextResponse.json(row, { status: 201 });
-}
+});

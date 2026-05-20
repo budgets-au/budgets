@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import Papa from "papaparse";
 import { parse, isValid } from "date-fns";
+import { withAuth } from "@/lib/api/route-guards";
 
 function parseDate(raw: string): string | undefined {
   if (!raw?.trim()) return undefined;
@@ -89,10 +89,7 @@ export interface PreviewAccount {
 // large).
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -189,4 +186,4 @@ export async function POST(request: Request) {
   });
 
   return NextResponse.json({ rows });
-}
+});

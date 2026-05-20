@@ -1,23 +1,21 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import {
   loadSuperPeople,
   saveSuperPeople,
   slugifyPersonKey,
 } from "@/lib/super-people";
 import { z } from "zod";
+import { withAuth } from "@/lib/api/route-guards";
 
 /** GET /api/super/people
  *  Returns the ordered list of people tracked on the super page.
  *  Format: `{ people: [{ key, label }] }`.
  *  When the underlying store is empty, falls back to deriving from
  *  existing snapshots + the legacy label columns. */
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const GET = withAuth(async () => {
   const people = await loadSuperPeople();
   return NextResponse.json({ people });
-}
+});
 
 const POST_BODY = z.object({
   label: z.string().min(1).max(60),
@@ -31,9 +29,7 @@ const POST_BODY = z.object({
  *  resulting key collides with an existing one, appends a numeric
  *  suffix so the operator can pick whatever label they want without
  *  worrying about uniqueness. */
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const POST = withAuth(async (request) => {
   const body = POST_BODY.safeParse(await request.json().catch(() => ({})));
   if (!body.success) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
@@ -51,4 +47,4 @@ export async function POST(request: Request) {
   const next = [...people, { key, label: body.data.label }];
   await saveSuperPeople(next);
   return NextResponse.json({ people: next });
-}
+});

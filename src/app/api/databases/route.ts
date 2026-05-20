@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth, isAdmin } from "@/lib/auth";
+import { withAdminAuth } from "@/lib/api/route-guards";
 import {
   initProfileFile,
   isUnlocked,
@@ -21,7 +21,7 @@ import {
  *  sensitive; only filenames could conceivably leak data-volume
  *  layout, which is uninteresting on a self-hosted single-tenant
  *  app. */
-export async function GET() {
+export const GET = withAdminAuth(async () => {
   const reg = readRegistry();
   return NextResponse.json({
     profiles: reg.profiles.map((p) => ({
@@ -35,7 +35,7 @@ export async function GET() {
     activeProfile: getActiveProfile(),
     unlocked: isUnlocked(),
   });
-}
+});
 
 const createSchema = z.object({
   label: z.string().min(1).max(80),
@@ -48,14 +48,7 @@ const createSchema = z.object({
  *  new profile becomes ACTIVE on success; the response signals the
  *  client to redirect to `/unlock` so the operator re-enters the
  *  same passphrase against the freshly-created file. */
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-  }
+export const POST = withAdminAuth(async (request) => {
   const body = await request.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
@@ -126,4 +119,4 @@ export async function POST(request: Request) {
     profileId,
     redirect: "/dashboard",
   });
-}
+});

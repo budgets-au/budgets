@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { accountTypeEnum } from "@/lib/api/enums";
 import { CATEGORICAL_PALETTE } from "@/lib/colours";
+import { withAuth } from "@/lib/api/route-guards";
 
 const COLORS = CATEGORICAL_PALETTE;
 
@@ -26,10 +26,7 @@ const bodySchema = z.object({
   rows: z.array(rowSchema),
 });
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const { rows } = bodySchema.parse(body);
 
@@ -78,4 +75,4 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ created, updated });
-}
+});

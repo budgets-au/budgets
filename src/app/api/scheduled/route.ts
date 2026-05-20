@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { scheduledTransactions } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
+import { withAuth } from "@/lib/api/route-guards";
 
 const createSchema = z.object({
   kind: z.enum(["schedule", "budget"]).default("schedule"),
@@ -49,10 +49,7 @@ function normaliseForKind<T extends {
   };
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async () => {
   const rows = await db
     .select({
       id: scheduledTransactions.id,
@@ -77,12 +74,9 @@ export async function GET() {
     .orderBy(asc(scheduledTransactions.startDate));
 
   return NextResponse.json(rows);
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const parsed = normaliseForKind(createSchema.parse(body));
   if (parsed.kind !== "budget" && !parsed.accountId) {
@@ -93,4 +87,4 @@ export async function POST(request: Request) {
   }
   const [row] = await db.insert(scheduledTransactions).values(parsed).returning();
   return NextResponse.json(row, { status: 201 });
-}
+});

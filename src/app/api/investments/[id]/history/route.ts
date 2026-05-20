@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { investments, investmentVests } from "@/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { getDailyHistory, persistPriceCache } from "@/lib/investments/yahoo";
 import { vestedQuantity, dividendsReceived } from "@/lib/investments/calc";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 interface ChartPoint {
   date: string;
@@ -29,18 +29,7 @@ const RANGE_DAYS: Record<string, number> = {
   all: 366 * 20,
 };
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  const id = idParse.data;
-
+export const GET = withAuthAndId(async (id, request) => {
   // Range purely from the picker: 1m / 3m / 1y / 5y / all. Always anchors
   // at today; we no longer trim by purchase / grant / vest dates so the
   // chart shows market context regardless of when the user bought.
@@ -103,4 +92,4 @@ export async function GET(
     dividends: dividendEvents,
     dividendsTotal,
   });
-}
+});

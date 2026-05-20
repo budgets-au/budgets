@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { compareSemver } from "@/lib/semver-compare";
 import { parseNextLink } from "./parse-next-link";
+import { withAuth } from "@/lib/api/route-guards";
 
 const GHCR_PACKAGE = "budgets-au/budgets";
 const TOKEN_URL = `https://ghcr.io/token?service=ghcr.io&scope=repository:${GHCR_PACKAGE}:pull`;
@@ -33,11 +33,7 @@ interface ErrorResp {
  */
 export const revalidate = 3600;
 
-export async function GET(): Promise<NextResponse<SuccessResp | ErrorResp>> {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAuth(async () => {
   try {
     const latest = await fetchLatestTag();
     if (latest == null) {
@@ -51,7 +47,7 @@ export async function GET(): Promise<NextResponse<SuccessResp | ErrorResp>> {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: message }, { status: 200 });
   }
-}
+});
 
 async function fetchLatestTag(): Promise<string | null> {
   // Try anonymous first. GHCR public packages always honour the

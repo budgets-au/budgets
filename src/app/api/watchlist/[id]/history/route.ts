@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { watchlist } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 import { getDailyHistory, persistPriceCache } from "@/lib/investments/yahoo";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 interface PricePoint {
   date: string;
@@ -24,21 +23,11 @@ const RANGE_DAYS: Record<string, number> = {
   all: 366 * 20,
 };
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id: rawId } = await params;
-  const idParse = z.string().uuid().safeParse(rawId);
-  if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-
+export const GET = withAuthAndId(async (id, request) => {
   const [row] = await db
     .select()
     .from(watchlist)
-    .where(eq(watchlist.id, idParse.data))
+    .where(eq(watchlist.id, id))
     .limit(1);
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -63,4 +52,4 @@ export async function GET(
   }
 
   return NextResponse.json({ series: closes, dividends });
-}
+});

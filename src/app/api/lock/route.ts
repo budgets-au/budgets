@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth, isAdmin } from "@/lib/auth";
 import { lock } from "@/db";
+import { withAdminAuth } from "@/lib/api/route-guards";
 
 /**
  * Drop the in-memory SQLCipher key by closing the live connection.
@@ -12,14 +12,7 @@ import { lock } from "@/db";
  * passphrase), so it's a household-wide operation, not a personal
  * action. Members can still sign out individually via /api/auth.
  */
-export async function POST() {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-  }
+export const POST = withAdminAuth(async () => {
   lock();
   return NextResponse.json({ ok: true });
-}
+});

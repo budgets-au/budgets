@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, transactions, scheduledTransactions } from "@/db/schema";
 import { and, gte, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { parseISO } from "date-fns";
 import { computeCashflow } from "@/lib/cashflow";
+import { withAuth } from "@/lib/api/route-guards";
 
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const fromParam = searchParams.get("from");
   const to = searchParams.get("to");
@@ -107,4 +104,4 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json(result);
-}
+});

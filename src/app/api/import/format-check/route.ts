@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, importLogs } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { withAuth } from "@/lib/api/route-guards";
 
 const bodySchema = z.object({
   format: z.string().min(1),
@@ -20,12 +20,7 @@ const bodySchema = z.object({
  * history is purely CSV — a frequent footgun because the importHash
  * shape differs across formats and re-imports won't dedupe.
  */
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const { format, accountIds } = bodySchema.parse(body);
 
@@ -128,4 +123,4 @@ export async function POST(request: Request) {
     totalsByFormat,
     newFormatAccounts,
   });
-}
+});

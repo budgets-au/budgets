@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { searchTicker } from "@/lib/investments/yahoo";
+import { withAuth } from "@/lib/api/route-guards";
 
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const q = searchParams.get("q") ?? "";
   if (q.trim().length < 1) return NextResponse.json([]);
@@ -19,4 +16,4 @@ export async function GET(request: Request) {
       { status: 502 },
     );
   }
-}
+});

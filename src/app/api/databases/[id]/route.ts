@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { rmSync, existsSync } from "node:fs";
 import { z } from "zod";
-import { auth, isAdmin } from "@/lib/auth";
 import {
   archiveProfile,
   deleteProfile,
@@ -11,6 +10,7 @@ import {
   renameProfile,
 } from "@/lib/db-profiles";
 import { backupDirForProfile } from "@/lib/backup/sqlite-backup";
+import { withAdminAuthAndId } from "@/lib/api/route-guards";
 
 const patchSchema = z.object({
   label: z.string().min(1).max(80).optional(),
@@ -23,18 +23,7 @@ const patchSchema = z.object({
  *  re-labelling profiles. Filename / id are immutable post-create
  *  (the on-disk file is named after the id; renaming the file
  *  would orphan backups). */
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-  }
-  const { id } = await params;
+export const PATCH = withAdminAuthAndId(async (id, request) => {
   if (!isValidProfileId(id)) {
     return NextResponse.json(
       { error: "Invalid profile id" },
@@ -68,25 +57,14 @@ export async function PATCH(
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg }, { status: 400 });
   }
-}
+});
 
 /** DELETE /api/databases/[id] — permanently remove a profile, its
  *  encrypted SQLCipher file, and its per-profile backup subdir.
  *  Admin-only. Server-side guards: the active profile is rejected
  *  (caller must switch first); the last remaining profile is
  *  rejected (the app needs at least one DB to talk to). */
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-  }
-  const { id } = await params;
+export const DELETE = withAdminAuthAndId(async (id, request) => {
   if (!isValidProfileId(id)) {
     return NextResponse.json(
       { error: "Invalid profile id" },
@@ -130,4 +108,4 @@ export async function DELETE(
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg }, { status: 400 });
   }
-}
+});

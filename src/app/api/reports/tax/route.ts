@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { appSettings, categories, transactions } from "@/db/schema";
 import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
@@ -7,15 +6,13 @@ import type { TaxConfig } from "@/db/schema";
 import { calculateTaxReport, type TaxReport } from "@/lib/tax/calc";
 import { currentFyEndYear, fyDateRange } from "@/lib/tax/fy";
 import { parseAccountIds } from "@/lib/api/account-ids";
+import { withAuth } from "@/lib/api/route-guards";
 
 export type { TaxReport };
 
 const EMPTY_TAX_CONFIG: TaxConfig = { wfhHoursByFy: {}, categoryRules: {} };
 
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const fyEndYearRaw = searchParams.get("fyEndYear");
   const fyEndYear = fyEndYearRaw ? parseInt(fyEndYearRaw, 10) : currentFyEndYear();
@@ -65,4 +62,4 @@ export async function GET(request: Request) {
   });
 
   return NextResponse.json(report);
-}
+});

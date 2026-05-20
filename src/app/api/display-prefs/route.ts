@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { appSettings, categories } from "@/db/schema";
+import { withAuth } from "@/lib/api/route-guards";
 import {
   DISPLAY_PREFS_DEFAULT,
   parseDisplayPrefs,
@@ -27,11 +27,7 @@ async function computeInitialPrefs(): Promise<DisplayPrefs> {
 
 /** Read the current display-prefs blob, merged with defaults so the
  * client gets a fully-populated DisplayPrefs every time. */
-export async function GET() {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAuth(async () => {
   const rows = await db
     .select({ displayPrefs: appSettings.displayPrefs })
     .from(appSettings)
@@ -41,18 +37,14 @@ export async function GET() {
     return NextResponse.json(await computeInitialPrefs());
   }
   return NextResponse.json(parseDisplayPrefs(stored));
-}
+});
 
 /** Patch one or more pref keys. Request body is a partial
  * DisplayPrefs object; only keys present in the body are updated,
  * everything else is left untouched (deep-merge over the current
  * blob). Response is the full merged + defaulted blob so the
  * client's SWR cache lands with a complete picture. */
-export async function PATCH(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const PATCH = withAuth(async (request) => {
   let patch: unknown;
   try {
     patch = await request.json();
@@ -104,7 +96,7 @@ export async function PATCH(request: Request) {
     });
 
   return NextResponse.json(next);
-}
+});
 
 // Helper for typed clients (re-export so consumers don't have to
 // reach into the lib path themselves).

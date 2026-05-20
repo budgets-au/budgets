@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, importLogs, transactions } from "@/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
+import { withAuth } from "@/lib/api/route-guards";
 
 const bodySchema = z.object({
   importLogIds: z.array(z.string().uuid()).min(1),
@@ -21,10 +21,7 @@ const bodySchema = z.object({
  * not provided here. The user mainly needs this when "possible" matches
  * were re-inserted as duplicates and they want them gone.
  */
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const { importLogIds } = bodySchema.parse(body);
 
@@ -61,4 +58,4 @@ export async function POST(request: Request) {
     deletedImportLogs: importLogIds.length,
     accountsRefreshed: accountIdSet.size,
   });
-}
+});

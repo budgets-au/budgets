@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { superannuationSnapshots } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
+import { withAuth } from "@/lib/api/route-guards";
 
 // `person` is a free-text key matching `superannuation_snapshots.person`.
 // Loosened from the legacy `z.enum(["self","partner"])` in 0.128.3
@@ -22,10 +22,7 @@ const createSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const personParam = searchParams.get("person");
   const personFilter = PERSON.safeParse(personParam);
@@ -38,12 +35,9 @@ export async function GET(request: Request) {
     ? await query.where(eq(superannuationSnapshots.person, personFilter.data))
     : await query;
   return NextResponse.json(rows);
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const data = createSchema.parse(body);
 
@@ -59,4 +53,4 @@ export async function POST(request: Request) {
     })
     .returning();
   return NextResponse.json(row, { status: 201 });
-}
+});

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { categories } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { transferKindEnum } from "@/lib/api/enums";
 import { wouldCreateCycle } from "@/lib/category-descendants";
+import { withAuthAndId } from "@/lib/api/route-guards";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -15,14 +15,7 @@ const updateSchema = z.object({
   sortOrder: z.number().int().min(0).optional(),
 });
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const PATCH = withAuthAndId(async (id, request) => {
   const body = await request.json();
   const data = updateSchema.parse(body);
 
@@ -53,16 +46,9 @@ export async function PATCH(
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(row);
-}
+});
 
-export async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { id } = await params;
+export const DELETE = withAuthAndId(async (id) => {
   const [cat] = await db
     .select()
     .from(categories)
@@ -79,4 +65,4 @@ export async function DELETE(
 
   await db.delete(categories).where(eq(categories.id, id));
   return NextResponse.json({ ok: true });
-}
+});

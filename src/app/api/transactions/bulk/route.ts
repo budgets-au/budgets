@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, transactions } from "@/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import { withAuth } from "@/lib/api/route-guards";
 // Auto-learning has been removed — the trigram suggester reads
 // directly from the categorised history, so re-categorising a
 // transaction makes the next import smarter without spawning more
@@ -14,10 +14,7 @@ const bulkSchema = z.object({
   categoryId: z.string().uuid().nullable(),
 });
 
-export async function PATCH(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const PATCH = withAuth(async (request) => {
   const body = await request.json();
   const { ids, categoryId } = bulkSchema.parse(body);
 
@@ -28,7 +25,7 @@ export async function PATCH(request: Request) {
     .returning({ id: transactions.id, payee: transactions.payee });
 
   return NextResponse.json({ updated: updated.length });
-}
+});
 
 const deleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(1000),
@@ -39,10 +36,7 @@ const deleteSchema = z.object({
  * affected account. Mirrors the per-row DELETE in
  * `/api/transactions/[id]` but in a single round-trip.
  */
-export async function DELETE(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const DELETE = withAuth(async (request) => {
   const body = await request.json();
   const { ids } = deleteSchema.parse(body);
 
@@ -74,4 +68,4 @@ export async function DELETE(request: Request) {
     deleted: deleted.length,
     accountsRefreshed: accountIds.length,
   });
-}
+});

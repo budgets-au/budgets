@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
-import { auth, isAdmin } from "@/lib/auth";
 import { db } from "@/db";
+import { withAdminAuth } from "@/lib/api/route-guards";
 
 /**
  * Refresh SQLite's query-planner statistics by running ANALYZE.
@@ -16,19 +16,9 @@ import { db } from "@/db";
  * Surfaced as a button on Settings → Maintenance. Admin-only — the
  * operation touches every indexed table.
  */
-export async function POST() {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdmin(session)) {
-    return NextResponse.json(
-      { error: "Admin role required" },
-      { status: 403 },
-    );
-  }
+export const POST = withAdminAuth(async () => {
   const start = Date.now();
   await db.run(sql`ANALYZE`);
   const elapsedMs = Date.now() - start;
   return NextResponse.json({ ok: true, elapsedMs });
-}
+});

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { watchlist } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import { z } from "zod";
 import { getQuote } from "@/lib/investments/yahoo";
+import { withAuth } from "@/lib/api/route-guards";
 
 const createSchema = z.object({
   symbol: z.string().min(1).max(32),
@@ -24,10 +24,7 @@ interface ListRow {
   currentPrice: number | null;
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async () => {
   const rows = await db.select().from(watchlist).orderBy(asc(watchlist.symbol));
 
   // Latest quote per unique symbol; tolerate failures so a single bad ticker
@@ -55,12 +52,9 @@ export async function GET() {
     currentPrice: priceBySymbol.get(r.symbol) ?? null,
   }));
   return NextResponse.json(out);
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const data = createSchema.parse(body);
 
@@ -97,4 +91,4 @@ export async function POST(request: Request) {
     }
     throw err;
   }
-}
+});

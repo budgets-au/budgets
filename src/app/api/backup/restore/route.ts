@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { auth, isAdmin } from "@/lib/auth";
+import { withAdminAuth } from "@/lib/api/route-guards";
 import {
   backupDir,
   isSafeBackupFilename,
@@ -40,15 +40,7 @@ import {
  */
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-  }
-
+export const POST = withAdminAuth(async (request) => {
   // Resolve the candidate file path on disk. Existing backups live in
   // backupDir(); uploaded files are written to a temp staging path in
   // the same directory so the eventual swapLive() rename is atomic
@@ -153,4 +145,4 @@ export async function POST(request: Request) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
-}
+});

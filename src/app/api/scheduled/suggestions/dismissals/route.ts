@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { scheduleSuggestionDismissals } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { withAuth } from "@/lib/api/route-guards";
 
 const createSchema = z.object({
   accountId: z.string().uuid(),
   normalizedPayee: z.string().min(1).max(500),
 });
 
-export async function GET() {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async () => {
   const rows = await db
     .select({
       accountId: scheduleSuggestionDismissals.accountId,
@@ -22,12 +19,9 @@ export async function GET() {
     })
     .from(scheduleSuggestionDismissals);
   return NextResponse.json(rows);
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const { accountId, normalizedPayee } = createSchema.parse(body);
 
@@ -45,12 +39,9 @@ export async function POST(request: Request) {
     .returning();
 
   return NextResponse.json(row, { status: 201 });
-}
+});
 
-export async function DELETE(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const DELETE = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const accountId = searchParams.get("accountId");
   const normalizedPayee = searchParams.get("normalizedPayee");
@@ -71,4 +62,4 @@ export async function DELETE(request: Request) {
     );
 
   return NextResponse.json({ ok: true });
-}
+});

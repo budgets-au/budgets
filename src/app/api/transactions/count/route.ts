@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { transactions, accounts, categories } from "@/db/schema";
 import { eq, and, gte, lte, like, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { categoryDescendantIds } from "@/lib/category-descendants";
+import { withAuth } from "@/lib/api/route-guards";
 
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const accountId = searchParams.get("accountId");
   const categoryId = searchParams.get("categoryId");
@@ -74,4 +71,4 @@ export async function GET(request: Request) {
     .where(conditions.length ? and(...conditions) : undefined);
 
   return NextResponse.json({ total: row?.total ?? 0 });
-}
+});

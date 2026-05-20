@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { transactions, accounts, categories, importLogs } from "@/db/schema";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -8,6 +7,7 @@ import { z } from "zod";
 import { normalizePayee, deriveMatchPayee, loadTokenFreq } from "@/lib/categorize";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
 import { categoryDescendantIds } from "@/lib/category-descendants";
+import { withAuth } from "@/lib/api/route-guards";
 
 const createSchema = z.object({
   accountId: z.string().uuid(),
@@ -69,10 +69,7 @@ async function findOrCreateExternalAccount(): Promise<string> {
 const pairTxn = alias(transactions, "pair_txn");
 const pairAcct = alias(accounts, "pair_acct");
 
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const accountId = searchParams.get("accountId");
   const categoryId = searchParams.get("categoryId");
@@ -333,12 +330,9 @@ export async function GET(request: Request) {
     .offset(offset);
 
   return NextResponse.json(rows);
-}
+});
 
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const body = await request.json();
   const data = createSchema.parse(body);
 
@@ -448,4 +442,4 @@ export async function POST(request: Request) {
     .where(eq(accounts.id, data.accountId));
 
   return NextResponse.json(row, { status: 201 });
-}
+});

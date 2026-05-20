@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { auth, isAdmin } from "@/lib/auth";
 import { rekey } from "@/db";
 import { validatePassphrase } from "@/lib/passphrase";
 import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
+import { withAdminAuth } from "@/lib/api/route-guards";
 
 /**
  * Rotate the SQLCipher passphrase. Admin-only — rotating the
@@ -13,14 +13,7 @@ import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
  * starts must use the new passphrase; existing sessions keep
  * working since the connection is keyed with the new value in place.
  */
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdmin(session)) {
-    return NextResponse.json({ error: "Admin role required" }, { status: 403 });
-  }
+export const POST = withAdminAuth(async (request) => {
   let body: unknown;
   try {
     body = await request.json();
@@ -88,4 +81,4 @@ export async function POST(request: Request) {
   }
   resetRateLimit("rekey:POST");
   return NextResponse.json({ ok: true });
-}
+});

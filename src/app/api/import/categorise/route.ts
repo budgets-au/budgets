@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { accounts, categories, transactions } from "@/db/schema";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
@@ -20,6 +19,7 @@ import {
   loadTokenFreq,
 } from "@/lib/categorize";
 import { trigramSimilarity } from "@/lib/trigram";
+import { withAuth } from "@/lib/api/route-guards";
 
 interface Neighbour {
   normalizedPayee: string;
@@ -148,10 +148,7 @@ interface TestResultRow {
  * the import-view's review panel can let the operator audit before
  * committing. Writes NOTHING to the DB.
  */
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const POST = withAuth(async (request) => {
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
@@ -985,4 +982,4 @@ export async function POST(request: Request) {
     fieldStats,
     rows: out,
   });
-}
+});

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { scheduledTransactions, categories } from "@/db/schema";
 import { sql, and, eq, ne, isNotNull, gte, lte, inArray, or, isNull } from "drizzle-orm";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from "date-fns";
 import { expandRecurrence } from "@/lib/recurrence";
 import { accountIdSql, parseAccountIds } from "@/lib/api/account-ids";
+import { withAuth } from "@/lib/api/route-guards";
 
 export interface CashflowCategory {
   id: string;
@@ -49,10 +49,7 @@ function generateMonths(from: string, to: string): string[] {
   return months;
 }
 
-export async function GET(request: Request) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
   const now = new Date();
   const from = searchParams.get("from") ?? format(startOfMonth(subMonths(now, 5)), "yyyy-MM-dd");
@@ -456,4 +453,4 @@ export async function GET(request: Request) {
     closingBalance,
     openingBalance,
   } satisfies CashflowReport);
-}
+});

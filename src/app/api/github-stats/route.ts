@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { extractGithubStats } from "./extract";
+import { withAuth } from "@/lib/api/route-guards";
 
 const PACKAGE_URL =
   "https://github.com/budgets-au/budgets/pkgs/container/budgets";
@@ -34,13 +34,7 @@ interface ErrorResp {
  *  doesn't break. */
 export const revalidate = 3600;
 
-export async function GET(): Promise<
-  NextResponse<SuccessResp | ErrorResp>
-> {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const GET = withAuth(async () => {
   try {
     const res = await fetch(PACKAGE_URL, {
       headers: { "User-Agent": UA, Accept: "text/html" },
@@ -58,4 +52,4 @@ export async function GET(): Promise<
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: message }, { status: 200 });
   }
-}
+});

@@ -9,6 +9,34 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.194.0 — 2026-05-20
+
+### Fixed
+- **Dismissed transfer-pair suggestions stay dismissed.**
+  Before this release, `DELETE /api/transfers/suggestions/[id]`
+  just dropped the row from `transfer_suggestions`. The next
+  matcher run — every unlock, every import, every manual
+  re-scan via Settings → Maintenance — re-discovered the
+  same pair and re-inserted it. The unique-index
+  `onConflictDoNothing` only catches the case where a row
+  already exists, which it didn't after a dismiss. So the
+  user saw the same suggestion "remembered" them forever.
+  Now there's a sticky `dismissed_transfer_pairs` table
+  (migration `0012`) that the matcher consults before
+  inserting. Dismiss writes the pair (canonical
+  `transaction_id < candidate_id` order) into that table;
+  the matcher's per-suggestion loop skips any pair found
+  there. The pair survives every subsequent re-scan. If
+  the operator later manually pairs the same two
+  transactions via the link-transfer dialog, the dismissal
+  is cleared (both rows now carry `transfer_pair_id`
+  anyway, but a stale dismissal row would be clutter).
+
+  One integration test in
+  [transfer-match.integration.test.ts](src/lib/transfer-match.integration.test.ts)
+  asserts the post-dismiss matcher run produces zero new
+  suggestions for the same pair.
+
 ## 0.193.0 — 2026-05-20
 
 ### Changed

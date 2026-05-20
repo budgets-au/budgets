@@ -4,6 +4,7 @@ import {
   integer,
   uniqueIndex,
   index,
+  primaryKey,
   type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
@@ -456,6 +457,33 @@ export const transferSuggestions = sqliteTable(
     ),
     index("transfer_suggestions_txn_idx").on(t.transactionId),
     index("transfer_suggestions_cand_idx").on(t.candidateId),
+  ],
+);
+
+/** Pairs the user has explicitly rejected as transfer matches. The
+ *  pair is stored in canonical (transactionId < candidateId) order
+ *  to match how `pairTransfersInWindow` orders its candidates, so
+ *  the lookup is a single primary-key probe. Without this table,
+ *  the matcher kept re-discovering and re-inserting the same pair
+ *  every run — the unique-index guard on `transfer_suggestions`
+ *  only fires when a row already exists, which it doesn't after a
+ *  dismiss DELETE. */
+export const dismissedTransferPairs = sqliteTable(
+  "dismissed_transfer_pairs",
+  {
+    transactionId: text("transaction_id")
+      .notNull()
+      .references(() => transactions.id, { onDelete: "cascade" }),
+    candidateId: text("candidate_id")
+      .notNull()
+      .references(() => transactions.id, { onDelete: "cascade" }),
+    dismissedAt: integer("dismissed_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    primaryKey({ columns: [t.transactionId, t.candidateId] }),
+    index("dismissed_transfer_pairs_candidate_idx").on(t.candidateId),
   ],
 );
 

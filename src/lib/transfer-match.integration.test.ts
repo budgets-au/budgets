@@ -473,3 +473,52 @@ describe("pairTransfersInWindow — idempotency + protection of existing pairs",
     expect(pairIdOf("sav-1")).toBe("chk-1");
   });
 });
+
+describe("pairTransfersInWindow — dismissed pairs stay dismissed", () => {
+  it("does not re-suggest a pair recorded in dismissed_transfer_pairs", async () => {
+    // Two accounts with one same-day same-amount pair. Matcher
+    // ordinarily emits a suggestion since the amount is small and
+    // the txns are categorised generic-spending, not transfer.
+    seedAccount("chk", "Checking");
+    seedAccount("sav", "Savings");
+    seedTxn({
+      id: "a",
+      accountId: "chk",
+      amount: "-50.00",
+      date: "2026-01-10",
+      categoryId: null,
+    });
+    seedTxn({
+      id: "b",
+      accountId: "sav",
+      amount: "50.00",
+      date: "2026-01-10",
+      categoryId: null,
+    });
+
+    // First run produces the suggestion.
+    const first = await pairTransfersInWindow({});
+    expect(first.suggested).toBe(1);
+    const suggestionsBefore = db.client
+      .prepare("SELECT COUNT(*) AS n FROM transfer_suggestions")
+      .get() as { n: number };
+    expect(suggestionsBefore.n).toBe(1);
+
+    // Simulate the dismiss API: insert into dismissed_transfer_pairs
+    // (canonical a<b order) and drop the suggestion row. After this
+    // the matcher should keep its mouth shut about this pair.
+    db.client
+      .prepare(
+        "INSERT INTO dismissed_transfer_pairs (transaction_id, candidate_id, dismissed_at) VALUES (?, ?, ?)",
+      )
+      .run("a", "b", Date.now());
+    db.client.exec("DELETE FROM transfer_suggestions");
+
+    const second = await pairTransfersInWindow({});
+    expect(second.suggested).toBe(0);
+    const suggestionsAfter = db.client
+      .prepare("SELECT COUNT(*) AS n FROM transfer_suggestions")
+      .get() as { n: number };
+    expect(suggestionsAfter.n).toBe(0);
+  });
+});

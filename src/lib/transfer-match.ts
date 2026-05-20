@@ -1,5 +1,11 @@
 import { db } from "@/db";
-import { accounts, transactions, transferSuggestions, categories } from "@/db/schema";
+import {
+  accounts,
+  transactions,
+  transferSuggestions,
+  dismissedTransferPairs,
+  categories,
+} from "@/db/schema";
 import { sql, eq, and, isNull, inArray, or } from "drizzle-orm";
 
 /**
@@ -411,10 +417,26 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
     paired++;
   }
 
+  // Pull the dismissed-pair set once so the per-suggestion loop is
+  // O(1) lookup instead of an `IN (...)` per row. Pairs are stored
+  // in canonical (a < b) order — same order as `suggestionPairs`.
+  const dismissedRows = await db
+    .select({
+      transactionId: dismissedTransferPairs.transactionId,
+      candidateId: dismissedTransferPairs.candidateId,
+    })
+    .from(dismissedTransferPairs);
+  const dismissedSet = new Set(
+    dismissedRows.map((r) => `${r.transactionId}|${r.candidateId}`),
+  );
+
   // Suggestions: insert one row per candidate pair (transaction_id < candidate_id),
-  // skip pairs whose halves are now paired.
+  // skip pairs whose halves are now paired OR whose pair sits in
+  // `dismissed_transfer_pairs` (the sticky "no, never suggest this
+  // again" signal).
   for (const s of suggestionPairs) {
     if (taken.has(s.aId) || taken.has(s.bId)) continue;
+    if (dismissedSet.has(`${s.aId}|${s.bId}`)) continue;
     const result = await db
       .insert(transferSuggestions)
       .values({ transactionId: s.aId, candidateId: s.bId, score: s.score })
@@ -462,6 +484,19 @@ export async function manualPair(aId: string, bId: string): Promise<void> {
         or(
           inArray(transferSuggestions.transactionId, [aId, bId]),
           inArray(transferSuggestions.candidateId, [aId, bId]),
+        ),
+      );
+    // If the user once dismissed this exact pair and is now
+    // explicitly linking it, drop the dismissal so the record
+    // reflects current intent. (The matcher won't re-suggest it
+    // either way because both halves now carry `transfer_pair_id`,
+    // but a stale dismissal row is just clutter.)
+    await tx
+      .delete(dismissedTransferPairs)
+      .where(
+        or(
+          inArray(dismissedTransferPairs.transactionId, [aId, bId]),
+          inArray(dismissedTransferPairs.candidateId, [aId, bId]),
         ),
       );
   });

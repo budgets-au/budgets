@@ -185,7 +185,7 @@ test.describe("dashboard edit-drawer drag-and-drop", () => {
       // just absence of React errors. If we want a real
       // placement-assertion test, we need CDP-level
       // Input.dispatchDragEvent or to drive a non-headless
-      // chromium. Track in TODO.md until we pick one.
+      // chromium. Track in TEST-RESULTS.md until we pick one.
       //
       // What this test would have caught: "drag widget,
       // widgets-panel flashes it in/out, widget doesn't actually

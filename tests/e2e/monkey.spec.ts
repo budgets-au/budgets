@@ -30,7 +30,7 @@ import { signInAsAdmin } from "./_helpers";
  * verified to survive a page reload.
  *
  * The crawl does NOT fail on findings — its job is to surface them
- * into TODO.md (via globalTeardown). The Golden Book's hard
+ * into TEST-RESULTS.md (via globalTeardown). The Golden Book's hard
  * assertions still live in the other specs.
  *
  * Destructive actions (sign out, lock, delete, etc.) are
@@ -60,7 +60,7 @@ const CRAWL_PAGES: ReadonlyArray<{ path: string; label: string }> = [
 let appMap: AppMap;
 let runStartedAt = 0;
 /** Per-run counters; flushed into the map's runs ring buffer in
- * afterAll. Granular fields back the TODO.md run-report table. */
+ * afterAll. Granular fields back the TEST-RESULTS.md run-report table. */
 let runCounters = emptyRunCounters();
 
 test.describe("1000 monkeys exploratory crawl", () => {

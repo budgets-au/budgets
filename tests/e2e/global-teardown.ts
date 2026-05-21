@@ -8,10 +8,12 @@ import { classifyFindings } from "./_findings";
 const VITEST_REPORT_PATH = resolve("./tests/e2e/.data/vitest-report.json");
 
 /** After every Playwright run, fold the 1000-monkey findings into
- * TODO.md so the operator has one place to look. Replaces the
- * `<!-- monkey:start -->`/`<!-- monkey:end -->` block in TODO.md
- * (creates it if missing) — that keeps the section
- * machine-overwritable while everything else stays human-authored.
+ * TEST-RESULTS.md so the operator has one place to look. Replaces
+ * the `<!-- monkey:start -->`/`<!-- monkey:end -->` block (creates
+ * it if missing) — that keeps the section machine-overwritable
+ * while everything else stays human-authored. Renamed from TODO.md
+ * in 0.224.0 when the TODO file was retired (all open follow-up
+ * work moved to GitHub Issues).
  *
  * No-op if no monkey crawl ran this session. */
 export default async function globalTeardown(): Promise<void> {
@@ -325,9 +327,13 @@ function appendByPage(lines: string[], findings: MonkeyFinding[]): void {
 }
 
 async function updateTodoBlock(body: string): Promise<void> {
-  const todoPath = resolve("./TODO.md");
-  if (!existsSync(todoPath)) return;
-  const current = await readFile(todoPath, "utf8");
+  // Renamed in 0.224.0: results moved from TODO.md → TEST-RESULTS.md
+  // (TODO.md retired, all open work tracked in GitHub Issues). The
+  // function name kept its `Todo` for now to avoid churn; the path
+  // is what matters.
+  const path = resolve("./TEST-RESULTS.md");
+  if (!existsSync(path)) return;
+  const current = await readFile(path, "utf8");
   const start = "<!-- monkey:start -->";
   const end = "<!-- monkey:end -->";
   const block = `${start}\n${body}\n${end}`;
@@ -338,17 +344,9 @@ async function updateTodoBlock(body: string): Promise<void> {
       block,
     );
   } else {
-    // Insert at the top of the "Known bugs" section if present,
-    // otherwise append.
-    const header = "## Known bugs / regressions to investigate";
-    if (current.includes(header)) {
-      next = current.replace(
-        header,
-        `${header}\n\n### 1000-monkeys crawl findings\n\n${block}`,
-      );
-    } else {
-      next = `${current.trimEnd()}\n\n## 1000-monkeys crawl findings\n\n${block}\n`;
-    }
+    // Sentinels missing — append a fresh block at the end so the
+    // next run has somewhere to replace into.
+    next = `${current.trimEnd()}\n\n## Latest smart-monkey run\n\n${block}\n`;
   }
-  await writeFile(todoPath, next);
+  await writeFile(path, next);
 }

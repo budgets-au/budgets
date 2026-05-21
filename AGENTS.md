@@ -225,6 +225,23 @@ When adding code that touches the on-disk DB or its backups:
   'al' before initialization`. Use a lazy `require()` inside
   the function for modules called from `unlock()` /
   `runPendingMigrations()`.
+- **Recharts 3.x bundles react-redux.** Any widget that mounts
+  a `ResponsiveContainer` inside a layout that resizes rapidly
+  (RGL drag, window resize during animation, etc.) risks a
+  subscriber-loop crash (React error #185). The 0.48 fix swaps
+  the chart for a static "Chart hidden while editing" placeholder
+  when `editMode === true`. New chart-rendering widgets MUST
+  follow the same pattern — see `net-worth-trend-card.tsx` /
+  `tracked-stock-card.tsx` for the canonical placeholder swap.
+- **`next dev` holds an exclusive lock on `.next`.** The e2e rig
+  uses a separate `.next-e2e/` build dir, toggled via
+  `E2E_TEST_BUILD=1` in `next.config.ts`. Don't reach into
+  `.next/` from a test — the dev server may be writing into it
+  concurrently.
+- **Drizzle migrations apply on first unlock**, idempotently,
+  against the keyed connection. The migrator is safe to re-run on
+  every unlock; you don't need to gate `runPendingMigrations()`
+  calls.
 
 ## Testing
 

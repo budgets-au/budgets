@@ -772,7 +772,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
    * verify it renders on BOTH `/scheduled` (the list view) AND
    * `/calendar` (the day-cell calendar). The four single-action
    * goals all stop at "row exists in the DB"; this one closes
-   * the gap the TODO.md "Scheduled / Calendar" coverage entry
+   * the gap the TEST-RESULTS.md "Scheduled / Calendar" coverage entry
    * called out — the calendar's cashflow-forecast SQL is its
    * own pipeline, distinct from the list query, so a regression
    * in either path would slip past the createSchedule goal.
@@ -2348,7 +2348,7 @@ async function scrapeValidationErrors(
 
 /** Smart-monkey discovery routine: probe `/api/scheduled` with a
  * matrix of known-baseline + known-bad payloads, recording each
- * response as a finding. The output rolls into TODO.md as a
+ * response as a finding. The output rolls into TEST-RESULTS.md as a
  * GUARDRAIL inventory — combinations the server rejects today but
  * the UI doesn't catch up front. Each entry is one
  * future-improvement TODO (clamp the input, surface a zod
@@ -2374,7 +2374,7 @@ async function runScheduleGuardrailProbes(
   // was hard-coded `res.ok() ? "question" : "issue"` — which read
   // every successful baseline POST as a "question" and every correct
   // guardrail rejection as an "issue", surfacing healthy behaviour
-  // as red flags in the TODO.md monkey block. Now each probe declares
+  // as red flags in the TEST-RESULTS.md monkey block. Now each probe declares
   // whether the server SHOULD accept (the baseline) or SHOULD reject
   // (the known-bad permutations), and the classifier compares:
   //   - expected match → kind:"verified" (guardrail working as intended)
@@ -2469,7 +2469,7 @@ async function runScheduleGuardrailProbes(
  * dialog. Used in the "submit disabled" finding so the operator
  * can see WHICH fields the form expects without having to open
  * the dialog manually. Caps at the first dozen labels to keep
- * TODO.md readable. */
+ * TEST-RESULTS.md readable. */
 async function snapshotDialogLabels(dialog: Locator): Promise<string[]> {
   return await dialog
     .locator(

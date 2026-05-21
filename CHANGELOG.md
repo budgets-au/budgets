@@ -9,6 +9,52 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.224.0 — 2026-05-22
+
+### Removed
+- **`TODO.md` retired.** The file had grown into a hybrid log of
+  open issues + ideas + test-results + architecture notes +
+  done-history; every one of those is better served by a
+  purpose-built channel. Specifically:
+
+  - **Open follow-up work** (40 entries: test-coverage gaps,
+    deferred dependency bumps, UX ideas, infrastructure
+    improvements) → **GitHub Issues** #3 – #42, with new
+    `area:*` and `type:*` labels for filtering. Examples:
+    `area:transactions + type:test-coverage`, `area:infra +
+    type:tech-debt`. See [Issues](https://github.com/budgets-au/budgets/issues).
+  - **Test results** (the auto-overwritten `<!-- monkey:start -->`
+    block) → **`TEST-RESULTS.md`** (new). The e2e teardown
+    (`tests/e2e/global-teardown.ts`) now writes there. Sentinel
+    markers are unchanged so the existing replace-between-markers
+    logic continues to work.
+  - **Architecture notes / gotchas** (Recharts 3 react-redux
+    subscriber loop, `.next-e2e` build-dir convention, drizzle
+    migration idempotency) → folded into `AGENTS.md`'s "Gotchas
+    worth knowing before you ship a bug" section, next to the
+    existing TDZ / Base-UI / hover-fallback notes.
+  - **Done / dropped history** — preserved in `CHANGELOG.md`,
+    which has carried per-release write-ups since 0.205.
+
+  Net effect: one source of truth per concern. Issues are
+  filterable / labellable / closeable; test results are
+  machine-overwritten without colliding with hand-prose; CHANGELOG
+  remains the canonical historical record.
+
+### Changed
+- `tests/e2e/global-teardown.ts` writes the monkey block to
+  `TEST-RESULTS.md` instead of `TODO.md`. The path-not-found
+  fallback inserts a fresh `## Latest smart-monkey run` heading
+  with the block beneath. All in-tree comments referencing
+  `TODO.md` updated to point at TEST-RESULTS.md or GH issues.
+
+### Labels added (in repo)
+- `area:transactions`, `area:scheduled`, `area:dashboard`,
+  `area:investments`, `area:categories`, `area:accounts`,
+  `area:settings`, `area:multi-db`, `area:auth`, `area:reports`,
+  `area:import`, `area:infra`, `area:tests`.
+- `type:test-coverage`, `type:tech-debt`, `type:ux`.
+
 ## 0.223.0 — 2026-05-22
 
 ### Added

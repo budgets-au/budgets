@@ -42,7 +42,7 @@ const REPORT_PATH = resolve("./tests/e2e/.data/monkey-report.json");
 
 /** Append a finding to the on-disk report (JSON). Called from
  * tests as they discover issues; the global teardown rolls the
- * report into TODO.md so the operator has one place to look. */
+ * report into TEST-RESULTS.md so the operator has one place to look. */
 export async function recordFinding(f: MonkeyFinding): Promise<void> {
   await mkdir(dirname(REPORT_PATH), { recursive: true });
   let existing: MonkeyFinding[] = [];
@@ -65,7 +65,7 @@ export async function clearFindings(): Promise<void> {
 }
 
 /** Read whatever the crawl recorded. The global teardown uses this
- * to roll findings into TODO.md. */
+ * to roll findings into TEST-RESULTS.md. */
 export async function readFindings(): Promise<MonkeyFinding[]> {
   if (!existsSync(REPORT_PATH)) return [];
   try {

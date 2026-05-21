@@ -17,7 +17,13 @@ import {
  * `kind: "question"` is what the form-filling phase emits when a
  * submit produced no observable side-effect (no network call,
  * toast, nav, or error). The crawl can't tell if that's a real
- * bug or intentional — it asks the operator. */
+ * bug or intentional — it asks the operator.
+ *
+ * `kind: "verified"` is what monkey-goals.spec.ts emits when a
+ * verification leg PASSED. We still log the message (so the
+ * operator can sanity-check what the monkey checked), but the
+ * teardown renders them under a separate "Verified" heading
+ * rather than mixing them in with the "silent no-op" questions. */
 export interface MonkeyFinding {
   page: string;
   action: string;
@@ -27,8 +33,9 @@ export interface MonkeyFinding {
   /** Optional stack snippet. */
   detail?: string;
   /** "issue" (default) — something is wrong / needs investigation.
-   * "question" — outcome was ambiguous; ask the operator. */
-  kind?: "issue" | "question";
+   * "question" — outcome was ambiguous; ask the operator.
+   * "verified" — a positive verification (goal leg passed). */
+  kind?: "issue" | "question" | "verified";
 }
 
 const REPORT_PATH = resolve("./tests/e2e/.data/monkey-report.json");

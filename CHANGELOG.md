@@ -9,6 +9,28 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.207.0 — 2026-05-21
+
+### Changed
+- **Smart-monkey findings split: `Issues` / `Questions` / `Verified`.**
+  When `monkey-goals.spec.ts` ran its post-goal verification
+  legs (GET /api/scheduled finds the row, DOM contains the
+  token, etc.) every pass was recorded with `kind: "question"`
+  and rendered under the "Questions for review" heading whose
+  framing copy reads _"the crawl filled these forms and clicked
+  their submit, but saw no network call, toast, or navigation.
+  Possibly a silent no-op bug, possibly intentional"_ — wrong
+  story for a positive verification. The `kind` union grows a
+  `"verified"` variant; the six verification-leg call sites in
+  monkey-goals.spec.ts now emit `"verified"` on pass and
+  `"issue"` on fail. The teardown report renders verifieds
+  under their own `#### Verified` heading with a ✅ tag and a
+  framing copy that matches the actual semantics. Run-summary
+  line now shows three counts (`6 issues, 0 questions, 6
+  verified.`) instead of two. The `classifyFindings` helper
+  moved to `tests/e2e/_findings.ts` so it can be unit-tested
+  under Vitest (4 new tests in `_findings.test.ts`).
+
 ## 0.206.0 — 2026-05-21
 
 ### Changed

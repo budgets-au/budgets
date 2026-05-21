@@ -679,7 +679,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       page: "/transactions",
       action: `goal "addTenToCategory" — verify list (API)`,
       severity: apiOK ? "info" : "error",
-      kind: apiOK ? "question" : "issue",
+      kind: apiOK ? "verified" : "issue",
       message: `GET /api/transactions found ${apiMatches}/${N} rows matching "${bulkPrefix}*".`,
     });
     runCounters.findingsCount += 1;
@@ -687,7 +687,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       page: "/transactions",
       action: `goal "addTenToCategory" — verify list (DOM)`,
       severity: domOK ? "info" : "error",
-      kind: domOK ? "question" : "issue",
+      kind: domOK ? "verified" : "issue",
       message: `DOM on /transactions contained ${domMatches} matches for "${RUN_TOKEN}-bulk-".`,
     });
     runCounters.findingsCount += 1;
@@ -695,7 +695,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       page: "/reports",
       action: `goal "addTenToCategory" — verify category report total`,
       severity: reportOK ? "info" : "error",
-      kind: reportOK ? "question" : "issue",
+      kind: reportOK ? "verified" : "issue",
       message:
         `Cashflow report for category "${reportCatName ?? target.name}" — ` +
         `totalCount=${reportTotalCount ?? "n/a"} (expected ${N}), ` +
@@ -867,7 +867,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       page: "/scheduled",
       action: `goal "scheduleOnCalendar" — verify API list`,
       severity: apiHit ? "info" : "error",
-      kind: apiHit ? "question" : "issue",
+      kind: apiHit ? "verified" : "issue",
       message: `GET /api/scheduled ${apiHit ? "found" : "DID NOT find"} a row with payee "${TOKEN}".`,
     });
     runCounters.findingsCount += 1;
@@ -875,7 +875,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       page: "/scheduled",
       action: `goal "scheduleOnCalendar" — verify /scheduled DOM`,
       severity: scheduledHit ? "info" : "error",
-      kind: scheduledHit ? "question" : "issue",
+      kind: scheduledHit ? "verified" : "issue",
       message: `DOM on /scheduled ${scheduledHit ? "contained" : "DID NOT contain"} the token "${TOKEN}".`,
     });
     runCounters.findingsCount += 1;
@@ -883,7 +883,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       page: "/calendar",
       action: `goal "scheduleOnCalendar" — verify /calendar DOM`,
       severity: calendarHit ? "info" : "error",
-      kind: calendarHit ? "question" : "issue",
+      kind: calendarHit ? "verified" : "issue",
       message: `DOM on /calendar ${calendarHit ? "contained" : "DID NOT contain"} the token "${TOKEN}". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).`,
     });
     runCounters.findingsCount += 1;

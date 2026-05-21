@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { MonkeyFinding } from "./_monkey-helpers";
 import { type AppMap, GOAL_KEYS, loadAppMap } from "./_app-map";
+import { classifyFindings } from "./_findings";
 
 const VITEST_REPORT_PATH = resolve("./tests/e2e/.data/vitest-report.json");
 
@@ -38,10 +39,9 @@ export default async function globalTeardown(): Promise<void> {
   const lines: string[] = [];
 
   // Run summary header.
-  const issues = findings.filter((f) => (f.kind ?? "issue") !== "question");
-  const questions = findings.filter((f) => f.kind === "question");
+  const { issues, questions, verified } = classifyFindings(findings);
   lines.push(
-    `_Last run: ${new Date().toISOString()} · ${issues.length} issue${issues.length === 1 ? "" : "s"}, ${questions.length} question${questions.length === 1 ? "" : "s"}._`,
+    `_Last run: ${new Date().toISOString()} · ${issues.length} issue${issues.length === 1 ? "" : "s"}, ${questions.length} question${questions.length === 1 ? "" : "s"}, ${verified.length} verified._`,
   );
   lines.push("");
 
@@ -72,10 +72,26 @@ export default async function globalTeardown(): Promise<void> {
     lines.push("");
     appendByPage(lines, questions);
   }
-
-  if (issues.length === 0 && questions.length === 0 && haveMap) {
+  if (verified.length > 0) {
+    lines.push("#### Verified");
+    lines.push("");
     lines.push(
-      "_No issues or questions on the last run — only the expert-system summary above._",
+      "_Goal verification legs that passed. Surfaced so the operator " +
+        "can sanity-check what the monkey looked at, without mixing " +
+        "into the silent-no-op questions above._",
+    );
+    lines.push("");
+    appendByPage(lines, verified);
+  }
+
+  if (
+    issues.length === 0 &&
+    questions.length === 0 &&
+    verified.length === 0 &&
+    haveMap
+  ) {
+    lines.push(
+      "_No issues, questions, or verifications on the last run — only the expert-system summary above._",
     );
     lines.push("");
   }
@@ -279,8 +295,8 @@ async function appendVitestReport(lines: string[]): Promise<void> {
 }
 
 /** Render a list of findings grouped by page, with severity
- * emoji prefixes. Shared between the issues and questions
- * subsections so they read the same way. */
+ * emoji prefixes. Shared between the issues, questions, and
+ * verified subsections so they read the same way. */
 function appendByPage(lines: string[], findings: MonkeyFinding[]): void {
   const byPage = new Map<string, MonkeyFinding[]>();
   for (const f of findings) {
@@ -292,13 +308,15 @@ function appendByPage(lines: string[], findings: MonkeyFinding[]): void {
     lines.push(`##### ${page}`);
     for (const f of list) {
       const tag =
-        f.kind === "question"
-          ? "❓"
-          : f.severity === "error"
-            ? "🔴"
-            : f.severity === "warn"
-              ? "🟡"
-              : "🔵";
+        f.kind === "verified"
+          ? "✅"
+          : f.kind === "question"
+            ? "❓"
+            : f.severity === "error"
+              ? "🔴"
+              : f.severity === "warn"
+                ? "🟡"
+                : "🔵";
       const msg = f.message.replace(/\s+/g, " ").trim();
       lines.push(`- ${tag} **${f.action}** — ${msg}`);
     }

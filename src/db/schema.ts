@@ -428,6 +428,14 @@ export const appSettings = sqliteTable("app_settings", {
   transferBackfillDone: integer("transfer_backfill_done", { mode: "boolean" })
     .notNull()
     .default(false),
+  /** Optional Brave Search subscription token for the supplemental
+   * web-source announcements on the investment-detail panel.
+   * Settable from Settings → General; the `BRAVE_SEARCH_API_KEY`
+   * env var takes precedence when both are set (containers can
+   * inject the key without touching the DB). Stored in the
+   * encrypted DB — same protection envelope as the rest of the
+   * household ledger. */
+  braveSearchApiKey: text("brave_search_api_key"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),

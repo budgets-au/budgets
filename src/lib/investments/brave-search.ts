@@ -15,6 +15,9 @@
  *  per day, the typical household tracking ~10 tickers spends ~300
  *  queries / month. */
 import { createHash } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { appSettings } from "@/db/schema";
 import type { NewsItem } from "./yahoo";
 
 const BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search";
@@ -141,6 +144,31 @@ export function toNewsItem(
   };
 }
 
+/** Resolve the active Brave Search API key. Precedence:
+ *    1. `BRAVE_SEARCH_API_KEY` env var (container override).
+ *    2. `app_settings.brave_search_api_key` (user-set via Settings
+ *       → General).
+ *    3. `undefined` (no key — fetcher returns [] gracefully).
+ *
+ *  Reads the DB lazily; failures (table missing on first migration,
+ *  DB locked, etc.) silently fall through to undefined so the
+ *  no-key install path stays solid. */
+export async function resolveBraveApiKey(): Promise<string | undefined> {
+  const fromEnv = process.env.BRAVE_SEARCH_API_KEY?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const [row] = await db
+      .select({ key: appSettings.braveSearchApiKey })
+      .from(appSettings)
+      .where(eq(appSettings.id, 1))
+      .limit(1);
+    const fromDb = row?.key?.trim();
+    return fromDb || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Recent web-search hits for a ticker. Returns `[]` (gracefully)
  *  when the API key is missing, the upstream errors, or the
  *  response has no results. The API route treats the empty case
@@ -150,9 +178,12 @@ export async function searchInvestmentNews(
   symbol: string,
   companyName: string | null,
   count = 20,
-  // Hook for tests — defaults to the real environment.
-  apiKey: string | undefined = process.env.BRAVE_SEARCH_API_KEY,
+  // Hook for tests — defaults to env+DB resolution at call time.
+  apiKey: string | undefined = undefined,
 ): Promise<NewsItem[]> {
+  if (apiKey === undefined) {
+    apiKey = await resolveBraveApiKey();
+  }
   if (!apiKey) {
     if (!warnedMissingKey) {
       console.log(

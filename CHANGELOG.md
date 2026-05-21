@@ -9,6 +9,45 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.223.0 — 2026-05-22
+
+### Added
+- **Brave Search API key now settable from Settings → General.**
+  0.222.0 shipped the dual-source announcements (Yahoo + Brave) but
+  the Brave key had to come from a `BRAVE_SEARCH_API_KEY` env var —
+  fine for container deployments, awkward for household installs
+  where the operator doesn't have container-env access. The key now
+  has a Settings UI:
+
+  - New `BraveSearchKeyPanel` component in Settings → General
+    (between the palette editor and the About box). Shows
+    "Configured / Not configured" + a source indicator (env var
+    vs DB vs none). Set / Replace / Clear buttons drive a masked
+    password-style input. The key value is never displayed back —
+    avoids leaking the household-wide secret on screenshares.
+
+  - New admin-gated endpoint `/api/settings/brave-search-key`:
+    - GET returns `{ configured: boolean, source: "env" | "db" |
+      "none" }`. No key bytes ever returned.
+    - PATCH `{ key: string | null }` writes (or clears with null /
+      empty string) the DB-stored value.
+
+  - New schema column `app_settings.brave_search_api_key` (text,
+    nullable). Migration `0014_app_settings_brave_search_api_key.sql`.
+
+  - New resolver `resolveBraveApiKey()` in
+    `src/lib/investments/brave-search.ts`. Precedence: env var →
+    DB value → undefined. Lazy DB lookup; failures (DB not ready,
+    table missing pre-migration, etc.) fall through to undefined
+    so the no-key install path stays solid. The news route's
+    `searchInvestmentNews()` call resolves at request time, so
+    setting the key in Settings takes effect on the next refresh
+    of any investment-detail Announcements panel — no app restart
+    needed.
+
+  - AGENTS.md updated to mention the Settings UI alongside the
+    env var.
+
 ## 0.222.0 — 2026-05-22
 
 ### Added

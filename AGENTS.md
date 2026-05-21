@@ -41,7 +41,10 @@ Optional:
   the supplemental web-source announcements on the investment
   detail panel. Unset is supported — Yahoo Finance continues to
   feed the panel alone, no UI degradation. Free tier (2000 q/mo,
-  1 q/s) is plenty given the 24h per-symbol cache.
+  1 q/s) is plenty given the 24h per-symbol cache. The same key
+  can also be set per-database via Settings → General → Brave
+  Search API key (DB-stored, encrypted with the rest of the
+  ledger); the env var takes precedence when both are set.
 
 Database migrations apply automatically on every unlock via
 `runPendingMigrations()` in [src/db/index.ts](src/db/index.ts) —

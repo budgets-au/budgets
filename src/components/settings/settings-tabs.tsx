@@ -20,6 +20,7 @@ import { MaintenancePanel } from "@/components/settings/maintenance-panel";
 import { OrphanCategoriesPanel } from "@/components/settings/orphan-categories-panel";
 import { ResetBrowserData } from "@/components/settings/reset-browser-data";
 import { SchedulePaletteEditor } from "@/components/settings/schedule-palette-editor";
+import { BraveSearchKeyPanel } from "@/components/settings/brave-search-key-panel";
 
 const SETTINGS_TABS = ["general", "accounts", "rules", "backups", "databases", "maintenance", "security"] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
@@ -176,6 +177,7 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
           </label>
         </div>
         <SchedulePaletteEditor />
+        <BraveSearchKeyPanel />
         <div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground space-y-1">
           <p className="font-medium text-foreground">About</p>
           <p>Household Budget Tracker · AUD · Local / Docker</p>

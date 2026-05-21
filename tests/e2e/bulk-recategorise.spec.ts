@@ -36,24 +36,24 @@ test.describe("bulk recategorise: /transactions toolbar → cashflow report", ()
     await signInAsAdmin(page);
     const request = page.context().request;
 
-    // 1. Pick two distinct expense categories from the seed: one is the
-    // SOURCE (where seeded txns start), one is the TARGET (where bulk
-    // moves them). Top-level expense categories only — child cats would
-    // need a deeper picker drive that's not the point of THIS test.
-    const catsRes = await request.get("/api/categories?type=expense");
-    expect(catsRes.ok()).toBeTruthy();
-    const allCats = (await catsRes.json()) as Array<{
-      id: string;
-      name: string;
-      parentId: string | null;
-    }>;
-    const topLevel = allCats.filter((c) => c.parentId === null);
-    expect(
-      topLevel.length,
-      "fixture should have at least 2 top-level expense cats",
-    ).toBeGreaterThanOrEqual(2);
-    const sourceCat = topLevel[0];
-    const targetCat = topLevel[1];
+    // 1. Create two test-only expense categories with per-run unique
+    // names. Avoid using seed cats — a known concurrent-seed race
+    // (multiple concurrent unlock() calls during boot can each
+    // re-run `seedSystemCategoriesIfMissing` and double-insert the
+    // default 30 cats) means seed names like "Charity" or "Bank
+    // Fees" can have multiple rows, and the combobox's name search
+    // then surfaces both, which we can't disambiguate by label.
+    // Per-run-token names guarantee uniqueness across runs AND
+    // within a run.
+    const createCat = async (name: string): Promise<{ id: string; name: string }> => {
+      const res = await request.post("/api/categories", {
+        data: { name, type: "expense", color: "#64748b" },
+      });
+      expect(res.ok(), `failed to create test category "${name}"`).toBeTruthy();
+      return (await res.json()) as { id: string; name: string };
+    };
+    const sourceCat = await createCat(`${RUN_TOKEN}-source`);
+    const targetCat = await createCat(`${RUN_TOKEN}-target`);
 
     // 2. Need an account for the seed POST. Grab the first non-archived.
     const accountsRes = await request.get("/api/accounts");
@@ -119,20 +119,40 @@ test.describe("bulk recategorise: /transactions toolbar → cashflow report", ()
 
     // 8. Open the bulk-category combobox. The trigger reads
     // "Choose category…" until a value is set.
-    await page.getByText("Choose category…").click();
-    // 9. Type the target category name to narrow the list, then click
-    // the matching `<li role="option">`.
-    await page
-      .getByPlaceholder("Search categories…")
-      .fill(targetCat.name);
-    await page
-      .locator('li[role="option"]', { hasText: targetCat.name })
-      .first()
+    const triggerInToolbar = page.getByText("Choose category…");
+    await triggerInToolbar.click();
+
+    // 9. Wait for the search input to render — that's the proof
+    // the popover is fully open. Fill the query, wait for the
+    // dropdown to filter to a single category-name match, then
+    // click it by its id-stable signature (NOT by name text — the
+    // combobox renders pinned items + a "Create '<query>'" row
+    // that also matches `hasText: <name>` and would catch a
+    // generic `.first()` click).
+    const searchInput = page.getByPlaceholder("Search categories…");
+    await expect(searchInput).toBeVisible({ timeout: 5_000 });
+    await searchInput.fill(targetCat.name);
+
+    // The bulk toolbar's listbox is the most recently opened popover.
+    // Scope option clicks to it so a per-row picker that happened to
+    // open earlier doesn't catch the click.
+    const openListbox = page.locator('[role="listbox"]:visible').last();
+    // Match by EXACT label text — the option renders as
+    // `<span>{ancestors}/<span>{label}</span></span>` for child
+    // cats but for top-level seed cats it's just `<span>{label}</span>`.
+    // `getByRole("option", { name: ..., exact: true })` matches
+    // accessible name, which for these option rows is just the
+    // visible label. That dodges the "Create '<query>'" row (which
+    // has different a11y name).
+    await openListbox
+      .getByRole("option", { name: targetCat.name, exact: true })
       .click();
 
     // 10. Apply + wait for the PATCH to land. Listen for the response
     // explicitly so the assertion doesn't race the optimistic
-    // cache update.
+    // cache update. Capture the REQUEST payload too — that's the
+    // ground truth for "what categoryId did the UI submit", which
+    // makes a wrong-option-click failure instantly diagnosable.
     const [patchRes] = await Promise.all([
       page.waitForResponse(
         (r) =>
@@ -142,6 +162,14 @@ test.describe("bulk recategorise: /transactions toolbar → cashflow report", ()
       page.getByRole("button", { name: "Apply" }).click(),
     ]);
     expect(patchRes.ok()).toBeTruthy();
+    const reqPayload = JSON.parse(patchRes.request().postData() ?? "{}") as {
+      ids: string[];
+      categoryId: string | null;
+    };
+    expect(
+      reqPayload.categoryId,
+      `combobox picked wrong category — sent ${reqPayload.categoryId} but expected ${targetCat.id} (${targetCat.name})`,
+    ).toBe(targetCat.id);
     const patchBody = (await patchRes.json()) as { updated: number };
     expect(patchBody.updated).toBe(SEED_COUNT);
 

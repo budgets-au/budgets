@@ -9,6 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.212.0 — 2026-05-21
+
+### Fixed
+- **Race in `seedSystemCategoriesIfMissing` that double-seeded the
+  default 30 categories.** The pre-0.212 implementation read the
+  empty-DB gate (`SELECT id FROM categories LIMIT 1`) OUTSIDE any
+  transaction. Two concurrent `unlock()` calls — common during boot
+  when several /api requests fan out from a single NextAuth sign-in
+  — could each pass the gate before either had inserted, leaving
+  the fresh DB with 60 categories (two of each name). Discovered
+  while debugging the new `bulk-recategorise.spec.ts` failing in
+  full-suite runs: the SearchableCombobox surfaced two "Charity"
+  options and the test's first-match click moved rows to the wrong
+  id. Fix: gate-check + insert now live inside a single
+  `state.drizzleDb.transaction((tx) => ...)` block; SQLite's
+  `behavior: "immediate"` grabs the write lock on BEGIN so the
+  second concurrent transaction blocks until the first commits,
+  then re-checks the gate and finds rows. Mirrors the existing
+  pattern in `seedSampleDataIfMissing`.
+
+  Existing dup-cat databases aren't auto-cleaned — operators can
+  merge or delete the duplicates from Settings → Categories. New
+  installs and fresh test DBs no longer hit the race.
+
+### Changed
+- **`bulk-recategorise.spec.ts` now creates its own test-only
+  categories** (`<run-token>-source` / `<run-token>-target`) rather
+  than picking from `DEFAULT_CATEGORIES`. Bypasses any pre-existing
+  dup-seed state in the DB (now fixed, but resilient against future
+  similar gotchas) AND guarantees the category names are unique
+  per run, so the combobox name-search resolves to exactly one
+  option.
+
 ## 0.211.0 — 2026-05-21
 
 ### Changed

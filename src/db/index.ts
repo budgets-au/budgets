@@ -381,20 +381,33 @@ function seedDefaultUserIfMissing(): void {
 export function seedSystemCategoriesIfMissing(): void {
   if (!state.drizzleDb) return;
   try {
-    const existing = state.drizzleDb
-      .select({ id: categories.id })
-      .from(categories)
-      .limit(1)
-      .all();
-    if (existing.length > 0) return;
-    const rows = DEFAULT_CATEGORIES.map((c) => ({
-      name: c.name,
-      type: c.type,
-      color: c.color,
-      isSystem: true,
-    }));
-    state.drizzleDb.insert(categories).values(rows).onConflictDoNothing().run();
-    console.log(`[db] Seeded ${rows.length} default categories.`);
+    // Wrap the gate-check + insert in a single transaction so two
+    // concurrent unlock() calls (e.g. several parallel /api requests
+    // during initial boot, common from a NextAuth sign-in fan-out)
+    // can't both pass the empty-DB gate before either commits. The
+    // pre-0.212 implementation read existing.length outside any
+    // transaction; a fast double-unlock would insert all 30 default
+    // categories twice. SQLite's `behavior: "immediate"` grabs the
+    // write lock on BEGIN so the second concurrent transaction
+    // blocks until the first commits, then re-checks the gate and
+    // finds rows. Mirrors the same pattern in
+    // `seedSampleDataIfMissing` below.
+    state.drizzleDb.transaction((tx) => {
+      const existing = tx
+        .select({ id: categories.id })
+        .from(categories)
+        .limit(1)
+        .all();
+      if (existing.length > 0) return;
+      const rows = DEFAULT_CATEGORIES.map((c) => ({
+        name: c.name,
+        type: c.type,
+        color: c.color,
+        isSystem: true,
+      }));
+      tx.insert(categories).values(rows).run();
+      console.log(`[db] Seeded ${rows.length} default categories.`);
+    });
   } catch (e) {
     console.error("[db] Failed to seed default categories:", e);
   }

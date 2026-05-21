@@ -10,15 +10,48 @@ up for "next session" into the top section.
 
 ## Up next
 
-_Cleared 2026-05-17 — every item from the 2026-05-15 review either
-shipped (0.137 → 0.143) or got moved to the "Done / dropped"
-section. Re-fill from the latest monkey crawl + ad-hoc finds._
+### 0.206.0 candidates
 
-### Small, in-flight (current session)
+- **`monkey-goals` create-{transaction,schedule,budget} tests
+  time out at 2 min post-submit.** Trace shows the `Add` /
+  `Create` click fires, then nothing — the `verifyOutcome`
+  chain (DOM token search → API fallback) hangs. The
+  `authjs Failed to fetch` error in the same trace (around
+  `/api/auth/session`) is suspicious. Reproducible on both
+  Linux and macOS hosts so it's not env-specific. Diagnose
+  by adding a per-step `console.log` inside `verifyOutcome`
+  or by inspecting the post-submit screencast frame to see
+  whether the dialog closed + the list re-rendered.
 
-_Cleared 2026-05-19 — the three items (calendar accent, two
-hover-only `lg:` stragglers, `hideTransfers` dead prop) all
-shipped in 0.166.0._
+- **Dashboard-edit HTML5-drag e2e coverage.** Two tests are
+  `test.fixme()` because Playwright's chromium-headless
+  drag synthesis is unreliable for the
+  `dragstart → dragover storm → drop` sequence RGL needs.
+  Re-enable when we adopt CDP-level
+  `Input.dispatchDragEvent` or move to non-headless
+  chromium. Coverage gap acknowledged in the spec comments.
+
+- **`docker-release.mjs` fallback-reason logging.** When
+  `useBuildx` is false the script just prints `runtime  docker`
+  without saying _why_ buildx wasn't used (no buildx? podman?
+  `--single-arch` flag?). A one-line reason field would save
+  the next operator a `--debug` chase. Tiny tweak.
+
+### Deferred (each its own release)
+
+- **eslint 9 → 10.** Major bump; config schema changes,
+  flat-config-only paths. Own release, full lint sweep.
+- **typescript 5 → 6.** Major bump; stricter type-checker.
+  Own release, expect a wave of small type fixups.
+- **`@signalapp/better-sqlite3` deprecation.** Registry marks
+  9.0.13 as deprecated. Investigate the replacement path
+  (`@matrixai/better-sqlite3`? back to upstream
+  `better-sqlite3` with a separate SQLCipher integration?)
+  before forcing a swap. Track Signal's recommendation.
+
+- **`@types/node` 20 → 25.** Defer — pinned to Node 22 runtime
+  in the Dockerfile, so chasing newer types yields nothing
+  except noise. Bump when we bump the runtime.
 
 ## Known bugs / regressions to investigate
 
@@ -235,6 +268,49 @@ X then verify X appears" flow below sits in this blind spot._
   existing topbar usage for the canonical pattern.
 
 ## Done / dropped
+
+### 2026-05-21
+
+- **`useDisplayPrefs` fetcher restoration (0.205.0).** The
+  0.190.0 `useSwrJson<T>` migration accidentally collapsed
+  the third arg of `useSWR(key, fetcher, config)`. SWR
+  with no fetcher = no fetch, just `fallbackData`. So for
+  12 releases every read-from-server display preference
+  (dashboard layout, hide-transfers, persistent account
+  filter, theme prefs, hidden cashflow categories, etc.)
+  was silently ignored on cold load until a PATCH-triggered
+  `mutate` woke SWR up. One-line fix + a verbose inline
+  comment so the next consolidation pass doesn't re-collapse
+  it. Caught during the dashboard-edit e2e debug session that
+  started as "why doesn't `setDashboardLayout` take effect".
+
+- **Multi-arch container shipping (0.205.0).**
+  `scripts/docker-release.mjs` defaults to `docker buildx`
+  for `linux/amd64,linux/arm64`. `--single-arch` keeps the
+  legacy fast path. Dockerfile got `ARG TARGETARCH` for
+  per-arch sharp-prebuild stripping + a pre-COPY `rm -rf`
+  of pnpm-style symlinks the buildx overlayfs driver refuses
+  to overwrite. Verified end-to-end on ghcr.io and
+  `registry.service.local`. The latter pushed via host-side
+  `skopeo` because the OrbStack docker daemon can't resolve
+  `.local` mDNS.
+
+- **Version-string in sidebar footer is now a link to the
+  GitHub release notes (0.204.0).**
+
+- **Backup → modify → restore e2e contract (0.203.0).** New
+  `tests/e2e/backup-restore.spec.ts` covers the destructive
+  disaster-recovery path the smart monkey can't reach. Caught
+  one latent gotcha: `swapLive()` RENAMES the snapshot into
+  the live path (it doesn't copy), so the source file
+  disappears from the backups dir after restore.
+
+- **macOS dev environment bootstrap.** Node 22 (brew) +
+  corepack + pnpm 9.15.9 + Playwright chromium for arm64 +
+  `/data` synthetic firmlink (`/etc/synthetic.conf`
+  `data\t/Users/wayne/data`) + skopeo for cross-registry
+  copies. Replaces the OrbStack Linux VM as the primary dev
+  env. Vitest 359/359 on the new host.
 
 ### 2026-05-19
 

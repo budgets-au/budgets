@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.226.0 — 2026-05-22
+
+### Fixed
+- **Issue #43 — `scheduleOnCalendar` /calendar DOM miss.** The
+  /calendar verification leg used a single `waitForTimeout(800)`
+  then read `body.innerText()` once. Calendar fetches cashflow
+  forecast via SWR; the 800 ms shot was racing the request +
+  render and intermittently missing the freshly-POSTed schedule
+  on full-suite runs. The API + /scheduled DOM legs both used
+  faster paths so they consistently passed — the discrepancy
+  was the timing of the single sample on the calendar.
+
+  Replaced the one-shot with a 5-attempt poll (600 ms between
+  attempts, 5 s innerText cap each) — same pattern as
+  addTenToCategory / searchTransaction / etc. Breaks the moment
+  the token shows up so the happy-path budget barely moves.
+  Verified standalone: all three legs pass in 2.7 s.
+
 ## 0.225.0 — 2026-05-22
 
 ### Fixed

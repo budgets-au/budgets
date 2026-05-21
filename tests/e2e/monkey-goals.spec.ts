@@ -893,13 +893,26 @@ test.describe("smart monkey: goal-driven crawl", () => {
     // our token rendered in its cell.
     await page.goto("/calendar");
     await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
-    await page.waitForTimeout(800);
     runCounters.routesVisited += 1;
-    const calendarText = await page
-      .locator("body")
-      .innerText()
-      .catch(() => "");
-    const calendarHit = calendarText.includes(TOKEN);
+    // Poll the body up to 5× 600ms for the token. Calendar fetches
+    // cashflow forecast via SWR — single-shot waitForTimeout(800)
+    // was racing the request + render and intermittently missing
+    // the new schedule on full-suite runs (issue #43). Polling
+    // mirrors the addTenToCategory / searchTransaction patterns
+    // and gives SWR room to settle without inflating the budget on
+    // happy-path runs (it breaks out the moment the token shows up).
+    let calendarHit = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await page.waitForTimeout(600);
+      const calendarText = await page
+        .locator("body")
+        .innerText({ timeout: 5_000 })
+        .catch(() => "");
+      if (calendarText.includes(TOKEN)) {
+        calendarHit = true;
+        break;
+      }
+    }
 
     await recordFinding({
       page: "/scheduled",

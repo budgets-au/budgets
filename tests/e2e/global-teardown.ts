@@ -116,8 +116,10 @@ function appendExpertSystem(lines: string[], map: AppMap): void {
   // makes that visible: a row whose `lastAttempt` is older than this
   // run's start was inherited from an earlier run, not re-verified
   // just now.
-  lines.push("| Goal | Achieved | Last attempt | Attempts | Last successful run |");
-  lines.push("| --- | --- | --- | --- | --- |");
+  lines.push(
+    "| Goal | Achieved | Last attempt | Total attempts | Pass rate | Last successful run |",
+  );
+  lines.push("| --- | --- | --- | --- | --- | --- |");
   for (const key of GOAL_KEYS) {
     const g = map.goals[key];
     const recipe = g.successfulRun
@@ -127,8 +129,17 @@ function appendExpertSystem(lines: string[], map: AppMap): void {
     // value, and the "Last attempt" column's job is "did this row
     // get re-checked recently or is it stale?".
     const stamp = g.lastAttempt ? g.lastAttempt.slice(0, 16).replace("T", " ") : "—";
+    // Pass rate = lifetime successes / lifetime attempts. Renders as
+    // "N/M (PP%)" so the operator sees both the absolute count and
+    // the percentage at a glance. Zero attempts → em-dash; the
+    // percentage of an empty sample is meaningless.
+    const successes = g.successes ?? 0;
+    const passRate =
+      g.attempts === 0
+        ? "—"
+        : `${successes}/${g.attempts} (${Math.round((successes / g.attempts) * 100)}%)`;
     lines.push(
-      `| \`${key}\` | ${g.achieved ? "✅" : "❌"} | ${stamp} | ${g.attempts} | ${recipe} |`,
+      `| \`${key}\` | ${g.achieved ? "✅" : "❌"} | ${stamp} | ${g.attempts} | ${passRate} | ${recipe} |`,
     );
   }
   lines.push("");

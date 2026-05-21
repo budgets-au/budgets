@@ -381,11 +381,26 @@ async function cycleSelects(
       (await sel.getAttribute("aria-label")) ?? `select #${i}`;
     if (isDestructiveLabel(label)) continue;
     try {
-      const options = await sel.locator("option").all();
+      // Read every option's value in ONE DOM call rather than
+      // `.locator("option").all()`. The latter returns Playwright
+      // Locators bound to `.nth(N)` selectors — if the select
+      // re-renders mid-cycle (which can happen when one option
+      // change rewires the underlying state and shrinks the option
+      // set), the stale Locator pointing at .nth(1) auto-waits the
+      // full per-test 60s budget on the next .getAttribute call.
+      // evaluateAll snapshots the values up front so the iteration
+      // never re-touches the DOM — fixes #44.
+      const optionValues = await sel
+        .locator("option")
+        .evaluateAll((els) =>
+          els.map((el) => (el as HTMLOptionElement).value),
+        );
+      // Skip selects with fewer than 2 options — there's nothing
+      // to cycle and the cycler should be idempotent anyway.
+      if (optionValues.length < 2) continue;
       const initial = await sel.inputValue();
-      for (const opt of options) {
-        const value = await opt.getAttribute("value");
-        if (value == null) continue;
+      for (const value of optionValues) {
+        if (!value) continue;
         await sel.selectOption(value).catch(() => {});
         runCounters.selectChanges += 1;
         await page.waitForTimeout(100);

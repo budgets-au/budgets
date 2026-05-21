@@ -13,7 +13,7 @@ import { dirname, resolve } from "node:path";
 
 const APP_MAP_PATH = resolve("./tests/e2e/.data/app-map.json");
 
-const APP_MAP_SCHEMA_VERSION = 7 as const;
+const APP_MAP_SCHEMA_VERSION = 8 as const;
 
 export type ControlKind = "button" | "switch" | "select" | "input" | "link";
 
@@ -104,7 +104,12 @@ export interface SuccessfulRun {
 
 interface GoalState {
   achieved: boolean;
+  /** Lifetime attempt count (every `recordGoalAttempt` call, success
+   *  or not). Persists across runs via the AppMap's on-disk snapshot. */
   attempts: number;
+  /** Lifetime success count — used to compute the table's pass-rate
+   *  column. Added in schema 8; older maps default to 0 on load. */
+  successes: number;
   lastAttempt: string | null;
   successfulRun: SuccessfulRun | null;
 }
@@ -163,6 +168,7 @@ export function emptyAppMap(): AppMap {
   const goal = (): GoalState => ({
     achieved: false,
     attempts: 0,
+    successes: 0,
     lastAttempt: null,
     successfulRun: null,
   });
@@ -277,6 +283,7 @@ export function recordGoalAttempt(
   state.lastAttempt = now;
   if (success) {
     state.achieved = true;
+    state.successes += 1;
     state.successfulRun = success;
   }
 }

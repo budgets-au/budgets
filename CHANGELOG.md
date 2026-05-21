@@ -9,6 +9,38 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.228.0 — 2026-05-22
+
+### Fixed
+- **#44 — monkey breadth-first select-cycler 60 s timeout on
+  single-option selects (or selects that mutate mid-cycle).** The
+  cycler at `monkey.spec.ts:374-403` was holding `Locator[]`
+  results from `sel.locator("option").all()` — Playwright Locators
+  are bound to `.nth(N)` selectors, so when a select re-rendered
+  with fewer options (one option-change rewired state and shrank
+  the option set), the next `.getAttribute("value")` on the stale
+  Locator auto-waited the full 60 s test budget. Replaced with
+  `evaluateAll` which snapshots all values in one DOM call as
+  plain strings — no stale Locators, no auto-wait surface. Also
+  short-circuits selects with `< 2` options (nothing meaningful
+  to cycle).
+  Verified: `pnpm test:e2e tests/e2e/monkey.spec.ts` → all 10 pages
+  pass (was failing on Transactions / Calendar in the full suite).
+
+### Added
+- **Two more columns on the Smart-Monkey expert-system table:**
+  - **Total attempts** (renamed from "Attempts" — it's already the
+    lifetime count, but the new label makes the persistence
+    semantics obvious).
+  - **Pass rate** — shows `successes/attempts (PP%)`, e.g.
+    `3/5 (60%)`. Em-dash when attempts = 0.
+  - Required a new `successes: number` field on `GoalState` (added
+    in schema 8, alongside the existing `attempts`). `emptyAppMap`
+    seeds it to 0; `recordGoalAttempt` increments it whenever a
+    `SuccessfulRun` is passed.
+
+  AppMap schema 7 → 8.
+
 ## 0.227.0 — 2026-05-22
 
 ### Added

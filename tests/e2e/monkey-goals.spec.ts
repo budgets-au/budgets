@@ -1251,9 +1251,12 @@ test.describe("smart monkey: goal-driven crawl", () => {
    * time it runs, every prior goal has already done its work.
    *
    * Verifies the round-trip:
-   *   1. GET /api/sample-data → confirm sample rows exist
+   *   1. GET /api/sample-data/remove → confirm sample rows exist
+   *      (the GET reports counts; the wipe is the POST). The
+   *      Settings UI hits the same `/remove` URL for its panel
+   *      data — there's no separate `/api/sample-data` GET.
    *   2. POST /api/sample-data/remove → expect ok
-   *   3. GET /api/sample-data → confirm sampleAccounts /
+   *   3. GET /api/sample-data/remove → confirm sampleAccounts /
    *      sampleTransactions / sampleScheduled all zeroed and
    *      `sampleDataSeeded` stays true (so the next unlock
    *      doesn't re-seed). */
@@ -1262,14 +1265,14 @@ test.describe("smart monkey: goal-driven crawl", () => {
     const request = page.context().request;
     runCounters.goalsAttempted += 1;
 
-    const beforeRes = await request.get("/api/sample-data");
+    const beforeRes = await request.get("/api/sample-data/remove");
     if (!beforeRes.ok()) {
       await recordFinding({
         page: "/settings",
         action: `goal "clearSampleData" — GET /api/sample-data`,
         severity: "warn",
         kind: "issue",
-        message: `GET /api/sample-data → ${beforeRes.status()}`,
+        message: `GET /api/sample-data/remove → ${beforeRes.status()}`,
       });
       runCounters.findingsCount += 1;
       recordGoalAttempt(appMap, "clearSampleData", null);
@@ -1322,7 +1325,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
     }
 
     // GET again to confirm the counts zeroed out.
-    const afterRes = await request.get("/api/sample-data");
+    const afterRes = await request.get("/api/sample-data/remove");
     const after = afterRes.ok()
       ? ((await afterRes.json()) as {
           sampleAccounts: number;
@@ -1830,13 +1833,16 @@ test.describe("smart monkey: goal-driven crawl", () => {
 
       const afterRes = await request.get("/api/accounts");
       const afterOk = afterRes.ok();
+      const afterBody = afterOk
+        ? ""
+        : (await afterRes.text().catch(() => "")).slice(0, 200);
 
       await recordFinding({
         page: "/settings",
         action: `goal "lockUnlockRoundTrip" — POST /api/unlock`,
         severity: unlockOk && afterOk ? "info" : "error",
         kind: unlockOk && afterOk ? "verified" : "issue",
-        message: `POST /api/unlock → ${unlockRes.status()}; post-unlock GET /api/accounts → ${afterRes.status()}.`,
+        message: `POST /api/unlock → ${unlockRes.status()}; post-unlock GET /api/accounts → ${afterRes.status()}${afterBody ? ` body: ${afterBody}` : ""}.`,
       });
       runCounters.findingsCount += 1;
 

@@ -10,8 +10,6 @@ up for "next session" into the top section.
 
 ## Up next
 
-### Next up
-
 - **Dashboard-edit HTML5-drag e2e coverage.** Two tests are
   `test.fixme()` because Playwright's chromium-headless
   drag synthesis is unreliable for the
@@ -41,32 +39,32 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T13:14:01.430Z · 0 issues, 0 questions, 2 verified._
+_Last run: 2026-05-21T13:27:21.229Z · 0 issues, 0 questions, 3 verified._
 
 #### Smart Monkey expert system
 
 | Goal | Achieved | Attempts | Last successful run |
 | --- | --- | --- | --- |
-| `createTransaction` | ❌ | 0 | _(not yet)_ |
-| `createBudget` | ❌ | 0 | _(not yet)_ |
-| `createSchedule` | ❌ | 0 | _(not yet)_ |
-| `addTenToCategory` | ❌ | 0 | _(not yet)_ |
-| `scheduleOnCalendar` | ❌ | 0 | _(not yet)_ |
-| `searchTransaction` | ❌ | 0 | _(not yet)_ |
-| `addAndViewNote` | ❌ | 0 | _(not yet)_ |
-| `searchForNote` | ❌ | 0 | _(not yet)_ |
-| `clearSampleData` | ❌ | 0 | _(not yet)_ |
-| `rekeyPassphrase` | ❌ | 0 | _(not yet)_ |
-| `multiDbSwitcher` | ❌ | 0 | _(not yet)_ |
-| `lockUnlockRoundTrip` | ✅ | 1 | /settings · "POST /api/lock" → "POST /api/unlock" (api) |
+| `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
+| `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
+| `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
+| `addTenToCategory` | ✅ | 1 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
+| `scheduleOnCalendar` | ✅ | 1 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
+| `searchTransaction` | ✅ | 1 | /transactions · "?search=monkey-goal-mpfimphh-search-payee" → "GET /api/transactions?search=…" (dom) |
+| `addAndViewNote` | ✅ | 1 | /transactions · "POST /api/transactions (with notes)" → "GET /api/transactions" (dom) |
+| `searchForNote` | ✅ | 1 | /transactions · "?search=find-me-monkey-goal-mpfimphh (notes-only)" → "GET /api/transactions?search=…" (dom) |
+| `clearSampleData` | ✅ | 2 | /settings · "POST /api/sample-data/remove" → "POST /api/sample-data/remove" (api) |
+| `rekeyPassphrase` | ✅ | 1 | /settings · "POST /api/rekey" → "POST /api/rekey" (api) |
+| `multiDbSwitcher` | ✅ | 1 | /dashboard · "Switcher → Create new database…" → "Create + switch back to Default" (dom) |
+| `lockUnlockRoundTrip` | ✅ | 2 | /settings · "POST /api/lock" → "POST /api/unlock" (api) |
 
-_Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
+_Coverage: 10 routes mapped, 338 interactive controls catalogued, 82 in-app links discovered._
 
 #### Smart Monkey run report
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 1.8s |
+| Total wall time | 2.7s |
 | Routes visited | 0 |
 | Button clicks | 0 |
 | Switch toggles | 0 |
@@ -76,22 +74,22 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 | Form submits | 0 |
 | Links discovered | 0 |
 | Console errors | 0 |
-| Goals attempted | 1 |
-| Goals achieved | 1 |
-| Findings logged | 2 |
+| Goals attempted | 2 |
+| Goals achieved | 2 |
+| Findings logged | 3 |
 
 ##### Workflows completed
-- ❌ `createTransaction` — _(not yet completed)_
-- ❌ `createBudget` — _(not yet completed)_
-- ❌ `createSchedule` — _(not yet completed)_
-- ❌ `addTenToCategory` — _(not yet completed)_
-- ❌ `scheduleOnCalendar` — _(not yet completed)_
-- ❌ `searchTransaction` — _(not yet completed)_
-- ❌ `addAndViewNote` — _(not yet completed)_
-- ❌ `searchForNote` — _(not yet completed)_
-- ❌ `clearSampleData` — _(not yet completed)_
-- ❌ `rekeyPassphrase` — _(not yet completed)_
-- ❌ `multiDbSwitcher` — _(not yet completed)_
+- ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
+- ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
+- ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
+- ✅ `addTenToCategory` — `/transactions` · click **POST /api/transactions × 10** → fill → click **POST /api/transactions** (verified via api)
+- ✅ `scheduleOnCalendar` — `/calendar` · click **POST /api/scheduled** → fill → click **POST /api/scheduled** (verified via dom)
+- ✅ `searchTransaction` — `/transactions` · click **?search=monkey-goal-mpfimphh-search-payee** → fill → click **GET /api/transactions?search=…** (verified via dom)
+- ✅ `addAndViewNote` — `/transactions` · click **POST /api/transactions (with notes)** → fill → click **GET /api/transactions** (verified via dom)
+- ✅ `searchForNote` — `/transactions` · click **?search=find-me-monkey-goal-mpfimphh (notes-only)** → fill → click **GET /api/transactions?search=…** (verified via dom)
+- ✅ `clearSampleData` — `/settings` · click **POST /api/sample-data/remove** → fill → click **POST /api/sample-data/remove** (verified via api)
+- ✅ `rekeyPassphrase` — `/settings` · click **POST /api/rekey** → fill → click **POST /api/rekey** (verified via api)
+- ✅ `multiDbSwitcher` — `/dashboard` · click **Switcher → Create new database…** → fill → click **Create + switch back to Default** (verified via dom)
 - ✅ `lockUnlockRoundTrip` — `/settings` · click **POST /api/lock** → fill → click **POST /api/unlock** (verified via api)
 
 #### Vitest summary
@@ -105,6 +103,7 @@ _Last run: 2026-05-20T09:26:06.823Z._
 _Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
 
 ##### /settings
+- ✅ **goal "clearSampleData" — wipe round-trip** — Before: accts=2 txns=25 schedules=3. Wipe OK ({"sampleAccounts":0,"sampleTransactions":0,"sampleScheduled":0,"samplePayeeRules":0,"dependentNonSample":{"transactions":0,"scheduled":0},"sampleDataSeeded":true}). After: accts=0 txns=0 schedules=0 seededFlag=true.
 - ✅ **goal "lockUnlockRoundTrip" — POST /api/lock** — POST /api/lock → 200; subsequent GET /api/accounts → 307 Location:/unlock?next=%2Fapi%2Faccounts (expected 3xx → /unlock).
 - ✅ **goal "lockUnlockRoundTrip" — POST /api/unlock** — POST /api/unlock → 200; post-unlock GET /api/accounts → 200.
 
@@ -125,19 +124,8 @@ X then verify X appears" flow below sits in this blind spot._
 - **Undo a commit** — `/api/import/undo-commit` zero coverage. Accidental import corrupts the ledger.
 - **Learn-aliases on commit** — `/api/import/learn-aliases` writes rules; nothing asserts the next import auto-categorises.
 
-#### Backup / restore / rekey (critical — disaster-recovery features)
-
-- ✅ Closed by `rekeyPassphrase` monkey goal (0.217.0). Whole section's
-  TODO gaps now covered by smart-monkey goals or focused e2e specs.
-
 #### Multi-DB (NEW — 0.142 / 0.143)
 
-- ✅ Closed by `multiDbSwitcher` monkey goal (0.218.0). Drove the
-  switcher dropdown end-to-end and discovered a real bug as a
-  bonus: `withAdminAuthAndId`'s UUID parse rejected the short
-  profile ids that DELETE / PATCH on `/api/databases/[id]` actually
-  receive, leaving the Settings → Database files Delete + Rename
-  buttons silently broken. Added `withAdminAuthAndProfileId`.
 - **Per-DB backup directory migration** — confirm `<base>/budgets_*.sqlite` from a single-DB install moves into `<base>/default/` cleanly.
 - **Backfill marker behaviour across restore** — restore an older DB, confirm orphan-transfer backfill doesn't re-fire when the registry flag is set.
 
@@ -149,12 +137,6 @@ X then verify X appears" flow below sits in this blind spot._
 
 #### Scheduled / Calendar
 
-- ✅ Closed by `scheduleOnCalendar` monkey goal (earlier in 0.21x
-  series). POSTs a schedule, then navigates `/scheduled` AND
-  `/calendar` to grep the rendered DOM for the per-run payee
-  token. Three verification legs (API list + /scheduled DOM +
-  /calendar DOM) recorded as separate findings so a partial-pass
-  pinpoints which pipeline diverged.
 - **Edit OCCURRENCE vs. SERIES** — `/api/scheduled/[id]/replace` splits a series; needs targeted-occurrence test.
 - **Dismiss missed scheduled** — `/api/scheduled/[id]/dismiss-missed` uncovered.
 - **Scheduled-transfer false-missed regression** — 0.136 fix has unit coverage; an E2E walk would catch UI-side regressions.
@@ -190,11 +172,6 @@ X then verify X appears" flow below sits in this blind spot._
 
 #### Auth / session
 
-- ✅ Closed by `lockUnlockRoundTrip` monkey goal (0.219.0). POSTs
-  `/api/lock`, verifies the proxy redirects every non-allowlisted
-  route to `/unlock`, then POSTs `/api/unlock` and confirms
-  access is restored. Self-preserving (try/finally re-unlock so
-  later specs aren't blocked).
 - **Wrong-passphrase rate-limit / lockout** — 0.144 added a 5-attempts-per-60s limit on `/api/unlock` + `/api/rekey`; an E2E driver could verify the 429 trigger + Retry-After header.
 
 #### Cross-cutting blind spot
@@ -226,19 +203,11 @@ X then verify X appears" flow below sits in this blind spot._
 - (placeholders — add as you walk the app and find rough edges)
 
 ### Infrastructure / tests
-- Expand E2E coverage:
-  - Transactions: add a transaction via UI, verify it appears in
-    the list and updates the dashboard total.
-  - Scheduled: add a scheduled txn via the global "+ scheduled"
-    dialog, verify it appears on /scheduled and the calendar.
+- Expand E2E coverage (still open):
   - Reports: walk each tab (Cashflow / Sankey / Envelope / YoY),
     confirm no console errors with seeded data.
   - Settings → Reset browser data: verify the action signs the
     operator out and lands them on /login.
-  - **Multi-DB switcher dropdown** — open dropdown, click each
-    profile entry, click "Create new database…" — verify the
-    expected nav / dialog opens (this would have caught the
-    0.142 → 0.144 `onSelect` regression).
 - Seed-data fixtures: helpers under `tests/e2e/_seed.ts` for
   inserting accounts / transactions / categories so tests aren't
   forced to drive the UI through every setup step.

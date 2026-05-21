@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.220.0 — 2026-05-21
+
+### Fixed
+- **`clearSampleData` goal pointed at the wrong endpoint.** Used
+  `GET /api/sample-data` (404 — no such route) where the Settings
+  UI and the actual GET handler live at `/api/sample-data/remove`
+  (the GET reports counts; the POST does the wipe — both on the
+  same `/remove` path). Surfaced as `🟡 GET /api/sample-data → 404`
+  in the previous run's monkey block; now records as a clean
+  verified leg.
+
+### Changed
+- **`lockUnlockRoundTrip` post-unlock leg now captures the response
+  body** on failure. The previous run's full-suite monkey block
+  showed a 401 on `GET /api/accounts` after `POST /api/unlock`
+  succeeded — but stand-alone the test passes clean, suggesting a
+  cookie-jar state issue from the cross-test sequence. Body
+  capture gives the next operator the error message instead of
+  just the status code so a follow-up dig is grounded in data.
+
+### Done — TODO reorg
+The "Backup / restore / rekey", "Multi-DB → Create / switch /
+unlock-the-new-one round-trip", "Scheduled / Calendar → Create
+scheduled → confirm on /scheduled AND /calendar", and "Auth /
+session → Lock / unlock round-trip" entries were all marked
+closed in the test-coverage-gaps section — covered by their
+respective smart-monkey goals. Stale "Expand E2E coverage"
+ideas trimmed.
+
 ## 0.219.0 — 2026-05-21
 
 ### Added

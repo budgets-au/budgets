@@ -12,17 +12,6 @@ up for "next session" into the top section.
 
 ### Next up
 
-- **`monkey-goals` create-{transaction,schedule,budget} tests
-  time out at 2 min post-submit.** Trace shows the `Add` /
-  `Create` click fires, then nothing — the `verifyOutcome`
-  chain (DOM token search → API fallback) hangs. The
-  `authjs Failed to fetch` error in the same trace (around
-  `/api/auth/session`) is suspicious. Reproducible on both
-  Linux and macOS hosts so it's not env-specific. Diagnose
-  by adding a per-step `console.log` inside `verifyOutcome`
-  or by inspecting the post-submit screencast frame to see
-  whether the dialog closed + the list re-rendered.
-
 - **Dashboard-edit HTML5-drag e2e coverage.** Two tests are
   `test.fixme()` because Playwright's chromium-headless
   drag synthesis is unreliable for the
@@ -52,50 +41,50 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T11:50:46.498Z · 1 issue, 0 questions, 2 verified._
+_Last run: 2026-05-21T12:13:32.796Z · 5 issues, 4 questions, 7 verified._
 
 #### Smart Monkey expert system
 
 | Goal | Achieved | Attempts | Last successful run |
 | --- | --- | --- | --- |
-| `createTransaction` | ❌ | 0 | _(not yet)_ |
-| `createBudget` | ❌ | 0 | _(not yet)_ |
-| `createSchedule` | ❌ | 0 | _(not yet)_ |
-| `addTenToCategory` | ❌ | 0 | _(not yet)_ |
-| `scheduleOnCalendar` | ❌ | 0 | _(not yet)_ |
-| `searchTransaction` | ✅ | 1 | /transactions · "?search=monkey-goal-mpffiyl1-search-payee" → "GET /api/transactions?search=…" (dom) |
+| `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
+| `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
+| `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
+| `addTenToCategory` | ❌ | 1 | _(not yet)_ |
+| `scheduleOnCalendar` | ✅ | 1 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
+| `searchTransaction` | ✅ | 1 | /transactions · "?search=monkey-goal-mpfg5bc0-search-payee" → "GET /api/transactions?search=…" (dom) |
 | `addAndViewNote` | ❌ | 1 | _(not yet)_ |
-| `searchForNote` | ✅ | 1 | /transactions · "?search=find-me-monkey-goal-mpffiyl1 (notes-only)" → "GET /api/transactions?search=…" (dom) |
+| `searchForNote` | ✅ | 1 | /transactions · "?search=find-me-monkey-goal-mpfg5bc0 (notes-only)" → "GET /api/transactions?search=…" (dom) |
 
-_Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
+_Coverage: 10 routes mapped, 337 interactive controls catalogued, 82 in-app links discovered._
 
 #### Smart Monkey run report
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 6.4s |
-| Routes visited | 3 |
-| Button clicks | 0 |
-| Switch toggles | 0 |
-| Select cycles | 0 |
-| Text inputs filled | 0 |
-| Dialogs opened | 0 |
-| Form submits | 0 |
-| Links discovered | 0 |
+| Total wall time | 119.6s |
+| Routes visited | 10 |
+| Button clicks | 170 |
+| Switch toggles | 11 |
+| Select cycles | 8 |
+| Text inputs filled | 8 |
+| Dialogs opened | 40 |
+| Form submits | 3 |
+| Links discovered | 113 |
 | Console errors | 0 |
-| Goals attempted | 3 |
-| Goals achieved | 2 |
-| Findings logged | 3 |
+| Goals attempted | 0 |
+| Goals achieved | 0 |
+| Findings logged | 2 |
 
 ##### Workflows completed
-- ❌ `createTransaction` — _(not yet completed)_
-- ❌ `createBudget` — _(not yet completed)_
-- ❌ `createSchedule` — _(not yet completed)_
+- ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
+- ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
+- ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
 - ❌ `addTenToCategory` — _(not yet completed)_
-- ❌ `scheduleOnCalendar` — _(not yet completed)_
-- ✅ `searchTransaction` — `/transactions` · click **?search=monkey-goal-mpffiyl1-search-payee** → fill → click **GET /api/transactions?search=…** (verified via dom)
+- ✅ `scheduleOnCalendar` — `/calendar` · click **POST /api/scheduled** → fill → click **POST /api/scheduled** (verified via dom)
+- ✅ `searchTransaction` — `/transactions` · click **?search=monkey-goal-mpfg5bc0-search-payee** → fill → click **GET /api/transactions?search=…** (verified via dom)
 - ❌ `addAndViewNote` — _(not yet completed)_
-- ✅ `searchForNote` — `/transactions` · click **?search=find-me-monkey-goal-mpffiyl1 (notes-only)** → fill → click **GET /api/transactions?search=…** (verified via dom)
+- ✅ `searchForNote` — `/transactions` · click **?search=find-me-monkey-goal-mpfg5bc0 (notes-only)** → fill → click **GET /api/transactions?search=…** (verified via dom)
 
 #### Vitest summary
 
@@ -105,16 +94,47 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 #### Issues
 
+##### /reports
+- 🔴 **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=20 (expected 10), |total|=500 (expected 250.00).
+
+##### /scheduled
+- 🟡 **guardrail probe: dayOfMonth=42 (exceeds zod max 31)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"dayOfMonth","message":"Too big: expected number to be <=31","code":"too_big"}]}
+- 🟡 **guardrail probe: type=transfer w/ no transferToAccountId** — → 400 ❌ {"error":"transferToAccountId is required when type=transfer","issues":[{"path":"transferToAccountId","message":"transferToAccountId is required when type=transfer","code":"cross_field"}]}
+- 🟡 **guardrail probe: amount with letter (regex violation)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"amount","message":"must be a numeric string","code":"invalid_format"}]}
+
 ##### /transactions
-- 🔴 **goal "addAndViewNote" — note round-trips API + DOM** — API echoed notes + DOM did not render "note-from-monkey-goal-mpffiyl1".
+- 🔴 **goal "addAndViewNote" — note round-trips API + DOM** — API echoed notes + DOM did not render "note-from-monkey-goal-mpfg5bc0".
+
+#### Questions for review
+
+_The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
+
+##### /scheduled
+- ❓ **guardrail probe: baseline (Account + defaults)** — → 201 ✅ accepted (cleaned up)
+- ❓ **guardrail probe: frequency=once w/ no endDate** — → 201 ✅ accepted (cleaned up)
+
+##### /settings
+- ❓ **submit "Create"** — Filled 3 inputs and clicked **Create** — no network call, toast, or navigation fired. Should it have?
+
+##### /superannuation
+- ❓ **submit "Save"** — Filled 3 inputs and clicked **Save** — no network call, toast, or navigation fired. Should it have?
 
 #### Verified
 
 _Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
 
+##### /calendar
+- ✅ **goal "scheduleOnCalendar" — verify /calendar DOM** — DOM on /calendar contained the token "monkey-goal-mpfg5bc0-cal-sched". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).
+
+##### /scheduled
+- ✅ **goal "scheduleOnCalendar" — verify API list** — GET /api/scheduled found a row with payee "monkey-goal-mpfg5bc0-cal-sched".
+- ✅ **goal "scheduleOnCalendar" — verify /scheduled DOM** — DOM on /scheduled contained the token "monkey-goal-mpfg5bc0-cal-sched".
+
 ##### /transactions
-- ✅ **goal "searchTransaction" — verify search filters to payee** — API matched + DOM rendered payee "monkey-goal-mpffiyl1-search-payee" with search=monkey-goal-mpffiyl1-search-payee.
-- ✅ **goal "searchForNote" — ?search= matches notes column** — API matched + DOM rendered the matching row for notes-only needle "find-me-monkey-goal-mpffiyl1".
+- ✅ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpfg5bc0-bulk-*".
+- ✅ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpfg5bc0-bulk-".
+- ✅ **goal "searchTransaction" — verify search filters to payee** — API matched + DOM rendered payee "monkey-goal-mpfg5bc0-search-payee" with search=monkey-goal-mpfg5bc0-search-payee.
+- ✅ **goal "searchForNote" — ?search= matches notes column** — API matched + DOM rendered the matching row for notes-only needle "find-me-monkey-goal-mpfg5bc0".
 
 <!-- monkey:end -->
 
@@ -265,6 +285,24 @@ X then verify X appears" flow below sits in this blind spot._
 ## Done / dropped
 
 ### 2026-05-21
+
+- **Monkey-goals `create-*` 2-min timeouts FIXED (0.213.0 + 0.214.0).**
+  Root cause was a cascade of TDZ errors on every unlock:
+  `runOrphanTransferBackfill` / `runLegacyBackupMigration` /
+  `backup-scheduler readSchedule` all top-level-imported from `@/db`
+  (or via `@/lib/backup/sqlite-backup` which itself top-level-imports
+  `@/db`), creating a webpack cycle where webpack chunks returned
+  half-init modules at module-eval time. Each errored hook re-ran
+  on every unlock (flags never set), spam-logged into the next
+  start console, and ultimately confused NextAuth's session-fetch
+  retry loop enough that `page.goto` would hang for 2 min in the
+  Playwright tests. Fix: dependency inversion (pass the drizzle
+  handle / config in as a parameter) for the backfill + legacy
+  migration; lazy `require()` inside `tick()` for the scheduler.
+  Verified: full e2e went 89/4 (12.3 min) → 92/0 (6.6 min). The
+  authjs-Failed-to-fetch + ERR_NETWORK_IO_SUSPENDED noise the
+  earlier diagnoses fingered was downstream of the TDZ — once the
+  TDZ went away the cascade went with it.
 
 - **Monkey 2xx-without-persistence check (0.211.0).**
   `observeSubmitOutcome` now peeks at the body of 2xx POST/PUT

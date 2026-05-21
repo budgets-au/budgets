@@ -140,9 +140,16 @@ function backupRootDir(): string {
  *  + their `.meta.json` sidecars directly under base) is present,
  *  move every file into `<base>/default/` so the per-profile layout
  *  takes over. Idempotent — repeated calls are no-ops once the legacy
- *  files are gone. */
-export function migrateLegacyBackups(): void {
-  const root = backupRootDir();
+ *  files are gone.
+ *
+ *  Accepts an optional `root` parameter so the unlock caller in
+ *  `@/db` can pass the resolved base directory in directly instead of
+ *  having THIS module reach back via `livePath()`. The reach-back was
+ *  causing a webpack-bundle TDZ on every unlock: the @/db → sqlite-
+ *  backup → @/db cycle leaves named imports in TDZ state at the
+ *  moment the unlock path's lazy `require()` runs. Passing `root` in
+ *  breaks the cycle. */
+export function migrateLegacyBackups(root: string = backupRootDir()): void {
   if (!existsSync(root)) return;
   const defaultProfileSubdir = join(root, "default");
   let moved = 0;

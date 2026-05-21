@@ -2,7 +2,7 @@ import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import Database from "@signalapp/better-sqlite3";
 import { existsSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type BetterSqlite3 from "better-sqlite3";
 import { hashSync } from "bcryptjs";
 import { eq } from "drizzle-orm";
@@ -239,9 +239,15 @@ export function unlock(
  *  cycle with the backup module. Errors are logged but never thrown. */
 function runLegacyBackupMigration(): void {
   try {
+    // Compute the root locally — avoids the lazy require pulling
+    // sqlite-backup into the unlock-path bundle cycle. The helper
+    // mirrors the body of `backupRootDir()` in sqlite-backup.ts;
+    // we have the live path right here in @/db so derive directly.
+    const live = livePath();
+    const root = resolve(process.env.BACKUP_DIR ?? join(dirname(live), "backups"));
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const m = require("@/lib/backup/sqlite-backup");
-    m.migrateLegacyBackups();
+    m.migrateLegacyBackups(root);
   } catch (e) {
     console.error("[db] Legacy-backup migration failed:", e);
   }

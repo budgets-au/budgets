@@ -9,6 +9,37 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.214.0 — 2026-05-21
+
+### Fixed
+- **Legacy-backup-migration TDZ.** `runLegacyBackupMigration` was
+  failing on every unlock with `TypeError: e.r(...).migrateLegacyBackups
+  is not a function` — the lazy `require("@/lib/backup/sqlite-backup")`
+  returned a half-init module because that file's top-level
+  `import { getClient, livePath, lock } from "@/db"` is part of the
+  same cycle the orphan-transfer backfill hit in 0.213.0.
+  Parameterised `migrateLegacyBackups(root?)` to accept the resolved
+  backup root directly. The unlock caller in @/db now computes the
+  root locally (mirroring `backupRootDir()`'s body) and passes it in.
+- **Backup-scheduler TDZ.** Same family — `scheduler.ts` was
+  top-level-importing `readSchedule` / `takeBackup` / `writeSchedule`
+  from sqlite-backup, and the 60s `setInterval` tick fired
+  `(0, lB.readSchedule) is not a function` because the named bindings
+  were in TDZ state when the scheduler module first evaluated (loaded
+  eagerly from `src/proxy.ts` during boot, before @/db's body
+  finished). Moved the imports to a `loadBackupModule()` lazy
+  `require()` invoked inside `tick()`; by 60s after boot the module
+  is fully initialised.
+
+Net effect: the `[db] Orphan-transfer backfill failed` /
+`[db] Legacy-backup migration failed` / `[backup-scheduler] Failed
+to read schedule` log spam on every unlock + every minute is gone.
+More importantly, the cascade those errors triggered through
+NextAuth's session-fetch retries was the actual cause of the
+`monkey-goals create-{transaction, schedule, budget}` 2-min
+timeouts — the full e2e suite now passes 92/0 in 6.6 min (down
+from 89/4 in 12.3 min on 0.211.0).
+
 ## 0.213.0 — 2026-05-21
 
 ### Fixed

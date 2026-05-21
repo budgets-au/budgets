@@ -21,11 +21,28 @@
  */
 import { isUnlocked } from "@/db";
 import type { BackupSchedule } from "@/db/schema";
-import {
-  readSchedule,
-  takeBackup,
-  writeSchedule,
+// `sqlite-backup` is lazy-required INSIDE tick() (not imported at the
+// top of this module) because both files participate in the @/db
+// dependency cycle: this module is loaded eagerly from `src/proxy.ts`
+// at boot, before @/db has finished initialising — webpack bundles the
+// named imports from sqlite-backup into TDZ state during that window
+// and `(0, lB.readSchedule) is not a function` fires on the first
+// scheduler tick. By the time the 60s timer first fires, @/db is fully
+// up; requiring inside tick() returns the live bindings.
+import type {
+  readSchedule as readScheduleFn,
+  takeBackup as takeBackupFn,
+  writeSchedule as writeScheduleFn,
 } from "@/lib/backup/sqlite-backup";
+
+function loadBackupModule(): {
+  readSchedule: typeof readScheduleFn;
+  takeBackup: typeof takeBackupFn;
+  writeSchedule: typeof writeScheduleFn;
+} {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  return require("@/lib/backup/sqlite-backup");
+}
 
 const TICK_MS = 60_000;
 const MS_PER_DAY = 86_400_000;
@@ -77,9 +94,10 @@ function tick(): void {
     globalForScheduler.__backupScheduler.lockedTickCount = 0;
   }
 
+  const backup = loadBackupModule();
   let cfg;
   try {
-    cfg = readSchedule();
+    cfg = backup.readSchedule();
   } catch (e) {
     console.error("[backup-scheduler] Failed to read schedule:", e);
     return;
@@ -89,9 +107,9 @@ function tick(): void {
 
   // Fire-and-forget; the next tick recovers naturally if takeBackup
   // throws (we don't update lastRunAt unless it succeeded).
-  takeBackup("scheduled")
+  backup.takeBackup("scheduled")
     .then(() => {
-      writeSchedule({ lastRunAt: new Date(now).toISOString() });
+      backup.writeSchedule({ lastRunAt: new Date(now).toISOString() });
       console.log("[backup-scheduler] Took scheduled backup.");
     })
     .catch((err) => {

@@ -39,32 +39,33 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T13:27:21.229Z · 0 issues, 0 questions, 3 verified._
+_Last run: 2026-05-21T13:35:49.390Z · 0 issues, 0 questions, 1 verified._
 
 #### Smart Monkey expert system
 
 | Goal | Achieved | Attempts | Last successful run |
 | --- | --- | --- | --- |
-| `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
-| `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `addTenToCategory` | ✅ | 1 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
-| `scheduleOnCalendar` | ✅ | 1 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
-| `searchTransaction` | ✅ | 1 | /transactions · "?search=monkey-goal-mpfimphh-search-payee" → "GET /api/transactions?search=…" (dom) |
-| `addAndViewNote` | ✅ | 1 | /transactions · "POST /api/transactions (with notes)" → "GET /api/transactions" (dom) |
-| `searchForNote` | ✅ | 1 | /transactions · "?search=find-me-monkey-goal-mpfimphh (notes-only)" → "GET /api/transactions?search=…" (dom) |
-| `clearSampleData` | ✅ | 2 | /settings · "POST /api/sample-data/remove" → "POST /api/sample-data/remove" (api) |
-| `rekeyPassphrase` | ✅ | 1 | /settings · "POST /api/rekey" → "POST /api/rekey" (api) |
-| `multiDbSwitcher` | ✅ | 1 | /dashboard · "Switcher → Create new database…" → "Create + switch back to Default" (dom) |
-| `lockUnlockRoundTrip` | ✅ | 2 | /settings · "POST /api/lock" → "POST /api/unlock" (api) |
+| `createTransaction` | ❌ | 0 | _(not yet)_ |
+| `createBudget` | ❌ | 0 | _(not yet)_ |
+| `createSchedule` | ❌ | 0 | _(not yet)_ |
+| `addTenToCategory` | ❌ | 0 | _(not yet)_ |
+| `scheduleOnCalendar` | ❌ | 0 | _(not yet)_ |
+| `searchTransaction` | ❌ | 0 | _(not yet)_ |
+| `addAndViewNote` | ❌ | 0 | _(not yet)_ |
+| `searchForNote` | ❌ | 0 | _(not yet)_ |
+| `clearSampleData` | ❌ | 0 | _(not yet)_ |
+| `rekeyPassphrase` | ❌ | 0 | _(not yet)_ |
+| `multiDbSwitcher` | ❌ | 0 | _(not yet)_ |
+| `lockUnlockRoundTrip` | ❌ | 0 | _(not yet)_ |
+| `savedFilterDeleteReorder` | ✅ | 2 | /transactions · "Saved Filters → trash icon on M-entry" → "PATCH /api/display-prefs (via setPref)" (dom) |
 
-_Coverage: 10 routes mapped, 338 interactive controls catalogued, 82 in-app links discovered._
+_Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
 #### Smart Monkey run report
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 2.7s |
+| Total wall time | 7.1s |
 | Routes visited | 0 |
 | Button clicks | 0 |
 | Switch toggles | 0 |
@@ -75,22 +76,23 @@ _Coverage: 10 routes mapped, 338 interactive controls catalogued, 82 in-app link
 | Links discovered | 0 |
 | Console errors | 0 |
 | Goals attempted | 2 |
-| Goals achieved | 2 |
+| Goals achieved | 1 |
 | Findings logged | 3 |
 
 ##### Workflows completed
-- ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
-- ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `addTenToCategory` — `/transactions` · click **POST /api/transactions × 10** → fill → click **POST /api/transactions** (verified via api)
-- ✅ `scheduleOnCalendar` — `/calendar` · click **POST /api/scheduled** → fill → click **POST /api/scheduled** (verified via dom)
-- ✅ `searchTransaction` — `/transactions` · click **?search=monkey-goal-mpfimphh-search-payee** → fill → click **GET /api/transactions?search=…** (verified via dom)
-- ✅ `addAndViewNote` — `/transactions` · click **POST /api/transactions (with notes)** → fill → click **GET /api/transactions** (verified via dom)
-- ✅ `searchForNote` — `/transactions` · click **?search=find-me-monkey-goal-mpfimphh (notes-only)** → fill → click **GET /api/transactions?search=…** (verified via dom)
-- ✅ `clearSampleData` — `/settings` · click **POST /api/sample-data/remove** → fill → click **POST /api/sample-data/remove** (verified via api)
-- ✅ `rekeyPassphrase` — `/settings` · click **POST /api/rekey** → fill → click **POST /api/rekey** (verified via api)
-- ✅ `multiDbSwitcher` — `/dashboard` · click **Switcher → Create new database…** → fill → click **Create + switch back to Default** (verified via dom)
-- ✅ `lockUnlockRoundTrip` — `/settings` · click **POST /api/lock** → fill → click **POST /api/unlock** (verified via api)
+- ❌ `createTransaction` — _(not yet completed)_
+- ❌ `createBudget` — _(not yet completed)_
+- ❌ `createSchedule` — _(not yet completed)_
+- ❌ `addTenToCategory` — _(not yet completed)_
+- ❌ `scheduleOnCalendar` — _(not yet completed)_
+- ❌ `searchTransaction` — _(not yet completed)_
+- ❌ `addAndViewNote` — _(not yet completed)_
+- ❌ `searchForNote` — _(not yet completed)_
+- ❌ `clearSampleData` — _(not yet completed)_
+- ❌ `rekeyPassphrase` — _(not yet completed)_
+- ❌ `multiDbSwitcher` — _(not yet completed)_
+- ❌ `lockUnlockRoundTrip` — _(not yet completed)_
+- ✅ `savedFilterDeleteReorder` — `/transactions` · click **Saved Filters → trash icon on M-entry** → fill → click **PATCH /api/display-prefs (via setPref)** (verified via dom)
 
 #### Vitest summary
 
@@ -102,10 +104,8 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 _Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
 
-##### /settings
-- ✅ **goal "clearSampleData" — wipe round-trip** — Before: accts=2 txns=25 schedules=3. Wipe OK ({"sampleAccounts":0,"sampleTransactions":0,"sampleScheduled":0,"samplePayeeRules":0,"dependentNonSample":{"transactions":0,"scheduled":0},"sampleDataSeeded":true}). After: accts=0 txns=0 schedules=0 seededFlag=true.
-- ✅ **goal "lockUnlockRoundTrip" — POST /api/lock** — POST /api/lock → 200; subsequent GET /api/accounts → 307 Location:/unlock?next=%2Fapi%2Faccounts (expected 3xx → /unlock).
-- ✅ **goal "lockUnlockRoundTrip" — POST /api/unlock** — POST /api/unlock → 200; post-unlock GET /api/accounts → 200.
+##### /transactions
+- ✅ **goal "savedFilterDeleteReorder" — delete M-entry** — After click-delete on "M-monkey-goal-mpfja3pu-middle", server prefs has 2/2 expected entries: [z-monkey-goal-mpfja3pu, a-monkey-goal-mpfja3pu].
 
 <!-- monkey:end -->
 
@@ -132,7 +132,11 @@ X then verify X appears" flow below sits in this blind spot._
 #### Transactions
 
 - **Transfer-pair confirmation** — `/api/transfers/suggestions/[id]/confirm` should drop both legs from income/expense totals. Uncovered.
-- **Saved-filter delete + reorder** — `saved-filters.spec.ts` covers save only.
+- ✅ Closed by `savedFilterDeleteReorder` monkey goal (0.221.0).
+  Drives the popover: seed 3 → open popover → click trash on
+  middle row → `GET /api/display-prefs` confirms only that one
+  removed. (App has no explicit reorder UI — saves auto-sort
+  by name, so "reorder" reduces to "delete works".)
 - **External-counterparty pairing → CSV reconciliation** — 0.137 minted synthetic legs; the cross-account promotion in commit-batched is uncovered end-to-end.
 
 #### Scheduled / Calendar

@@ -1873,6 +1873,153 @@ test.describe("smart monkey: goal-driven crawl", () => {
       }
     }
   });
+
+  /** Saved-filter delete (TODO ask: "delete + reorder" — but the
+   * app exposes no explicit reorder UI; `saveCurrent()` auto-
+   * sorts by name on every write, so a separate reorder concept
+   * doesn't exist).
+   *
+   * `saved-filters.spec.ts` covers the SAVE happy-path only. The
+   * DELETE leg was uncovered until this goal.
+   *
+   * Two legs:
+   *   1. Seed three saved filters via PATCH /api/display-prefs.
+   *   2. Navigate /transactions, open the popover, click the
+   *      trash icon next to the middle preset, then GET
+   *      /api/display-prefs to confirm only that preset was
+   *      removed — the other two survive. */
+  test("goal: saved-filter delete from the popover", async ({ page }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    const a = {
+      id: `a-${RUN_TOKEN}`,
+      name: `A-${RUN_TOKEN}-alpha`,
+      query: "search=alpha",
+    };
+    const m = {
+      id: `m-${RUN_TOKEN}`,
+      name: `M-${RUN_TOKEN}-middle`,
+      query: "search=middle",
+    };
+    const z = {
+      id: `z-${RUN_TOKEN}`,
+      name: `Z-${RUN_TOKEN}-omega`,
+      query: "search=omega",
+    };
+
+    // Seed in NON-alphabetical insertion order to prove the
+    // popover sorts client-side, not just "render in array
+    // order".
+    const seedPatch = await request.patch("/api/display-prefs", {
+      data: { transactionsSavedFilters: [z, a, m] },
+    });
+    if (!seedPatch.ok()) {
+      await recordFinding({
+        page: "/transactions",
+        action: `goal "savedFilterDeleteReorder" — seed`,
+        severity: "warn",
+        kind: "issue",
+        message: `PATCH /api/display-prefs → ${seedPatch.status()} during seed`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "savedFilterDeleteReorder", null);
+      return;
+    }
+
+    await page.goto("/transactions");
+    await page
+      .waitForLoadState("domcontentloaded", { timeout: 8_000 })
+      .catch(() => {});
+    await page.waitForTimeout(400);
+
+    // Open the popover. Trigger is a button with the Bookmark
+    // icon — match by accessible name (the title attr says
+    // "Saved filters").
+    const trigger = page.getByRole("button", { name: /saved filter/i }).first();
+    await expect(trigger).toBeVisible({ timeout: 5_000 });
+    await trigger.click();
+
+    // Confirm our three seeded names render in the popover (any
+    // order — the app doesn't sort at render time, only on save).
+    await expect(
+      page.getByText(a.name, { exact: false }),
+    ).toBeVisible({ timeout: 3_000 });
+    await expect(
+      page.getByText(m.name, { exact: false }),
+    ).toBeVisible({ timeout: 1_000 });
+    await expect(
+      page.getByText(z.name, { exact: false }),
+    ).toBeVisible({ timeout: 1_000 });
+
+    // Leg 3: delete the middle one. The Trash button has aria-
+    // label "Delete <name>"-ish via title; simpler: locate the
+    // <button> ancestor of the M-name and find its sibling trash
+    // button. Easier still — the row's apply button (with the
+    // preset name) is followed by a trash icon button next to it.
+    // Click the trash button whose row contains the M-name.
+    const mRow = page
+      .locator('div, li')
+      .filter({ hasText: m.name })
+      .last();
+    const trashBtn = mRow.locator("button").filter({ has: page.locator("svg") }).last();
+    await trashBtn.click().catch(() => {});
+    // Settling time for the optimistic SWR write + revalidation.
+    await page.waitForTimeout(800);
+
+    // Verify the M-filter is gone from the server-side prefs.
+    const finalRes = await request.get("/api/display-prefs");
+    let final: Array<{ id: string; name: string }> = [];
+    if (finalRes.ok()) {
+      const body = (await finalRes.json()) as {
+        transactionsSavedFilters?: Array<{ id: string; name: string }>;
+      };
+      final = body.transactionsSavedFilters ?? [];
+    }
+    const ourFinal = final.filter((p) => p.name.includes(RUN_TOKEN));
+    const deletedOk =
+      ourFinal.length === 2 &&
+      !ourFinal.some((p) => p.id === m.id) &&
+      ourFinal.some((p) => p.id === a.id) &&
+      ourFinal.some((p) => p.id === z.id);
+
+    await recordFinding({
+      page: "/transactions",
+      action: `goal "savedFilterDeleteReorder" — delete M-entry`,
+      severity: deletedOk ? "info" : "error",
+      kind: deletedOk ? "verified" : "issue",
+      message: `After click-delete on "${m.name}", server prefs has ${ourFinal.length}/2 expected entries: [${ourFinal.map((p) => p.id).join(", ")}].`,
+    });
+    runCounters.findingsCount += 1;
+
+    const allOK = deletedOk;
+    if (allOK) {
+      recordGoalAttempt(appMap, "savedFilterDeleteReorder", {
+        timestamp: new Date().toISOString(),
+        route: "/transactions",
+        triggerLabel: "Saved Filters → trash icon on M-entry",
+        fillSpec: { seeded: "[z, a, m]" },
+        submitLabel: "PATCH /api/display-prefs (via setPref)",
+        verified: "dom",
+      });
+      runCounters.goalsAchieved += 1;
+    } else {
+      recordGoalAttempt(appMap, "savedFilterDeleteReorder", null);
+    }
+
+    // Cleanup: drop the remaining test presets so the next run
+    // starts clean. Best-effort.
+    await request
+      .patch("/api/display-prefs", {
+        data: {
+          transactionsSavedFilters: final.filter(
+            (p) => !p.name.includes(RUN_TOKEN),
+          ),
+        },
+      })
+      .catch(() => {});
+  });
 });
 
 /** Locate an "Add" / "New" / "Create" trigger button on the

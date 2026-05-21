@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.221.0 — 2026-05-21
+
+### Added
+- **`savedFilterDeleteReorder` smart-monkey goal.** Closes the
+  "Saved-filter delete + reorder — `saved-filters.spec.ts`
+  covers save only" Transactions TODO gap. Seeds three named
+  filters via `PATCH /api/display-prefs`, opens the
+  `/transactions` Saved Filters popover, asserts the three
+  render, clicks the trash icon on the middle row, then
+  `GET /api/display-prefs` confirms only that filter was
+  removed.
+
+  Note re: "reorder" — the app exposes no explicit reorder UI
+  (`saveCurrent()` auto-sorts by name on every UI save, so there's
+  nothing for a user to drag/move). The test focuses on DELETE,
+  which is what the TODO entry's "delete + reorder" actually
+  needs covered.
+
+  AppMap schema 6 → 7.
+
 ## 0.220.0 — 2026-05-21
 
 ### Fixed

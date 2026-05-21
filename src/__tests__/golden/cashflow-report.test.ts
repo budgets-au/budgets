@@ -10,7 +10,7 @@
  *   - commit a183ba8: hideTransfers leaked into balance walk — catches
  *     via the closing-balance walk assertion.
  *   - commit 9a2c47b: Plan/mo double-counted superseded schedules —
- *     catches via PLAN_PER_MONTH.health = 580 (not 1127).
+ *     catches via PLAN_TOTAL.health = 580 (not 1127).
  *   - commit 07326cb: superseded predecessor missing from history —
  *     catches via CATEGORY_BY_MONTH.health[Jan]=-547 (which depends
  *     on the predecessor's expansion contributing past months).
@@ -32,7 +32,7 @@ import {
   INCOME_TOTAL_PER_MONTH,
   MONTHLY_NET,
   OPENING_BALANCE,
-  PLAN_PER_MONTH,
+  PLAN_TOTAL,
 } from "@/lib/test-fixtures/golden-book-truth";
 import { assertPeriodContinuity } from "@/lib/test-invariants/accounting-invariants";
 import { createTestDb, installTestDb, type TestDb } from "./_helpers/test-db";
@@ -49,7 +49,7 @@ type CashflowResp = {
     grandparentId: string | null;
     byMonth: Record<string, number>;
     total: number;
-    scheduledPerMonth: number;
+    scheduledTotal: number;
     scheduledByMonth: Record<string, number>;
   }>;
   expenses: Array<{
@@ -59,7 +59,7 @@ type CashflowResp = {
     grandparentId: string | null;
     byMonth: Record<string, number>;
     total: number;
-    scheduledPerMonth: number;
+    scheduledTotal: number;
     scheduledByMonth: Record<string, number>;
   }>;
   totals: {
@@ -179,24 +179,28 @@ describe("golden / cashflow report", () => {
     });
   });
 
-  describe("Plan/mo — currently-active schedules only", () => {
-    it("Salary Plan/mo = 6000", () => {
+  describe("Plan total — window-sum of expanded scheduled occurrences", () => {
+    // The Plan column flipped from monthly-averaged rate to window-sum
+    // in 0.208.0 ("lumpy view"). The old "currently-active only" rule
+    // doesn't apply to the lumpy total — both the active V2 (Jul-Dec)
+    // and the superseded V1's historical firings (Jan-Jun) light up
+    // their months and sum into scheduledTotal.
+    it("Salary scheduledTotal = 72_000 (12 × 6000)", () => {
       const salary = body.income.find((c) => c.id === CAT.salary)!;
-      expect(salary.scheduledPerMonth).toBeCloseTo(PLAN_PER_MONTH.salary, 2);
+      expect(salary.scheduledTotal).toBeCloseTo(PLAN_TOTAL.salary, 2);
     });
-    it("Health Plan/mo = 580 (V2 only, NOT 1127 = V1+V2)", () => {
-      // This is the exact bug behind commit 9a2c47b. The fix ensured
-      // superseded (isActive=false) schedules don't contribute to
-      // scheduledByCategory even though they're still pulled in for
-      // historical projection. A regression would surface here as
-      // 1127.
+    it("Health scheduledTotal = 6_762 (V1 Jan-Jun + V2 Jul-Dec)", () => {
+      // Historical V1 + active V2 both contribute to scheduledByMonth,
+      // and the new lumpy Plan column sums them. A monthly-rate
+      // regression that double-counted V1+V2 across the full year
+      // would surface here as 12_924.
       const health = body.expenses.find((c) => c.id === CAT.health)!;
-      expect(health.scheduledPerMonth).toBeCloseTo(PLAN_PER_MONTH.health, 2);
+      expect(health.scheduledTotal).toBeCloseTo(PLAN_TOTAL.health, 2);
     });
-    it("Groceries Plan/mo = 800", () => {
+    it("Groceries scheduledTotal = 9_600 (12 × 800)", () => {
       const groceries = body.expenses.find((c) => c.id === CAT.groceries)!;
-      expect(groceries.scheduledPerMonth).toBeCloseTo(
-        PLAN_PER_MONTH.groceries,
+      expect(groceries.scheduledTotal).toBeCloseTo(
+        PLAN_TOTAL.groceries,
         2,
       );
     });

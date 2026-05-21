@@ -133,7 +133,8 @@ describe("avg idempotency", () => {
 });
 
 describe("schedule projection consistency", () => {
-  it("passes for a monthly schedule with even firings", () => {
+  it("passes when scheduledTotal equals Σ scheduledByMonth", () => {
+    // Monthly schedule × 12, $100/firing → total $1200 in both forms.
     expect(() =>
       assertScheduleProjectionConsistency(
         Object.fromEntries(
@@ -142,22 +143,27 @@ describe("schedule projection consistency", () => {
             100,
           ]),
         ),
-        100,
-        12,
+        1200,
       ),
     ).not.toThrow();
   });
-  it("tolerates one month of slack (quarterly schedules)", () => {
-    // Quarterly schedule, monthly-normalised = 33.33, fires 4 times in
-    // 12 months totalling 400 — vs expected 33.33 × 12 = 400. Match.
+  it("passes for a quarterly schedule (lumpy months, identity still holds)", () => {
+    // Quarterly $100 firing 4× in 12 months → Σ byMonth = $400 = total.
     expect(() =>
       assertScheduleProjectionConsistency(
         {
           "2026-01": 100, "2026-04": 100, "2026-07": 100, "2026-10": 100,
         },
-        100 / 3,
-        12,
+        400,
       ),
     ).not.toThrow();
+  });
+  it("throws when the total disagrees with Σ scheduledByMonth", () => {
+    expect(() =>
+      assertScheduleProjectionConsistency(
+        { "2026-01": 100, "2026-02": 100 },
+        500, // wrong — should be 200
+      ),
+    ).toThrow(/Schedule projection inconsistency/);
   });
 });

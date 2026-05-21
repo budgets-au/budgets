@@ -240,9 +240,9 @@ export function assertRollupIntegrity(
 
 // ── 6. Aggregate idempotency ─────────────────────────────────────────
 /**
- * Avg/mo × N = Total (within rounding). Plan/mo × N ≈ Σ scheduledByMonth
- * (firing variability for quarterly/yearly schedules means we use a
- * relaxed tolerance for non-monthly cadences).
+ * Avg/mo × N = Total (within rounding). The Plan column's identity
+ * (Σ scheduledByMonth === scheduledTotal) is enforced by
+ * `assertScheduleProjectionConsistency` further down.
  */
 export function assertAvgIdempotency(
   total: number,
@@ -259,26 +259,21 @@ export function assertAvgIdempotency(
 
 // ── 9. Schedule projection consistency ───────────────────────────────
 /**
- * For monthly schedules in a window of N months:
- *   Σ scheduledByMonth ≈ scheduledPerMonth × N
- * Within firing variability for quarterly/yearly (we use a relaxed
- * tolerance: one month's worth of slack).
+ * After the 0.208.0 "lumpy view" change, `scheduledTotal` IS the sum
+ * of `scheduledByMonth` (derived from the same expansion). The invariant
+ * is now a tight identity, not an approximate × N comparison. Kept as a
+ * helper so any future refactor that decouples the two values gets
+ * caught by every report's golden suite.
  */
 export function assertScheduleProjectionConsistency(
   scheduledByMonth: Record<string, number>,
-  scheduledPerMonth: number,
-  monthCount: number,
+  scheduledTotal: number,
 ): void {
   const sum = Object.values(scheduledByMonth).reduce((s, v) => s + v, 0);
-  const expected = scheduledPerMonth * monthCount;
-  // Allow one month's slack — a quarterly bill can land 4× in a
-  // 12-month window or 3× depending on the start date.
-  const slack = Math.abs(scheduledPerMonth) + 0.01;
-  if (Math.abs(sum - expected) > slack) {
+  if (!approx(sum, scheduledTotal, 0.01)) {
     throw new Error(
       `Schedule projection inconsistency: Σ scheduledByMonth=${fmt(sum)} but ` +
-        `scheduledPerMonth(${fmt(scheduledPerMonth)}) × N(${monthCount}) = ${fmt(expected)} ` +
-        `(slack ${fmt(slack)}).`,
+        `scheduledTotal=${fmt(scheduledTotal)} (should be identical).`,
     );
   }
 }

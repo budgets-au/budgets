@@ -37,14 +37,14 @@ type CashflowResp = {
     id: string;
     name: string;
     byMonth: Record<string, number>;
-    scheduledPerMonth: number;
+    scheduledTotal: number;
     scheduledByMonth: Record<string, number>;
   }>;
   expenses: Array<{
     id: string;
     name: string;
     byMonth: Record<string, number>;
-    scheduledPerMonth: number;
+    scheduledTotal: number;
     scheduledByMonth: Record<string, number>;
   }>;
   totals: {
@@ -133,33 +133,27 @@ describe("golden / cross-cutting accounting invariants", () => {
   });
 
   // ─ Schedule projection consistency ──────────────────────────────
-  it("schedule projection: Σ scheduledByMonth ≈ scheduledPerMonth × 12 for monthly cadences", () => {
+  it("schedule projection: scheduledTotal === Σ scheduledByMonth (lumpy view identity)", () => {
     for (const cat of [...body.income, ...body.expenses]) {
-      // Only check categories whose stored Plan/mo is non-zero —
+      // Only check categories whose stored Plan total is non-zero —
       // empty schedule cats just have nothing to compare.
-      if (cat.scheduledPerMonth === 0) continue;
+      if (cat.scheduledTotal === 0) continue;
       assertScheduleProjectionConsistency(
         cat.scheduledByMonth,
-        cat.scheduledPerMonth,
-        GOLDEN_MONTHS.length,
+        cat.scheduledTotal,
       );
     }
   });
 
-  // ─ Plan/mo respects supersession (commit 9a2c47b regression) ────
-  it("Plan/mo never sums superseded predecessors with their successor", () => {
-    // For every category, Plan/mo should equal the contribution from
-    // active schedules only. We confirmed Health=$580 in the focused
-    // cashflow test; here we generalise: for ANY category with a
-    // single active monthly schedule of amount A, scheduledPerMonth ≈ A.
-    // The invariant is "no Plan/mo is more than the expected per-cat
-    // ceiling" — but a comprehensive expression of that needs schedule
-    // data we'd have to re-query. Instead we lean on the focused test
-    // and just assert nothing is wildly out of range for our fixture.
+  // ─ Plan total respects fixture bounds ───────────────────────────
+  it("Plan total stays within the fixture's per-category ceiling", () => {
+    // For the golden 12-month window, the largest legitimate Plan
+    // total is salary = $72k (12 × $6k/mo). Anything wildly larger
+    // would mean a regression that double-summed schedules. We use
+    // $100k as a generous ceiling; the focused cashflow test pins
+    // the exact values.
     for (const cat of [...body.income, ...body.expenses]) {
-      // Plan/mo should never exceed $10,000 in this fixture — anything
-      // larger means at least two schedules summed (the bug shape).
-      expect(Math.abs(cat.scheduledPerMonth)).toBeLessThan(10000);
+      expect(Math.abs(cat.scheduledTotal)).toBeLessThan(100_000);
     }
   });
 

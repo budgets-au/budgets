@@ -117,16 +117,20 @@ export const CATEGORY_BY_MONTH = {
   ) as Record<string, number>,
 };
 
-/** Plan/mo per category — `scheduledPerMonth` in the API. Only
- * currently-active schedules contribute (this is what commit
- * 9a2c47b's fix turned on); the superseded Health V1 must NOT
- * appear here. */
-export const PLAN_PER_MONTH = {
-  salary: 6000,    // monthly schedule, factor=1
-  health: 580,     // V2 active; V1 inactive (the bug-fix invariant)
-  groceries: 800,  // monthly
+/** Plan total per category — `scheduledTotal` in the API. The Plan
+ * column is now a window-sum (Σ scheduledByMonth across the 12-month
+ * window) rather than a monthly-averaged rate. Includes BOTH the
+ * active V2 Health firings (Jul-Dec) and the superseded V1's
+ * historical Jan-Jun firings — anything expandRecurrence walks lights
+ * up the column. (The old "exclude superseded predecessors" rule
+ * applied to the monthly rate to stop double-counting; the lumpy
+ * total has no such hazard — each occurrence is counted once.) */
+export const PLAN_TOTAL = {
+  salary: 12 * 6000,            // 72_000 — monthly schedule × 12
+  health: 6 * 547 + 6 * 580,    // 6_762 — V1 Jan-Jun + V2 Jul-Dec
+  groceries: 12 * 800,          // 9_600 — monthly schedule × 12
   // internalTransfer: undefined — transfer_kind=internal skipped on
-  // the scheduledByCategory aggregation (see route.ts).
+  // the schedule aggregation (see route.ts).
 };
 
 /** Average per month for each leaf across the 12-month window. */

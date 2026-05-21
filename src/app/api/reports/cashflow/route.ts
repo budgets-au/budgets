@@ -19,9 +19,9 @@ export interface CashflowCategory {
   countByMonth: Record<string, number>; // "YYYY-MM" → transaction count
   total: number;
   totalCount: number;
-  budgetPerMonth: number;    // monthly-normalised budget (0 if no budget)
-  scheduledPerMonth: number; // monthly-normalised scheduled amount (0 if none)
-  budgetByMonth: Record<string, number>;    // per-month allocation (uniform from monthly-normalised budget)
+  budgetTotal: number;    // window-sum: Σ budgetByMonth (the Plan column for budgets)
+  scheduledTotal: number; // window-sum: Σ scheduledByMonth (the Plan column for schedules)
+  budgetByMonth: Record<string, number>;    // per-month allocation (uniform within window for budgets)
   scheduledByMonth: Record<string, number>; // sum of expanded scheduled occurrences per month
 }
 
@@ -231,20 +231,16 @@ export const GET = withAuth(async (request) => {
   const scheduledRowsFull = allActiveSchedules.filter((s) => s.kind !== "budget");
   const budgetSchedules = allActiveSchedules.filter((s) => s.kind === "budget");
 
-  const FREQ_MONTHLY: Record<string, number> = { daily: 365/12, weekly: 52/12, fortnightly: 26/12, monthly: 1, quarterly: 1/3, yearly: 1/12 };
+  // FREQ_MONTHLY (the old monthly-normalised "Plan/mo rate") used to live
+  // here — a yearly $1200 became $100/mo and showed in the Plan column as
+  // an average. That was confusing next to the lumpy per-month cells (which
+  // correctly put the full $1200 on the actual due month). The Plan column
+  // is now a window-sum derived from scheduledByMonth / budgetByMonth, so a
+  // yearly bill reads as $1200 when its due-month is in the window and $0
+  // when it isn't — consistent with the cells.
 
-  const budgetByCategory = new Map<string, number>();
-  for (const b of budgetSchedules) {
-    if (!b.categoryId) continue;
-    const factor = (FREQ_MONTHLY[b.frequency] ?? 1) / (b.interval || 1);
-    budgetByCategory.set(
-      b.categoryId,
-      (budgetByCategory.get(b.categoryId) ?? 0) + Math.abs(parseFloat(b.amount)) * factor,
-    );
-  }
-
-  const scheduledByCategory = new Map<string, number>();
   const scheduledByCategoryByMonth = new Map<string, Record<string, number>>();
+  const budgetByCategoryByMonth = new Map<string, Record<string, number>>();
   const fromDate = parseISO(from);
   const toDate = parseISO(to);
   for (const s of scheduledRowsFull) {
@@ -252,19 +248,6 @@ export const GET = withAuth(async (request) => {
     // Inner transfers are net-zero by definition — don't roll their
     // projected amounts into any category's expense/income aggregate.
     if (s.categoryTransferKind === "internal") continue;
-    // Per-mo normalised rate (Plan/mo column): only currently-active
-    // schedules contribute. A superseded predecessor (isActive=false,
-    // endDate set) is still pulled in above so its past occurrences
-    // can light up the months they actually fired — but its monthly
-    // rate would double-count against the successor's, blowing
-    // Plan/mo up to 2× the real recurring spend.
-    if (s.isActive) {
-      const factor = (FREQ_MONTHLY[s.frequency] ?? 1) / (s.interval || 1);
-      scheduledByCategory.set(
-        s.categoryId,
-        (scheduledByCategory.get(s.categoryId) ?? 0) + Math.abs(parseFloat(s.amount)) * factor,
-      );
-    }
     // Expand the per-occurrence dates so a quarterly bill lands in the
     // months it actually fires, not 1/3 of the amount in every month.
     const events = expandRecurrence(s, fromDate, toDate);
@@ -280,13 +263,40 @@ export const GET = withAuth(async (request) => {
     }
     scheduledByCategoryByMonth.set(s.categoryId, monthMap);
   }
-  // Budgets are constant targets — distribute the monthly-normalised amount
-  // uniformly across every month in the report window.
-  const budgetByCategoryByMonth = new Map<string, Record<string, number>>();
-  for (const [catId, monthlyAmount] of budgetByCategory) {
-    const map: Record<string, number> = {};
-    for (const m of months) map[m] = monthlyAmount;
-    budgetByCategoryByMonth.set(catId, map);
+  // Budgets are constant targets — distribute the amount uniformly across
+  // every month in the report window. The schedule row's amount field
+  // represents the cap for ONE period of its frequency, so we project per
+  // period and bucket by month. For monthly/weekly/fortnightly that's
+  // straightforward; for quarterly/yearly the cap spans multiple months and
+  // we spread the cap evenly across each month it covers (a yearly $1200
+  // cap → $100/month within the window). expandRecurrence already emits one
+  // event per period anchor with the cap amount.
+  const FREQ_MONTHS_PER_PERIOD: Record<string, number> = {
+    daily: 1/30, weekly: 1/4, fortnightly: 1/2, monthly: 1, quarterly: 3, yearly: 12,
+  };
+  for (const b of budgetSchedules) {
+    if (!b.categoryId) continue;
+    const monthsPerPeriod = (FREQ_MONTHS_PER_PERIOD[b.frequency] ?? 1) * (b.interval || 1);
+    const perMonthShare = Math.abs(parseFloat(b.amount)) / monthsPerPeriod;
+    const map = budgetByCategoryByMonth.get(b.categoryId) ?? {};
+    for (const m of months) map[m] = (map[m] ?? 0) + perMonthShare;
+    budgetByCategoryByMonth.set(b.categoryId, map);
+  }
+
+  // Roll up the lumpy per-month maps into a window-total for the Plan column.
+  // This is the new "lumpy" Plan/Total — a yearly schedule lights up only
+  // when its due-month is in the window; budgets sum their per-month shares.
+  const scheduledTotalByCategory = new Map<string, number>();
+  for (const [catId, monthMap] of scheduledByCategoryByMonth) {
+    let sum = 0;
+    for (const v of Object.values(monthMap)) sum += v;
+    scheduledTotalByCategory.set(catId, sum);
+  }
+  const budgetTotalByCategory = new Map<string, number>();
+  for (const [catId, monthMap] of budgetByCategoryByMonth) {
+    let sum = 0;
+    for (const v of Object.values(monthMap)) sum += v;
+    budgetTotalByCategory.set(catId, sum);
   }
 
   // --- Build category map ---
@@ -306,8 +316,8 @@ export const GET = withAuth(async (request) => {
         countByMonth: {},
         total: 0,
         totalCount: 0,
-        budgetPerMonth: budgetByCategory.get(row.category_id) ?? 0,
-        scheduledPerMonth: scheduledByCategory.get(row.category_id) ?? 0,
+        budgetTotal: budgetTotalByCategory.get(row.category_id) ?? 0,
+        scheduledTotal: scheduledTotalByCategory.get(row.category_id) ?? 0,
         budgetByMonth: budgetByCategoryByMonth.get(row.category_id) ?? {},
         scheduledByMonth: scheduledByCategoryByMonth.get(row.category_id) ?? {},
       });
@@ -324,10 +334,10 @@ export const GET = withAuth(async (request) => {
   // Groceries/Dining Out have actuals). Inject zero-transaction rows for
   // those so buildGroups can roll the budget into the parent's header total.
   const orphanCatIds: string[] = [];
-  for (const id of budgetByCategory.keys()) {
+  for (const id of budgetTotalByCategory.keys()) {
     if (!categoryMap.has(id)) orphanCatIds.push(id);
   }
-  for (const id of scheduledByCategory.keys()) {
+  for (const id of scheduledTotalByCategory.keys()) {
     if (!categoryMap.has(id) && !orphanCatIds.includes(id)) orphanCatIds.push(id);
   }
   if (orphanCatIds.length > 0) {
@@ -363,8 +373,8 @@ export const GET = withAuth(async (request) => {
         countByMonth: {},
         total: 0,
         totalCount: 0,
-        budgetPerMonth: budgetByCategory.get(row.category_id) ?? 0,
-        scheduledPerMonth: scheduledByCategory.get(row.category_id) ?? 0,
+        budgetTotal: budgetTotalByCategory.get(row.category_id) ?? 0,
+        scheduledTotal: scheduledTotalByCategory.get(row.category_id) ?? 0,
         budgetByMonth: budgetByCategoryByMonth.get(row.category_id) ?? {},
         scheduledByMonth: scheduledByCategoryByMonth.get(row.category_id) ?? {},
       });
@@ -404,10 +414,10 @@ export const GET = withAuth(async (request) => {
 
   // Add uncategorised rows if they have data
   if (uncatIncomeTotal !== 0) {
-    income.push({ id: "uncategorised-income", name: "Uncategorised", parentId: null, parentName: null, grandparentId: null, grandparentName: null, type: "income", byMonth: uncatIncomeByMonth, countByMonth: uncatIncomeCountByMonth, total: uncatIncomeTotal, totalCount: uncatIncomeTotalCount, budgetPerMonth: 0, scheduledPerMonth: 0, budgetByMonth: {}, scheduledByMonth: {} });
+    income.push({ id: "uncategorised-income", name: "Uncategorised", parentId: null, parentName: null, grandparentId: null, grandparentName: null, type: "income", byMonth: uncatIncomeByMonth, countByMonth: uncatIncomeCountByMonth, total: uncatIncomeTotal, totalCount: uncatIncomeTotalCount, budgetTotal: 0, scheduledTotal: 0, budgetByMonth: {}, scheduledByMonth: {} });
   }
   if (uncatExpensesTotal !== 0) {
-    expenses.push({ id: "uncategorised-expenses", name: "Uncategorised", parentId: null, parentName: null, grandparentId: null, grandparentName: null, type: "expense", byMonth: uncatExpensesByMonth, countByMonth: uncatExpensesCountByMonth, total: uncatExpensesTotal, totalCount: uncatExpensesTotalCount, budgetPerMonth: 0, scheduledPerMonth: 0, budgetByMonth: {}, scheduledByMonth: {} });
+    expenses.push({ id: "uncategorised-expenses", name: "Uncategorised", parentId: null, parentName: null, grandparentId: null, grandparentName: null, type: "expense", byMonth: uncatExpensesByMonth, countByMonth: uncatExpensesCountByMonth, total: uncatExpensesTotal, totalCount: uncatExpensesTotalCount, budgetTotal: 0, scheduledTotal: 0, budgetByMonth: {}, scheduledByMonth: {} });
   }
 
   income.sort((a, b) => a.name.localeCompare(b.name));

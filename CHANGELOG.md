@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.208.0 — 2026-05-21
+
+### Changed
+- **Cashflow report's `Plan` column flipped from monthly-average to
+  window-total ("lumpy view").** Was: a yearly $1200 expense schedule
+  showed `$100` in the Plan column (the monthly-normalised rate) while
+  the per-month cells correctly lumped the full $1200 onto the due
+  month and `—` elsewhere. The mismatch read as a bug — `$100` looked
+  like a per-month forecast that didn't match what the cells were
+  saying. Now the Plan column reads as `Σ scheduledByMonth` across the
+  visible window — the same lumpy figure the cells aggregate to.
+  Examples: yearly $1200 in a 12-month window including its due-month
+  → $1200; same yearly $1200 in a 6-month window that skips the
+  due-month → $0; quarterly $300 in a 12-month window → $1200.
+  Per-month cells, Avg/mo, and Diff columns unchanged.
+
+  Field renames in the cashflow API response:
+  `CashflowCategory.scheduledPerMonth` → `scheduledTotal`,
+  `budgetPerMonth` → `budgetTotal`. Frontend type, golden fixture
+  (`PLAN_PER_MONTH` → `PLAN_TOTAL`), and accounting invariants updated
+  in lockstep — the schedule-projection consistency invariant
+  simplifies from `Σ byMonth ≈ rate × N` (with a one-month tolerance
+  for quarterly/yearly firing variability) to a tight identity
+  `Σ byMonth === scheduledTotal`. 363 → 364 vitest cases (one new test
+  for the mismatch-throws path on the simplified invariant).
+
+  Header label changed from `Plan/mo` → `Plan` to match the new
+  semantics.
+
 ## 0.207.0 — 2026-05-21
 
 ### Changed

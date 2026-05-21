@@ -239,7 +239,7 @@ function CountCell({
 
 function BudgetCell({ value }: { value?: number }) {
   const { text } = formatAmount(value ? value : undefined, "plain");
-  // Plan/mo is always a computed column — left separator + muted bg
+  // Plan is always a computed column — left separator + muted bg
   // baked in so callers don't repeat the styling everywhere.
   return (
     <td className="pl-3 pr-1.5 py-1.5 text-right tabular-nums text-muted-foreground/70 bg-muted/40 border-l border-border">
@@ -301,8 +301,8 @@ interface ParentSubGroup {
   countByMonth: Record<string, number>;
   total: number;
   totalCount: number;
-  budgetPerMonth: number;
-  scheduledPerMonth: number;
+  budgetTotal: number;
+  scheduledTotal: number;
   budgetByMonth: Record<string, number>;
   scheduledByMonth: Record<string, number>;
   children: CashflowCategory[]; // grandchildren (depth-2)
@@ -317,8 +317,8 @@ interface GrandparentGroup {
   countByMonth: Record<string, number>;
   total: number;
   totalCount: number;
-  budgetPerMonth: number;
-  scheduledPerMonth: number;
+  budgetTotal: number;
+  scheduledTotal: number;
   budgetByMonth: Record<string, number>;
   scheduledByMonth: Record<string, number>;
   subGroups: ParentSubGroup[];
@@ -328,8 +328,8 @@ interface StandaloneGroup { kind: "standalone"; cat: CashflowCategory }
 
 type DisplayGroup = GrandparentGroup | StandaloneGroup;
 
-function sumBudget(cats: CashflowCategory[]): number { return cats.reduce((s, c) => s + c.budgetPerMonth, 0); }
-function sumScheduled(cats: CashflowCategory[]): number { return cats.reduce((s, c) => s + c.scheduledPerMonth, 0); }
+function sumBudget(cats: CashflowCategory[]): number { return cats.reduce((s, c) => s + c.budgetTotal, 0); }
+function sumScheduled(cats: CashflowCategory[]): number { return cats.reduce((s, c) => s + c.scheduledTotal, 0); }
 
 function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
   const depth0 = cats.filter((c) => !c.parentId);
@@ -376,7 +376,7 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
       const countByMonth = aggregateField(allInSub, "countByMonth");
       const total = Object.values(byMonth).reduce((s, v) => s + v, 0);
       const totalCount = Object.values(countByMonth).reduce((s, v) => s + v, 0);
-      parentSubs.push({ parentId: p1.id, parentName: p1.name, parentCat: p1, byMonth, countByMonth, total, totalCount, budgetPerMonth: sumBudget(allInSub), scheduledPerMonth: sumScheduled(allInSub), budgetByMonth: aggregateField(allInSub, "budgetByMonth"), scheduledByMonth: aggregateField(allInSub, "scheduledByMonth"), children: grandkids });
+      parentSubs.push({ parentId: p1.id, parentName: p1.name, parentCat: p1, byMonth, countByMonth, total, totalCount, budgetTotal: sumBudget(allInSub), scheduledTotal: sumScheduled(allInSub), budgetByMonth: aggregateField(allInSub, "budgetByMonth"), scheduledByMonth: aggregateField(allInSub, "scheduledByMonth"), children: grandkids });
     }
 
     // depth-2 cats whose depth-1 parent has no own transactions
@@ -390,7 +390,7 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
         const countByMonth = aggregateField(siblings, "countByMonth");
         const total = Object.values(byMonth).reduce((s, v) => s + v, 0);
         const totalCount = Object.values(countByMonth).reduce((s, v) => s + v, 0);
-        parentSubs.push({ parentId: c.parentId!, parentName: c.parentName ?? "Unknown", byMonth, countByMonth, total, totalCount, budgetPerMonth: sumBudget(siblings), scheduledPerMonth: sumScheduled(siblings), budgetByMonth: aggregateField(siblings, "budgetByMonth"), scheduledByMonth: aggregateField(siblings, "scheduledByMonth"), children: siblings });
+        parentSubs.push({ parentId: c.parentId!, parentName: c.parentName ?? "Unknown", byMonth, countByMonth, total, totalCount, budgetTotal: sumBudget(siblings), scheduledTotal: sumScheduled(siblings), budgetByMonth: aggregateField(siblings, "budgetByMonth"), scheduledByMonth: aggregateField(siblings, "scheduledByMonth"), children: siblings });
       }
     }
 
@@ -404,7 +404,7 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
     const gpTotal = Object.values(gpByMonth).reduce((s, v) => s + v, 0);
     const gpTotalCount = Object.values(gpCountByMonth).reduce((s, v) => s + v, 0);
 
-    grandparentGroups.set(gpId, { kind: "grandparent", grandparentId: gpId, grandparentName, hasDirect: gpOwnCat !== undefined, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetPerMonth: sumBudget(allForGp), scheduledPerMonth: sumScheduled(allForGp), budgetByMonth: aggregateField(allForGp, "budgetByMonth"), scheduledByMonth: aggregateField(allForGp, "scheduledByMonth"), subGroups: parentSubs });
+    grandparentGroups.set(gpId, { kind: "grandparent", grandparentId: gpId, grandparentName, hasDirect: gpOwnCat !== undefined, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetTotal: sumBudget(allForGp), scheduledTotal: sumScheduled(allForGp), budgetByMonth: aggregateField(allForGp, "budgetByMonth"), scheduledByMonth: aggregateField(allForGp, "scheduledByMonth"), subGroups: parentSubs });
   }
 
   const depth0IdsAsGrandparents = new Set(grandparentGroups.keys());
@@ -434,14 +434,14 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
           const countByMonth = aggregateField([k], "countByMonth");
           const total = Object.values(byMonth).reduce((s, v) => s + v, 0);
           const totalCount = Object.values(countByMonth).reduce((s, v) => s + v, 0);
-          return { parentId: k.id, parentName: k.name, parentCat: k, byMonth, countByMonth, total, totalCount, budgetPerMonth: k.budgetPerMonth, scheduledPerMonth: k.scheduledPerMonth, budgetByMonth: { ...k.budgetByMonth }, scheduledByMonth: { ...k.scheduledByMonth }, children: [] };
+          return { parentId: k.id, parentName: k.name, parentCat: k, byMonth, countByMonth, total, totalCount, budgetTotal: k.budgetTotal, scheduledTotal: k.scheduledTotal, budgetByMonth: { ...k.budgetByMonth }, scheduledByMonth: { ...k.scheduledByMonth }, children: [] };
         });
       const allForGp: CashflowCategory[] = [cat, ...subGroups.flatMap((s) => s.parentCat ? [s.parentCat] : [])];
       const gpByMonth = aggregateField(allForGp, "byMonth");
       const gpCountByMonth = aggregateField(allForGp, "countByMonth");
       const gpTotal = Object.values(gpByMonth).reduce((s, v) => s + v, 0);
       const gpTotalCount = Object.values(gpCountByMonth).reduce((s, v) => s + v, 0);
-      groups.push({ kind: "grandparent", grandparentId: cat.id, grandparentName: cat.name, hasDirect: true, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetPerMonth: sumBudget(allForGp), scheduledPerMonth: sumScheduled(allForGp), budgetByMonth: aggregateField(allForGp, "budgetByMonth"), scheduledByMonth: aggregateField(allForGp, "scheduledByMonth"), subGroups });
+      groups.push({ kind: "grandparent", grandparentId: cat.id, grandparentName: cat.name, hasDirect: true, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetTotal: sumBudget(allForGp), scheduledTotal: sumScheduled(allForGp), budgetByMonth: aggregateField(allForGp, "budgetByMonth"), scheduledByMonth: aggregateField(allForGp, "scheduledByMonth"), subGroups });
     }
   }
 
@@ -465,7 +465,7 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
       const countByMonth = aggregateField([k], "countByMonth");
       const total = Object.values(byMonth).reduce((s, v) => s + v, 0);
       const totalCount = Object.values(countByMonth).reduce((s, v) => s + v, 0);
-      return { parentId: k.id, parentName: k.name, parentCat: k, byMonth, countByMonth, total, totalCount, budgetPerMonth: k.budgetPerMonth, scheduledPerMonth: k.scheduledPerMonth, budgetByMonth: { ...k.budgetByMonth }, scheduledByMonth: { ...k.scheduledByMonth }, children: [] };
+      return { parentId: k.id, parentName: k.name, parentCat: k, byMonth, countByMonth, total, totalCount, budgetTotal: k.budgetTotal, scheduledTotal: k.scheduledTotal, budgetByMonth: { ...k.budgetByMonth }, scheduledByMonth: { ...k.scheduledByMonth }, children: [] };
     });
 
     const existing = grandparentGroups.get(parentId);
@@ -481,8 +481,8 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
       existing.countByMonth = aggregateField(allForGp, "countByMonth");
       existing.total = Object.values(existing.byMonth).reduce((s, v) => s + v, 0);
       existing.totalCount = Object.values(existing.countByMonth).reduce((s, v) => s + v, 0);
-      existing.budgetPerMonth = sumBudget(allForGp);
-      existing.scheduledPerMonth = sumScheduled(allForGp);
+      existing.budgetTotal = sumBudget(allForGp);
+      existing.scheduledTotal = sumScheduled(allForGp);
       existing.budgetByMonth = aggregateField(allForGp, "budgetByMonth");
       existing.scheduledByMonth = aggregateField(allForGp, "scheduledByMonth");
     } else {
@@ -490,7 +490,7 @@ function buildGroups(cats: CashflowCategory[]): DisplayGroup[] {
       const gpCountByMonth = aggregateField(sorted, "countByMonth");
       const gpTotal = Object.values(gpByMonth).reduce((s, v) => s + v, 0);
       const gpTotalCount = Object.values(gpCountByMonth).reduce((s, v) => s + v, 0);
-      groups.push({ kind: "grandparent", grandparentId: parentId, grandparentName: parentName, hasDirect: false, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetPerMonth: sumBudget(sorted), scheduledPerMonth: sumScheduled(sorted), budgetByMonth: aggregateField(sorted, "budgetByMonth"), scheduledByMonth: aggregateField(sorted, "scheduledByMonth"), subGroups: newSubGroups });
+      groups.push({ kind: "grandparent", grandparentId: parentId, grandparentName: parentName, hasDirect: false, byMonth: gpByMonth, countByMonth: gpCountByMonth, total: gpTotal, totalCount: gpTotalCount, budgetTotal: sumBudget(sorted), scheduledTotal: sumScheduled(sorted), budgetByMonth: aggregateField(sorted, "budgetByMonth"), scheduledByMonth: aggregateField(sorted, "scheduledByMonth"), subGroups: newSubGroups });
     }
   }
 
@@ -638,7 +638,7 @@ function MonthCells({
 function ParentHeaderRow({
   name, months, byMonth, countByMonth, total, totalCount, thisMonth,
   negate, href, grandparent, hasDirect, showValues = true,
-  budgetPerMonth, scheduledPerMonth, budgetByMonth, scheduledByMonth,
+  budgetTotal, scheduledTotal, budgetByMonth, scheduledByMonth,
   isCollapsed, onToggle, categoryIdForCell, fromForCell, toForCell,
   hideTargetId, isHidden,
 }: {
@@ -654,8 +654,8 @@ function ParentHeaderRow({
   grandparent?: boolean;
   hasDirect?: boolean;
   showValues?: boolean;
-  budgetPerMonth?: number;
-  scheduledPerMonth?: number;
+  budgetTotal?: number;
+  scheduledTotal?: number;
   budgetByMonth?: Record<string, number>;
   scheduledByMonth?: Record<string, number>;
   isCollapsed?: boolean;
@@ -737,7 +737,7 @@ function ParentHeaderRow({
       {opts.showCounts && <td className="bg-muted/40 border-l border-border" />}
       {opts.showAvg && <AmountCell value={showValues && months.length > 0 ? display(total / months.length) : undefined} muted computed />}
       {opts.showPlan && (
-        <BudgetCell value={(budgetPerMonth ?? 0) + (scheduledPerMonth ?? 0)} />
+        <BudgetCell value={(budgetTotal ?? 0) + (scheduledTotal ?? 0)} />
       )}
       {opts.showDiff && (
         <AmountCell
@@ -840,7 +840,7 @@ function SubParentHeaderRow({
       />
       {opts.showCounts && <td className="bg-muted/40 border-l border-border" />}
       {opts.showAvg && <AmountCell value={showValues && months.length > 0 ? display(sub.total / months.length) : undefined} muted computed />}
-      {opts.showPlan && <BudgetCell value={sub.budgetPerMonth + sub.scheduledPerMonth} />}
+      {opts.showPlan && <BudgetCell value={sub.budgetTotal + sub.scheduledTotal} />}
       {opts.showDiff && (
         <AmountCell
           value={
@@ -941,7 +941,7 @@ function LeafRow({
       <AmountCell value={cat.total} negate={negate} computed onClick={openTotal} />
       {opts.showCounts && <CountCell value={cat.totalCount} computed />}
       {opts.showAvg && <AmountCell value={months.length > 0 ? cat.total / months.length : undefined} negate={negate} muted computed />}
-      {opts.showPlan && <BudgetCell value={cat.budgetPerMonth + cat.scheduledPerMonth} />}
+      {opts.showPlan && <BudgetCell value={cat.budgetTotal + cat.scheduledTotal} />}
       {opts.showDiff && (
         <AmountCell
           value={totalDiff(cat.total, cat.budgetByMonth, cat.scheduledByMonth, months, !!negate)}
@@ -1101,8 +1101,8 @@ function GrandparentRows({
         }
         showValues={totalsLevel === "grandparent"}
 
-        budgetPerMonth={group.budgetPerMonth}
-        scheduledPerMonth={group.scheduledPerMonth}
+        budgetTotal={group.budgetTotal}
+        scheduledTotal={group.scheduledTotal}
         budgetByMonth={group.budgetByMonth}
         scheduledByMonth={group.scheduledByMonth}
         isCollapsed={isGpCollapsed}
@@ -1494,7 +1494,7 @@ export function CashflowReport({
             )}
             {showPlan && (
               <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] text-muted-foreground/70 bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
-                Plan/mo
+                Plan
               </th>
             )}
             {showDiff && (

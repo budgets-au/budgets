@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, accounts, categories, importLogs } from "@/db/schema";
 import { alias } from "drizzle-orm/sqlite-core";
-import { eq, and, gte, lte, desc, asc, like, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, like, or, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { normalizePayee, deriveMatchPayee, loadTokenFreq } from "@/lib/categorize";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
@@ -166,7 +166,18 @@ export const GET = withAuth(async (request) => {
     // SQLite's LIKE is case-insensitive for ASCII by default. ilike is
     // Postgres-only — using it here was a leftover from the PG → SQLite
     // migration that surfaced as a 500 ("near 'ilike': syntax error").
-    conditions.push(like(transactions.payee, `%${search}%`));
+    // Match either the payee column OR the notes column so the
+    // transactions-page search box catches "find that thing I wrote
+    // a note about" as well as "find that payee". Description column
+    // intentionally NOT included — it's the auto-derived import
+    // description (raw CSV line) and matching it produces noise.
+    const pattern = `%${search}%`;
+    conditions.push(
+      or(
+        like(transactions.payee, pattern),
+        like(transactions.notes, pattern),
+      )!,
+    );
   }
   if (transfersFilter === "only") {
     conditions.push(isNotNull(transactions.transferPairId));

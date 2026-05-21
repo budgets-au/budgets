@@ -52,44 +52,50 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T11:17:31.367Z · 0 issues, 0 questions, 0 verified._
+_Last run: 2026-05-21T11:50:46.498Z · 1 issue, 0 questions, 2 verified._
 
 #### Smart Monkey expert system
 
 | Goal | Achieved | Attempts | Last successful run |
 | --- | --- | --- | --- |
-| `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
-| `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `addTenToCategory` | ✅ | 4 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
-| `scheduleOnCalendar` | ✅ | 4 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
+| `createTransaction` | ❌ | 0 | _(not yet)_ |
+| `createBudget` | ❌ | 0 | _(not yet)_ |
+| `createSchedule` | ❌ | 0 | _(not yet)_ |
+| `addTenToCategory` | ❌ | 0 | _(not yet)_ |
+| `scheduleOnCalendar` | ❌ | 0 | _(not yet)_ |
+| `searchTransaction` | ✅ | 1 | /transactions · "?search=monkey-goal-mpffiyl1-search-payee" → "GET /api/transactions?search=…" (dom) |
+| `addAndViewNote` | ❌ | 1 | _(not yet)_ |
+| `searchForNote` | ✅ | 1 | /transactions · "?search=find-me-monkey-goal-mpffiyl1 (notes-only)" → "GET /api/transactions?search=…" (dom) |
 
-_Coverage: 10 routes mapped, 330 interactive controls catalogued, 82 in-app links discovered._
+_Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
 #### Smart Monkey run report
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 163.9s |
-| Routes visited | 9 |
-| Button clicks | 170 |
-| Switch toggles | 11 |
-| Select cycles | 7 |
-| Text inputs filled | 8 |
-| Dialogs opened | 39 |
-| Form submits | 3 |
+| Total wall time | 6.4s |
+| Routes visited | 3 |
+| Button clicks | 0 |
+| Switch toggles | 0 |
+| Select cycles | 0 |
+| Text inputs filled | 0 |
+| Dialogs opened | 0 |
+| Form submits | 0 |
 | Links discovered | 0 |
-| Console errors | 1 |
-| Goals attempted | 0 |
-| Goals achieved | 0 |
+| Console errors | 0 |
+| Goals attempted | 3 |
+| Goals achieved | 2 |
 | Findings logged | 3 |
 
 ##### Workflows completed
-- ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
-- ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `addTenToCategory` — `/transactions` · click **POST /api/transactions × 10** → fill → click **POST /api/transactions** (verified via api)
-- ✅ `scheduleOnCalendar` — `/calendar` · click **POST /api/scheduled** → fill → click **POST /api/scheduled** (verified via dom)
+- ❌ `createTransaction` — _(not yet completed)_
+- ❌ `createBudget` — _(not yet completed)_
+- ❌ `createSchedule` — _(not yet completed)_
+- ❌ `addTenToCategory` — _(not yet completed)_
+- ❌ `scheduleOnCalendar` — _(not yet completed)_
+- ✅ `searchTransaction` — `/transactions` · click **?search=monkey-goal-mpffiyl1-search-payee** → fill → click **GET /api/transactions?search=…** (verified via dom)
+- ❌ `addAndViewNote` — _(not yet completed)_
+- ✅ `searchForNote` — `/transactions` · click **?search=find-me-monkey-goal-mpffiyl1 (notes-only)** → fill → click **GET /api/transactions?search=…** (verified via dom)
 
 #### Vitest summary
 
@@ -97,7 +103,18 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 ✅ **353 passed** across 38 files (13.3s).
 
-_No issues, questions, or verifications on the last run — only the expert-system summary above._
+#### Issues
+
+##### /transactions
+- 🔴 **goal "addAndViewNote" — note round-trips API + DOM** — API echoed notes + DOM did not render "note-from-monkey-goal-mpffiyl1".
+
+#### Verified
+
+_Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
+
+##### /transactions
+- ✅ **goal "searchTransaction" — verify search filters to payee** — API matched + DOM rendered payee "monkey-goal-mpffiyl1-search-payee" with search=monkey-goal-mpffiyl1-search-payee.
+- ✅ **goal "searchForNote" — ?search= matches notes column** — API matched + DOM rendered the matching row for notes-only needle "find-me-monkey-goal-mpffiyl1".
 
 <!-- monkey:end -->
 

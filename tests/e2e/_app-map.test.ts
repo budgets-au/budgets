@@ -20,7 +20,7 @@ const T1 = "2026-05-20T01:00:00.000Z";
 describe("emptyAppMap", () => {
   it("returns a schema-versioned shell with all goals reset", () => {
     const m = emptyAppMap();
-    expect(m.schemaVersion).toBe(1);
+    expect(m.schemaVersion).toBe(2);
     expect(m.routes).toEqual({});
     expect(m.runs).toEqual([]);
     for (const g of GOAL_KEYS) {

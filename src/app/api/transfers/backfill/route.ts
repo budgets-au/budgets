@@ -29,7 +29,7 @@ export const POST = withAdminAuth(async () => {
     .set({ transferBackfillDone: false, updatedAt: new Date() })
     .where(sql`${appSettings.id} = 1`);
 
-  const { paired } = backfillOrphanTransfers();
+  const { paired } = backfillOrphanTransfers(db);
 
   // Re-set the flag so the next unlock doesn't trigger another pass.
   await db

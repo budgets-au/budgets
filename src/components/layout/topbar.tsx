@@ -33,7 +33,21 @@ export function Topbar({
             <span className="hidden sm:inline">{session?.user?.name ?? "Account"}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => signOut({ redirectTo: "/login" })}>
+            <DropdownMenuItem
+              onClick={async () => {
+                // `redirect: false` keeps NextAuth from constructing the
+                // post-signout URL on the server — when `AUTH_URL` /
+                // `NEXTAUTH_URL` aren't set and `trustHost` can't resolve
+                // (e.g. behind a LAN proxy that doesn't forward Host),
+                // Auth.js falls back to its hardcoded `http://localhost:3000`
+                // default and the browser ends up at a port the app
+                // doesn't run on. Navigating client-side from the
+                // current `window.location.origin` always lands on the
+                // right host.
+                await signOut({ redirect: false });
+                window.location.href = "/login";
+              }}
+            >
               <LogOut className="h-4 w-4 mr-2" />
               Sign out
             </DropdownMenuItem>

@@ -251,7 +251,16 @@ test.describe("smart monkey: goal-driven crawl", () => {
       let achieved: SuccessfulRun | null = null;
       for (const route of goal.candidateRoutes) {
         await page.goto(route);
-        await page.waitForLoadState("networkidle");
+        // `domcontentloaded` instead of `networkidle` — NextAuth's
+        // session-fetch retries (especially around the orphan-backfill
+        // TDZ error logged on /api/auth/session) can keep the network
+        // active indefinitely, so `networkidle` would block until the
+        // 30s Playwright default fires + cascade into the 120s
+        // test-timeout. `domcontentloaded` settles deterministically
+        // once the SPA shell is hydrated; SWR's data fetch runs after
+        // that and is what the per-test `waitForTimeout`/explicit
+        // queries cover.
+        await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
         await page.waitForTimeout(400);
 
         const trigger = await findTrigger(page, goal.triggerPatterns);
@@ -629,7 +638,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
     // 4. DOM verification — load /transactions and look for
     // tokens in the rendered table.
     await page.goto("/transactions");
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(500);
     runCounters.routesVisited += 1;
     const bodyText = await page
@@ -840,7 +849,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
 
     // Leg 2: /scheduled DOM.
     await page.goto("/scheduled");
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(500);
     runCounters.routesVisited += 1;
     const scheduledText = await page
@@ -854,7 +863,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
     // text per scheduled occurrence; today's date should have
     // our token rendered in its cell.
     await page.goto("/calendar");
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(800);
     runCounters.routesVisited += 1;
     const calendarText = await page
@@ -911,6 +920,289 @@ test.describe("smart monkey: goal-driven crawl", () => {
       // row should be findable via the API. If even apiHit is
       // false the seed data + route are broken.
       expect(createdRow?.id).toBeTruthy();
+    }
+  });
+
+  /** Search a transaction by payee on /transactions.
+   *
+   * Seeds one transaction via the API with a unique per-run payee
+   * token, then drives the UI:
+   *   1. Navigate to /transactions?search=<token>
+   *   2. Confirm the row's payee text appears in the rendered table
+   *   3. Confirm GET /api/transactions?search=<token> returns it
+   *
+   * Pins the contract that the search box matches the payee column —
+   * a regression that broke this would hide transactions from the
+   * search results UI even though they're still in the DB. */
+  test("goal: search transactions by payee", async ({ page }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    const accountsRes = await request.get("/api/accounts");
+    if (!accountsRes.ok()) {
+      await recordFinding({
+        page: "/transactions",
+        action: `goal "searchTransaction" — setup`,
+        severity: "warn",
+        kind: "issue",
+        message: `Could not load accounts (${accountsRes.status()}).`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "searchTransaction", null);
+      return;
+    }
+    const accounts = (await accountsRes.json()) as Array<{ id: string }>;
+    const account = accounts[0];
+    if (!account) {
+      recordGoalAttempt(appMap, "searchTransaction", null);
+      return;
+    }
+
+    const TOKEN = `${RUN_TOKEN}-search-payee`;
+    const postRes = await request.post("/api/transactions", {
+      data: {
+        accountId: account.id,
+        date: "2026-01-20",
+        amount: "-11.11",
+        payee: TOKEN,
+      },
+    });
+    expect(postRes.ok(), "seed POST should succeed").toBeTruthy();
+
+    // API leg first — cheap + authoritative.
+    const apiRes = await request.get(
+      `/api/transactions?search=${encodeURIComponent(TOKEN)}&limit=10`,
+    );
+    const apiHit = apiRes.ok()
+      ? ((await apiRes.json()) as Array<{ payee: string | null }>).some(
+          (t) => t.payee === TOKEN,
+        )
+      : false;
+
+    // DOM leg — navigate with ?search= so the table renders filtered.
+    await page.goto(`/transactions?search=${encodeURIComponent(TOKEN)}`);
+    await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
+    runCounters.routesVisited += 1;
+    let domHit = false;
+    for (let i = 0; i < 5; i++) {
+      await page.waitForTimeout(400);
+      const text = await page
+        .locator("body")
+        .innerText({ timeout: 5_000 })
+        .catch(() => "");
+      if (text.includes(TOKEN)) {
+        domHit = true;
+        break;
+      }
+    }
+
+    await recordFinding({
+      page: "/transactions",
+      action: `goal "searchTransaction" — verify search filters to payee`,
+      severity: apiHit && domHit ? "info" : "error",
+      kind: apiHit && domHit ? "verified" : "issue",
+      message: `API ${apiHit ? "matched" : "missed"} + DOM ${domHit ? "rendered" : "did not render"} payee "${TOKEN}" with search=${TOKEN}.`,
+    });
+    runCounters.findingsCount += 1;
+
+    if (apiHit && domHit) {
+      recordGoalAttempt(appMap, "searchTransaction", {
+        timestamp: new Date().toISOString(),
+        route: "/transactions",
+        triggerLabel: `?search=${TOKEN}`,
+        fillSpec: { payee: TOKEN },
+        submitLabel: "GET /api/transactions?search=…",
+        verified: "dom",
+      });
+      runCounters.goalsAchieved += 1;
+    } else {
+      recordGoalAttempt(appMap, "searchTransaction", null);
+    }
+  });
+
+  /** Add a transaction with notes via the API, then view it on
+   * /transactions and confirm the notes text is visible in the
+   * rendered row (or expanded detail).
+   *
+   * The notes column is the operator's freeform-context field —
+   * a regression that stops it being persisted, returned, OR
+   * rendered would slip past the silent-monkey crawl (the field is
+   * optional, no validation fires, no toast). This goal pins the
+   * full round-trip. */
+  test("goal: add and view a note on a transaction", async ({ page }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    const accountsRes = await request.get("/api/accounts");
+    if (!accountsRes.ok()) {
+      recordGoalAttempt(appMap, "addAndViewNote", null);
+      return;
+    }
+    const accounts = (await accountsRes.json()) as Array<{ id: string }>;
+    const account = accounts[0];
+    if (!account) {
+      recordGoalAttempt(appMap, "addAndViewNote", null);
+      return;
+    }
+
+    const NOTE_TEXT = `note-from-${RUN_TOKEN}`;
+    const PAYEE = `${RUN_TOKEN}-note-row`;
+    const postRes = await request.post("/api/transactions", {
+      data: {
+        accountId: account.id,
+        date: "2026-01-21",
+        amount: "-22.22",
+        payee: PAYEE,
+        notes: NOTE_TEXT,
+      },
+    });
+    expect(postRes.ok(), "seed POST should succeed").toBeTruthy();
+    const created = (await postRes.json()) as {
+      id: string;
+      notes?: string | null;
+    };
+    expect(created.notes, "POST response should echo notes").toBe(NOTE_TEXT);
+
+    // API leg — GET back and confirm notes persisted.
+    const apiRes = await request.get(`/api/transactions?limit=100`);
+    const apiHit = apiRes.ok()
+      ? ((await apiRes.json()) as Array<{ id: string; notes?: string | null }>)
+          .some((t) => t.id === created.id && t.notes === NOTE_TEXT)
+      : false;
+
+    // DOM leg — navigate to /transactions filtered to our row and
+    // look for the notes text in the rendered body.
+    await page.goto(`/transactions?search=${encodeURIComponent(PAYEE)}`);
+    await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
+    runCounters.routesVisited += 1;
+    let domHit = false;
+    for (let i = 0; i < 5; i++) {
+      await page.waitForTimeout(400);
+      const text = await page
+        .locator("body")
+        .innerText({ timeout: 5_000 })
+        .catch(() => "");
+      if (text.includes(NOTE_TEXT)) {
+        domHit = true;
+        break;
+      }
+    }
+
+    await recordFinding({
+      page: "/transactions",
+      action: `goal "addAndViewNote" — note round-trips API + DOM`,
+      severity: apiHit && domHit ? "info" : "error",
+      kind: apiHit && domHit ? "verified" : "issue",
+      message: `API ${apiHit ? "echoed" : "lost"} notes + DOM ${domHit ? "rendered" : "did not render"} "${NOTE_TEXT}".`,
+    });
+    runCounters.findingsCount += 1;
+
+    if (apiHit && domHit) {
+      recordGoalAttempt(appMap, "addAndViewNote", {
+        timestamp: new Date().toISOString(),
+        route: "/transactions",
+        triggerLabel: "POST /api/transactions (with notes)",
+        fillSpec: { notes: NOTE_TEXT, payee: PAYEE },
+        submitLabel: "GET /api/transactions",
+        verified: "dom",
+      });
+      runCounters.goalsAchieved += 1;
+    } else {
+      recordGoalAttempt(appMap, "addAndViewNote", null);
+    }
+  });
+
+  /** Search transactions by notes content.
+   *
+   * Pins the 0.213.0 backend change that extended the
+   * `?search=` filter to match the `notes` column as well as
+   * `payee`. Without this test a regression that narrowed the
+   * search back to payee-only would silently break "find that
+   * thing I wrote a note about" without any user-visible error. */
+  test("goal: search transactions by notes content", async ({ page }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    const accountsRes = await request.get("/api/accounts");
+    if (!accountsRes.ok()) {
+      recordGoalAttempt(appMap, "searchForNote", null);
+      return;
+    }
+    const accounts = (await accountsRes.json()) as Array<{ id: string }>;
+    const account = accounts[0];
+    if (!account) {
+      recordGoalAttempt(appMap, "searchForNote", null);
+      return;
+    }
+
+    const NOTE_NEEDLE = `find-me-${RUN_TOKEN}`;
+    const PAYEE = `${RUN_TOKEN}-search-note`;
+    const postRes = await request.post("/api/transactions", {
+      data: {
+        accountId: account.id,
+        date: "2026-01-22",
+        amount: "-33.33",
+        payee: PAYEE,
+        notes: `arbitrary leading text ${NOTE_NEEDLE} arbitrary trailing text`,
+      },
+    });
+    expect(postRes.ok(), "seed POST should succeed").toBeTruthy();
+    const created = (await postRes.json()) as { id: string };
+
+    // API leg — search by the notes-only needle (NOT in payee).
+    const apiRes = await request.get(
+      `/api/transactions?search=${encodeURIComponent(NOTE_NEEDLE)}&limit=10`,
+    );
+    const apiHit = apiRes.ok()
+      ? ((await apiRes.json()) as Array<{ id: string }>).some(
+          (t) => t.id === created.id,
+        )
+      : false;
+
+    // DOM leg — same search, this time check the rendered list.
+    await page.goto(`/transactions?search=${encodeURIComponent(NOTE_NEEDLE)}`);
+    await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
+    runCounters.routesVisited += 1;
+    let domHit = false;
+    for (let i = 0; i < 5; i++) {
+      await page.waitForTimeout(400);
+      const text = await page
+        .locator("body")
+        .innerText({ timeout: 5_000 })
+        .catch(() => "");
+      if (text.includes(PAYEE)) {
+        // We render the payee on the row even when the match was
+        // on notes — finding payee in the filtered list proves the
+        // search box matched on the notes column.
+        domHit = true;
+        break;
+      }
+    }
+
+    await recordFinding({
+      page: "/transactions",
+      action: `goal "searchForNote" — ?search= matches notes column`,
+      severity: apiHit && domHit ? "info" : "error",
+      kind: apiHit && domHit ? "verified" : "issue",
+      message: `API ${apiHit ? "matched" : "missed"} + DOM ${domHit ? "rendered the matching row" : "did not render"} for notes-only needle "${NOTE_NEEDLE}".`,
+    });
+    runCounters.findingsCount += 1;
+
+    if (apiHit && domHit) {
+      recordGoalAttempt(appMap, "searchForNote", {
+        timestamp: new Date().toISOString(),
+        route: "/transactions",
+        triggerLabel: `?search=${NOTE_NEEDLE} (notes-only)`,
+        fillSpec: { notes: NOTE_NEEDLE, payee: PAYEE },
+        submitLabel: "GET /api/transactions?search=…",
+        verified: "dom",
+      });
+      runCounters.goalsAchieved += 1;
+    } else {
+      recordGoalAttempt(appMap, "searchForNote", null);
     }
   });
 });
@@ -1364,7 +1656,12 @@ async function attemptReplay(
 ): Promise<{ success: boolean }> {
   try {
     await page.goto(recipe.route);
-    await page.waitForLoadState("networkidle");
+    // See the analogous comment in the exploration goto above —
+    // `networkidle` can hang on a NextAuth-poll retry loop and bust
+    // the test's 120s budget. `domcontentloaded` is enough to know
+    // the SPA shell is up; SWR fetches are caught by the post-submit
+    // verifyOutcome polling loop.
+    await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(400);
 
     const trigger = page
@@ -1430,7 +1727,17 @@ async function attemptReplay(
 
 /** Look for `token` in the current page DOM first; if absent,
  * hit `verifyApi` and look for it in the JSON body. Returns
- * "dom" / "api" / null. Falsy → goal NOT verified. */
+ * "dom" / "api" / null. Falsy → goal NOT verified.
+ *
+ * Defensive against the prior 120s-timeout failure mode where
+ * `body.innerText()` could hang for Playwright's default 30s and
+ * a stuck `request.get()` could hang another 30s — stacked across
+ * the replay path + the exploration fall-through, that easily
+ * blew past the test's 120s budget. Now:
+ *   - DOM check polls 5× with a 5s innerText cap each, breaking
+ *     the moment the token appears (typical: first poll catches
+ *     it once SWR's revalidation lands).
+ *   - API check uses an explicit 8s timeout. */
 async function verifyOutcome(
   page: Page,
   request: import("@playwright/test").APIRequestContext,
@@ -1438,23 +1745,27 @@ async function verifyOutcome(
   verifyApi: string,
 ): Promise<"dom" | "api" | null> {
   // DOM check — give Next a moment to re-render any list that
-  // re-fetches via SWR.
-  await page.waitForTimeout(800);
-  const bodyText = await page
-    .locator("body")
-    .innerText()
-    .catch(() => "");
-  if (bodyText.includes(token)) return "dom";
+  // re-fetches via SWR. Poll rather than single-shot so we don't
+  // race the SWR mutate→revalidate cycle.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await page.waitForTimeout(400);
+    const bodyText = await page
+      .locator("body")
+      .innerText({ timeout: 5_000 })
+      .catch(() => "");
+    if (bodyText.includes(token)) return "dom";
+  }
 
   // API fallback — hits the list endpoint, scans the raw body
-  // for the token. Cheap and authoritative.
+  // for the token. Cheap and authoritative. Explicit timeout so a
+  // hung server can't drain the test's wall-clock budget.
   try {
-    const res = await request.get(verifyApi);
+    const res = await request.get(verifyApi, { timeout: 8_000 });
     if (!res.ok()) return null;
     const text = await res.text();
     if (text.includes(token)) return "api";
   } catch {
-    /* unreachable / 5xx — treat as not verified */
+    /* unreachable / 5xx / timeout — treat as not verified */
   }
   return null;
 }

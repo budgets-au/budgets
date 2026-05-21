@@ -42,9 +42,13 @@ export function ResetBrowserData() {
     } catch {
       /* private mode, blocked storage — fall through to signOut */
     }
-    // signOut clears the NextAuth session-token cookie and lands
-    // the user on /login.
-    await signOut({ redirectTo: "/login" });
+    // signOut clears the NextAuth session-token cookie; navigate
+    // client-side so the post-signout URL uses the browser's
+    // current origin instead of NextAuth's localhost:3000 default
+    // when `AUTH_URL` isn't set (same gotcha the topbar
+    // sign-out hits behind a LAN proxy).
+    await signOut({ redirect: false });
+    window.location.href = "/login";
   }
 
   return (

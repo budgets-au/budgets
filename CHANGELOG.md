@@ -9,6 +9,63 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.213.0 — 2026-05-21
+
+### Fixed
+- **Sign-out redirected to `0.0.0.0:3000` instead of the current
+  origin.** NextAuth's server-side `signOut` URL construction was
+  falling back to its hardcoded `localhost:3000` default when the
+  request's host couldn't be resolved (LAN proxies that don't
+  forward Host, container networking quirks). Switched both
+  sign-out call sites (`topbar.tsx`, `settings/reset-browser-data.tsx`)
+  to `signOut({ redirect: false })` followed by a client-side
+  `window.location.href = "/login"` — uses the browser's actual
+  origin every time.
+- **Orphan-transfer backfill TDZ on every unlock.** The lazy-require
+  pattern (`require("@/db").db` inside `getDb()`) wasn't enough to
+  break the webpack cycle in production builds — `Module.db`'s
+  getter still resolved before its closure was initialised,
+  throwing `ReferenceError: Cannot access 'D' before initialization`.
+  Inverted the dependency: `backfillOrphanTransfers` now takes the
+  drizzle handle as a parameter. The caller in `db/index.ts` and
+  the explicit API route at `/api/transfers/backfill` both pass
+  the live handle in. No more cycle, no more TDZ in the unlock
+  log spam.
+
+### Added
+- **Transactions search now matches the `notes` column** in
+  addition to `payee`. `?search=<q>` on `/api/transactions` issues
+  `OR(payee LIKE %q%, notes LIKE %q%)`. Description column
+  intentionally NOT included — it's the raw CSV/import line and
+  matching it would produce noise. The `notes` column is the
+  operator's freeform context field; this closes "find that thing
+  I wrote a note about".
+- **Three new smart-monkey goals**:
+  - `searchTransaction` — POST a transaction with a per-run-token
+    payee, navigate `/transactions?search=<token>`, verify the row
+    renders + the API returns it. Pins payee-search.
+  - `addAndViewNote` — POST a transaction with a notes string,
+    verify the API echoes it on creation, navigate
+    `/transactions?search=<payee>`, verify the notes text is
+    rendered in the row. Pins notes round-trip (DB → API → UI).
+  - `searchForNote` — POST a transaction whose notes contain a
+    unique needle that is NOT in the payee, search for the needle,
+    verify the row appears. Pins the new search-includes-notes
+    behaviour against regression to payee-only.
+- **`monkey-goals.spec.ts` hardening** — `verifyOutcome` now polls
+  the DOM 5× with a 5s `innerText` cap per attempt (was a single
+  shot with Playwright's default 30s timeout) and the API fallback
+  has an explicit 8s timeout. All `waitForLoadState("networkidle")`
+  calls became `waitForLoadState("domcontentloaded", { timeout:
+  8_000 })` so a NextAuth-poll retry storm can't bust the test's
+  120s budget.
+
+### Changed
+- **AppMap schema bumped 1 → 2** to accommodate the three new goal
+  keys. Existing `tests/e2e/.data/app-map.json` files invalidate on
+  load (returning a fresh empty map) so stale runs that didn't
+  carry the new keys don't crash on access.
+
 ## 0.212.0 — 2026-05-21
 
 ### Fixed

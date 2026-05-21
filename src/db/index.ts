@@ -297,12 +297,15 @@ function runOrphanTransferBackfill(): void {
       // Already done on this DB — restore-safe no-op.
       return;
     }
-    // Lazy import: the helper pulls from `@/db` itself; importing it
-    // at module-init would create a cycle. Resolved at call time
-    // when the singleton is already initialised.
+    // Lazy import keeps the unlock path off of the helper's chunk
+    // at module-init time. The helper no longer reaches back for
+    // `db` via require — we PASS the live drizzle handle in, which
+    // fully breaks the cycle that used to cause the production-
+    // bundle TDZ `ReferenceError: Cannot access 'D' before
+    // initialization`.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const m = require("@/lib/backfill-orphan-transfers");
-    const result = m.backfillOrphanTransfers();
+    const result = m.backfillOrphanTransfers(state.drizzleDb);
     if (result.paired > 0) {
       console.log(
         `[db] Backfilled ${result.paired} orphan transfer row(s) with synthetic counterparts.`,

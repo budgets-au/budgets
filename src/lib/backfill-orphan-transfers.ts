@@ -1,24 +1,16 @@
-// NOTE: `db` is imported lazily at call time to avoid a temporal-
-// dead-zone crash. The unlock path in `src/db/index.ts` calls
-// `require("@/lib/backfill-orphan-transfers")` from INSIDE the
-// still-initialising `db` module — webpack bundles this file's
-// top-level `import { db }` into the dependency cycle and the
-// `db` Proxy reference resolves before its module's IIFE has
-// finished, throwing "Cannot access 'al' before initialization"
-// in production builds. Pulling the import inside the function
-// breaks the cycle: by the time `backfillOrphanTransfers()` is
-// actually invoked, `db/index.ts` has finished its module body.
-//
-// Drizzle helpers (`accounts`, `eq`, `sql`, etc.) DON'T have the
-// same problem — they don't transitively re-import `db`.
-import { accounts, appSettings, transactions, categories } from "@/db/schema";
-import { and, eq, isNull, sql } from "drizzle-orm";
+// The drizzle `db` handle is now PASSED IN as a parameter rather
+// than reached for via require("@/db").db. Pre-0.213 the latter
+// worked in dev but the production webpack bundle hit a temporal-
+// dead-zone error every time runOrphanTransferBackfill (called
+// from unlock()) reached back through getDb(): `ReferenceError:
+// Cannot access 'D' before initialization`. The lazy-require
+// pattern wasn't enough — webpack's chunked bundle still cycled
+// through Module.db's getter before its closure had finished
+// initialising. Passing the handle in inverts the dependency and
+// removes the cycle entirely.
+import { accounts, transactions, categories } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 import type { db as dbType } from "@/db";
-
-function getDb(): typeof dbType {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("@/db").db;
-}
 
 /** Default external-account name used when backfill mints synthetics
  * for legacy orphan transfer rows. The user can rename or split this
@@ -57,11 +49,7 @@ interface OrphanRow {
  * Re-runs are opt-in via Settings → Maintenance → "Re-run transfer
  * backfill".
  */
-export function backfillOrphanTransfers(): { paired: number } {
-  // Resolve `db` at call time — see the lazy-import note at the top
-  // of the file for why a top-level `import { db } from "@/db"` was
-  // crashing this function in production.
-  const db = getDb();
+export function backfillOrphanTransfers(db: typeof dbType): { paired: number } {
   // 1. Find-or-create the default external account.
   const existingExternal = db.all(sql`
     SELECT id FROM accounts
@@ -159,24 +147,8 @@ export function backfillOrphanTransfers(): { paired: number } {
   return { paired };
 }
 
-/** Test-friendly variant that runs against any drizzle handle (not
- *  the live one). Same algorithm, just doesn't import the singleton.
- *  Used by the unit tests in this module's `.test.ts`. */
-export function backfillOrphanTransfersWith(
-  // Loose handle type — accepts the live drizzle Db or any compatible
-  // sql-tag-supporting wrapper. Test fixtures pass an in-memory
-  // wrapper here.
-  _handle: typeof dbType,
-): { paired: number } {
-  // The current implementation is tightly coupled to the singleton
-  // `db` symbol because each db.* call below funnels through it. A
-  // future cleanup can parameterise; for now tests use the singleton
-  // pointed at a tmp DB.
-  void _handle;
-  return backfillOrphanTransfers();
-}
-
-// Helper re-exports used by the eq/isNull/and/sql consumers above —
-// keep the helper file self-contained so adding the import to db
-// startup doesn't drag too many specifiers.
-export { and, eq, isNull };
+/** Back-compat alias kept so the prior `backfillOrphanTransfersWith(db)`
+ *  callers (tests) don't need to change names. The signature is now
+ *  identical to `backfillOrphanTransfers` because `db` is always a
+ *  parameter. */
+export const backfillOrphanTransfersWith = backfillOrphanTransfers;

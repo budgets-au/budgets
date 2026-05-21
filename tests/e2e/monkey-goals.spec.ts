@@ -901,6 +901,8 @@ test.describe("smart monkey: goal-driven crawl", () => {
     // mirrors the addTenToCategory / searchTransaction patterns
     // and gives SWR room to settle without inflating the budget on
     // happy-path runs (it breaks out the moment the token shows up).
+    // Note: still flakes under full-suite cross-test pressure —
+    // tracked in #43. Standalone is reliable.
     let calendarHit = false;
     for (let attempt = 0; attempt < 5; attempt++) {
       await page.waitForTimeout(600);

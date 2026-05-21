@@ -109,16 +109,26 @@ function appendExpertSystem(lines: string[], map: AppMap): void {
   lines.push("#### Smart Monkey expert system");
   lines.push("");
 
-  // Goal status table.
-  lines.push("| Goal | Achieved | Attempts | Last successful run |");
-  lines.push("| --- | --- | --- | --- |");
+  // Goal status table. Each row is read from the PERSISTED AppMap
+  // (`tests/e2e/.data/app-map.json`) — rows accrue across runs so a
+  // single-test run that only touches one goal doesn't blank the
+  // achievement state of the others. The "Last attempt" column
+  // makes that visible: a row whose `lastAttempt` is older than this
+  // run's start was inherited from an earlier run, not re-verified
+  // just now.
+  lines.push("| Goal | Achieved | Last attempt | Attempts | Last successful run |");
+  lines.push("| --- | --- | --- | --- | --- |");
   for (const key of GOAL_KEYS) {
     const g = map.goals[key];
     const recipe = g.successfulRun
       ? `${g.successfulRun.route} · "${g.successfulRun.triggerLabel}" → "${g.successfulRun.submitLabel}" (${g.successfulRun.verified})`
       : "_(not yet)_";
+    // ISO date+minute is enough — second precision adds noise without
+    // value, and the "Last attempt" column's job is "did this row
+    // get re-checked recently or is it stale?".
+    const stamp = g.lastAttempt ? g.lastAttempt.slice(0, 16).replace("T", " ") : "—";
     lines.push(
-      `| \`${key}\` | ${g.achieved ? "✅" : "❌"} | ${g.attempts} | ${recipe} |`,
+      `| \`${key}\` | ${g.achieved ? "✅" : "❌"} | ${stamp} | ${g.attempts} | ${recipe} |`,
     );
   }
   lines.push("");

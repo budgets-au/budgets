@@ -9,6 +9,41 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.227.0 — 2026-05-22
+
+### Added
+- **`Last attempt` column on the Smart-Monkey expert-system table
+  in `TEST-RESULTS.md`.** Pre-0.227 the table was rendered fresh
+  from the persisted AppMap every run, but rows looked ❌
+  whenever a single-test invocation wiped `tests/e2e/.data/app-map.json`
+  before firing (a habit from my own test commands that defeated
+  the AppMap's accrue-across-runs design). The new column shows
+  each goal's `lastAttempt` timestamp (ISO date + minute, e.g.
+  `2026-05-22 09:00`) — rows whose stamp predates the current run's
+  start are clearly carry-overs from earlier runs, not blanks.
+
+  Also documents in-code that the AppMap is intentionally persisted
+  across runs (`tests/e2e/global-setup.ts` already comments the
+  non-wipe convention; the new column makes it visible in the
+  rendered output).
+
+### Notes
+- **0.226 closed #43 prematurely; reopened.** The standalone-fix
+  poll (5 × 600 ms after `page.goto("/calendar")`) reliably makes
+  the scheduleOnCalendar test pass when run standalone (2.7 s),
+  but the FULL e2e run still misses the /calendar DOM. Tried in a
+  0.227-attempt run: added `Promise.all([waitForResponse(/api/cashflow), goto])`
+  + bumped the poll to 10×600 ms. Result: WORSE — full e2e went
+  from 1 failure (7.3 min) to 2 failures (11.0 min), with
+  `monkey: Calendar` (a different test) now also failing. Reverted.
+
+  Added an in-code comment on the polling block pointing future
+  readers at #43 with the diagnostic trail.
+
+- **Refreshed screenshots + TEST-RESULTS.md** from the latest full
+  e2e run (the now-machine-overwritten block lives in the renamed
+  file, no longer in the retired TODO.md).
+
 ## 0.226.0 — 2026-05-22
 
 ### Fixed

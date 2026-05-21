@@ -52,7 +52,7 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T09:00:36.647Z · 0 issues, 6 questions._
+_Last run: 2026-05-21T09:37:47.631Z · 0 issues, 2 questions, 6 verified._
 
 #### Smart Monkey expert system
 
@@ -61,28 +61,28 @@ _Last run: 2026-05-21T09:00:36.647Z · 0 issues, 6 questions._
 | `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
 | `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
 | `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `addTenToCategory` | ✅ | 2 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
-| `scheduleOnCalendar` | ✅ | 2 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
+| `addTenToCategory` | ✅ | 3 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
+| `scheduleOnCalendar` | ✅ | 3 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
 
-_Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
+_Coverage: 10 routes mapped, 330 interactive controls catalogued, 82 in-app links discovered._
 
 #### Smart Monkey run report
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 1378.3s |
-| Routes visited | 3 |
-| Button clicks | 0 |
-| Switch toggles | 0 |
-| Select cycles | 0 |
-| Text inputs filled | 0 |
-| Dialogs opened | 0 |
-| Form submits | 11 |
-| Links discovered | 0 |
+| Total wall time | 119.0s |
+| Routes visited | 10 |
+| Button clicks | 170 |
+| Switch toggles | 11 |
+| Select cycles | 7 |
+| Text inputs filled | 8 |
+| Dialogs opened | 39 |
+| Form submits | 3 |
+| Links discovered | 109 |
 | Console errors | 0 |
-| Goals attempted | 5 |
-| Goals achieved | 2 |
-| Findings logged | 6 |
+| Goals attempted | 0 |
+| Goals achieved | 0 |
+| Findings logged | 2 |
 
 ##### Workflows completed
 - ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
@@ -101,19 +101,29 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 _The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
 
+##### /settings
+- ❓ **submit "Create"** — Filled 3 inputs and clicked **Create** — no network call, toast, or navigation fired. Should it have?
+
+##### /superannuation
+- ❓ **submit "Save"** — Filled 3 inputs and clicked **Save** — no network call, toast, or navigation fired. Should it have?
+
+#### Verified
+
+_Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
+
 ##### /calendar
-- ❓ **goal "scheduleOnCalendar" — verify /calendar DOM** — DOM on /calendar contained the token "monkey-goal-mpf9fy6a-cal-sched". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).
+- ✅ **goal "scheduleOnCalendar" — verify /calendar DOM** — DOM on /calendar contained the token "monkey-goal-mpfalgmq-cal-sched". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).
 
 ##### /reports
-- ❓ **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=10 (expected 10), |total|=250 (expected 250.00).
+- ✅ **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=10 (expected 10), |total|=250 (expected 250.00).
 
 ##### /scheduled
-- ❓ **goal "scheduleOnCalendar" — verify API list** — GET /api/scheduled found a row with payee "monkey-goal-mpf9fy6a-cal-sched".
-- ❓ **goal "scheduleOnCalendar" — verify /scheduled DOM** — DOM on /scheduled contained the token "monkey-goal-mpf9fy6a-cal-sched".
+- ✅ **goal "scheduleOnCalendar" — verify API list** — GET /api/scheduled found a row with payee "monkey-goal-mpfalgmq-cal-sched".
+- ✅ **goal "scheduleOnCalendar" — verify /scheduled DOM** — DOM on /scheduled contained the token "monkey-goal-mpfalgmq-cal-sched".
 
 ##### /transactions
-- ❓ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpf9fy6a-bulk-*".
-- ❓ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpf9fy6a-bulk-".
+- ✅ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpfalgmq-bulk-*".
+- ✅ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpfalgmq-bulk-".
 
 <!-- monkey:end -->
 

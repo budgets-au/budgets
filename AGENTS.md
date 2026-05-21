@@ -37,6 +37,11 @@ Optional:
 - `NEXTAUTH_URL` — only needed when the app is reachable on a
   hostname other than `localhost` (e.g. `http://budgets.lan`)
   for login redirects.
+- `BRAVE_SEARCH_API_KEY` — Brave Search subscription token for
+  the supplemental web-source announcements on the investment
+  detail panel. Unset is supported — Yahoo Finance continues to
+  feed the panel alone, no UI degradation. Free tier (2000 q/mo,
+  1 q/s) is plenty given the 24h per-symbol cache.
 
 Database migrations apply automatically on every unlock via
 `runPendingMigrations()` in [src/db/index.ts](src/db/index.ts) —

@@ -92,6 +92,13 @@
       "when": 1779500000000,
       "tag": "0012_dismissed_transfer_pairs",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1779586400000,
+      "tag": "0013_investment_news_source_description",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,13 @@ interface NewsItem {
   link: string;
   publishedAt: number | null;
   thumbnail: string | null;
+  /** Origin of the row. "yahoo" = Yahoo Finance news, "web" =
+   *  Brave Search. Older cached rows pre-0.222 have source "yahoo"
+   *  per the migration default. */
+  source: "yahoo" | "web";
+  /** Short snippet/description text. Populated by Brave only —
+   *  Yahoo never has one. */
+  description: string | null;
 }
 
 interface NewsResponse {
@@ -92,7 +99,30 @@ export function AnnouncementsPanel({ investmentId }: { investmentId: string }) {
                     <span className="block font-medium leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                       {n.title}
                     </span>
+                    {n.description && (
+                      // Brave-only snippet. Clamp to 2 lines so the
+                      // row stays compact; full text is available on
+                      // the linked page. Tailwind's `line-clamp-2`
+                      // wraps the WebKit clamp utility.
+                      <span className="block text-xs text-muted-foreground/90 mt-1 line-clamp-2 leading-snug">
+                        {n.description}
+                      </span>
+                    )}
                     <span className="block text-[11px] text-muted-foreground mt-0.5 tabular-nums">
+                      {/* Tiny source pill — distinguishes Yahoo's
+                          curated feed from Brave's broader web hits
+                          so the operator can spot when a story is
+                          from a less-vetted source. Indigo accent
+                          matches the project's brand pattern. */}
+                      <span
+                        className={
+                          n.source === "web"
+                            ? "inline-block mr-1.5 px-1 py-px rounded text-[9px] uppercase tracking-wider bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 font-medium"
+                            : "inline-block mr-1.5 px-1 py-px rounded text-[9px] uppercase tracking-wider bg-muted text-muted-foreground font-medium"
+                        }
+                      >
+                        {n.source === "web" ? "web" : "yahoo"}
+                      </span>
                       {n.publisher ?? "Unknown source"}
                       {n.publishedAt && (
                         <>

@@ -9,6 +9,49 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.222.0 — 2026-05-22
+
+### Added
+- **Brave Search results alongside Yahoo announcements on the
+  investment-detail panel.** Yahoo's news endpoint is curated but
+  narrow (single source, title-only, strict ticker filter that
+  drops legitimate stories that don't tag the ticker). Brave
+  Search broadens coverage — broker blogs, ASX wires, niche
+  financial outlets — AND returns a snippet/`description` so the
+  operator can triage without clicking through every headline.
+
+  Augment, not replace: the panel now fetches BOTH sources in
+  parallel via `Promise.allSettled`. A failure in either is
+  logged and the other source still feeds the panel. Brave
+  gracefully returns `[]` when its API key is missing — installs
+  without a `BRAVE_SEARCH_API_KEY` env var keep working exactly
+  as today (Yahoo carries the panel alone). No UI degradation
+  for the no-key install path.
+
+  Each result carries a `"yahoo"` / `"web"` source badge in the
+  publisher line so the operator can spot which channel surfaced
+  a story. The 24h per-symbol cache is unchanged; both sources
+  refresh together when TTL expires.
+
+  Schema: `investment_news` gains a `source TEXT NOT NULL
+  DEFAULT 'yahoo'` column (legacy rows back-fill correctly) and
+  a `description TEXT` column (Yahoo never populates it; Brave
+  always does when the result has a snippet). Migration
+  `drizzle/0013_investment_news_source_description.sql`.
+
+  Brave-side dedup key: SHA-256 of the result URL — same URL
+  always yields the same uuid, so the existing
+  `(symbol, uuid) UNIQUE` index handles dedup across sources.
+
+  New env var: `BRAVE_SEARCH_API_KEY` — documented in AGENTS.md.
+  Free tier (2000 q/mo, 1 q/s) is plenty for a household app
+  with the existing 24h cache.
+
+  24 new unit tests in `brave-search.test.ts` cover query
+  construction, URL → uuid stability, `age` string parsing
+  (relative + absolute forms), graceful empty on missing key /
+  upstream failure, dedup by URL, count cap.
+
 ## 0.221.0 — 2026-05-21
 
 ### Added

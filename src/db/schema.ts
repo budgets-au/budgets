@@ -705,6 +705,13 @@ export const investmentNews = sqliteTable(
     fetchedAt: integer("fetched_at", { mode: "timestamp_ms" })
       .notNull()
       .$defaultFn(() => new Date()),
+    /** Origin of the row — Yahoo Finance news API ("yahoo") or
+     * Brave Search Web API ("web"). Defaults to yahoo for legacy
+     * rows that pre-date the dual-source split. */
+    source: text("source").notNull().default("yahoo"),
+    /** Short snippet/description text. Populated by Brave's
+     * `description` field; Yahoo never sets this. */
+    description: text("description"),
   },
   (t) => [
     uniqueIndex("investment_news_symbol_uuid_idx").on(t.symbol, t.uuid),

@@ -19,6 +19,12 @@ export interface NewsItem {
   /** Unix epoch ms (the Yahoo response uses seconds; we convert). */
   publishedAt: number | null;
   thumbnail: string | null;
+  /** Short snippet/description text. Brave's web search returns
+   *  these; Yahoo never has one. Null when unavailable. */
+  description: string | null;
+  /** Origin of the row. "yahoo" rows come from Yahoo Finance's
+   *  news API; "web" rows come from Brave Search. */
+  source: "yahoo" | "web";
 }
 
 export interface SearchResult {
@@ -318,6 +324,8 @@ function toNewsItem(n: RawNewsItem): NewsItem {
         ? n.providerPublishTime * 1000
         : null,
     thumbnail: small?.url ?? null,
+    description: null,
+    source: "yahoo",
   };
 }
 

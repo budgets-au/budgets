@@ -4,7 +4,9 @@ import { investments, investmentNews } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
 import { getNews } from "@/lib/investments/yahoo";
+import { searchInvestmentNews } from "@/lib/investments/brave-search";
 import { withAuthAndId } from "@/lib/api/route-guards";
+import type { NewsItem } from "@/lib/investments/yahoo";
 
 /** Refetch from Yahoo if the most recent cache row for this symbol is
  *  older than this. Yahoo's news cadence isn't sub-hourly for most
@@ -55,51 +57,84 @@ export const GET = withAuthAndId(async (id, request) => {
   let stale = false;
 
   if (cacheAgeMs >= NEWS_TTL_MS) {
-    try {
-      const fresh = await getNews(symbol, companyName);
-      // Dedup-insert: only insert items whose (symbol, uuid) pair
-      // isn't already cached. Bumping `fetched_at` on existing rows
-      // keeps the staleness check honest even when nothing new
-      // appeared upstream.
-      if (fresh.length > 0) {
-        const existing = await db
-          .select({ uuid: investmentNews.uuid })
-          .from(investmentNews)
-          .where(eq(investmentNews.symbol, symbol));
-        const have = new Set(existing.map((e) => e.uuid));
-        const toInsert = fresh
-          .filter((n) => !have.has(n.uuid))
-          .map((n) => ({
-            symbol,
-            uuid: n.uuid,
-            title: n.title,
-            publisher: n.publisher,
-            link: n.link,
-            publishedAt:
-              n.publishedAt !== null ? new Date(n.publishedAt) : null,
-            thumbnail: n.thumbnail,
-          }));
-        if (toInsert.length > 0) {
-          await db.insert(investmentNews).values(toInsert);
-        }
-      }
-      // Sentinel-bump: even if nothing new came back, touch the
-      // newest cached row so we don't refetch on every request when
-      // Yahoo has nothing. Do this only when we have a prior row.
-      if (newest && fresh.length === 0) {
-        await db
-          .update(investmentNews)
-          .set({ fetchedAt: new Date() })
-          .where(
-            and(
-              eq(investmentNews.symbol, symbol),
-              eq(investmentNews.fetchedAt, newest.fetchedAt),
-            ),
-          );
-      }
-    } catch {
-      // Upstream failure → fall back to whatever's in the cache.
+    // Fetch BOTH sources in parallel. `allSettled` so a failure in
+    // one (Yahoo's flaky search endpoint OR a Brave 429/5xx) leaves
+    // the other source to still feed the panel. Brave gracefully
+    // returns `[]` when the API key is missing — installs without
+    // a key keep working on Yahoo alone, matching the
+    // pre-0.222 behaviour.
+    const [yahooResult, braveResult] = await Promise.allSettled([
+      getNews(symbol, companyName),
+      searchInvestmentNews(symbol, companyName),
+    ]);
+
+    const fresh: NewsItem[] = [];
+    if (yahooResult.status === "fulfilled") {
+      fresh.push(...yahooResult.value);
+    } else {
+      console.error(
+        `[news] Yahoo fetch failed for ${symbol}:`,
+        yahooResult.reason,
+      );
+    }
+    if (braveResult.status === "fulfilled") {
+      fresh.push(...braveResult.value);
+    } else {
+      console.error(
+        `[news] Brave fetch failed for ${symbol}:`,
+        braveResult.reason,
+      );
+    }
+    // If BOTH upstreams failed entirely we mark the response stale.
+    if (
+      yahooResult.status === "rejected" &&
+      braveResult.status === "rejected"
+    ) {
       stale = true;
+    }
+
+    // Dedup-insert: only insert items whose (symbol, uuid) pair
+    // isn't already cached. Bumping `fetched_at` on existing rows
+    // keeps the staleness check honest even when nothing new
+    // appeared upstream.
+    if (fresh.length > 0) {
+      const existing = await db
+        .select({ uuid: investmentNews.uuid })
+        .from(investmentNews)
+        .where(eq(investmentNews.symbol, symbol));
+      const have = new Set(existing.map((e) => e.uuid));
+      const toInsert = fresh
+        .filter((n) => !have.has(n.uuid))
+        .map((n) => ({
+          symbol,
+          uuid: n.uuid,
+          title: n.title,
+          publisher: n.publisher,
+          link: n.link,
+          publishedAt:
+            n.publishedAt !== null ? new Date(n.publishedAt) : null,
+          thumbnail: n.thumbnail,
+          source: n.source,
+          description: n.description,
+        }));
+      if (toInsert.length > 0) {
+        await db.insert(investmentNews).values(toInsert);
+      }
+    }
+    // Sentinel-bump: even if nothing new came back, touch the
+    // newest cached row so we don't refetch on every request when
+    // both upstreams have nothing. Do this only when we have a
+    // prior row.
+    if (newest && fresh.length === 0) {
+      await db
+        .update(investmentNews)
+        .set({ fetchedAt: new Date() })
+        .where(
+          and(
+            eq(investmentNews.symbol, symbol),
+            eq(investmentNews.fetchedAt, newest.fetchedAt),
+          ),
+        );
     }
   }
 
@@ -113,6 +148,8 @@ export const GET = withAuthAndId(async (id, request) => {
       publishedAt: investmentNews.publishedAt,
       thumbnail: investmentNews.thumbnail,
       fetchedAt: investmentNews.fetchedAt,
+      source: investmentNews.source,
+      description: investmentNews.description,
     })
     .from(investmentNews)
     .where(eq(investmentNews.symbol, symbol))
@@ -132,6 +169,8 @@ export const GET = withAuthAndId(async (id, request) => {
       link: c.link,
       publishedAt: c.publishedAt?.getTime() ?? null,
       thumbnail: c.thumbnail,
+      source: c.source,
+      description: c.description,
     })),
     fetchedAt: newestFetch || null,
     stale,

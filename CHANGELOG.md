@@ -9,6 +9,42 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.218.0 — 2026-05-21
+
+### Fixed
+- **DELETE / PATCH on `/api/databases/[id]` was unreachable for
+  any non-UUID profile id.** Both endpoints used
+  `withAdminAuthAndId`, whose route-guard parses the `[id]`
+  segment as a UUID. But profile IDs are short hex strings
+  (`/^[a-z0-9][a-z0-9-]{0,39}$/`) — every request was returning
+  `400 {"error":"Invalid id"}` before reaching the handler.
+  Effect: Settings → Database files "Delete" button silently
+  failed; ditto the rename. Discovered by the new
+  `multiDbSwitcher` monkey goal's cleanup leg.
+  Added `withAdminAuthAndProfileId` (validates against
+  `isValidProfileId`'s regex inline to keep route-guards' module
+  graph minimal) and switched both endpoints to use it.
+
+### Added
+- **`multiDbSwitcher` smart-monkey goal** — drives the sidebar
+  database-switcher dropdown end-to-end. Closes the
+  "Create / switch / unlock-the-new-one round-trip" entry in the
+  Multi-DB TODO gap. Five legs:
+  1. Click switcher trigger → dropdown opens.
+  2. Click "Create new database…" menu item → dialog opens.
+     **This is the regression catch point for the 2026-05-17
+     `onSelect` vs `onClick` bug** — Base UI's `Menu.Item` fires
+     `onClick` (not Radix's `onSelect`); using the wrong prop
+     made the menu items silent no-ops.
+  3. Fill label + passphrase + confirm → Create → server
+     auto-switches + auto-unlocks → /dashboard.
+  4. API verify: GET /api/databases shows new profile as active.
+  5. Click switcher → Default entry → /unlock → drive unlock
+     form with default passphrase → back on default profile.
+  Cleanup wraps in `try/finally` so a partial-fail still
+  attempts the DELETE → no orphan profile leaks across runs.
+  AppMap schema bumped 4 → 5.
+
 ## 0.217.0 — 2026-05-21
 
 ### Added

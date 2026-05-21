@@ -1509,6 +1509,240 @@ test.describe("smart monkey: goal-driven crawl", () => {
       }
     }
   });
+
+  /** Multi-DB switcher round-trip via the sidebar dropdown.
+   *
+   * Catches the regression class that bit 0.142 → 0.144: shadcn
+   * DropdownMenuItem wraps `@base-ui/react/menu` which fires
+   * `onClick` (NOT `onSelect` — the Radix idiom from copy-paste).
+   * Using `onSelect` made the switcher's menu items silent no-ops
+   * for two releases. This test clicks the menu items via the UI
+   * — an API-only equivalent would miss the same bug.
+   *
+   * Five UI/API legs (wrapped in `try/finally` so a partial-fail
+   * still attempts cleanup):
+   *   1. Click switcher trigger → dropdown opens (presence of
+   *      "Create new database…" entry confirms).
+   *   2. Click "Create new database…" menu item → dialog opens.
+   *      THIS is the regression catch point — if onSelect/onClick
+   *      is back, the click is silent and the dialog never opens.
+   *   3. Fill label + passphrase + confirm passphrase → Create.
+   *      API auto-switches active profile + auto-unlocks → router
+   *      lands on /dashboard.
+   *   4. API verify: GET /api/databases shows the new profile as
+   *      active.
+   *   5. Click switcher trigger again → dropdown opens → click
+   *      "Default" entry → POST /api/databases/switch → /unlock.
+   *      Drive the unlock form, confirm we land back on the
+   *      default profile. */
+  test("goal: multi-DB switcher round-trip", async ({ page }) => {
+    test.setTimeout(90_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    const TEST_LABEL = `MD-${RUN_TOKEN.slice(-8)}`;
+    const TEST_PASSPHRASE =
+      "test-multi-db-passphrase-1234567890";
+    const DEFAULT_PASSPHRASE =
+      process.env.E2E_SQLITE_KEY ??
+      "0000000000000000000000000000000000000000000000000000000000000000";
+
+    let createdProfileId: string | null = null;
+
+    try {
+      // Confirm we start on the default profile.
+      const beforeRes = await request.get("/api/databases");
+      if (!beforeRes.ok()) {
+        await recordFinding({
+          page: "/dashboard",
+          action: `goal "multiDbSwitcher" — precondition`,
+          severity: "warn",
+          kind: "issue",
+          message: `GET /api/databases → ${beforeRes.status()} before test.`,
+        });
+        runCounters.findingsCount += 1;
+        recordGoalAttempt(appMap, "multiDbSwitcher", null);
+        return;
+      }
+      const before = (await beforeRes.json()) as {
+        activeProfileId: string;
+        profiles: Array<{ id: string; label: string }>;
+      };
+
+      await page.goto("/dashboard");
+      await page
+        .waitForLoadState("domcontentloaded", { timeout: 8_000 })
+        .catch(() => {});
+      await page.waitForTimeout(400);
+
+      // Leg 1 + 2: open dropdown, click "Create new database…".
+      // The trigger is the sidebar pill with title="Active database…".
+      const trigger = page.locator(
+        'button[title^="Active database"]',
+      );
+      await expect(trigger).toBeVisible({ timeout: 5_000 });
+      await trigger.click();
+      const createMenuItem = page.getByText("Create new database…");
+      await expect(createMenuItem).toBeVisible({ timeout: 3_000 });
+      await createMenuItem.click();
+
+      // Leg 3: fill dialog + Create. The dialog has Label,
+      // Passphrase, Confirm passphrase + a Create button.
+      const dialog = page.getByRole("dialog").last();
+      await expect(
+        dialog,
+        "Create-database dialog should open when the menu item fires (catches onSelect/onClick regression)",
+      ).toBeVisible({ timeout: 3_000 });
+      const labelInput = dialog.locator('input').first();
+      await labelInput.fill(TEST_LABEL);
+      const passInputs = dialog.locator('input[type="password"]');
+      await passInputs.first().fill(TEST_PASSPHRASE);
+      await passInputs.nth(1).fill(TEST_PASSPHRASE);
+      const [createRes] = await Promise.all([
+        page.waitForResponse(
+          (r) =>
+            r.url().endsWith("/api/databases") &&
+            r.request().method() === "POST",
+        ),
+        dialog.getByRole("button", { name: /^create/i }).click(),
+      ]);
+      const createOk = createRes.ok();
+      if (createOk) {
+        const body = (await createRes.json().catch(() => ({}))) as {
+          profile?: { id?: string };
+          id?: string;
+        };
+        createdProfileId = body.profile?.id ?? body.id ?? null;
+      }
+
+      // Leg 4: GET /api/databases should now show our new profile
+      // as active (the server auto-switches on create).
+      const afterCreateRes = await request.get("/api/databases");
+      const afterCreate = afterCreateRes.ok()
+        ? ((await afterCreateRes.json()) as {
+            activeProfileId: string;
+            profiles: Array<{ id: string; label: string }>;
+          })
+        : null;
+      const createdActive =
+        afterCreate !== null &&
+        afterCreate.profiles.some(
+          (p) => p.label === TEST_LABEL && p.id === afterCreate.activeProfileId,
+        );
+      if (!createdProfileId && afterCreate) {
+        createdProfileId =
+          afterCreate.profiles.find((p) => p.label === TEST_LABEL)?.id ?? null;
+      }
+      await recordFinding({
+        page: "/dashboard",
+        action: `goal "multiDbSwitcher" — create + auto-switch`,
+        severity: createOk && createdActive ? "info" : "error",
+        kind: createOk && createdActive ? "verified" : "issue",
+        message: `POST /api/databases → ${createRes.status()}; new profile "${TEST_LABEL}" is${createdActive ? "" : " NOT"} the active one.`,
+      });
+      runCounters.findingsCount += 1;
+
+      // Leg 5: switch back to Default via the dropdown.
+      // The new profile auto-unlocked us; we should be authenticated
+      // against it. Re-sign-in is not needed for the switcher action
+      // itself (the POST /api/databases/switch is public per the
+      // route comment).
+      await page.goto("/dashboard");
+      await page
+        .waitForLoadState("domcontentloaded", { timeout: 8_000 })
+        .catch(() => {});
+      await page.waitForTimeout(400);
+
+      const triggerAgain = page.locator(
+        'button[title^="Active database"]',
+      );
+      await expect(triggerAgain).toBeVisible({ timeout: 5_000 });
+      await triggerAgain.click();
+      // Find the Default entry in the dropdown — it lives on
+      // before.profiles[0] (the first registered profile, label
+      // "Default"). Use the visible-text match.
+      const defaultEntry = page.getByText("Default", { exact: true });
+      await expect(defaultEntry).toBeVisible({ timeout: 3_000 });
+      await defaultEntry.click();
+
+      // Switch triggers POST /api/databases/switch which returns
+      // { redirect: "/unlock" }; the client navigates there.
+      await page.waitForURL((u) => u.pathname === "/unlock", {
+        timeout: 8_000,
+      });
+
+      // Drive the unlock form with the default passphrase.
+      await page.fill('input#passphrase', DEFAULT_PASSPHRASE);
+      await Promise.all([
+        page.waitForURL((u) => u.pathname !== "/unlock", {
+          timeout: 8_000,
+        }),
+        page.locator('button[type="submit"]:visible').first().click(),
+      ]);
+
+      // API verify: default is active again.
+      const finalRes = await request.get("/api/databases");
+      const final = finalRes.ok()
+        ? ((await finalRes.json()) as { activeProfileId: string })
+        : null;
+      const switchedBack =
+        final !== null && final.activeProfileId === before.activeProfileId;
+      await recordFinding({
+        page: "/unlock",
+        action: `goal "multiDbSwitcher" — switch back to Default`,
+        severity: switchedBack ? "info" : "error",
+        kind: switchedBack ? "verified" : "issue",
+        message: `After switch+unlock, activeProfileId=${final?.activeProfileId ?? "n/a"} (expected ${before.activeProfileId}).`,
+      });
+      runCounters.findingsCount += 1;
+
+      const allOK = createOk && createdActive && switchedBack;
+      if (allOK) {
+        recordGoalAttempt(appMap, "multiDbSwitcher", {
+          timestamp: new Date().toISOString(),
+          route: "/dashboard",
+          triggerLabel: "Switcher → Create new database…",
+          fillSpec: { label: TEST_LABEL, passphrase: "(test-fixture)" },
+          submitLabel: "Create + switch back to Default",
+          verified: "dom",
+        });
+        runCounters.goalsAchieved += 1;
+      } else {
+        recordGoalAttempt(appMap, "multiDbSwitcher", null);
+      }
+    } finally {
+      // Cleanup: delete the test profile so its file + backup
+      // subdir don't leak into the next run's data dir. The DELETE
+      // route only allows non-active profiles, so this requires us
+      // to have switched back to default first. The leg-5 unlock
+      // landed us back on default; if that failed we can still
+      // attempt the API switch as a fallback.
+      if (createdProfileId) {
+        // Best-effort: ensure we're not on the test profile.
+        await request
+          .post("/api/databases/switch", {
+            data: { id: "default" },
+          })
+          .catch(() => {});
+        const delRes = await request
+          .delete(`/api/databases/${encodeURIComponent(createdProfileId)}`)
+          .catch(() => null);
+        if (!delRes || !delRes.ok()) {
+          const body = delRes
+            ? await delRes.text().catch(() => "")
+            : "(no response)";
+          await recordFinding({
+            page: "/settings",
+            action: `goal "multiDbSwitcher" — cleanup`,
+            severity: "warn",
+            kind: "issue",
+            message: `Failed to DELETE test profile ${createdProfileId}: ${delRes?.status() ?? "no response"} ${body.slice(0, 200)}. The profile + its file will leak into the next test run.`,
+          });
+          runCounters.findingsCount += 1;
+        }
+      }
+    }
+  });
 });
 
 /** Locate an "Add" / "New" / "Create" trigger button on the

@@ -10,7 +10,7 @@ import {
   renameProfile,
 } from "@/lib/db-profiles";
 import { backupDirForProfile } from "@/lib/backup/sqlite-backup";
-import { withAdminAuthAndId } from "@/lib/api/route-guards";
+import { withAdminAuthAndProfileId } from "@/lib/api/route-guards";
 import { badRequest, parseJsonBody } from "@/lib/api/parse-body";
 
 const patchSchema = z.object({
@@ -24,7 +24,7 @@ const patchSchema = z.object({
  *  re-labelling profiles. Filename / id are immutable post-create
  *  (the on-disk file is named after the id; renaming the file
  *  would orphan backups). */
-export const PATCH = withAdminAuthAndId(async (id, request) => {
+export const PATCH = withAdminAuthAndProfileId(async (id, request) => {
   if (!isValidProfileId(id)) {
     return NextResponse.json(
       { error: "Invalid profile id" },
@@ -56,7 +56,7 @@ export const PATCH = withAdminAuthAndId(async (id, request) => {
  *  Admin-only. Server-side guards: the active profile is rejected
  *  (caller must switch first); the last remaining profile is
  *  rejected (the app needs at least one DB to talk to). */
-export const DELETE = withAdminAuthAndId(async (id, request) => {
+export const DELETE = withAdminAuthAndProfileId(async (id, request) => {
   if (!isValidProfileId(id)) {
     return NextResponse.json(
       { error: "Invalid profile id" },

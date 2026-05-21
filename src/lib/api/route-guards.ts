@@ -116,3 +116,37 @@ export function withAdminAuthAndId(
     },
   );
 }
+
+/** Admin-gated variant for routes whose `[id]` segment is a
+ *  short profile id (`isValidProfileId` regex —
+ *  `/^[a-z0-9][a-z0-9-]{0,39}$/`) rather than a UUID. Routes
+ *  under `/api/databases/[id]/...` need this — pre-0.218 they
+ *  used `withAdminAuthAndId` which always rejected short ids
+ *  as "Invalid id" (so DELETE on any non-default profile was
+ *  unreachable, even from the Settings UI).
+ *
+ *  Light-weight regex inline rather than importing
+ *  `isValidProfileId` from db-profiles, because route-guards is
+ *  imported by many api/ routes and we want to keep its module
+ *  graph minimal. The regex is duplicated; the same shape is
+ *  guarded in db-profiles too. */
+const PROFILE_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+export function withAdminAuthAndProfileId(
+  handler: (
+    id: string,
+    request: Request,
+  ) => Promise<NextResponse> | NextResponse,
+) {
+  return withAdminAuth<{ params: Promise<{ id: string }> }>(
+    async (request, ctx) => {
+      const { id: rawId } = await ctx.params;
+      if (typeof rawId !== "string" || !PROFILE_ID_RE.test(rawId)) {
+        return NextResponse.json(
+          { error: "Invalid profile id" },
+          { status: 400 },
+        );
+      }
+      return handler(rawId, request);
+    },
+  );
+}

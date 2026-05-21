@@ -52,7 +52,7 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T10:40:19.612Z · 0 issues, 0 questions, 0 verified._
+_Last run: 2026-05-21T11:17:31.367Z · 0 issues, 0 questions, 0 verified._
 
 #### Smart Monkey expert system
 
@@ -61,8 +61,8 @@ _Last run: 2026-05-21T10:40:19.612Z · 0 issues, 0 questions, 0 verified._
 | `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
 | `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
 | `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `addTenToCategory` | ✅ | 3 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
-| `scheduleOnCalendar` | ✅ | 3 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
+| `addTenToCategory` | ✅ | 4 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
+| `scheduleOnCalendar` | ✅ | 4 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
 
 _Coverage: 10 routes mapped, 330 interactive controls catalogued, 82 in-app links discovered._
 
@@ -70,19 +70,19 @@ _Coverage: 10 routes mapped, 330 interactive controls catalogued, 82 in-app link
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 119.0s |
-| Routes visited | 10 |
+| Total wall time | 163.9s |
+| Routes visited | 9 |
 | Button clicks | 170 |
 | Switch toggles | 11 |
 | Select cycles | 7 |
 | Text inputs filled | 8 |
 | Dialogs opened | 39 |
 | Form submits | 3 |
-| Links discovered | 109 |
-| Console errors | 0 |
+| Links discovered | 0 |
+| Console errors | 1 |
 | Goals attempted | 0 |
 | Goals achieved | 0 |
-| Findings logged | 2 |
+| Findings logged | 3 |
 
 ##### Workflows completed
 - ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)

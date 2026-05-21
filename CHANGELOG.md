@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.206.0 — 2026-05-21
+
+### Changed
+- **`docker:release` now explains why it skipped buildx.** When
+  the script falls back to the single-arch path the runtime
+  line used to read `runtime  docker` with no hint about
+  which branch fired — `--single-arch` flag? podman? missing
+  `docker-buildx-plugin`? The next operator had to read the
+  source to find out. The `buildxAvailable()` probe is now a
+  `resolveBuildxMode()` resolver that returns the reason
+  alongside the boolean; the runtime line surfaces it as
+  `runtime  docker  (single-arch — docker buildx not available
+  (install docker-buildx-plugin))`. Saves a `--debug` chase
+  when an unattended release lands on the wrong path.
+
 ## 0.205.0 — 2026-05-21
 
 ### Fixed

@@ -31,12 +31,6 @@ up for "next session" into the top section.
   `Input.dispatchDragEvent` or move to non-headless
   chromium. Coverage gap acknowledged in the spec comments.
 
-- **`docker-release.mjs` fallback-reason logging.** When
-  `useBuildx` is false the script just prints `runtime  docker`
-  without saying _why_ buildx wasn't used (no buildx? podman?
-  `--single-arch` flag?). A one-line reason field would save
-  the next operator a `--debug` chase. Tiny tweak.
-
 ### Deferred (each its own release)
 
 - **eslint 9 → 10.** Major bump; config schema changes,
@@ -58,7 +52,7 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T08:21:31.694Z · 6 issues, 7 questions._
+_Last run: 2026-05-21T09:00:36.647Z · 0 issues, 6 questions._
 
 #### Smart Monkey expert system
 
@@ -66,9 +60,9 @@ _Last run: 2026-05-21T08:21:31.694Z · 6 issues, 7 questions._
 | --- | --- | --- | --- |
 | `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
 | `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `createSchedule` | ❌ | 1 | _(not yet)_ |
-| `addTenToCategory` | ❌ | 1 | _(not yet)_ |
-| `scheduleOnCalendar` | ✅ | 1 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
+| `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
+| `addTenToCategory` | ✅ | 2 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
+| `scheduleOnCalendar` | ✅ | 2 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
 
 _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
@@ -76,25 +70,25 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 30.6s |
+| Total wall time | 1378.3s |
 | Routes visited | 3 |
-| Button clicks | 7 |
+| Button clicks | 0 |
 | Switch toggles | 0 |
 | Select cycles | 0 |
-| Text inputs filled | 17 |
-| Dialogs opened | 3 |
-| Form submits | 13 |
+| Text inputs filled | 0 |
+| Dialogs opened | 0 |
+| Form submits | 11 |
 | Links discovered | 0 |
 | Console errors | 0 |
 | Goals attempted | 5 |
-| Goals achieved | 3 |
-| Findings logged | 8 |
+| Goals achieved | 2 |
+| Findings logged | 6 |
 
 ##### Workflows completed
 - ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
 - ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ❌ `createSchedule` — _(not yet completed)_
-- ❌ `addTenToCategory` — _(not yet completed)_
+- ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
+- ✅ `addTenToCategory` — `/transactions` · click **POST /api/transactions × 10** → fill → click **POST /api/transactions** (verified via api)
 - ✅ `scheduleOnCalendar` — `/calendar` · click **POST /api/scheduled** → fill → click **POST /api/scheduled** (verified via dom)
 
 #### Vitest summary
@@ -103,34 +97,23 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 ✅ **353 passed** across 38 files (13.3s).
 
-#### Issues
-
-##### /reports
-- 🔴 **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=20 (expected 10), |total|=500 (expected 250.00).
-
-##### /scheduled
-- 🟡 **guardrail probe: dayOfMonth=42 (exceeds zod max 31)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"dayOfMonth","message":"Too big: expected number to be <=31","code":"too_big"}]}
-- 🟡 **guardrail probe: type=transfer w/ no transferToAccountId** — → 400 ❌ {"error":"transferToAccountId is required when type=transfer","issues":[{"path":"transferToAccountId","message":"transferToAccountId is required when type=transfer","code":"cross_field"}]}
-- 🟡 **guardrail probe: amount with letter (regex violation)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"amount","message":"must be a numeric string","code":"invalid_format"}]}
-- 🟡 **goal "create a schedule" — submit "Create" disabled** — Form submit was disabled after filling 8 fields + 3 pickers. Visible labels: Account *, Account▼, Type *, expense▼, Category, Payee, Every, Frequency *, once▼, Dates *, Amount *, Range.
-- 🟡 **goal "create a schedule"** — Could not complete the "create a schedule" goal across 1 candidate route(s). Smart monkey will retry next run.
-
 #### Questions for review
 
 _The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
 
 ##### /calendar
-- ❓ **goal "scheduleOnCalendar" — verify /calendar DOM** — DOM on /calendar contained the token "monkey-goal-mpf81ckr-cal-sched". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).
+- ❓ **goal "scheduleOnCalendar" — verify /calendar DOM** — DOM on /calendar contained the token "monkey-goal-mpf9fy6a-cal-sched". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).
+
+##### /reports
+- ❓ **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=10 (expected 10), |total|=250 (expected 250.00).
 
 ##### /scheduled
-- ❓ **guardrail probe: baseline (Account + defaults)** — → 201 ✅ accepted (cleaned up)
-- ❓ **guardrail probe: frequency=once w/ no endDate** — → 201 ✅ accepted (cleaned up)
-- ❓ **goal "scheduleOnCalendar" — verify API list** — GET /api/scheduled found a row with payee "monkey-goal-mpf81ckr-cal-sched".
-- ❓ **goal "scheduleOnCalendar" — verify /scheduled DOM** — DOM on /scheduled contained the token "monkey-goal-mpf81ckr-cal-sched".
+- ❓ **goal "scheduleOnCalendar" — verify API list** — GET /api/scheduled found a row with payee "monkey-goal-mpf9fy6a-cal-sched".
+- ❓ **goal "scheduleOnCalendar" — verify /scheduled DOM** — DOM on /scheduled contained the token "monkey-goal-mpf9fy6a-cal-sched".
 
 ##### /transactions
-- ❓ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpf81ckr-bulk-*".
-- ❓ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpf81ckr-bulk-".
+- ❓ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpf9fy6a-bulk-*".
+- ❓ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpf9fy6a-bulk-".
 
 <!-- monkey:end -->
 
@@ -284,6 +267,14 @@ X then verify X appears" flow below sits in this blind spot._
 ## Done / dropped
 
 ### 2026-05-21
+
+- **`docker:release` fallback-reason logging (0.206.0).**
+  When `useBuildx` is false the script now appends the reason
+  to the runtime line — `(single-arch — --single-arch flag set)`
+  / `(single-arch — podman has no buildx integration)` /
+  `(single-arch — docker buildx not available (install
+  docker-buildx-plugin))`. Verified all three branches via
+  `--dry-run`.
 
 - **`useDisplayPrefs` fetcher restoration (0.205.0).** The
   0.190.0 `useSwrJson<T>` migration accidentally collapsed

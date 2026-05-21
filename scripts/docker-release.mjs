@@ -152,21 +152,30 @@ const latestTag = `${FQN}:latest`;
 /** Multi-arch builds need `docker buildx` (or `podman` ≥ 4 with
  * the buildx-shim — not yet exercised here). Probe once and gate
  * the multi-arch path on the result. `--single-arch` forces the
- * legacy single-arch path even when buildx is available. */
-function buildxAvailable() {
-  if (runtimeName !== "docker") return false;
-  const probe = spawnSync("docker", ["buildx", "version"], {
-    stdio: "ignore",
-  });
-  return probe.status === 0;
+ * legacy single-arch path even when buildx is available.
+ *
+ * Returns `{ useBuildx, fallbackReason }` so the operator can see
+ * exactly why the multi-arch path was skipped (otherwise the
+ * runtime line just says `docker` and you have to grep this file
+ * to find out which branch fired). */
+function resolveBuildxMode() {
+  if (singleArch) return { useBuildx: false, fallbackReason: "--single-arch flag set" };
+  if (runtimeName !== "docker") {
+    return { useBuildx: false, fallbackReason: `${runtimeName} has no buildx integration` };
+  }
+  const probe = spawnSync("docker", ["buildx", "version"], { stdio: "ignore" });
+  if (probe.status !== 0) {
+    return { useBuildx: false, fallbackReason: "docker buildx not available (install docker-buildx-plugin)" };
+  }
+  return { useBuildx: true, fallbackReason: null };
 }
 
-const useBuildx = !singleArch && buildxAvailable();
+const { useBuildx, fallbackReason } = resolveBuildxMode();
 const platforms = useBuildx ? PLATFORMS : "(host arch)";
 
 const rtLabel = runtimeName ?? "(no runtime)";
 console.log(`\n▶ Releasing budgets${dryRun ? "  (dry-run)" : ""}`);
-console.log(`  runtime  ${rtLabel}${useBuildx ? "  (buildx)" : ""}`);
+console.log(`  runtime  ${rtLabel}${useBuildx ? "  (buildx)" : `  (single-arch — ${fallbackReason})`}`);
 console.log(`  arches   ${platforms}`);
 console.log(`  version  ${version}`);
 console.log(`  sha      ${sha}${dirty ? "  (dirty — only because --allow-dirty)" : ""}`);

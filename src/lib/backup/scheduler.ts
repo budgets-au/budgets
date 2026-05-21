@@ -20,6 +20,7 @@
  * unlocked yet.
  */
 import { isUnlocked } from "@/db";
+import type { BackupSchedule } from "@/db/schema";
 import {
   readSchedule,
   takeBackup,
@@ -28,6 +29,21 @@ import {
 
 const TICK_MS = 60_000;
 const MS_PER_DAY = 86_400_000;
+
+/** Pure cadence decision: should the scheduler fire a backup now? Extracted
+ * from `tick()` so the branches are unit-testable without the singleton
+ * timer + DB layer. The caller still owns the side-effects (firing the
+ * backup, writing `lastRunAt`). */
+export function shouldFireBackup(
+  cfg: BackupSchedule,
+  nowMs: number,
+): boolean {
+  if (!cfg.enabled) return false;
+  const intervalMs = Math.max(0, cfg.intervalDays) * MS_PER_DAY;
+  if (intervalMs === 0) return false;
+  const last = cfg.lastRunAt ? new Date(cfg.lastRunAt).getTime() : 0;
+  return nowMs - last >= intervalMs;
+}
 
 interface SchedulerHandle {
   timer: NodeJS.Timeout;
@@ -68,14 +84,8 @@ function tick(): void {
     console.error("[backup-scheduler] Failed to read schedule:", e);
     return;
   }
-  if (!cfg.enabled) return;
-
-  const intervalMs = Math.max(0, cfg.intervalDays) * MS_PER_DAY;
-  if (intervalMs === 0) return;
-
-  const last = cfg.lastRunAt ? new Date(cfg.lastRunAt).getTime() : 0;
   const now = Date.now();
-  if (now - last < intervalMs) return;
+  if (!shouldFireBackup(cfg, now)) return;
 
   // Fire-and-forget; the next tick recovers naturally if takeBackup
   // throws (we don't update lastRunAt unless it succeeded).

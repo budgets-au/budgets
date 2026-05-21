@@ -9,6 +9,36 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.209.0 — 2026-05-21
+
+### Added
+- **Backup-scheduler cadence decision is now unit-tested.** Extracted
+  `shouldFireBackup(cfg, nowMs)` from the singleton `tick()` in
+  `src/lib/backup/scheduler.ts` so the cadence branches (disabled,
+  intervalDays=0, lastRunAt=null first-fire, just-fired, on the
+  boundary, weekly 6-vs-7-day) can be exercised without spinning up
+  the 60s timer + DB layer. 8 new tests in `scheduler.test.ts`. Closes
+  the "Scheduled-backup cron actually fires" gap from TODO.
+- **Backup-retention pruning is now unit-tested.** Extracted
+  `backupsToPrune(list, retain)` from `sweepRetention()` in
+  `src/lib/backup/sqlite-backup.ts` — pure decision returning the
+  scheduled-only subset past the retain cap (newest-first sort
+  applied internally). 8 new tests covering: nothing-scheduled,
+  at-cap, over-cap, mixed types (manual + pre-restore stay sticky),
+  unsorted input, retain=0 (prune all), fractional + negative retain
+  (defensive clamping). Pins the retention behaviour against future
+  refactors.
+- **Wrong-passphrase rejection on `/api/backup/restore` now has e2e
+  coverage** (`tests/e2e/backup-restore.spec.ts`). Verifies the
+  restore route returns 401 + leaves the live DB untouched + leaves
+  the snapshot file on disk when the operator fat-fingers the
+  passphrase. The `verifyBackup` integrity check runs BEFORE
+  `swapLive()`, so a typo can't corrupt the household ledger — this
+  test pins that ordering.
+
+Tests: 364 → 380 vitest cases. Backup/restore e2e: 1 → 2 (happy-path
+round-trip + the new wrong-passphrase rejection).
+
 ## 0.208.0 — 2026-05-21
 
 ### Changed

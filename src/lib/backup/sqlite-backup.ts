@@ -400,18 +400,33 @@ export function deleteBackup(filename: string): void {
   if (existsSync(meta)) rmSync(meta);
 }
 
+/** Pure retention decision: from a list of backups + retain count,
+ * return the subset that should be pruned. Only `scheduled` backups
+ * are eligible — manual + pre-restore types are sticky. Caller passes
+ * the full list (any order); the function sorts newest-first and
+ * returns everything past the `retain` cap. Extracted so the decision
+ * is unit-testable without a tmpdir + fs writes. */
+export function backupsToPrune(
+  backups: BackupEntry[],
+  retain: number,
+): BackupEntry[] {
+  const cap = Math.max(0, Math.floor(retain));
+  const scheduledNewestFirst = backups
+    .filter((b) => b.type === "scheduled")
+    .toSorted((a, b) => (a.mtime < b.mtime ? 1 : a.mtime > b.mtime ? -1 : 0));
+  return scheduledNewestFirst.slice(cap);
+}
+
 /** Drop scheduled backups beyond `retain` count. Called after each
  * scheduled backup completes; a no-op for manual + pre-restore types.
  * Reads the current retention setting from app_settings on every call
  * so config changes apply on the next sweep without restarting. */
 export function sweepRetention(): void {
   const cfg = readSchedule();
-  const retain = Math.max(0, Math.floor(cfg.retain ?? 0));
-  const scheduledNewestFirst = listBackups().filter((b) => b.type === "scheduled");
-  if (scheduledNewestFirst.length <= retain) return;
-  for (const stale of scheduledNewestFirst.slice(retain)) {
+  const stale = backupsToPrune(listBackups(), cfg.retain ?? 0);
+  for (const entry of stale) {
     try {
-      rmSync(join(backupDir(), stale.filename));
+      rmSync(join(backupDir(), entry.filename));
     } catch {
       // Sweep is best-effort — a locked file or permission glitch
       // shouldn't propagate up and abort the schedule loop.

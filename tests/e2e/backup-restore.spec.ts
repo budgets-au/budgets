@@ -159,4 +159,74 @@ test.describe("disaster recovery: backup → modify → restore", () => {
       "the consumed snapshot should be gone from the backups dir (swapLive renames it INTO the live path)",
     ).toBe(false);
   });
+
+  /** Wrong-passphrase rejection. The restore route runs `verifyBackup`
+   * (a SQLCipher open + PRAGMA cipher_integrity_check) BEFORE
+   * swapLive() touches the live DB, so a typo on the operator's part
+   * must surface as a 401 with the live DB untouched. A regression in
+   * that ordering would mean a fat-fingered restore could nuke the
+   * household ledger with a corrupt or wrong-key file. */
+  test("wrong passphrase is rejected with 401 and leaves the live DB untouched", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await signInAsAdmin(page);
+    const request = page.context().request;
+
+    // Snapshot the live state so we can prove nothing moved after the
+    // failed restore attempt.
+    const beforeRes = await request.get("/api/transactions?limit=1000");
+    expect(beforeRes.ok()).toBeTruthy();
+    const before = (await beforeRes.json()) as Array<{ id: string }>;
+    const beforeCount = before.length;
+
+    // Take a snapshot to attempt restoring with a wrong passphrase
+    // against. (We don't actually need this file's content to be
+    // SQLCipher-correct — verifyBackup just needs SOMETHING to
+    // attempt opening with the bad key.)
+    const backupRes = await request.post("/api/backup");
+    expect(backupRes.ok()).toBeTruthy();
+    const backupBody = (await backupRes.json()) as {
+      entry: { filename: string };
+    };
+    const snapshotFilename = backupBody.entry.filename;
+
+    // Attempt restore with a wrong-but-valid-looking passphrase.
+    // verifyBackup() opens the snapshot file with this key and runs
+    // a cipher integrity check — the wrong key produces gibberish
+    // bytes, integrity_check fails, the route returns 401.
+    const restoreRes = await request.post("/api/backup/restore", {
+      data: {
+        filename: snapshotFilename,
+        passphrase:
+          "0badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbad",
+      },
+    });
+    expect(restoreRes.status()).toBe(401);
+    const restoreBody = (await restoreRes.json()) as {
+      ok: boolean;
+      error?: string;
+    };
+    expect(restoreBody.ok).toBe(false);
+
+    // The live DB should be unchanged — we can still read it without
+    // re-unlocking, and the row count matches the pre-attempt
+    // snapshot. (A bug that swapped BEFORE verifying would have
+    // left the connection closed or the file replaced.)
+    const afterRes = await request.get("/api/transactions?limit=1000");
+    expect(afterRes.ok()).toBeTruthy();
+    const after = (await afterRes.json()) as Array<{ id: string }>;
+    expect(after.length).toBe(beforeCount);
+
+    // The snapshot we took above should STILL be on disk — a failed
+    // restore must not consume the snapshot file.
+    const listRes = await request.get("/api/backup");
+    const listBody = (await listRes.json()) as {
+      backups: Array<{ filename: string }>;
+    };
+    expect(
+      listBody.backups.some((b) => b.filename === snapshotFilename),
+      "snapshot must survive a failed restore attempt",
+    ).toBe(true);
+  });
 });

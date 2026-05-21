@@ -10,7 +10,7 @@ up for "next session" into the top section.
 
 ## Up next
 
-### 0.206.0 candidates
+### Next up
 
 - **`monkey-goals` create-{transaction,schedule,budget} tests
   time out at 2 min post-submit.** Trace shows the `Add` /
@@ -52,7 +52,7 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T09:37:47.631Z · 0 issues, 2 questions, 6 verified._
+_Last run: 2026-05-21T10:30:54.912Z · 0 issues, 0 questions, 0 verified._
 
 #### Smart Monkey expert system
 
@@ -97,33 +97,7 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 ✅ **353 passed** across 38 files (13.3s).
 
-#### Questions for review
-
-_The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
-
-##### /settings
-- ❓ **submit "Create"** — Filled 3 inputs and clicked **Create** — no network call, toast, or navigation fired. Should it have?
-
-##### /superannuation
-- ❓ **submit "Save"** — Filled 3 inputs and clicked **Save** — no network call, toast, or navigation fired. Should it have?
-
-#### Verified
-
-_Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
-
-##### /calendar
-- ✅ **goal "scheduleOnCalendar" — verify /calendar DOM** — DOM on /calendar contained the token "monkey-goal-mpfalgmq-cal-sched". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).
-
-##### /reports
-- ✅ **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=10 (expected 10), |total|=250 (expected 250.00).
-
-##### /scheduled
-- ✅ **goal "scheduleOnCalendar" — verify API list** — GET /api/scheduled found a row with payee "monkey-goal-mpfalgmq-cal-sched".
-- ✅ **goal "scheduleOnCalendar" — verify /scheduled DOM** — DOM on /scheduled contained the token "monkey-goal-mpfalgmq-cal-sched".
-
-##### /transactions
-- ✅ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpfalgmq-bulk-*".
-- ✅ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpfalgmq-bulk-".
+_No issues, questions, or verifications on the last run — only the expert-system summary above._
 
 <!-- monkey:end -->
 
@@ -144,8 +118,6 @@ X then verify X appears" flow below sits in this blind spot._
 
 #### Backup / restore / rekey (critical — disaster-recovery features)
 
-- **Backup → restore round-trip** — destructive-banned; restore replaces the active DB and logs the session out, which is why monkey can't do it. No spec exercises restore at all.
-- **Scheduled-backup cron actually fires** — `backup-schedule.tsx` saves config; nothing tests cadence + prune-to-`keepCount`.
 - **Rekey passphrase** — `/rekey` is in pages-smoke; no spec drives the form (current + new + confirm) and reconnects.
 
 #### Multi-DB (NEW — 0.142 / 0.143)
@@ -277,6 +249,18 @@ X then verify X appears" flow below sits in this blind spot._
 ## Done / dropped
 
 ### 2026-05-21
+
+- **Backup-scheduler + retention pruning unit-tested (0.209.0).**
+  `shouldFireBackup(cfg, nowMs)` extracted from the scheduler's
+  singleton `tick()` (8 tests covering disabled / interval=0 /
+  null-lastRunAt / boundary / weekly cadence). `backupsToPrune(list,
+  retain)` extracted from `sweepRetention()` (8 tests covering
+  empty / at-cap / over-cap / mixed types stay sticky / unsorted
+  input / retain=0 / fractional / negative). Plus a wrong-passphrase
+  rejection e2e on `/api/backup/restore` — verifies 401 + live DB
+  untouched + snapshot file survives the failed restore.
+
+### 2026-05-21 (earlier)
 
 - **`docker:release` fallback-reason logging (0.206.0).**
   When `useBuildx` is false the script now appends the reason

@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.225.0 — 2026-05-22
+
+### Fixed
+- **`TEST-RESULTS.md` prose was getting eaten by the teardown's
+  sentinel-replace regex.** 0.224.0's new TEST-RESULTS.md mentioned
+  the literal `<!-- monkey:start -->` token by name in the intro
+  prose, so when the teardown ran its non-greedy
+  `start…end` regex, it matched from the FIRST instance of the
+  opening token (in the prose, inside backticks) through to the
+  closing sentinel — eating the entire intro between them. Rewrote
+  the prose to describe the tokens generically ("HTML-comment
+  sentinels") without naming them literally; added an inline
+  warning in the file so the next editor doesn't reintroduce the
+  same trap.
+
+### Notes from the 0.224 e2e run
+- **96 passed, 1 failed, 2 skipped in 7.3 min** — full result.
+- New findings filed as issues:
+  - #43 — `scheduleOnCalendar` /calendar DOM doesn't render today's
+    occurrence (the API + /scheduled DOM legs still pass, so it's
+    isolated to the calendar's render layer or the cashflow
+    forecast SQL).
+  - #44 — `monkey: <Page>` select-cycler times out on single-
+    option selects (waits for `<option>.nth(1)` that never appears,
+    busting the 60s per-test budget).
+- Pre-existing finding: `lockUnlockRoundTrip` post-unlock 401
+  on the full-suite run only (passes stand-alone). Documented
+  in 0.220.0 — cross-test cookie state. Not re-filed.
+
 ## 0.224.0 — 2026-05-22
 
 ### Removed

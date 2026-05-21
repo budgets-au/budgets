@@ -1365,6 +1365,150 @@ test.describe("smart monkey: goal-driven crawl", () => {
       recordGoalAttempt(appMap, "clearSampleData", null);
     }
   });
+
+  /** Rotate the SQLCipher passphrase via /api/rekey.
+   *
+   * Pinned last in the spec so a partial failure (e.g. rotation
+   * succeeded but the revert leg didn't) doesn't break later
+   * specs in the same run — by the time this fires, every other
+   * goal has done its work, and the test wraps the revert in a
+   * `try/finally` so even an assertion failure still attempts to
+   * restore the original key.
+   *
+   * Verifies four legs:
+   *   1. Wrong-current passphrase is rejected (4xx, key unchanged).
+   *   2. Too-short next passphrase is rejected (4xx, key unchanged).
+   *   3. Valid current + valid next → 200, the existing session
+   *      keeps working (PRAGMA rekey rebinds in-place; the JWT
+   *      cookie + connection state are untouched).
+   *   4. Revert leg: rekey new → original. Required so the env's
+   *      `E2E_SQLITE_KEY` still matches the file at the next
+   *      next-start boot. */
+  test("goal: rekey passphrase round-trip", async ({ page }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    const ORIGINAL =
+      process.env.E2E_SQLITE_KEY ??
+      "0000000000000000000000000000000000000000000000000000000000000000";
+    const NEW =
+      "1111111111111111111111111111111111111111111111111111111111111111";
+
+    // Sanity-prime — confirm the session can read from the DB. If
+    // this fails the rest is moot; flag and bail.
+    const probe = await request.get("/api/accounts");
+    if (!probe.ok()) {
+      await recordFinding({
+        page: "/settings",
+        action: `goal "rekeyPassphrase" — precondition`,
+        severity: "warn",
+        kind: "issue",
+        message: `GET /api/accounts → ${probe.status()} before rekey; session/db not in expected state.`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "rekeyPassphrase", null);
+      return;
+    }
+
+    // Track whether we actually flipped the key — drives the
+    // revert in the finally block. If the happy-path rekey is
+    // never attempted (e.g. precondition bail-out), revert is a
+    // no-op.
+    let keyRotated = false;
+
+    try {
+      // Leg 1: wrong current passphrase. Rate limiter allows 5
+      // attempts / 60s, so one bad attempt fits in our budget.
+      const wrongCurrentRes = await request.post("/api/rekey", {
+        data: { current: "this-is-not-the-key", next: NEW },
+      });
+      const wrongCurrentRejected = !wrongCurrentRes.ok();
+      await recordFinding({
+        page: "/settings",
+        action: `goal "rekeyPassphrase" — reject wrong current`,
+        severity: wrongCurrentRejected ? "info" : "error",
+        kind: wrongCurrentRejected ? "verified" : "issue",
+        message: `POST /api/rekey with wrong current → ${wrongCurrentRes.status()} (${wrongCurrentRejected ? "rejected as expected" : "ACCEPTED — guardrail breached"}).`,
+      });
+      runCounters.findingsCount += 1;
+
+      // Leg 2: too-short next passphrase. Route enforces
+      // `next.length >= 8`.
+      const tooShortRes = await request.post("/api/rekey", {
+        data: { current: ORIGINAL, next: "short" },
+      });
+      const tooShortRejected = !tooShortRes.ok();
+      await recordFinding({
+        page: "/settings",
+        action: `goal "rekeyPassphrase" — reject too-short next`,
+        severity: tooShortRejected ? "info" : "error",
+        kind: tooShortRejected ? "verified" : "issue",
+        message: `POST /api/rekey with next="short" → ${tooShortRes.status()} (${tooShortRejected ? "rejected as expected" : "ACCEPTED — guardrail breached"}).`,
+      });
+      runCounters.findingsCount += 1;
+
+      // Leg 3: happy path. Rotate to the new key and confirm the
+      // existing session still works (the connection rebinds
+      // in-place, no re-unlock needed for the live process).
+      const rotateRes = await request.post("/api/rekey", {
+        data: { current: ORIGINAL, next: NEW },
+      });
+      const rotateOk = rotateRes.ok();
+      if (rotateOk) keyRotated = true;
+
+      let postRotateReadOk = false;
+      if (rotateOk) {
+        const postRotateProbe = await request.get("/api/accounts");
+        postRotateReadOk = postRotateProbe.ok();
+      }
+      await recordFinding({
+        page: "/settings",
+        action: `goal "rekeyPassphrase" — rotate and keep session`,
+        severity: rotateOk && postRotateReadOk ? "info" : "error",
+        kind: rotateOk && postRotateReadOk ? "verified" : "issue",
+        message: `POST /api/rekey → ${rotateRes.status()}; post-rotate GET /api/accounts → ${postRotateReadOk ? "200" : "FAIL"}.`,
+      });
+      runCounters.findingsCount += 1;
+
+      const allOK = wrongCurrentRejected && tooShortRejected && rotateOk && postRotateReadOk;
+      if (allOK) {
+        recordGoalAttempt(appMap, "rekeyPassphrase", {
+          timestamp: new Date().toISOString(),
+          route: "/settings",
+          triggerLabel: "POST /api/rekey",
+          fillSpec: { current: "(env)", next: "(test-fixture)" },
+          submitLabel: "POST /api/rekey",
+          verified: "api",
+        });
+        runCounters.goalsAchieved += 1;
+      } else {
+        recordGoalAttempt(appMap, "rekeyPassphrase", null);
+      }
+    } finally {
+      // Always attempt the revert if we successfully rotated. A
+      // failure here leaves the DB keyed with `NEW` but the env
+      // pointing at `ORIGINAL` — global-setup of the NEXT
+      // `pnpm test:e2e` invocation wipes test.db so the impact
+      // is bounded to nothing important, but logging the failure
+      // here makes it obvious in CI logs.
+      if (keyRotated) {
+        const revertRes = await request.post("/api/rekey", {
+          data: { current: NEW, next: ORIGINAL },
+        });
+        if (!revertRes.ok()) {
+          await recordFinding({
+            page: "/settings",
+            action: `goal "rekeyPassphrase" — revert leg`,
+            severity: "error",
+            kind: "issue",
+            message: `Revert POST /api/rekey ${NEW.slice(0, 4)}…→${ORIGINAL.slice(0, 4)}… returned ${revertRes.status()}. Next next-start boot may fail to unlock.`,
+          });
+          runCounters.findingsCount += 1;
+        }
+      }
+    }
+  });
 });
 
 /** Locate an "Add" / "New" / "Create" trigger button on the

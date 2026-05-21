@@ -41,52 +41,54 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T12:49:10.296Z · 1 issue, 2 questions, 14 verified._
+_Last run: 2026-05-21T12:54:26.401Z · 1 issue, 0 questions, 3 verified._
 
 #### Smart Monkey expert system
 
 | Goal | Achieved | Attempts | Last successful run |
 | --- | --- | --- | --- |
-| `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
-| `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `addTenToCategory` | ✅ | 1 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
-| `scheduleOnCalendar` | ✅ | 1 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
-| `searchTransaction` | ✅ | 1 | /transactions · "?search=monkey-goal-mpfhejpt-search-payee" → "GET /api/transactions?search=…" (dom) |
-| `addAndViewNote` | ✅ | 1 | /transactions · "POST /api/transactions (with notes)" → "GET /api/transactions" (dom) |
-| `searchForNote` | ✅ | 1 | /transactions · "?search=find-me-monkey-goal-mpfhejpt (notes-only)" → "GET /api/transactions?search=…" (dom) |
-| `clearSampleData` | ❌ | 1 | _(not yet)_ |
+| `createTransaction` | ❌ | 0 | _(not yet)_ |
+| `createBudget` | ❌ | 0 | _(not yet)_ |
+| `createSchedule` | ❌ | 0 | _(not yet)_ |
+| `addTenToCategory` | ❌ | 0 | _(not yet)_ |
+| `scheduleOnCalendar` | ❌ | 0 | _(not yet)_ |
+| `searchTransaction` | ❌ | 0 | _(not yet)_ |
+| `addAndViewNote` | ❌ | 0 | _(not yet)_ |
+| `searchForNote` | ❌ | 0 | _(not yet)_ |
+| `clearSampleData` | ❌ | 0 | _(not yet)_ |
+| `rekeyPassphrase` | ✅ | 1 | /settings · "POST /api/rekey" → "POST /api/rekey" (api) |
 
-_Coverage: 10 routes mapped, 338 interactive controls catalogued, 82 in-app links discovered._
+_Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
 #### Smart Monkey run report
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 148.4s |
-| Routes visited | 10 |
-| Button clicks | 169 |
-| Switch toggles | 11 |
-| Select cycles | 7 |
-| Text inputs filled | 8 |
-| Dialogs opened | 39 |
-| Form submits | 3 |
-| Links discovered | 111 |
+| Total wall time | 1.7s |
+| Routes visited | 0 |
+| Button clicks | 0 |
+| Switch toggles | 0 |
+| Select cycles | 0 |
+| Text inputs filled | 0 |
+| Dialogs opened | 0 |
+| Form submits | 0 |
+| Links discovered | 0 |
 | Console errors | 0 |
-| Goals attempted | 0 |
-| Goals achieved | 0 |
-| Findings logged | 2 |
+| Goals attempted | 1 |
+| Goals achieved | 1 |
+| Findings logged | 4 |
 
 ##### Workflows completed
-- ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
-- ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `addTenToCategory` — `/transactions` · click **POST /api/transactions × 10** → fill → click **POST /api/transactions** (verified via api)
-- ✅ `scheduleOnCalendar` — `/calendar` · click **POST /api/scheduled** → fill → click **POST /api/scheduled** (verified via dom)
-- ✅ `searchTransaction` — `/transactions` · click **?search=monkey-goal-mpfhejpt-search-payee** → fill → click **GET /api/transactions?search=…** (verified via dom)
-- ✅ `addAndViewNote` — `/transactions` · click **POST /api/transactions (with notes)** → fill → click **GET /api/transactions** (verified via dom)
-- ✅ `searchForNote` — `/transactions` · click **?search=find-me-monkey-goal-mpfhejpt (notes-only)** → fill → click **GET /api/transactions?search=…** (verified via dom)
+- ❌ `createTransaction` — _(not yet completed)_
+- ❌ `createBudget` — _(not yet completed)_
+- ❌ `createSchedule` — _(not yet completed)_
+- ❌ `addTenToCategory` — _(not yet completed)_
+- ❌ `scheduleOnCalendar` — _(not yet completed)_
+- ❌ `searchTransaction` — _(not yet completed)_
+- ❌ `addAndViewNote` — _(not yet completed)_
+- ❌ `searchForNote` — _(not yet completed)_
 - ❌ `clearSampleData` — _(not yet completed)_
+- ✅ `rekeyPassphrase` — `/settings` · click **POST /api/rekey** → fill → click **POST /api/rekey** (verified via api)
 
 #### Vitest summary
 
@@ -97,43 +99,16 @@ _Last run: 2026-05-20T09:26:06.823Z._
 #### Issues
 
 ##### /settings
-- 🟡 **goal "clearSampleData" — GET /api/sample-data** — GET /api/sample-data → 404
-
-#### Questions for review
-
-_The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
-
-##### /settings
-- ❓ **submit "Create"** — Filled 3 inputs and clicked **Create** — no network call, toast, or navigation fired. Should it have?
-
-##### /superannuation
-- ❓ **submit "Save"** — Filled 3 inputs and clicked **Save** — no network call, toast, or navigation fired. Should it have?
+- 🔴 **goal "rekeyPassphrase" — revert leg** — Revert POST /api/rekey 1111…→0000… returned 400. Next next-start boot may fail to unlock.
 
 #### Verified
 
 _Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
 
-##### /calendar
-- ✅ **goal "scheduleOnCalendar" — verify /calendar DOM** — DOM on /calendar contained the token "monkey-goal-mpfhejpt-cal-sched". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).
-
-##### /reports
-- ✅ **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=10 (expected 10), |total|=250 (expected 250.00).
-
-##### /scheduled
-- ✅ **guardrail probe: baseline (Account + defaults)** — → 201 ✅ accepted (cleaned up) (expected accept; got accept)
-- ✅ **guardrail probe: dayOfMonth=42 (exceeds zod max 31)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"dayOfMonth","message":"Too big: expected number to be <=31","code":"too_big"}]} (expected reject; got reject)
-- ✅ **guardrail probe: type=transfer w/ no transferToAccountId** — → 400 ❌ {"error":"transferToAccountId is required when type=transfer","issues":[{"path":"transferToAccountId","message":"transferToAccountId is required when type=transfer","code":"cross_field"}]} (expected reject; got reject)
-- ✅ **guardrail probe: frequency=once w/ no endDate** — → 201 ✅ accepted (cleaned up) (expected accept; got accept)
-- ✅ **guardrail probe: amount with letter (regex violation)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"amount","message":"must be a numeric string","code":"invalid_format"}]} (expected reject; got reject)
-- ✅ **goal "scheduleOnCalendar" — verify API list** — GET /api/scheduled found a row with payee "monkey-goal-mpfhejpt-cal-sched".
-- ✅ **goal "scheduleOnCalendar" — verify /scheduled DOM** — DOM on /scheduled contained the token "monkey-goal-mpfhejpt-cal-sched".
-
-##### /transactions
-- ✅ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpfhejpt-bulk-*".
-- ✅ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpfhejpt-bulk-".
-- ✅ **goal "searchTransaction" — verify search filters to payee** — API matched + DOM rendered payee "monkey-goal-mpfhejpt-search-payee" with search=monkey-goal-mpfhejpt-search-payee.
-- ✅ **goal "addAndViewNote" — note round-trips API + DOM** — API echoed notes + DOM rendered "note-from-monkey-goal-mpfhejpt".
-- ✅ **goal "searchForNote" — ?search= matches notes column** — API matched + DOM rendered the matching row for notes-only needle "find-me-monkey-goal-mpfhejpt".
+##### /settings
+- ✅ **goal "rekeyPassphrase" — reject wrong current** — POST /api/rekey with wrong current → 400 (rejected as expected).
+- ✅ **goal "rekeyPassphrase" — reject too-short next** — POST /api/rekey with next="short" → 400 (rejected as expected).
+- ✅ **goal "rekeyPassphrase" — rotate and keep session** — POST /api/rekey → 200; post-rotate GET /api/accounts → 200.
 
 <!-- monkey:end -->
 
@@ -154,7 +129,8 @@ X then verify X appears" flow below sits in this blind spot._
 
 #### Backup / restore / rekey (critical — disaster-recovery features)
 
-- **Rekey passphrase** — `/rekey` is in pages-smoke; no spec drives the form (current + new + confirm) and reconnects.
+- ✅ Closed by `rekeyPassphrase` monkey goal (0.217.0). Whole section's
+  TODO gaps now covered by smart-monkey goals or focused e2e specs.
 
 #### Multi-DB (NEW — 0.142 / 0.143)
 

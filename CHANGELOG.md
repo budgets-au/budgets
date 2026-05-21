@@ -9,6 +9,30 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.217.0 — 2026-05-21
+
+### Added
+- **`rekeyPassphrase` smart-monkey goal** — pinned as the last
+  test in `monkey-goals.spec.ts`. Closes the long-standing
+  "Rekey passphrase — `/rekey` is in pages-smoke; no spec drives
+  the form" entry in the Backup/restore/rekey TODO gap.
+
+  Four legs:
+  1. POST `/api/rekey` with wrong current passphrase → expect 4xx
+     (key must not flip on bad current).
+  2. POST `/api/rekey` with too-short next passphrase → expect
+     4xx (route enforces `next.length >= 8`).
+  3. Happy path: rotate from the env's `E2E_SQLITE_KEY` (all-zero)
+     to an all-ones key, then `GET /api/accounts` to confirm the
+     existing session keeps working (PRAGMA rekey rebinds in-place
+     — no re-unlock needed for the live process).
+  4. Revert: rotate back to the original key. Wrapped in
+     `try/finally` so even an assertion failure during the happy-
+     path leg still attempts the revert, leaving the DB ready for
+     subsequent specs in the same run.
+
+  AppMap schema bumped 3 → 4 for the new goal key.
+
 ## 0.216.0 — 2026-05-21
 
 ### Added

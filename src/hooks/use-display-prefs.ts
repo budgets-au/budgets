@@ -29,8 +29,24 @@ export function useDisplayPrefs(): {
   prefs: DisplayPrefs;
   setPref: <K extends keyof DisplayPrefs>(key: K, value: DisplayPrefs[K]) => void;
 } {
+  // useSWR's signature is (key, fetcher?, config?). The 0.190.0
+  // `useSwrJson<T>` migration accidentally collapsed the fetcher
+  // here when it was unifying ~50 other call sites, dropping the
+  // 3rd argument and leaving the config-object in the 2nd
+  // (fetcher) slot. SWR with no fetcher = no fetch, just
+  // fallbackData — so for 12 releases every display preference
+  // (dashboard layout, hide-transfers, persistent account filter,
+  // theme prefs, etc.) was silently ignored on cold load until a
+  // PATCH-triggered mutate kicked SWR into life. We keep the
+  // file-local `fetcher` rather than switching to `useSwrJson`
+  // so the custom error message survives — useSwrJson's generic
+  // helper throws `"<url> → <status>"` which is fine for routes
+  // but the display-prefs path historically logged a specific
+  // "Failed to load display prefs" string that operators have
+  // already grep'd for in support reports.
   const { data, mutate } = useSWR<DisplayPrefs>(
     "/api/display-prefs",
+    fetcher,
     {
       revalidateOnFocus: true,
       fallbackData: { ...DISPLAY_PREFS_DEFAULT },

@@ -16,6 +16,14 @@ RUN corepack prepare --activate \
 
 # Stage 2: Build
 FROM node:22-alpine AS builder
+# `TARGETARCH` is set automatically by `docker buildx` to the
+# target platform's arch tag (`amd64`, `arm64`, …). We use it to
+# strip the OPPOSITE-arch sharp prebuilds — keeping both would
+# bloat the image, removing the wrong one would break the runtime.
+# When building outside buildx (`docker build`, `podman build`)
+# the arg defaults to amd64; override with `--build-arg TARGETARCH=arm64`
+# if you need a single-arch arm build via plain `docker build`.
+ARG TARGETARCH=amd64
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -69,8 +77,23 @@ RUN set -e \
            ./node_modules/@signalapp/better-sqlite3/deps \
            ./node_modules/@signalapp/better-sqlite3/binding.gyp \
  && if [ -d ./.next/standalone/node_modules/@img ]; then \
-      rm -rf ./.next/standalone/node_modules/@img/sharp-libvips-linux-x64 \
-             ./.next/standalone/node_modules/@img/sharp-linux-x64; \
+      # Strip the OTHER arch's sharp prebuild bundles so the image
+      # only ships the one that matches TARGETARCH. The mapping is
+      # the literal arch tag for amd64 (`x64`) and the libvips
+      # variant suffix for arm64 (`arm64v8`). The amd64 directory
+      # name uses `linux-x64` because npm's prebuild tarballs
+      # historically tracked Node's process.arch which reports `x64`
+      # rather than `amd64` on 64-bit Intel.
+      case "$TARGETARCH" in \
+        amd64) \
+          rm -rf ./.next/standalone/node_modules/@img/sharp-libvips-linux-arm64v8 \
+                 ./.next/standalone/node_modules/@img/sharp-linux-arm64 ;; \
+        arm64) \
+          rm -rf ./.next/standalone/node_modules/@img/sharp-libvips-linux-x64 \
+                 ./.next/standalone/node_modules/@img/sharp-linux-x64 ;; \
+        *) \
+          echo "WARN: unrecognised TARGETARCH=$TARGETARCH; skipping sharp prebuild trim" >&2 ;; \
+      esac; \
     fi
 
 # Stage the SQLCipher driver + its native-resolver deps into a flat
@@ -133,15 +156,26 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 # (drizzle-orm/better-sqlite3) is in the standalone NFT trace.
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 
-# SQLCipher driver — Next's NFT skips it (next.config.ts marks
-# @signalapp/better-sqlite3 as a serverExternalPackage because
-# Turbopack can't bundle the .node binary), so it's NOT in the
-# standalone's traced node_modules. The builder staged @signalapp
-# + the two native-resolver peers (bindings, file-uri-to-path) into
-# /app/runtime-deps/ with symlinks already dereferenced. If a future
-# serverExternalPackage gets added in next.config.ts, extend the
-# builder's runtime-deps step rather than this COPY.
-COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps ./node_modules
+# SQLCipher driver — Next's NFT marks @signalapp/better-sqlite3 as
+# a serverExternalPackage (Turbopack can't bundle the .node binary)
+# but its standalone trace STILL ships a partial stub at
+# ./node_modules/@signalapp/better-sqlite3 (a pnpm-style symlink
+# into the deps store), plus bindings + file-uri-to-path. Those
+# stubs are useless without the real native module and they break
+# the subsequent `COPY` because:
+#   - On classic docker / podman, COPY into an existing symlink
+#     silently overwrites it with the directory contents (we
+#     relied on this).
+#   - On buildkit's overlayfs driver (used by buildx for
+#     multi-arch) the same COPY errors with "cannot copy to
+#     non-directory" because the cache-mount overlay refuses to
+#     replace the symlink with a directory.
+# Solving by deleting the stubs first, then COPY'ing the staged
+# runtime-deps. Works under both driver families.
+RUN rm -rf ./node_modules/@signalapp ./node_modules/bindings ./node_modules/file-uri-to-path
+COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/@signalapp ./node_modules/@signalapp
+COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/bindings ./node_modules/bindings
+COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/file-uri-to-path ./node_modules/file-uri-to-path
 
 # Slim the image to just what `node server.js` actually reads. The
 # Next.js `output: "standalone"` bundle copies a chunk of the source

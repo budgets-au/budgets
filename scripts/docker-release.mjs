@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
  * docker:release — build, tag (× 3), and push the budgets image.
- * Runtime-agnostic: prefers `docker` on PATH, falls back to
- * `podman`, or honours `CONTAINER_RUNTIME` if set explicitly. Both
- * engines accept the same build/tag/push args.
+ * Defaults to a multi-arch (linux/amd64 + linux/arm64) manifest via
+ * `docker buildx`; falls back to single-arch via plain
+ * `docker build` / `podman build` when `--single-arch` is passed
+ * or buildx is missing.
  *
  * Configuration via env vars:
  *   DOCKER_REGISTRY   — registry hostname or hub-shaped namespace.
@@ -17,13 +18,19 @@
  *   DOCKER_IMAGE      — image name within the registry. Default
  *                       `budgets`.
  *   CONTAINER_RUNTIME — force a specific binary (else auto-detect).
+ *   PLATFORMS         — comma-separated buildx platform list.
+ *                       Default `linux/amd64,linux/arm64`. Set to
+ *                       a single value (`linux/arm64`) to skip the
+ *                       cross-build but keep buildx semantics.
  *
  * Usage:
- *   DOCKER_REGISTRY=docker.io/you npm run docker:release
- *   npm run docker:release -- --allow-dirty   # emergency override
- *   npm run docker:release -- --dry-run       # print, don't run anything
+ *   DOCKER_REGISTRY=ghcr.io/you npm run docker:release
+ *   npm run docker:release -- --single-arch    # fast path, host arch only
+ *   npm run docker:release -- --allow-dirty    # emergency override
+ *   npm run docker:release -- --dry-run        # print, don't run anything
  *
- * Tags published, all pointing at the same digest:
+ * Tags published (multi-arch manifest list, all pointing at the
+ * same parent digest):
  *   <registry>/<image>:<semver>      # from package.json
  *   <registry>/<image>:<short-sha>   # immutable per commit
  *   <registry>/<image>:latest        # convenience pointer
@@ -62,6 +69,9 @@ const versionMatch = versionFile.match(
 );
 const allowDirty = process.argv.includes("--allow-dirty");
 const dryRun = process.argv.includes("--dry-run");
+const singleArch = process.argv.includes("--single-arch");
+const PLATFORMS =
+  process.env.PLATFORMS?.trim() || "linux/amd64,linux/arm64";
 
 /** Pick a container runtime. Honour the env override first, then
  * prefer docker (most common in CI), then fall back to podman. The
@@ -139,26 +149,70 @@ const shaTag = `${FQN}:${sha}`;
 const versionTag = `${FQN}:${version}`;
 const latestTag = `${FQN}:latest`;
 
+/** Multi-arch builds need `docker buildx` (or `podman` ≥ 4 with
+ * the buildx-shim — not yet exercised here). Probe once and gate
+ * the multi-arch path on the result. `--single-arch` forces the
+ * legacy single-arch path even when buildx is available. */
+function buildxAvailable() {
+  if (runtimeName !== "docker") return false;
+  const probe = spawnSync("docker", ["buildx", "version"], {
+    stdio: "ignore",
+  });
+  return probe.status === 0;
+}
+
+const useBuildx = !singleArch && buildxAvailable();
+const platforms = useBuildx ? PLATFORMS : "(host arch)";
+
 const rtLabel = runtimeName ?? "(no runtime)";
 console.log(`\n▶ Releasing budgets${dryRun ? "  (dry-run)" : ""}`);
-console.log(`  runtime  ${rtLabel}`);
+console.log(`  runtime  ${rtLabel}${useBuildx ? "  (buildx)" : ""}`);
+console.log(`  arches   ${platforms}`);
 console.log(`  version  ${version}`);
 console.log(`  sha      ${sha}${dirty ? "  (dirty — only because --allow-dirty)" : ""}`);
 console.log(`  tags     ${shaTag}`);
 console.log(`           ${versionTag}`);
 console.log(`           ${latestTag}\n`);
 
-console.log(`▶ ${rtLabel} build…`);
-runtime(["build", "-t", shaTag, "."]);
+if (useBuildx) {
+  // Multi-arch path: one `buildx build` call cross-compiles for
+  // every platform AND pushes a manifest-list of all the resulting
+  // images. There's no equivalent `tag` step because buildx
+  // attaches all -t targets to the same manifest list. `--push` is
+  // required: multi-arch images can't be loaded into the local
+  // engine because docker's local store is single-arch.
+  console.log(`▶ ${rtLabel} buildx (build + push for ${PLATFORMS})…`);
+  runtime([
+    "buildx",
+    "build",
+    "--platform",
+    PLATFORMS,
+    "-t",
+    shaTag,
+    "-t",
+    versionTag,
+    "-t",
+    latestTag,
+    "--push",
+    ".",
+  ]);
+} else {
+  // Legacy single-arch path. Stays around for fast local dev
+  // iteration (no QEMU emulation when building for a non-native
+  // platform) and as the only available path when running under
+  // podman, which doesn't expose buildx.
+  console.log(`▶ ${rtLabel} build…`);
+  runtime(["build", "-t", shaTag, "."]);
 
-console.log(`\n▶ ${rtLabel} tag…`);
-runtime(["tag", shaTag, versionTag]);
-runtime(["tag", shaTag, latestTag]);
+  console.log(`\n▶ ${rtLabel} tag…`);
+  runtime(["tag", shaTag, versionTag]);
+  runtime(["tag", shaTag, latestTag]);
 
-console.log(`\n▶ ${rtLabel} push…`);
-runtime(["push", shaTag]);
-runtime(["push", versionTag]);
-runtime(["push", latestTag]);
+  console.log(`\n▶ ${rtLabel} push…`);
+  runtime(["push", shaTag]);
+  runtime(["push", versionTag]);
+  runtime(["push", latestTag]);
+}
 
 console.log("\n▶ Resolving digest…");
 

@@ -9,6 +9,88 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.205.0 — 2026-05-21
+
+### Fixed
+- **`useDisplayPrefs` now actually fetches.** The 0.190.0
+  `useSwrJson<T>` migration accidentally collapsed the third
+  argument of `useSWR(key, fetcher, config)` — the explicit
+  fetcher dropped out and the config object slid into its slot.
+  SWR with no fetcher = no fetch, just `fallbackData`. So for
+  12 releases every read-from-server display preference
+  (dashboard layout, hide-transfers, persistent account
+  filter, theme prefs, hidden categories on the cashflow
+  report, sticky upcoming-budgets toggle, etc.) was silently
+  ignored on cold load until a PATCH-triggered `mutate`
+  kicked SWR into life. Users with customised layouts saw the
+  registry default on every page reload; the customisations
+  only re-applied on the first SWR revalidate (e.g. focus
+  back to the tab, save a toggle, navigate away and back).
+  Restored as a single-line fix; the inline comment in
+  `src/hooks/use-display-prefs.ts` documents the trap so the
+  next `useSwrJson` consolidation pass doesn't re-collapse it.
+
+  Caught during the dashboard-edit e2e debugging session in
+  0.204.0 — the test PATCHed a 2-widget layout, the dashboard
+  rendered all 9 default widgets, and a 30s `toHaveCount(2)`
+  wait timed out because the hook was returning defaults.
+  Documented as a "Discovered" item in 0.204.0 and fixed here.
+
+### Added
+- **Multi-arch container images** (`linux/amd64` + `linux/arm64`).
+  `scripts/docker-release.mjs` now defaults to
+  `docker buildx build --platform=linux/amd64,linux/arm64 --push`,
+  producing a single OCI manifest list that points at both
+  arch-specific images. The cluster pulls the right one
+  automatically — same tag, different digest per platform.
+  Apple Silicon servers / Raspberry Pi / Graviton stop being
+  second-class citizens.
+
+  Flags + env:
+  - `--single-arch` — opt out for fast local dev iteration
+    (host-arch only, plain `docker build` + `tag` + `push`).
+  - `PLATFORMS=linux/arm64` (env) — narrow buildx to one
+    platform without losing the buildx semantics (`--push`,
+    manifest list of size 1).
+  - Falls back to the legacy single-arch path automatically
+    when only `podman` is available (buildx is docker-only).
+
+### Changed
+- **Dockerfile: `ARG TARGETARCH` arch-aware sharp prebuild
+  cleanup.** Before this release, the runner stage hardcoded
+  `rm -rf ./.next/standalone/node_modules/@img/sharp-libvips-linux-x64`,
+  which on an `arm64` build:
+  1. didn't strip the actual arm64 bundle (~50 MB of dead
+     weight in the runtime image),
+  2. tried to remove an x64 bundle that doesn't exist on the
+     arm64 builder (silent no-op, no damage but no benefit).
+  Now the `RUN` block switches on `TARGETARCH` so each arch
+  trims only the OTHER arch's prebuild. Pure size win on arm64
+  images.
+
+- **Dockerfile: pre-clean of pnpm-style stubs before
+  `COPY --from=builder /app/runtime-deps`.** Next's standalone
+  trace leaves symlinks for `@signalapp/better-sqlite3` /
+  `bindings` / `file-uri-to-path` in
+  `./node_modules/...`. Classic `docker build` / `podman build`
+  silently overwrites those symlinks when the next COPY drops
+  a directory there. `docker buildx`'s overlayfs cache-mount
+  driver (used for multi-arch) refuses with
+  "cannot copy to non-directory". A single `RUN rm -rf` of
+  those three subpaths before the COPY makes the same image
+  build cleanly under both driver families. Harmless under
+  classic builds (the rm is a no-op once you re-create them
+  with the COPY).
+
+Validation: vitest **359/359** (full suite — the
+disk-usage tests now find `/data` via macOS synthetic.conf).
+E2E: **83 passed / 3 failed / 2 skipped**; the 3 failures are
+the existing `monkey-goals` create-* trio (timeout post-submit
+in `verifyOutcome` — separate investigation queued for 0.206.0).
+Multi-arch image verified: `docker buildx imagetools inspect`
+shows a proper OCI image index with both `linux/amd64` and
+`linux/arm64` manifests.
+
 ## 0.204.0 — 2026-05-21
 
 ### Added

@@ -9,6 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.211.0 — 2026-05-21
+
+### Changed
+- **Smart-monkey now verifies POST/PUT responses look persisted, not
+  just 2xx.** The old `observeSubmitOutcome` treated any non-error
+  response in the 800ms window as healthy — a regression that had a
+  route stop persisting while still answering `200 {ok:true}` would
+  pass the crawl undetected. New behaviour: the request listener
+  peeks at the 2xx response body for POST/PUT submits and stamps
+  `persisted: true|false` on the `FormOutcome.network` variant. A
+  route is `persisted` when the body has shape suggesting a real
+  resource was returned — a top-level `id`, a non-empty array, or an
+  envelope (`{data: {id:...}}` / `{row:...}` / `{entry:...}`).
+  `{ok:true}`, `{updated:N}`, `{count:N}`, empty body, and
+  unparseable junk all stamp `persisted: false`.
+
+  `monkey.spec.ts` now flags a 2xx-but-not-persisted submit as a
+  `kind: "question"` finding with the captured body attached, so the
+  operator can spot the regression in the same TODO.md block where
+  silent submits already surface. PATCH/DELETE responses bypass the
+  check entirely — they're not expected to return a single created
+  row, so don't get downgraded.
+
+  Pure `looksPersisted(body)` helper extracted for unit testability
+  (13 new tests in `_monkey-helpers.test.ts` covering: empty input,
+  unparseable JSON, null / scalar values, empty objects + arrays,
+  `{ok:true}`, bulk-result envelopes, top-level id (real + empty +
+  non-string), array shapes, envelope shapes, extra-fields-alongside
+  -id). 380 → 393 vitest cases.
+
+  Closes the "Monkey treats any POST/PATCH within 800ms as healthy"
+  cross-cutting blind spot from TODO.
+
 ## 0.210.0 — 2026-05-21
 
 ### Added

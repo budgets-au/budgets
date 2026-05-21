@@ -129,13 +129,80 @@ export function isNoiseMessage(msg: string): boolean {
 /** Outcome of a form submission, in priority order: a real
  * outcome means the submit DID something. "silent" means the
  * crawl saw no side-effect within the observation window — the
- * thing the operator probably wants to know about. */
+ * thing the operator probably wants to know about.
+ *
+ * `persisted` on the network variant distinguishes "the route
+ * returned an identifiable row" (POST → `{id:"<uuid>", ...}` or a
+ * non-empty array of rows) from "the route returned 200 but no
+ * proof of persistence" (e.g. `{ok:true}` only, empty body, or a
+ * 2xx with a body that doesn't look row-shaped). The caller flags
+ * the latter case for review — a regression that has the route
+ * stop persisting while still answering 200 reads as green
+ * otherwise. Always true for DELETE / PATCH / non-row-returning
+ * actions: see `looksPersisted` for the heuristic. */
 export type FormOutcome =
-  | { kind: "network"; method: string; url: string; status: number; body?: string }
+  | {
+      kind: "network";
+      method: string;
+      url: string;
+      status: number;
+      body?: string;
+      persisted: boolean;
+    }
   | { kind: "toast"; text: string }
   | { kind: "nav"; to: string }
   | { kind: "error"; message: string }
   | { kind: "silent" };
+
+/** Inspect a captured response body string and decide whether it
+ * looks like the server actually persisted a row. The heuristic is
+ * intentionally permissive — a regression that has the route stop
+ * persisting while still answering `{ok:true}` is what we're
+ * pinning against, NOT every route that doesn't echo a row.
+ *
+ * Returns `true` when the parsed body has shape suggesting a real
+ * resource was returned:
+ *   - `{ id: "<uuid-like>", ... }` (top-level id) — a created row.
+ *   - `[ {...}, ... ]` (non-empty array) — list of rows returned.
+ *   - `{ data: {...} }` / `{ row: {...} }` — common envelope shapes.
+ *
+ * Returns `false` for:
+ *   - empty / unparseable body
+ *   - `{}`, `null`
+ *   - `{ ok: true }` ONLY (no id, no rows, no envelope)
+ *   - `{ updated: N }` / `{ count: N }` — bulk results, no row proof.
+ *     (These ARE legitimate routes; the caller can choose to permit
+ *     them via the `methodAllowsBareOk` second pass — bulk routes
+ *     are intended-to-be-bare and not a regression target.) */
+export function looksPersisted(body: string | undefined): boolean {
+  if (!body) return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return false;
+  }
+  if (parsed === null) return false;
+  if (Array.isArray(parsed)) return parsed.length > 0;
+  if (typeof parsed !== "object") return false;
+  const obj = parsed as Record<string, unknown>;
+  // Top-level id is the canonical row marker.
+  if (typeof obj.id === "string" && obj.id.length > 0) return true;
+  // Common envelope shapes — recurse one level.
+  for (const key of ["data", "row", "entry"]) {
+    const inner = obj[key];
+    if (
+      inner &&
+      typeof inner === "object" &&
+      !Array.isArray(inner) &&
+      typeof (inner as Record<string, unknown>).id === "string"
+    ) {
+      return true;
+    }
+    if (Array.isArray(inner) && inner.length > 0) return true;
+  }
+  return false;
+}
 
 const OBSERVE_WINDOW_MS = 800;
 
@@ -218,22 +285,34 @@ export async function observeSubmitOutcome(
     // Capture the request; status comes from the response. For
     // 4xx/5xx we also pull the response body (capped) so the
     // operator can see WHY the server rejected without having
-    // to instrument the route by hand.
+    // to instrument the route by hand. For 2xx we also peek at
+    // the body so we can stamp `persisted` — a route that returns
+    // `{ok:true}` without actually creating a row should NOT read
+    // as healthy (the regression shape we're pinning against).
     req
       .response()
       .then(async (resp) => {
         if (!resp) return;
         const status = resp.status();
-        let body: string | undefined;
-        if (status >= 400) {
-          body = (await resp.text().catch(() => "")).slice(0, 240);
-        }
+        const rawBody = (await resp.text().catch(() => "")).slice(0, 512);
+        const isCreateLike = method === "POST" || method === "PUT";
+        // PATCH/DELETE bodies vary by route — they're not expected
+        // to return a single created row. Don't downgrade them on
+        // the `persisted` check. Only POST/PUT (the create paths)
+        // are held to "must show row evidence".
+        const persisted = !isCreateLike || looksPersisted(rawBody);
         networkHits.push({
           kind: "network",
           method,
           url: req.url(),
           status,
-          body,
+          // Capture the body for 4xx/5xx (the existing operator
+          // signal) AND for 2xx-but-not-persisted (the new
+          // signal). Healthy 2xx with persistence proof stays
+          // body-less so the report doesn't bloat.
+          body:
+            status >= 400 || !persisted ? rawBody.slice(0, 240) : undefined,
+          persisted,
         });
       })
       .catch(() => {});
@@ -427,6 +506,14 @@ export function describeOutcome(outcome: FormOutcome): string {
         return outcome.body
           ? `${base} — ${outcome.body}`
           : `${base} — [empty body]`;
+      }
+      // 2xx but not persisted: the route returned a success status
+      // without row evidence in the body. Show the captured body
+      // so the operator can see what came back instead of a row.
+      if (!outcome.persisted) {
+        return outcome.body
+          ? `${base} — NOT PERSISTED — body: ${outcome.body}`
+          : `${base} — NOT PERSISTED — [empty body]`;
       }
       return base;
     }

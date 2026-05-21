@@ -482,8 +482,22 @@ async function fillAndSubmitForms(
         kind: "issue",
         message: describeOutcome(outcome),
       });
+    } else if (outcome.kind === "network" && !outcome.persisted) {
+      // 2xx but no row evidence in the response. The route may be
+      // legitimately bare (a bulk PATCH that returns `{updated:N}`
+      // or a side-effect-only endpoint), or it may be a regression
+      // where the route stopped persisting while still answering
+      // 200. The crawl can't tell — flag as a question so the
+      // operator can decide which.
+      errors.push({
+        page: pagePath,
+        action: `submit "${submitLabel}"`,
+        severity: "info",
+        kind: "question",
+        message: `Filled ${filled} input${filled === 1 ? "" : "s"} and clicked **${submitLabel}** — ${describeOutcome(outcome)}. Route returned 2xx without row-shaped evidence; could be a regression or an intentional bare-OK endpoint.`,
+      });
     }
-    // Non-error network / toast / nav are healthy — don't record.
+    // Non-error, persisted network / toast / nav are healthy — don't record.
 
     // Reset for the next form. Dismiss any dialog the submit may
     // have opened, then reload to a clean state. Reload is

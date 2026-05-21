@@ -175,7 +175,7 @@ X then verify X appears" flow below sits in this blind spot._
 
 #### Cross-cutting blind spot
 
-- Monkey treats any POST/PATCH within 800 ms as healthy ([_monkey-helpers.ts:251-258](tests/e2e/_monkey-helpers.ts#L251-L258)). Doesn't check HTTP body, doesn't verify rows reached the DB, doesn't navigate cross-page. A route that returns `200 { ok: true }` without persisting reads as green.
+- ~~Monkey treats any POST/PATCH within 800 ms as healthy~~ — partially closed in 0.211.0: POST/PUT submits now check the response body for row-shaped evidence and flag bare-OK responses as `kind: "question"`. Still missing: monkey doesn't navigate cross-page to verify the row appears in a list view (monkey-goals.spec.ts handles that for the four scripted goals; the broader exploratory crawl doesn't).
 
 ## Ideas
 
@@ -248,6 +248,21 @@ X then verify X appears" flow below sits in this blind spot._
 ## Done / dropped
 
 ### 2026-05-21
+
+- **Monkey 2xx-without-persistence check (0.211.0).**
+  `observeSubmitOutcome` now peeks at the body of 2xx POST/PUT
+  responses and stamps `persisted: false` when the body is empty
+  / unparseable / `{ok:true}` / `{updated:N}` etc — anything that
+  isn't row-shaped (top-level id, non-empty array, or `{data:
+  {id:...}}`-style envelope). `monkey.spec.ts` flags those as
+  `kind: "question"` with the captured body attached, so a
+  regression that has a route stop persisting while still
+  answering 200 stops reading as green. Pure `looksPersisted`
+  helper + 13 unit tests in `_monkey-helpers.test.ts`. PATCH/DELETE
+  bypass the check (they're not expected to return a single created
+  row). Partially closes the "Cross-cutting blind spot" entry;
+  cross-page row-appearance verification on the breadth-first
+  crawl remains a separate task.
 
 - **Bulk recategorise e2e (0.210.0).**
   `tests/e2e/bulk-recategorise.spec.ts` drives the multi-select

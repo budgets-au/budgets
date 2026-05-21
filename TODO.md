@@ -41,7 +41,7 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T12:13:32.796Z · 5 issues, 4 questions, 7 verified._
+_Last run: 2026-05-21T12:27:12.277Z · 0 issues, 0 questions, 1 verified._
 
 #### Smart Monkey expert system
 
@@ -53,7 +53,7 @@ _Last run: 2026-05-21T12:13:32.796Z · 5 issues, 4 questions, 7 verified._
 | `addTenToCategory` | ❌ | 1 | _(not yet)_ |
 | `scheduleOnCalendar` | ✅ | 1 | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
 | `searchTransaction` | ✅ | 1 | /transactions · "?search=monkey-goal-mpfg5bc0-search-payee" → "GET /api/transactions?search=…" (dom) |
-| `addAndViewNote` | ❌ | 1 | _(not yet)_ |
+| `addAndViewNote` | ✅ | 2 | /transactions · "POST /api/transactions (with notes)" → "GET /api/transactions" (dom) |
 | `searchForNote` | ✅ | 1 | /transactions · "?search=find-me-monkey-goal-mpfg5bc0 (notes-only)" → "GET /api/transactions?search=…" (dom) |
 
 _Coverage: 10 routes mapped, 337 interactive controls catalogued, 82 in-app links discovered._
@@ -62,19 +62,19 @@ _Coverage: 10 routes mapped, 337 interactive controls catalogued, 82 in-app link
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 119.6s |
-| Routes visited | 10 |
-| Button clicks | 170 |
-| Switch toggles | 11 |
-| Select cycles | 8 |
-| Text inputs filled | 8 |
-| Dialogs opened | 40 |
-| Form submits | 3 |
-| Links discovered | 113 |
+| Total wall time | 2.0s |
+| Routes visited | 1 |
+| Button clicks | 0 |
+| Switch toggles | 0 |
+| Select cycles | 0 |
+| Text inputs filled | 0 |
+| Dialogs opened | 0 |
+| Form submits | 0 |
+| Links discovered | 0 |
 | Console errors | 0 |
-| Goals attempted | 0 |
-| Goals achieved | 0 |
-| Findings logged | 2 |
+| Goals attempted | 1 |
+| Goals achieved | 1 |
+| Findings logged | 1 |
 
 ##### Workflows completed
 - ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
@@ -83,7 +83,7 @@ _Coverage: 10 routes mapped, 337 interactive controls catalogued, 82 in-app link
 - ❌ `addTenToCategory` — _(not yet completed)_
 - ✅ `scheduleOnCalendar` — `/calendar` · click **POST /api/scheduled** → fill → click **POST /api/scheduled** (verified via dom)
 - ✅ `searchTransaction` — `/transactions` · click **?search=monkey-goal-mpfg5bc0-search-payee** → fill → click **GET /api/transactions?search=…** (verified via dom)
-- ❌ `addAndViewNote` — _(not yet completed)_
+- ✅ `addAndViewNote` — `/transactions` · click **POST /api/transactions (with notes)** → fill → click **GET /api/transactions** (verified via dom)
 - ✅ `searchForNote` — `/transactions` · click **?search=find-me-monkey-goal-mpfg5bc0 (notes-only)** → fill → click **GET /api/transactions?search=…** (verified via dom)
 
 #### Vitest summary
@@ -92,49 +92,12 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 ✅ **353 passed** across 38 files (13.3s).
 
-#### Issues
-
-##### /reports
-- 🔴 **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=20 (expected 10), |total|=500 (expected 250.00).
-
-##### /scheduled
-- 🟡 **guardrail probe: dayOfMonth=42 (exceeds zod max 31)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"dayOfMonth","message":"Too big: expected number to be <=31","code":"too_big"}]}
-- 🟡 **guardrail probe: type=transfer w/ no transferToAccountId** — → 400 ❌ {"error":"transferToAccountId is required when type=transfer","issues":[{"path":"transferToAccountId","message":"transferToAccountId is required when type=transfer","code":"cross_field"}]}
-- 🟡 **guardrail probe: amount with letter (regex violation)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"amount","message":"must be a numeric string","code":"invalid_format"}]}
-
-##### /transactions
-- 🔴 **goal "addAndViewNote" — note round-trips API + DOM** — API echoed notes + DOM did not render "note-from-monkey-goal-mpfg5bc0".
-
-#### Questions for review
-
-_The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
-
-##### /scheduled
-- ❓ **guardrail probe: baseline (Account + defaults)** — → 201 ✅ accepted (cleaned up)
-- ❓ **guardrail probe: frequency=once w/ no endDate** — → 201 ✅ accepted (cleaned up)
-
-##### /settings
-- ❓ **submit "Create"** — Filled 3 inputs and clicked **Create** — no network call, toast, or navigation fired. Should it have?
-
-##### /superannuation
-- ❓ **submit "Save"** — Filled 3 inputs and clicked **Save** — no network call, toast, or navigation fired. Should it have?
-
 #### Verified
 
 _Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
 
-##### /calendar
-- ✅ **goal "scheduleOnCalendar" — verify /calendar DOM** — DOM on /calendar contained the token "monkey-goal-mpfg5bc0-cal-sched". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).
-
-##### /scheduled
-- ✅ **goal "scheduleOnCalendar" — verify API list** — GET /api/scheduled found a row with payee "monkey-goal-mpfg5bc0-cal-sched".
-- ✅ **goal "scheduleOnCalendar" — verify /scheduled DOM** — DOM on /scheduled contained the token "monkey-goal-mpfg5bc0-cal-sched".
-
 ##### /transactions
-- ✅ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpfg5bc0-bulk-*".
-- ✅ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpfg5bc0-bulk-".
-- ✅ **goal "searchTransaction" — verify search filters to payee** — API matched + DOM rendered payee "monkey-goal-mpfg5bc0-search-payee" with search=monkey-goal-mpfg5bc0-search-payee.
-- ✅ **goal "searchForNote" — ?search= matches notes column** — API matched + DOM rendered the matching row for notes-only needle "find-me-monkey-goal-mpfg5bc0".
+- ✅ **goal "addAndViewNote" — note round-trips API + DOM** — API echoed notes + DOM rendered "note-from-monkey-goal-mpfgtwia".
 
 <!-- monkey:end -->
 

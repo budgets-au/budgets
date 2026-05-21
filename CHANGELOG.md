@@ -9,6 +9,33 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.215.0 — 2026-05-21
+
+### Fixed
+- **`addAndViewNote` smart-monkey goal couldn't see the note in the
+  DOM.** The new 0.213.0 goal seeded a transaction with a notes
+  string, then grepped `body.innerText` on `/transactions` for the
+  text — but the default `transactionsShowNotes` display pref is
+  `false`, so the notes column never renders in the row until the
+  user toggles "Show notes". Test now PATCHes
+  `/api/display-prefs { transactionsShowNotes: true }` before the
+  DOM check; the row's notes cell is rendered and the body scan
+  finds the text. The API round-trip leg was already passing — the
+  notes WERE being persisted and returned, the test just couldn't
+  see them.
+- **Guardrail-probe classification was inverted.** The
+  `runScheduleGuardrailProbes` helper sends both known-good baseline
+  payloads AND known-bad payloads to `/api/scheduled`, then recorded
+  every successful POST as `kind: "question"` and every rejection as
+  `kind: "issue"`. That surfaced the API correctly rejecting bad
+  input as red flags in the TODO monkey block, and a successful
+  baseline as a yellow "?". Each probe now declares
+  `expectAccept: boolean`; the classifier compares against the
+  outcome and records `verified` on a match (guardrail working as
+  intended) or `issue` on a mismatch (real regression target).
+  Message includes the expected vs got summary so the operator can
+  see what was being tested at a glance.
+
 ## 0.214.0 — 2026-05-21
 
 ### Fixed

@@ -1072,6 +1072,14 @@ test.describe("smart monkey: goal-driven crawl", () => {
           .some((t) => t.id === created.id && t.notes === NOTE_TEXT)
       : false;
 
+    // Flip the `transactionsShowNotes` display pref ON so the notes
+    // text actually renders in the row. Default is OFF — without this
+    // PATCH the DOM leg would always miss the note text even though
+    // the row is in the table.
+    await request.patch("/api/display-prefs", {
+      data: { transactionsShowNotes: true },
+    });
+
     // DOM leg — navigate to /transactions filtered to our row and
     // look for the notes text in the rendered body.
     await page.goto(`/transactions?search=${encodeURIComponent(PAYEE)}`);
@@ -1555,7 +1563,15 @@ async function runScheduleGuardrailProbes(
   const accountId = accounts[0]?.id;
   if (!accountId) return;
 
-  // Each probe: (label, payload override on top of the baseline).
+  // Each probe carries an EXPECTED outcome. Pre-0.215 the classifier
+  // was hard-coded `res.ok() ? "question" : "issue"` — which read
+  // every successful baseline POST as a "question" and every correct
+  // guardrail rejection as an "issue", surfacing healthy behaviour
+  // as red flags in the TODO.md monkey block. Now each probe declares
+  // whether the server SHOULD accept (the baseline) or SHOULD reject
+  // (the known-bad permutations), and the classifier compares:
+  //   - expected match → kind:"verified" (guardrail working as intended)
+  //   - expected mismatch → kind:"issue" (real regression target)
   // Baseline is the known-good combination from the user's
   // screenshot: Account + Type=expense + Frequency=monthly.
   const baseline = {
@@ -1568,23 +1584,42 @@ async function runScheduleGuardrailProbes(
     interval: 1,
     startDate: "2026-02-01",
   };
-  const probes: Array<{ label: string; payload: Record<string, unknown> }> = [
-    { label: "baseline (Account + defaults)", payload: { ...baseline } },
+  interface Probe {
+    label: string;
+    payload: Record<string, unknown>;
+    /** true → the API should ACCEPT (2xx); false → should REJECT (4xx). */
+    expectAccept: boolean;
+  }
+  const probes: Probe[] = [
+    {
+      label: "baseline (Account + defaults)",
+      payload: { ...baseline },
+      expectAccept: true,
+    },
     {
       label: "dayOfMonth=42 (exceeds zod max 31)",
       payload: { ...baseline, dayOfMonth: 42 },
+      expectAccept: false,
     },
     {
       label: "type=transfer w/ no transferToAccountId",
       payload: { ...baseline, type: "transfer" },
+      expectAccept: false,
     },
     {
       label: "frequency=once w/ no endDate",
       payload: { ...baseline, frequency: "once" },
+      // The server currently ACCEPTS this — open question whether a
+      // once-frequency schedule with no endDate is semantically
+      // valid. Leaving expectAccept=true so a future guardrail that
+      // tightens this would surface as an issue (drawing attention)
+      // rather than silently changing behaviour.
+      expectAccept: true,
     },
     {
       label: "amount with letter (regex violation)",
       payload: { ...baseline, amount: "monkey-goal" },
+      expectAccept: false,
     },
   ];
 
@@ -1594,8 +1629,9 @@ async function runScheduleGuardrailProbes(
       .catch(() => null);
     if (!res) continue;
     const status = res.status();
+    const accepted = res.ok();
     let summary: string;
-    if (res.ok()) {
+    if (accepted) {
       // Clean up so this probe row doesn't pollute the goal's
       // own DOM/API verification check below.
       const created = (await res.json().catch(() => null)) as {
@@ -1611,12 +1647,13 @@ async function runScheduleGuardrailProbes(
       const body = (await res.text().catch(() => "")).slice(0, 200);
       summary = `→ ${status} ❌ ${body || "[empty body]"}`;
     }
+    const expectedMatched = accepted === probe.expectAccept;
     await recordFinding({
       page: "/scheduled",
       action: `guardrail probe: ${probe.label}`,
-      severity: res.ok() ? "info" : "warn",
-      kind: res.ok() ? "question" : "issue",
-      message: summary,
+      severity: expectedMatched ? "info" : "error",
+      kind: expectedMatched ? "verified" : "issue",
+      message: `${summary} (expected ${probe.expectAccept ? "accept" : "reject"}; got ${accepted ? "accept" : "reject"})`,
     });
   }
 }

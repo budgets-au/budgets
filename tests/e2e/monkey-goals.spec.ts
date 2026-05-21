@@ -623,7 +623,9 @@ test.describe("smart monkey: goal-driven crawl", () => {
     const listRes = await request.get("/api/transactions?limit=200");
     const listOk = listRes.ok();
     const listTxns = listOk
-      ? ((await listRes.json()) as Array<{ payee: string | null }>)
+      ? ((await listRes.json()) as Array<
+          { id: string; payee: string | null; date: string; amount: string; categoryId: string | null; isSample?: boolean }
+        >)
       : [];
     // Filter on the `-bulk-` suffix so we count ONLY this goal's
     // rows. RUN_TOKEN alone would also match the createTransaction
@@ -634,6 +636,33 @@ test.describe("smart monkey: goal-driven crawl", () => {
     const apiMatches = listTxns.filter((t) =>
       (t.payee ?? "").startsWith(bulkPrefix),
     ).length;
+
+    // State-leak diagnostic: if the target category contains MORE
+    // Jan-2026 transactions than this run created, something else
+    // wrote to it — historically the 20/500 cashflow finding traced
+    // to TDZ-errored unlock paths ghost-doubling writes. The 0.213-
+    // 0.215 TDZ cleanup retired that, but the check stays as a
+    // sentinel: silent in normal runs, screams if the leak ever
+    // comes back.
+    const bankFeesTxns = listTxns.filter(
+      (t) =>
+        t.categoryId === target.id &&
+        t.date >= "2026-01-01" &&
+        t.date <= "2026-01-31",
+    );
+    if (bankFeesTxns.length !== apiMatches) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[state-leak] addTenToCategory found ${bankFeesTxns.length} txns in "${target.name}" Jan 2026 — expected ${apiMatches} (this run's POSTs). ${bankFeesTxns.length - apiMatches} pre-existing rows:`,
+      );
+      for (const t of bankFeesTxns) {
+        if ((t.payee ?? "").startsWith(bulkPrefix)) continue;
+        // eslint-disable-next-line no-console
+        console.log(
+          `[state-leak]   ${t.date} ${t.amount.padStart(8)} payee="${t.payee ?? ""}" isSample=${t.isSample ?? "n/a"}`,
+        );
+      }
+    }
 
     // 4. DOM verification — load /transactions and look for
     // tokens in the rendered table.
@@ -1211,6 +1240,129 @@ test.describe("smart monkey: goal-driven crawl", () => {
       runCounters.goalsAchieved += 1;
     } else {
       recordGoalAttempt(appMap, "searchForNote", null);
+    }
+  });
+
+  /** Clear sample data via the Settings → Sample data panel.
+   *
+   * Pinned as the LAST goal in monkey-goals.spec.ts because the
+   * wipe is destructive to the seeded accounts + sample
+   * transactions every other test in this spec leans on. By the
+   * time it runs, every prior goal has already done its work.
+   *
+   * Verifies the round-trip:
+   *   1. GET /api/sample-data → confirm sample rows exist
+   *   2. POST /api/sample-data/remove → expect ok
+   *   3. GET /api/sample-data → confirm sampleAccounts /
+   *      sampleTransactions / sampleScheduled all zeroed and
+   *      `sampleDataSeeded` stays true (so the next unlock
+   *      doesn't re-seed). */
+  test("goal: clear sample data via Settings", async ({ page }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    const beforeRes = await request.get("/api/sample-data");
+    if (!beforeRes.ok()) {
+      await recordFinding({
+        page: "/settings",
+        action: `goal "clearSampleData" — GET /api/sample-data`,
+        severity: "warn",
+        kind: "issue",
+        message: `GET /api/sample-data → ${beforeRes.status()}`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "clearSampleData", null);
+      return;
+    }
+    const before = (await beforeRes.json()) as {
+      sampleAccounts: number;
+      sampleTransactions: number;
+      sampleScheduled: number;
+      sampleDataSeeded: boolean;
+    };
+    // If the fixture had no sample data to begin with (e.g. an
+    // already-wiped run), surface a finding so the operator knows
+    // why the test was a no-op — but don't fail.
+    const haveSampleData =
+      before.sampleAccounts > 0 ||
+      before.sampleTransactions > 0 ||
+      before.sampleScheduled > 0;
+    if (!haveSampleData) {
+      await recordFinding({
+        page: "/settings",
+        action: `goal "clearSampleData" — precondition`,
+        severity: "info",
+        kind: "verified",
+        message: `Nothing to wipe (sampleAccounts=${before.sampleAccounts}, sampleTxns=${before.sampleTransactions}, sampleSchedules=${before.sampleScheduled}). Skipping the destructive leg.`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "clearSampleData", {
+        timestamp: new Date().toISOString(),
+        route: "/settings",
+        triggerLabel: "GET /api/sample-data (no-op)",
+        fillSpec: {},
+        submitLabel: "(no wipe needed)",
+        verified: "api",
+      });
+      runCounters.goalsAchieved += 1;
+      return;
+    }
+
+    // POST the wipe.
+    const wipeRes = await request.post("/api/sample-data/remove");
+    const wipeOk = wipeRes.ok();
+    let wipeSummary: { ok?: boolean; counts?: Record<string, number> } | null =
+      null;
+    if (wipeOk) {
+      wipeSummary = (await wipeRes.json().catch(() => null)) as {
+        ok?: boolean;
+        counts?: Record<string, number>;
+      } | null;
+    }
+
+    // GET again to confirm the counts zeroed out.
+    const afterRes = await request.get("/api/sample-data");
+    const after = afterRes.ok()
+      ? ((await afterRes.json()) as {
+          sampleAccounts: number;
+          sampleTransactions: number;
+          sampleScheduled: number;
+          sampleDataSeeded: boolean;
+        })
+      : null;
+
+    const cleared =
+      after !== null &&
+      after.sampleAccounts === 0 &&
+      after.sampleTransactions === 0 &&
+      after.sampleScheduled === 0 &&
+      after.sampleDataSeeded === true;
+
+    await recordFinding({
+      page: "/settings",
+      action: `goal "clearSampleData" — wipe round-trip`,
+      severity: cleared ? "info" : "error",
+      kind: cleared ? "verified" : "issue",
+      message:
+        `Before: accts=${before.sampleAccounts} txns=${before.sampleTransactions} schedules=${before.sampleScheduled}. ` +
+        `Wipe ${wipeOk ? `OK (${JSON.stringify(wipeSummary?.counts ?? {})})` : `FAILED (${wipeRes.status()})`}. ` +
+        `After: ${after ? `accts=${after.sampleAccounts} txns=${after.sampleTransactions} schedules=${after.sampleScheduled} seededFlag=${after.sampleDataSeeded}` : "(GET failed)"}.`,
+    });
+    runCounters.findingsCount += 1;
+
+    if (cleared) {
+      recordGoalAttempt(appMap, "clearSampleData", {
+        timestamp: new Date().toISOString(),
+        route: "/settings",
+        triggerLabel: "POST /api/sample-data/remove",
+        fillSpec: {},
+        submitLabel: "POST /api/sample-data/remove",
+        verified: "api",
+      });
+      runCounters.goalsAchieved += 1;
+    } else {
+      recordGoalAttempt(appMap, "clearSampleData", null);
     }
   });
 });

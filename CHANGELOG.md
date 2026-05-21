@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.216.0 — 2026-05-21
+
+### Added
+- **`clearSampleData` smart-monkey goal** — last test in
+  `monkey-goals.spec.ts`. Verifies the
+  Settings → Sample data → "Remove sample data" round-trip:
+  GET `/api/sample-data` → POST `/api/sample-data/remove` → GET
+  again → confirm `sampleAccounts` / `sampleTransactions` /
+  `sampleScheduled` all zero AND `sampleDataSeeded` stays true
+  (so the next unlock doesn't re-seed). Pinned as the suite's
+  last destructive action so earlier tests still run against
+  the seeded baseline. AppMap schema bumped 2 → 3.
+- **`addTenToCategory` state-leak sentinel.** Silent in normal
+  runs; screams if the target category has more rows than the
+  current run posted. Closes the loop on the long-running "20
+  txns / $500 instead of 10 / $250" cashflow finding — the
+  0.213–0.214 TDZ cleanup retired the underlying cause, this
+  sentinel catches a regression if it returns.
+
+### Confirmed
+- Full e2e at 0.215.0 → **93 passed, 2 skipped, 0 failed in
+  7.1 min**. Bank Fees shows exactly 10 Jan-2026 txns in the
+  diagnostic dump, 0 pre-existing. The state-leak the monkey
+  finding flagged is gone.
+
 ## 0.215.0 — 2026-05-21
 
 ### Fixed

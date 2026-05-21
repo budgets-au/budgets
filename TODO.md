@@ -41,7 +41,7 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T13:09:12.536Z · 0 issues, 0 questions, 2 verified._
+_Last run: 2026-05-21T13:14:01.430Z · 0 issues, 0 questions, 2 verified._
 
 #### Smart Monkey expert system
 
@@ -57,7 +57,8 @@ _Last run: 2026-05-21T13:09:12.536Z · 0 issues, 0 questions, 2 verified._
 | `searchForNote` | ❌ | 0 | _(not yet)_ |
 | `clearSampleData` | ❌ | 0 | _(not yet)_ |
 | `rekeyPassphrase` | ❌ | 0 | _(not yet)_ |
-| `multiDbSwitcher` | ✅ | 1 | /dashboard · "Switcher → Create new database…" → "Create + switch back to Default" (dom) |
+| `multiDbSwitcher` | ❌ | 0 | _(not yet)_ |
+| `lockUnlockRoundTrip` | ✅ | 1 | /settings · "POST /api/lock" → "POST /api/unlock" (api) |
 
 _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
@@ -65,7 +66,7 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 3.8s |
+| Total wall time | 1.8s |
 | Routes visited | 0 |
 | Button clicks | 0 |
 | Switch toggles | 0 |
@@ -90,7 +91,8 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 - ❌ `searchForNote` — _(not yet completed)_
 - ❌ `clearSampleData` — _(not yet completed)_
 - ❌ `rekeyPassphrase` — _(not yet completed)_
-- ✅ `multiDbSwitcher` — `/dashboard` · click **Switcher → Create new database…** → fill → click **Create + switch back to Default** (verified via dom)
+- ❌ `multiDbSwitcher` — _(not yet completed)_
+- ✅ `lockUnlockRoundTrip` — `/settings` · click **POST /api/lock** → fill → click **POST /api/unlock** (verified via api)
 
 #### Vitest summary
 
@@ -102,11 +104,9 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 _Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
 
-##### /dashboard
-- ✅ **goal "multiDbSwitcher" — create + auto-switch** — POST /api/databases → 200; new profile "MD-mpfibvtv" is the active one.
-
-##### /unlock
-- ✅ **goal "multiDbSwitcher" — switch back to Default** — After switch+unlock, activeProfileId=default (expected default).
+##### /settings
+- ✅ **goal "lockUnlockRoundTrip" — POST /api/lock** — POST /api/lock → 200; subsequent GET /api/accounts → 307 Location:/unlock?next=%2Fapi%2Faccounts (expected 3xx → /unlock).
+- ✅ **goal "lockUnlockRoundTrip" — POST /api/unlock** — POST /api/unlock → 200; post-unlock GET /api/accounts → 200.
 
 <!-- monkey:end -->
 
@@ -149,7 +149,12 @@ X then verify X appears" flow below sits in this blind spot._
 
 #### Scheduled / Calendar
 
-- **Create scheduled → confirm on `/scheduled` AND `/calendar`** — monkey POSTs but never navigates to verify rendering.
+- ✅ Closed by `scheduleOnCalendar` monkey goal (earlier in 0.21x
+  series). POSTs a schedule, then navigates `/scheduled` AND
+  `/calendar` to grep the rendered DOM for the per-run payee
+  token. Three verification legs (API list + /scheduled DOM +
+  /calendar DOM) recorded as separate findings so a partial-pass
+  pinpoints which pipeline diverged.
 - **Edit OCCURRENCE vs. SERIES** — `/api/scheduled/[id]/replace` splits a series; needs targeted-occurrence test.
 - **Dismiss missed scheduled** — `/api/scheduled/[id]/dismiss-missed` uncovered.
 - **Scheduled-transfer false-missed regression** — 0.136 fix has unit coverage; an E2E walk would catch UI-side regressions.
@@ -185,7 +190,11 @@ X then verify X appears" flow below sits in this blind spot._
 
 #### Auth / session
 
-- **Lock / unlock round-trip** — destructive-banned.
+- ✅ Closed by `lockUnlockRoundTrip` monkey goal (0.219.0). POSTs
+  `/api/lock`, verifies the proxy redirects every non-allowlisted
+  route to `/unlock`, then POSTs `/api/unlock` and confirms
+  access is restored. Self-preserving (try/finally re-unlock so
+  later specs aren't blocked).
 - **Wrong-passphrase rate-limit / lockout** — 0.144 added a 5-attempts-per-60s limit on `/api/unlock` + `/api/rekey`; an E2E driver could verify the 429 trigger + Retry-After header.
 
 #### Cross-cutting blind spot

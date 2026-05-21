@@ -1743,6 +1743,130 @@ test.describe("smart monkey: goal-driven crawl", () => {
       }
     }
   });
+
+  /** Lock → unlock round-trip.
+   *
+   * `/api/lock` and `/api/unlock` are the household-wide "send
+   * everyone back to the passphrase screen" + "let them back in"
+   * pair. They're destructive-banned in the breadth-first crawl
+   * (locking mid-test would break every subsequent click) but
+   * trivially scriptable as a focused goal.
+   *
+   * Pinned last in the spec — same self-preservation pattern as
+   * `rekeyPassphrase` and `multiDbSwitcher` — so a partial-fail
+   * mid-lock doesn't leave later specs running against a locked
+   * DB. The finally block fires a best-effort unlock on the way
+   * out.
+   *
+   * Four legs:
+   *   1. Precondition: GET /api/accounts → 200 (proves we start
+   *      authenticated + unlocked).
+   *   2. POST /api/lock → 200, then GET /api/accounts with
+   *      `maxRedirects:0` should 3xx-redirect to /unlock — the
+   *      proxy intercepts every non-allowlisted route while
+   *      locked.
+   *   3. POST /api/unlock { passphrase } → 200.
+   *   4. GET /api/accounts → 200 again. */
+  test("goal: lock + unlock round-trip", async ({ page }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    const PASSPHRASE =
+      process.env.E2E_SQLITE_KEY ??
+      "0000000000000000000000000000000000000000000000000000000000000000";
+
+    let locked = false;
+
+    try {
+      // Leg 1: precondition.
+      const beforeRes = await request.get("/api/accounts");
+      if (!beforeRes.ok()) {
+        await recordFinding({
+          page: "/settings",
+          action: `goal "lockUnlockRoundTrip" — precondition`,
+          severity: "warn",
+          kind: "issue",
+          message: `GET /api/accounts → ${beforeRes.status()} before lock; can't run the test from this state.`,
+        });
+        runCounters.findingsCount += 1;
+        recordGoalAttempt(appMap, "lockUnlockRoundTrip", null);
+        return;
+      }
+
+      // Leg 2: lock.
+      const lockRes = await request.post("/api/lock");
+      const lockOk = lockRes.ok();
+      if (lockOk) locked = true;
+
+      // After lock, the proxy redirects every non-allowlisted
+      // route (including /api/accounts) to /unlock. Disable
+      // redirect-follow so we see the raw 307/302 response.
+      const lockedRes = await request.get("/api/accounts", {
+        maxRedirects: 0,
+      });
+      const lockedStatus = lockedRes.status();
+      const lockedLocation = lockedRes.headers()["location"] ?? "";
+      const lockedRedirect =
+        lockedStatus >= 300 &&
+        lockedStatus < 400 &&
+        lockedLocation.includes("/unlock");
+
+      await recordFinding({
+        page: "/settings",
+        action: `goal "lockUnlockRoundTrip" — POST /api/lock`,
+        severity: lockOk && lockedRedirect ? "info" : "error",
+        kind: lockOk && lockedRedirect ? "verified" : "issue",
+        message: `POST /api/lock → ${lockRes.status()}; subsequent GET /api/accounts → ${lockedStatus}${lockedLocation ? ` Location:${lockedLocation}` : ""} (expected 3xx → /unlock).`,
+      });
+      runCounters.findingsCount += 1;
+
+      // Leg 3 + 4: unlock + verify access restored.
+      const unlockRes = await request.post("/api/unlock", {
+        data: { passphrase: PASSPHRASE },
+      });
+      const unlockOk = unlockRes.ok();
+      if (unlockOk) locked = false;
+
+      const afterRes = await request.get("/api/accounts");
+      const afterOk = afterRes.ok();
+
+      await recordFinding({
+        page: "/settings",
+        action: `goal "lockUnlockRoundTrip" — POST /api/unlock`,
+        severity: unlockOk && afterOk ? "info" : "error",
+        kind: unlockOk && afterOk ? "verified" : "issue",
+        message: `POST /api/unlock → ${unlockRes.status()}; post-unlock GET /api/accounts → ${afterRes.status()}.`,
+      });
+      runCounters.findingsCount += 1;
+
+      const allOK = lockOk && lockedRedirect && unlockOk && afterOk;
+      if (allOK) {
+        recordGoalAttempt(appMap, "lockUnlockRoundTrip", {
+          timestamp: new Date().toISOString(),
+          route: "/settings",
+          triggerLabel: "POST /api/lock",
+          fillSpec: { passphrase: "(env)" },
+          submitLabel: "POST /api/unlock",
+          verified: "api",
+        });
+        runCounters.goalsAchieved += 1;
+      } else {
+        recordGoalAttempt(appMap, "lockUnlockRoundTrip", null);
+      }
+    } finally {
+      // Best-effort re-unlock — leaving the DB locked at test
+      // end-of-life would break any subsequent spec in the same
+      // run (they all hit the proxy's locked-redirect). The
+      // global-teardown can't help because it doesn't know the
+      // passphrase.
+      if (locked) {
+        await request
+          .post("/api/unlock", { data: { passphrase: PASSPHRASE } })
+          .catch(() => {});
+      }
+    }
+  });
 });
 
 /** Locate an "Add" / "New" / "Create" trigger button on the

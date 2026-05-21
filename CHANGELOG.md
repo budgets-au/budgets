@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.219.0 — 2026-05-21
+
+### Added
+- **`lockUnlockRoundTrip` smart-monkey goal** — closes the
+  "Lock / unlock round-trip" entry in the Auth/session
+  test-coverage gap. The two-endpoint pair was previously
+  destructive-banned in the breadth-first crawl (locking
+  mid-test would break every subsequent click); a focused
+  goal scripts it cleanly. Four legs:
+  1. Precondition: GET /api/accounts → 200 (unlocked).
+  2. POST /api/lock → 200; subsequent GET /api/accounts with
+     `maxRedirects:0` should 307-redirect to /unlock
+     (verifies the proxy intercepts every non-allowlisted
+     route while locked).
+  3. POST /api/unlock { passphrase } → 200.
+  4. Post-unlock GET /api/accounts → 200 (access restored).
+  Pinned last with a `try/finally` safety unlock so a
+  partial-fail can't leave later specs in the same run
+  facing a locked DB. AppMap schema 5 → 6.
+
+### Changed
+- **TODO cleanup**: the "Create scheduled → confirm on
+  `/scheduled` AND `/calendar`" gap was already closed by
+  the `scheduleOnCalendar` goal (shipped earlier in the
+  session). Marked closed in the test-coverage-gaps section.
+
 ## 0.218.0 — 2026-05-21
 
 ### Fixed

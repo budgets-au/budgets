@@ -729,6 +729,190 @@ test.describe("smart monkey: goal-driven crawl", () => {
       expect(createdIds.length).toBeGreaterThan(0);
     }
   });
+
+  /** Cross-page goal: create a scheduled transaction, then
+   * verify it renders on BOTH `/scheduled` (the list view) AND
+   * `/calendar` (the day-cell calendar). The four single-action
+   * goals all stop at "row exists in the DB"; this one closes
+   * the gap the TODO.md "Scheduled / Calendar" coverage entry
+   * called out — the calendar's cashflow-forecast SQL is its
+   * own pipeline, distinct from the list query, so a regression
+   * in either path would slip past the createSchedule goal.
+   *
+   * Test data: schedule starts today, monthly frequency, so the
+   * calendar's default month view (it doesn't read URL params
+   * for the month — defaults to today via internal state) has
+   * a guaranteed occurrence to render. Payee carries an
+   * identifiable per-run token; the calendar cell shows the
+   * payee text directly (cashflow-calendar.tsx:1368-1397), so
+   * a body-text search hits cleanly without DOM gymnastics.
+   *
+   * Three verification legs:
+   *   1. `GET /api/scheduled` finds the row by payee.
+   *   2. Navigate `/scheduled`, grep body text for token.
+   *   3. Navigate `/calendar`, grep body text for token.
+   * Each leg gets its own finding so a partial-pass run
+   * narrows the regression to one pipeline. */
+  test("goal: create scheduled → verify on /scheduled list + /calendar", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    const accountsRes = await request.get("/api/accounts");
+    if (!accountsRes.ok()) {
+      await recordFinding({
+        page: "/scheduled",
+        action: `goal "scheduleOnCalendar" — setup`,
+        severity: "warn",
+        kind: "issue",
+        message: `Could not load accounts (${accountsRes.status()}) for setup.`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "scheduleOnCalendar", null);
+      return;
+    }
+    const accounts = (await accountsRes.json()) as Array<{
+      id: string;
+      name: string;
+    }>;
+    const account = accounts[0];
+    if (!account) {
+      await recordFinding({
+        page: "/scheduled",
+        action: `goal "scheduleOnCalendar" — setup`,
+        severity: "warn",
+        kind: "issue",
+        message: `Skipping — need at least one account (have ${accounts.length}).`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "scheduleOnCalendar", null);
+      return;
+    }
+
+    // Today as ISO. The calendar opens to today's month by
+    // default, so a schedule starting today has a guaranteed
+    // occurrence in the rendered grid.
+    const today = new Date().toISOString().slice(0, 10);
+    const TOKEN = `${RUN_TOKEN}-cal-sched`;
+
+    const createRes = await request.post("/api/scheduled", {
+      data: {
+        kind: "schedule",
+        accountId: account.id,
+        payee: TOKEN,
+        amount: "-50.00",
+        type: "expense",
+        frequency: "monthly",
+        startDate: today,
+        interval: 1,
+      },
+    });
+    if (!createRes.ok()) {
+      const body = (await createRes.text().catch(() => "")).slice(0, 200);
+      await recordFinding({
+        page: "/scheduled",
+        action: `goal "scheduleOnCalendar" — POST /api/scheduled`,
+        severity: "error",
+        kind: "issue",
+        message: `Returned ${createRes.status()}. Body: ${body || "[empty]"}`,
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "scheduleOnCalendar", null);
+      return;
+    }
+    runCounters.formSubmits += 1;
+    const createdRow = (await createRes
+      .json()
+      .catch(() => null)) as { id?: string } | null;
+
+    // Leg 1: API list. Hits the same endpoint the /scheduled
+    // page uses for hydration, so a divergence between this
+    // and Leg 2 points at the SWR / list-rendering layer
+    // rather than the API.
+    const listRes = await request.get("/api/scheduled");
+    const apiHit = listRes.ok()
+      ? ((await listRes.json()) as Array<{ payee: string | null }>).some(
+          (s) => s.payee === TOKEN,
+        )
+      : false;
+
+    // Leg 2: /scheduled DOM.
+    await page.goto("/scheduled");
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(500);
+    runCounters.routesVisited += 1;
+    const scheduledText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
+    const scheduledHit = scheduledText.includes(TOKEN);
+
+    // Leg 3: /calendar DOM. The calendar fetches cashflow
+    // forecast data for the visible month and renders payee
+    // text per scheduled occurrence; today's date should have
+    // our token rendered in its cell.
+    await page.goto("/calendar");
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(800);
+    runCounters.routesVisited += 1;
+    const calendarText = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "");
+    const calendarHit = calendarText.includes(TOKEN);
+
+    await recordFinding({
+      page: "/scheduled",
+      action: `goal "scheduleOnCalendar" — verify API list`,
+      severity: apiHit ? "info" : "error",
+      kind: apiHit ? "question" : "issue",
+      message: `GET /api/scheduled ${apiHit ? "found" : "DID NOT find"} a row with payee "${TOKEN}".`,
+    });
+    runCounters.findingsCount += 1;
+    await recordFinding({
+      page: "/scheduled",
+      action: `goal "scheduleOnCalendar" — verify /scheduled DOM`,
+      severity: scheduledHit ? "info" : "error",
+      kind: scheduledHit ? "question" : "issue",
+      message: `DOM on /scheduled ${scheduledHit ? "contained" : "DID NOT contain"} the token "${TOKEN}".`,
+    });
+    runCounters.findingsCount += 1;
+    await recordFinding({
+      page: "/calendar",
+      action: `goal "scheduleOnCalendar" — verify /calendar DOM`,
+      severity: calendarHit ? "info" : "error",
+      kind: calendarHit ? "question" : "issue",
+      message: `DOM on /calendar ${calendarHit ? "contained" : "DID NOT contain"} the token "${TOKEN}". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).`,
+    });
+    runCounters.findingsCount += 1;
+
+    const allOK = apiHit && scheduledHit && calendarHit;
+    if (allOK) {
+      recordGoalAttempt(appMap, "scheduleOnCalendar", {
+        timestamp: new Date().toISOString(),
+        route: "/calendar",
+        triggerLabel: "POST /api/scheduled",
+        fillSpec: {
+          accountId: account.id,
+          payee: TOKEN,
+          amount: "-50.00",
+          startDate: today,
+          frequency: "monthly",
+        },
+        submitLabel: "POST /api/scheduled",
+        verified: "dom",
+      });
+      runCounters.goalsAchieved += 1;
+    } else {
+      recordGoalAttempt(appMap, "scheduleOnCalendar", null);
+      // Hard sanity: the POST returned 201, so at minimum the
+      // row should be findable via the API. If even apiHit is
+      // false the seed data + route are broken.
+      expect(createdRow?.id).toBeTruthy();
+    }
+  });
 });
 
 /** Locate an "Add" / "New" / "Create" trigger button on the

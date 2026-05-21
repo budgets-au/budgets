@@ -51,13 +51,15 @@ export type GoalKey =
   | "createTransaction"
   | "createBudget"
   | "createSchedule"
-  | "addTenToCategory";
+  | "addTenToCategory"
+  | "scheduleOnCalendar";
 
 export const GOAL_KEYS: readonly GoalKey[] = [
   "createTransaction",
   "createBudget",
   "createSchedule",
   "addTenToCategory",
+  "scheduleOnCalendar",
 ];
 
 /** Recipe for repeating a previously-successful goal attempt. The
@@ -156,6 +158,7 @@ export function emptyAppMap(): AppMap {
       createBudget: goal(),
       createSchedule: goal(),
       addTenToCategory: goal(),
+      scheduleOnCalendar: goal(),
     },
     runs: [],
   };

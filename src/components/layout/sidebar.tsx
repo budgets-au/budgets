@@ -289,7 +289,15 @@ function VersionFooter() {
     !!latest && compareSemver(APP_VERSION, latest) < 0;
   return (
     <div className="border-t px-6 pt-3 pb-1 text-center text-[10px] uppercase tracking-wider text-muted-foreground/60 tabular-nums">
-      <div>v{APP_VERSION}</div>
+      <Link
+        href={`https://github.com/budgets-au/budgets/releases/tag/v${APP_VERSION}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="View release notes on GitHub"
+        className="hover:text-foreground transition-colors"
+      >
+        v{APP_VERSION}
+      </Link>
       {hasUpdate && (
         <Link
           href="https://github.com/budgets-au/budgets/pkgs/container/budgets"

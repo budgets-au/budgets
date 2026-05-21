@@ -25,7 +25,7 @@ shipped in 0.166.0._
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T01:06:53.203Z · 0 issues, 0 questions._
+_Last run: 2026-05-21T03:58:15.914Z · 0 issues, 0 questions._
 
 #### Smart Monkey expert system
 
@@ -33,8 +33,8 @@ _Last run: 2026-05-21T01:06:53.203Z · 0 issues, 0 questions._
 | --- | --- | --- | --- |
 | `createTransaction` | ✅ | 1 | /transactions · "Add transaction" → "Add" (dom) |
 | `createBudget` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `createSchedule` | ✅ | 1 | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `addTenToCategory` | ✅ | 1 | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
+| `createSchedule` | ❌ | 1 | _(not yet)_ |
+| `addTenToCategory` | ❌ | 1 | _(not yet)_ |
 
 _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
@@ -42,25 +42,25 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 86.5s |
-| Routes visited | 1 |
-| Button clicks | 8 |
+| Total wall time | 201.5s |
+| Routes visited | 0 |
+| Button clicks | 0 |
 | Switch toggles | 0 |
 | Select cycles | 0 |
-| Text inputs filled | 17 |
-| Dialogs opened | 3 |
-| Form submits | 13 |
+| Text inputs filled | 0 |
+| Dialogs opened | 0 |
+| Form submits | 0 |
 | Links discovered | 0 |
 | Console errors | 0 |
-| Goals attempted | 4 |
-| Goals achieved | 4 |
-| Findings logged | 3 |
+| Goals attempted | 0 |
+| Goals achieved | 0 |
+| Findings logged | 0 |
 
 ##### Workflows completed
 - ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
 - ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `addTenToCategory` — `/transactions` · click **POST /api/transactions × 10** → fill → click **POST /api/transactions** (verified via api)
+- ❌ `createSchedule` — _(not yet completed)_
+- ❌ `addTenToCategory` — _(not yet completed)_
 
 #### Vitest summary
 

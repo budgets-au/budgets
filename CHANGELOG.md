@@ -9,6 +9,45 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.203.0 — 2026-05-20
+
+### Added
+- **Disaster-recovery e2e spec — backup → modify → restore
+  round-trip.** New file
+  [tests/e2e/backup-restore.spec.ts](tests/e2e/backup-restore.spec.ts)
+  exercises the destructive flow the smart-monkey crawl
+  can't reach (`restore` is destructive-banned in the click
+  crawl, and the post-restore re-unlock plus cross-state
+  comparison needs knowledge the monkey doesn't carry).
+
+  The spec is the disaster-recovery **contract**: a backup
+  taken at time T must, when restored, return the live DB
+  to the exact state at T. Without this test a regression
+  in `swapLive()` / WAL handling / passphrase-rebind could
+  silently lose a household's ledger.
+
+  Flow:
+  1. Sign in (JWT cookie survives the swap — references the
+     `admin` user id which the restored DB also has).
+  2. Snapshot the baseline transaction count.
+  3. `POST /api/backup` → manual snapshot.
+  4. `POST /api/transactions` → add a marker row.
+  5. `POST /api/backup/restore` with the snapshot + passphrase
+     → returns `{ ok, redirect: "/unlock" }`.
+  6. `POST /api/unlock` → re-keys the in-process SQLCipher
+     connection against the swapped file.
+  7. Re-fetch `/api/transactions` → marker is gone, row count
+     back to baseline. Plus a `pre-restore` snapshot now
+     exists in the backups dir (the user's forward-undo path).
+
+  One latent gotcha caught + documented while writing this:
+  `swapLive()` doesn't just *copy* the snapshot over the live
+  path — it *renames* it. So the consumed snapshot file is
+  gone from the backups dir after restore. The v1 test
+  asserted "snapshot still on disk" and failed; the v2
+  asserts the opposite (and explains why) so the next
+  reader doesn't re-introduce the bug.
+
 ## 0.202.0 — 2026-05-20
 
 ### Changed

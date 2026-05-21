@@ -25,7 +25,7 @@ shipped in 0.166.0._
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-20T14:08:36.874Z · 3 issues, 5 questions._
+_Last run: 2026-05-21T01:06:53.203Z · 0 issues, 0 questions._
 
 #### Smart Monkey expert system
 
@@ -68,27 +68,7 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 ✅ **353 passed** across 38 files (13.3s).
 
-#### Issues
-
-##### /scheduled
-- 🟡 **guardrail probe: dayOfMonth=42 (exceeds zod max 31)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"dayOfMonth","message":"Too big: expected number to be <=31","code":"too_big"}]}
-- 🟡 **guardrail probe: type=transfer w/ no transferToAccountId** — → 400 ❌ {"error":"transferToAccountId is required when type=transfer","issues":[{"path":"transferToAccountId","message":"transferToAccountId is required when type=transfer","code":"cross_field"}]}
-- 🟡 **guardrail probe: amount with letter (regex violation)** — → 400 ❌ {"error":"Invalid request body","issues":[{"path":"amount","message":"must be a numeric string","code":"invalid_format"}]}
-
-#### Questions for review
-
-_The crawl filled these forms and clicked their submit, but saw no network call, toast, or navigation. Possibly a silent no-op bug, possibly intentional — decide which._
-
-##### /reports
-- ❓ **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=10 (expected 10), |total|=250 (expected 250.00).
-
-##### /scheduled
-- ❓ **guardrail probe: baseline (Account + defaults)** — → 201 ✅ accepted (cleaned up)
-- ❓ **guardrail probe: frequency=once w/ no endDate** — → 201 ✅ accepted (cleaned up)
-
-##### /transactions
-- ❓ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpe4ynbb-bulk-*".
-- ❓ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpe4ynbb-bulk-".
+_No issues or questions on the last run — only the expert-system summary above._
 
 <!-- monkey:end -->
 

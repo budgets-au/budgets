@@ -52,7 +52,7 @@ up for "next session" into the top section.
 ### 1000-monkeys crawl findings
 
 <!-- monkey:start -->
-_Last run: 2026-05-21T10:30:54.912Z · 0 issues, 0 questions, 0 verified._
+_Last run: 2026-05-21T10:40:19.612Z · 0 issues, 0 questions, 0 verified._
 
 #### Smart Monkey expert system
 
@@ -128,7 +128,6 @@ X then verify X appears" flow below sits in this blind spot._
 
 #### Transactions
 
-- **Bulk recategorise** — multi-select + change category + reload + verify everywhere (category-spend widget, cashflow report). Monkey doesn't multi-select.
 - **Transfer-pair confirmation** — `/api/transfers/suggestions/[id]/confirm` should drop both legs from income/expense totals. Uncovered.
 - **Saved-filter delete + reorder** — `saved-filters.spec.ts` covers save only.
 - **External-counterparty pairing → CSV reconciliation** — 0.137 minted synthetic legs; the cross-account promotion in commit-batched is uncovered end-to-end.
@@ -249,6 +248,17 @@ X then verify X appears" flow below sits in this blind spot._
 ## Done / dropped
 
 ### 2026-05-21
+
+- **Bulk recategorise e2e (0.210.0).**
+  `tests/e2e/bulk-recategorise.spec.ts` drives the multi-select
+  toolbar end-to-end: seed 5 txns in cat A → URL-filter via
+  `?search=` → select-all → pick cat B in the combobox → Apply →
+  verify (a) PATCH `/api/transactions/bulk` returns `{updated: 5}`,
+  (b) GET `/api/transactions` shows the new categoryId on every
+  seeded row, (c) GET `/api/reports/cashflow` shows the source
+  bucket up by $125 and the target down by $125. Closes the
+  "Bulk recategorise" entry in the Transactions test-coverage gap
+  (was: "Monkey doesn't multi-select").
 
 - **Backup-scheduler + retention pruning unit-tested (0.209.0).**
   `shouldFireBackup(cfg, nowMs)` extracted from the scheduler's

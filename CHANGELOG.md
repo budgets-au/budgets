@@ -9,6 +9,27 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.210.0 — 2026-05-21
+
+### Added
+- **Bulk recategorise e2e coverage** (`tests/e2e/bulk-recategorise.spec.ts`).
+  The transactions multi-select toolbar flow has been a blind spot —
+  smart-monkey drives controls one at a time, so a regression in the
+  bulk PATCH path, the SearchableCombobox category picker, or the
+  optimistic SWR cache patch could ship silently. New spec seeds 5
+  transactions in a source category via the API, drives the UI to
+  filter (`?search=<token>`) + select-all + pick a target category +
+  Apply, then verifies the move on three legs:
+  (1) PATCH `/api/transactions/bulk` returned `{updated: 5}`,
+  (2) GET `/api/transactions` shows every seeded row's `categoryId`
+      now matches the target,
+  (3) GET `/api/reports/cashflow` shows the source month's bucket
+      went UP by $125 (less negative) and the target's went DOWN
+      by $125 (more negative).
+  The cashflow leg is the "verify everywhere" leg from the TODO —
+  the cashflow report is the truth source the category-spend
+  dashboard widget pulls from too.
+
 ## 0.209.0 — 2026-05-21
 
 ### Added

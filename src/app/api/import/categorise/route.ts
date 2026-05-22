@@ -600,6 +600,30 @@ export const POST = withAuth(async (request) => {
     return { accountId: null, accountName: null, via: null };
   }
 
+  // Issue #95: pre-warm both caches with every distinct bankAccountId
+  // referenced in the import. Without this, the first occurrence of
+  // each unique id fires two sequential resolver queries inside the
+  // per-row loop — 5 distinct bank IDs across 1000 rows = 10
+  // sequential queries before any progress. After this prewarm, the
+  // per-row loop is pure Map lookup.
+  const distinctBankIds = Array.from(
+    new Set(
+      rows
+        .map((r) => r.qifAccount?.name)
+        .filter((v): v is string => !!v),
+    ),
+  );
+  await Promise.all(
+    distinctBankIds.map(async (bid) => {
+      const [aliasHit, last4Hit] = await Promise.all([
+        resolveAccountByAlias("bank-account", bid),
+        resolveAccountByLast4(bid),
+      ]);
+      aliasCache.set(bid, aliasHit);
+      last4Cache.set(bid, last4Hit);
+    }),
+  );
+
   const resolutionByImportHash = new Map<string, Resolution>();
   for (const r of rows) {
     const match = matchByImportHash.get(r.importHash);

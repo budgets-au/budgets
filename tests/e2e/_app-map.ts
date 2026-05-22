@@ -308,7 +308,21 @@ export function appendRun(map: AppMap, run: RunSummary): void {
 export function isInternalPath(path: string | null | undefined): boolean {
   if (!path) return false;
   if (path.startsWith("/api/")) return false; // never click an API URL
-  if (path.startsWith("/login") || path === "/unlock") return false; // would log us out
+  // Issue #68: exact match on both. `startsWith("/login")` was
+  // inconsistent with `=== "/unlock"` — the crawl would also reject
+  // `/loginRequest` / `/login/forgot` etc. We don't have such
+  // routes today but the asymmetry made the rule's intent
+  // ambiguous. Also reject the whole `/login/*` and `/unlock/*`
+  // subtrees explicitly (e.g. a future magic-link `/login/verify`
+  // shouldn't ricochet through the auth flow mid-crawl).
+  if (
+    path === "/login" ||
+    path === "/unlock" ||
+    path.startsWith("/login/") ||
+    path.startsWith("/unlock/")
+  ) {
+    return false;
+  }
   return path.startsWith("/") && !path.startsWith("//");
 }
 

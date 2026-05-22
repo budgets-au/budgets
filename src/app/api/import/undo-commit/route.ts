@@ -44,15 +44,19 @@ export const POST = withAuth(async (request) => {
 
   await db.delete(importLogs).where(inArray(importLogs.id, importLogIds));
 
-  // Recompute currentBalance for every account whose transactions changed.
-  for (const accountId of accountIdSet) {
+  // Recompute currentBalance for every account whose transactions
+  // changed. Issue #74: was N separate UPDATEs in a loop; now one
+  // UPDATE correlated against accounts.id so each affected row
+  // gets its balance recomputed in a single statement.
+  const accountIds = Array.from(accountIdSet);
+  if (accountIds.length > 0) {
     await db
       .update(accounts)
       .set({
-        currentBalance: sql`${accounts.startingBalance} + (SELECT COALESCE(SUM(amount), 0) FROM ${transactions} WHERE ${transactions.accountId} = ${accountId})`,
+        currentBalance: sql`${accounts.startingBalance} + COALESCE((SELECT SUM(amount) FROM ${transactions} WHERE ${transactions.accountId} = ${accounts.id}), 0)`,
         updatedAt: new Date(),
       })
-      .where(eq(accounts.id, accountId));
+      .where(inArray(accounts.id, accountIds));
   }
 
   return NextResponse.json({

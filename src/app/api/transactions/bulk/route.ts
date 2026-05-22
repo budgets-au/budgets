@@ -57,14 +57,19 @@ export const DELETE = withAuth(async (request) => {
   const accountIds = Array.from(
     new Set(deleted.map((r) => r.accountId).filter((x): x is string => !!x)),
   );
-  for (const accountId of accountIds) {
+  // Issue #74: was looping per-account UPDATE with a correlated
+  // SUM subquery — N writes + N full account-scoped SUMs. Now one
+  // UPDATE that correlates against `accounts.id` via SQL so each
+  // touched account gets its balance recomputed in a single
+  // statement. Same shape as `/api/import/undo-commit` uses below.
+  if (accountIds.length > 0) {
     await db
       .update(accounts)
       .set({
-        currentBalance: sql`${accounts.startingBalance} + (SELECT COALESCE(SUM(amount), 0) FROM ${transactions} WHERE ${transactions.accountId} = ${accountId})`,
+        currentBalance: sql`${accounts.startingBalance} + COALESCE((SELECT SUM(amount) FROM ${transactions} WHERE ${transactions.accountId} = ${accounts.id}), 0)`,
         updatedAt: new Date(),
       })
-      .where(eq(accounts.id, accountId));
+      .where(inArray(accounts.id, accountIds));
   }
 
   return NextResponse.json({

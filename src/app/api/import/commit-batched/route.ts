@@ -278,15 +278,25 @@ async function runCommit(request: Request) {
       ...dupeUpdates.map((u) => u.existingRow.accountId),
     ]),
   );
+  // Issue #76: was N sequential MAX queries per touched account.
+  // One GROUP BY does the same in a single round-trip; missing
+  // accounts (no prior txns) default to -1 below.
   const maxByAccount = new Map<string, number>();
-  for (const accountId of touchedAccountIds) {
-    const [maxRow] = await db
+  if (touchedAccountIds.length > 0) {
+    const maxRows = await db
       .select({
+        accountId: transactions.accountId,
         m: sql<number>`COALESCE(MAX(${transactions.postedSeq}), -1)`,
       })
       .from(transactions)
-      .where(eq(transactions.accountId, accountId));
-    maxByAccount.set(accountId, Number(maxRow?.m ?? -1));
+      .where(inArray(transactions.accountId, touchedAccountIds))
+      .groupBy(transactions.accountId);
+    for (const r of maxRows) {
+      maxByAccount.set(r.accountId, Number(r.m ?? -1));
+    }
+    for (const id of touchedAccountIds) {
+      if (!maxByAccount.has(id)) maxByAccount.set(id, -1);
+    }
   }
 
   const importLogIds: string[] = [];

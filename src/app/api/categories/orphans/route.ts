@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { categories, transactions, scheduledTransactions } from "@/db/schema";
 import { withAdminAuth } from "@/lib/api/route-guards";
@@ -60,8 +60,8 @@ export const POST = withAdminAuth(async () => {
   const orphans = await findOrphans();
   const ids = orphans.map((o) => o.id);
   if (ids.length === 0) return NextResponse.json({ ok: true, removed: 0 });
-  for (const id of ids) {
-    await db.delete(categories).where(eq(categories.id, id));
-  }
+  // Issue #90: was N separate DELETEs. One `inArray` does the same
+  // in a single statement.
+  await db.delete(categories).where(inArray(categories.id, ids));
   return NextResponse.json({ ok: true, removed: ids.length });
 });

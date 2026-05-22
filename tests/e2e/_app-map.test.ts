@@ -312,6 +312,17 @@ describe("isInternalPath", () => {
     expect(isInternalPath("/unlock")).toBe(false);
   });
 
+  it("rejects /login/* and /unlock/* subtrees (#68)", () => {
+    expect(isInternalPath("/login/forgot")).toBe(false);
+    expect(isInternalPath("/login/verify")).toBe(false);
+    expect(isInternalPath("/unlock/recover")).toBe(false);
+  });
+
+  it("accepts non-auth paths that happen to start with login/unlock letters (#68)", () => {
+    expect(isInternalPath("/loginRequest")).toBe(true);
+    expect(isInternalPath("/unlocked-status")).toBe(true);
+  });
+
   it("rejects protocol-relative URLs (//cdn.example.com)", () => {
     expect(isInternalPath("//evil.com")).toBe(false);
   });

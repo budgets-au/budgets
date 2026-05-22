@@ -9,6 +9,46 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.247.0 — 2026-05-22
+
+### Fixed
+- **`/api/transactions/bulk` and `/api/import/undo-commit` recompute
+  balances in one UPDATE instead of N** (#74). Was looping a
+  per-account `UPDATE … (SELECT SUM ...)` correlated subquery; now
+  one statement that correlates against `accounts.id` for every
+  affected row.
+- **`/api/import/commit-batched` MAX(posted_seq) lookup is now a
+  single GROUP BY** (#76). Was firing one SELECT per touched
+  account in a sequential loop; one round-trip for a multi-account
+  CSV.
+- **`/api/categories/orphans` POST uses `inArray`** (#90). Was
+  looping per-id DELETEs.
+- **`/api/import/categorise` pre-warms account-resolution caches
+  in parallel via `Promise.all`** (#95). Five distinct bank-IDs
+  across a 1000-row import used to fire 10 sequential resolver
+  queries inside the per-row loop; now resolved up front and the
+  per-row loop is pure Map lookup.
+- **`tests/e2e/_app-map.ts:isInternalPath` now exact-matches both
+  `/login` and `/unlock`** (#68). Previous asymmetry
+  (`startsWith("/login")` vs `=== "/unlock"`) would reject benign
+  paths like `/loginRequest`. Now explicit on the subtrees we
+  refuse to crawl into.
+- **`tests/e2e/_helpers.ts:captureErrors` filters benign NextAuth
+  session-retry warnings.** The `Failed to fetch.*errors.authjs.dev`
+  / `_getSession` console-error pair fires transiently during e2e
+  when the build's Node server momentarily refuses a session ping;
+  the retry succeeds on the next cycle and the session stays
+  valid. Was making `import-csv-commit.spec.ts` falsely fail; now
+  filtered with a documented entry in the ignore-list.
+
+### Deferred
+- **#80** — folding `pairTransfersInWindow`'s per-pair transactions
+  into a single outer transaction conflicts with the race-check
+  shipped in 0.243.0 (#60), which depends on per-pair rollback
+  semantics. Reverting that to bundle pairs would let a single
+  race-loser roll back the whole batch. Needs a different shape
+  (e.g. retry inside the outer-tx).
+
 ## 0.246.0 — 2026-05-22
 
 ### Added

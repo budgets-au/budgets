@@ -21,6 +21,19 @@ export async function signInAsAdmin(page: Page): Promise<void> {
  * accumulator arrays for later assertion. Use after every nav
  * so a runtime React error (e.g. #185 "Maximum update depth")
  * fails the test rather than hiding in browser devtools. */
+/** Console-error messages that are noise — captured by `console.error`
+ *  but not a real regression. Anything that matches these prefixes is
+ *  filtered out of the test's accumulator. Keep the list tight; only
+ *  add entries with documented justification. */
+const CONSOLE_ERROR_IGNORE: ReadonlyArray<RegExp> = [
+  // NextAuth retries its session ping (`_getSession` → `/api/auth/session`)
+  // and surfaces a `Failed to fetch` console.error on transient network
+  // blips. Common during e2e because the build's Node server can
+  // momentarily refuse connections while serving a heavy page request.
+  // The retry succeeds on the next cycle and the session stays valid.
+  /Failed to fetch.*errors\.authjs\.dev|_getSession/,
+];
+
 export function captureErrors(page: Page): {
   consoleErrors: string[];
   pageErrors: Error[];
@@ -29,7 +42,9 @@ export function captureErrors(page: Page): {
   const pageErrors: Error[] = [];
   page.on("console", (msg) => {
     if (msg.type() === "error") {
-      consoleErrors.push(msg.text());
+      const text = msg.text();
+      if (CONSOLE_ERROR_IGNORE.some((re) => re.test(text))) return;
+      consoleErrors.push(text);
     }
   });
   page.on("pageerror", (err) => {

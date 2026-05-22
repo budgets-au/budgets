@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { signInAsAdmin } from "./_helpers";
+import {
+  signInAsAdmin,
+  seedCategory,
+  seedTransactions,
+  getFirstAccountId,
+} from "./_helpers";
 
 /** Bulk recategorise on /transactions — multi-select + change category +
  * verify the move propagates everywhere it has to.
@@ -36,50 +41,46 @@ test.describe("bulk recategorise: /transactions toolbar → cashflow report", ()
     await signInAsAdmin(page);
     const request = page.context().request;
 
-    // 1. Create two test-only expense categories with per-run unique
-    // names. Avoid using seed cats — a known concurrent-seed race
-    // (multiple concurrent unlock() calls during boot can each
-    // re-run `seedSystemCategoriesIfMissing` and double-insert the
-    // default 30 cats) means seed names like "Charity" or "Bank
-    // Fees" can have multiple rows, and the combobox's name search
-    // then surfaces both, which we can't disambiguate by label.
-    // Per-run-token names guarantee uniqueness across runs AND
-    // within a run.
-    const createCat = async (name: string): Promise<{ id: string; name: string }> => {
-      const res = await request.post("/api/categories", {
-        data: { name, type: "expense", color: "#64748b" },
-      });
-      expect(res.ok(), `failed to create test category "${name}"`).toBeTruthy();
-      return (await res.json()) as { id: string; name: string };
-    };
-    const sourceCat = await createCat(`${RUN_TOKEN}-source`);
-    const targetCat = await createCat(`${RUN_TOKEN}-target`);
+    // 1. Two test-only expense categories with per-run unique names.
+    // Avoid using seed cats — a known concurrent-seed race
+    // (multiple concurrent unlock() calls during boot could each
+    // re-run `seedSystemCategoriesIfMissing` and double-insert
+    // before the 0.244.0 BEGIN IMMEDIATE fix) means seed names
+    // like "Charity" or "Bank Fees" can have multiple rows on
+    // legacy DBs, and the combobox's name search then surfaces
+    // both, which we can't disambiguate by label. Per-run-token
+    // names guarantee uniqueness across runs AND within a run.
+    // Issue #41: shared `seedCategory` helper replaces the
+    // hand-rolled `createCat` closure.
+    const ctx = page.context();
+    const sourceCat = await seedCategory(ctx, {
+      name: `${RUN_TOKEN}-source`,
+      type: "expense",
+    });
+    const targetCat = await seedCategory(ctx, {
+      name: `${RUN_TOKEN}-target`,
+      type: "expense",
+    });
 
-    // 2. Need an account for the seed POST. Grab the first non-archived.
-    const accountsRes = await request.get("/api/accounts");
-    expect(accountsRes.ok()).toBeTruthy();
-    const accounts = (await accountsRes.json()) as Array<{ id: string }>;
-    expect(accounts.length).toBeGreaterThan(0);
-    const accountId = accounts[0].id;
+    // 2. Anchor txns against the first non-archived account.
+    const accountId = await getFirstAccountId(ctx);
 
-    // 3. Seed SEED_COUNT transactions in the SOURCE category. Each carries
-    // an identifiable per-run token so we can filter the /transactions
-    // view to just our rows.
-    const seededIds: string[] = [];
-    for (let i = 0; i < SEED_COUNT; i++) {
-      const res = await request.post("/api/transactions", {
-        data: {
-          accountId,
+    // 3. Seed SEED_COUNT transactions in the SOURCE category. Each
+    // carries an identifiable per-run token so we can filter the
+    // /transactions view to just our rows. Issue #41: shared
+    // `seedTransactions` helper replaces the per-row POST loop.
+    const seededIds = (
+      await seedTransactions(
+        ctx,
+        accountId,
+        Array.from({ length: SEED_COUNT }, (_, i) => ({
           date: TXN_DATE,
           amount: TXN_AMOUNT,
           payee: `${RUN_TOKEN}-${i}`,
           categoryId: sourceCat.id,
-        },
-      });
-      expect(res.ok()).toBeTruthy();
-      const row = (await res.json()) as { id: string };
-      seededIds.push(row.id);
-    }
+        })),
+      )
+    ).map((r) => r.id);
     expect(seededIds).toHaveLength(SEED_COUNT);
 
     // 4. Capture the BEFORE state of the cashflow report so the AFTER

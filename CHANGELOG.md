@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.252.0 — 2026-05-22
+
+### Added
+- **Shared seed-data fixtures helpers** (#41). Five new exports in
+  `tests/e2e/_helpers.ts`:
+  - `getFirstAccountId(ctx)` — anchor txns against an existing
+    account without re-issuing the GET /api/accounts boilerplate.
+  - `seedAccount(ctx, { name, type?, color?, currentBalance? })`
+  - `seedCategory(ctx, { name, type, color? })`
+  - `seedTransaction(ctx, { accountId, date, amount, payee?, categoryId?, notes? })`
+  - `seedTransactions(ctx, accountId, rows[])` (sequential for
+    deterministic ordering).
+
+  Each throws on non-2xx with the response body in the message so
+  setup-time mismatches fail the test with the actionable error
+  rather than the silent downstream symptom. `bulk-recategorise.spec.ts`
+  refactored to use them — the new e2e specs added below already
+  start from the same primitives.
+
+- **E2E spec for the scheduled-dismiss-missed flow** (#16). Three
+  API legs covered: `POST .../dismiss-missed` (upsert) including
+  re-POST idempotency / note amendment, `DELETE` missing-param
+  guard (400), and `DELETE` happy-path. `GET
+  /api/scheduled/dismissed-missed` consulted between each leg to
+  pin the contract.
+
 ## 0.251.0 — 2026-05-22
 
 ### Fixed

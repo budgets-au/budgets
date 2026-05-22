@@ -15,7 +15,7 @@ are in [CHANGELOG.md](CHANGELOG.md).
 ## Latest smart-monkey run
 
 <!-- monkey:start -->
-_Last run: 2026-05-22T06:12:54.595Z · 1 issue, 0 questions, 8 verified._
+_Last run: 2026-05-22T06:25:42.769Z · 0 issues, 0 questions, 0 verified._
 
 #### Smart Monkey expert system
 
@@ -80,23 +80,6 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 ✅ **353 passed** across 38 files (13.3s).
 
-#### Issues
-
-##### /settings
-- 🔴 **goal "rekeyPassphrase" — revert leg** — Revert POST /api/rekey 1111…→0000… returned 400. Next next-start boot may fail to unlock.
-
-#### Verified
-
-_Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
-
-##### /settings
-- ✅ **goal "rekeyPassphrase" — reject wrong current** — POST /api/rekey with wrong current → 400 (rejected as expected).
-- ✅ **goal "rekeyPassphrase" — reject too-short next** — POST /api/rekey with next="short" → 400 (rejected as expected).
-- ✅ **goal "rekeyPassphrase" — rotate and keep session** — POST /api/rekey → 200; post-rotate GET /api/accounts → 200.
-- ✅ **goal "lockUnlockRoundTrip" — POST /api/lock** — POST /api/lock → 200; subsequent GET /api/accounts → 307 Location:/unlock?next=%2Fapi%2Faccounts (expected 3xx → /unlock).
-- ✅ **goal "lockUnlockRoundTrip" — POST /api/unlock** — POST /api/unlock → 200; post-unlock GET /api/accounts → 200.
-- ✅ **goal "resetBrowserData" — cancel leg** — Confirm dialog shown; Cancel kept session alive (200) and URL on /settings (true).
-- ✅ **goal "resetBrowserData" — confirm leg (redirect + sign-out)** — Landed on /login: true (url=http://0.0.0.0:3003/login); subsequent GET /api/accounts → 401 (expected 401 or 3xx → /login).
-- ✅ **goal "resetBrowserData" — local-state cleanup** — localStorage.length=0, sessionStorage.length=0; theme cookie gone=true; NextAuth session cookie gone=true.
+_No issues, questions, or verifications on the last run — only the expert-system summary above._
 
 <!-- monkey:end -->

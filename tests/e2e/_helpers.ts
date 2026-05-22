@@ -95,6 +95,142 @@ export async function setDashboardLayout(
   }
 }
 
+// ─── Seed-data fixtures (#41) ──────────────────────────────────────
+//
+// Tests across this directory used to hand-roll the same ~15-line
+// `POST /api/accounts` → `POST /api/categories` → loop-POST
+// `/api/transactions` setup. Each call site bumped subtly: differing
+// default colours, payees / amounts hard-coded, error handling
+// inconsistent. These helpers are the single source of truth.
+//
+// Every helper throws on non-2xx with the response body in the
+// message so a setup-time mismatch fails the test with the
+// actionable error rather than the silent downstream symptom. Caller
+// supplies the run token so per-run isolation stays explicit.
+
+/** Return the id of the first non-archived account, throwing if there
+ *  is none. Convenient for specs that just need *an* account to anchor
+ *  a transaction against — saved-filters, search, note-related goals,
+ *  etc. */
+export async function getFirstAccountId(
+  context: BrowserContext,
+): Promise<string> {
+  const res = await context.request.get("/api/accounts");
+  if (!res.ok()) {
+    throw new Error(`GET /api/accounts → ${res.status()}`);
+  }
+  const rows = (await res.json()) as Array<{ id: string }>;
+  if (rows.length === 0) {
+    throw new Error("getFirstAccountId: no accounts exist (DB empty?)");
+  }
+  return rows[0].id;
+}
+
+/** Create a fresh account via the public API. Returns the new
+ *  `{ id, name }`. */
+export async function seedAccount(
+  context: BrowserContext,
+  opts: {
+    name: string;
+    type?: string;
+    color?: string;
+    currentBalance?: string;
+  },
+): Promise<{ id: string; name: string }> {
+  const res = await context.request.post("/api/accounts", {
+    data: {
+      name: opts.name,
+      type: opts.type ?? "checking",
+      color: opts.color ?? "#3b82f6",
+      currentBalance: opts.currentBalance ?? "0",
+    },
+  });
+  if (!res.ok()) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `seedAccount failed: POST /api/accounts → ${res.status()} ${body}`,
+    );
+  }
+  const row = (await res.json()) as { id: string; name: string };
+  return row;
+}
+
+/** Create a fresh category. Defaults to a slate-grey colour so a
+ *  series of seeded cats look distinct from the seeded "real" ones
+ *  in the sample dataset. */
+export async function seedCategory(
+  context: BrowserContext,
+  opts: {
+    name: string;
+    type: "income" | "expense";
+    color?: string;
+  },
+): Promise<{ id: string; name: string }> {
+  const res = await context.request.post("/api/categories", {
+    data: {
+      name: opts.name,
+      type: opts.type,
+      color: opts.color ?? "#64748b",
+    },
+  });
+  if (!res.ok()) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `seedCategory failed: POST /api/categories → ${res.status()} ${body}`,
+    );
+  }
+  const row = (await res.json()) as { id: string; name: string };
+  return row;
+}
+
+/** Create a single transaction. Returns the new row id (and notes
+ *  field when present — some specs verify notes round-trip). */
+export async function seedTransaction(
+  context: BrowserContext,
+  opts: {
+    accountId: string;
+    date: string;
+    amount: string;
+    payee?: string;
+    categoryId?: string;
+    notes?: string;
+  },
+): Promise<{ id: string; notes?: string | null }> {
+  const res = await context.request.post("/api/transactions", {
+    data: opts,
+  });
+  if (!res.ok()) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `seedTransaction failed: POST /api/transactions → ${res.status()} ${body}`,
+    );
+  }
+  const row = (await res.json()) as { id: string; notes?: string | null };
+  return row;
+}
+
+/** Bulk seed: create one transaction per entry. Sequential to keep
+ *  the order deterministic (parallel POSTs to /api/transactions
+ *  would commit in arbitrary order — fine for some tests, bad for
+ *  any spec that asserts row order). Returns the ids in input order. */
+export async function seedTransactions(
+  context: BrowserContext,
+  accountId: string,
+  rows: Array<{
+    date: string;
+    amount: string;
+    payee?: string;
+    categoryId?: string;
+    notes?: string;
+  }>,
+): Promise<Array<{ id: string }>> {
+  const out: Array<{ id: string }> = [];
+  for (const r of rows) {
+    out.push(await seedTransaction(context, { accountId, ...r }));
+  }
+  return out;
+}
+
 /** Fail the test if any of the page's runtime errors look like a
  * React infinite-render bailout. React's minified error #185 is the
  * "Maximum update depth exceeded" code — exactly the symptom that

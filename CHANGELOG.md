@@ -9,7 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
-## 0.228.0 — 2026-05-22
+## 0.229.0 — 2026-05-22
+
+### Changed
+- **`scheduleOnCalendar` goal now dumps source data before + after
+  the POST, and probes `/api/cashflow` directly between the API
+  list and the /calendar DOM check.** Per user feedback on #43:
+  data-driven tests should attribute a failure to the layer that
+  caused it (server forecast vs client render vs cross-test
+  pollution), not just report "DOM didn't contain the token".
+  - **Pre-flight scan** of `/api/transactions` for same-account
+    real txns within ±3 days of today at -$50 (the claim-match
+    window from `cashflow-calendar.tsx:matchScheduledToReal`).
+    These would suppress our projected occurrence from rendering
+    even though both `/api/scheduled` and `/api/cashflow` could
+    still show it elsewhere — surfacing them up-front in the
+    finding message makes a "phantom miss" self-explanatory.
+  - **New `verify cashflow projection` finding** between the API
+    list and `/scheduled` DOM legs. Calls
+    `/api/cashflow?from=<month-start>&to=<month-end>`, finds
+    today's day, and asserts our payee is in `scheduledEvents`.
+    `cashflowProjected=true` + `calendarHit=false` ⇒ client
+    bug; `cashflowProjected=false` ⇒ server forecast or
+    claim-matching suppression.
+  - **`/calendar — verify /calendar DOM` finding** now appends a
+    `Layer: <ok | client | server>` attribution so the
+    TEST-RESULTS.md row tells you which subsystem to look at
+    next without re-running the test under a debugger.
+  Standalone run on the new code: cashflow projection ✅,
+  calendar DOM ✅, pre-flight collisions: `none`. The
+  diagnostic carries into full-suite runs where #43 has been
+  flaking — the next failure will name the layer.
+
+
 
 ### Fixed
 - **#44 — monkey breadth-first select-cycler 60 s timeout on

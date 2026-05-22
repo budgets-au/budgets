@@ -834,6 +834,48 @@ test.describe("smart monkey: goal-driven crawl", () => {
     // occurrence in the rendered grid.
     const today = new Date().toISOString().slice(0, 10);
     const TOKEN = `${RUN_TOKEN}-cal-sched`;
+    const SCHED_AMOUNT = -50;
+
+    // Pre-flight data dump (#43). Calendar collapses a scheduled
+    // occurrence into a same-account, same-amount real txn within
+    // ±3 days (cashflow-calendar.tsx:matchScheduledToReal). When
+    // this goal flakes in full-suite but passes standalone, a
+    // prior test that seeded a -$50 real txn on this account near
+    // today is the prime suspect. Capture the candidates BEFORE
+    // we POST so we can attribute the miss to data pollution
+    // rather than guess at it from the calendar DOM alone.
+    const preTxnsRes = await request.get("/api/transactions?limit=500");
+    let preCollisionCandidates: Array<{
+      id: string;
+      date: string;
+      amount: number;
+      payee: string | null;
+    }> = [];
+    if (preTxnsRes.ok()) {
+      const todayMs = Date.parse(today);
+      const allTxns = (await preTxnsRes.json()) as Array<{
+        id: string;
+        accountId: string;
+        date: string;
+        amount: number | string;
+        payee: string | null;
+      }>;
+      preCollisionCandidates = allTxns
+        .filter((t) => t.accountId === account.id)
+        .map((t) => ({
+          id: t.id,
+          date: t.date,
+          amount: Number(t.amount),
+          payee: t.payee,
+        }))
+        .filter((t) => {
+          if (Math.abs(t.amount - SCHED_AMOUNT) > 0.01) return false;
+          const d = Math.abs(
+            Math.round((Date.parse(t.date) - todayMs) / 86_400_000),
+          );
+          return d <= 3;
+        });
+    }
 
     const createRes = await request.post("/api/scheduled", {
       data: {
@@ -875,6 +917,36 @@ test.describe("smart monkey: goal-driven crawl", () => {
           (s) => s.payee === TOKEN,
         )
       : false;
+
+    // Leg 1b: /api/cashflow server-side projection (#43). The
+    // calendar reads this exact endpoint for the visible month;
+    // if our scheduled occurrence isn't here, no amount of DOM
+    // polling will surface it — it's either suppressed by the
+    // forecast SQL or by claim-matching against a real txn at
+    // the same account+amount within ±3 days. Window the query
+    // to today's month so the response stays small.
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const monthEndDate = new Date(today);
+    monthEndDate.setUTCMonth(monthEndDate.getUTCMonth() + 1, 0);
+    const monthEnd = monthEndDate.toISOString().slice(0, 10);
+    const cashflowRes = await request.get(
+      `/api/cashflow?from=${monthStart}&to=${monthEnd}`,
+    );
+    let cashflowProjected = false;
+    let cashflowTodayScheduledCount = 0;
+    if (cashflowRes.ok()) {
+      const { daily } = (await cashflowRes.json()) as {
+        daily: Array<{
+          date: string;
+          scheduledEvents: Array<{ payee?: string | null; amount: number }>;
+        }>;
+      };
+      const todayDay = daily.find((d) => d.date === today);
+      cashflowTodayScheduledCount = todayDay?.scheduledEvents.length ?? 0;
+      cashflowProjected = (todayDay?.scheduledEvents ?? []).some(
+        (e) => e.payee === TOKEN,
+      );
+    }
 
     // Leg 2: /scheduled DOM.
     await page.goto("/scheduled");
@@ -925,6 +997,14 @@ test.describe("smart monkey: goal-driven crawl", () => {
     });
     runCounters.findingsCount += 1;
     await recordFinding({
+      page: "/calendar",
+      action: `goal "scheduleOnCalendar" — verify cashflow projection`,
+      severity: cashflowProjected ? "info" : "error",
+      kind: cashflowProjected ? "verified" : "issue",
+      message: `GET /api/cashflow ${cashflowProjected ? "projected" : "DID NOT project"} an occurrence with payee "${TOKEN}" on ${today}. Day had ${cashflowTodayScheduledCount} scheduledEvents in total. Pre-POST claim-match candidates (-$50 ±3 days, same account): ${preCollisionCandidates.length === 0 ? "none" : JSON.stringify(preCollisionCandidates)}.`,
+    });
+    runCounters.findingsCount += 1;
+    await recordFinding({
       page: "/scheduled",
       action: `goal "scheduleOnCalendar" — verify /scheduled DOM`,
       severity: scheduledHit ? "info" : "error",
@@ -932,12 +1012,21 @@ test.describe("smart monkey: goal-driven crawl", () => {
       message: `DOM on /scheduled ${scheduledHit ? "contained" : "DID NOT contain"} the token "${TOKEN}".`,
     });
     runCounters.findingsCount += 1;
+    // Pinpoint the layer responsible for a /calendar miss using the
+    // cashflow probe above. cashflowProjected=true + calendarHit=false
+    // ⇒ client (SWR / render). cashflowProjected=false ⇒ server (forecast
+    // SQL or claim-matching suppression).
+    const calendarLayer = calendarHit
+      ? "ok"
+      : cashflowProjected
+        ? "client (server projected the occurrence, but the calendar DOM didn't surface it — likely SWR timing or cell render)"
+        : "server (cashflow forecast did NOT include the occurrence — claim-matching or SQL suppression upstream of the client)";
     await recordFinding({
       page: "/calendar",
       action: `goal "scheduleOnCalendar" — verify /calendar DOM`,
       severity: calendarHit ? "info" : "error",
       kind: calendarHit ? "verified" : "issue",
-      message: `DOM on /calendar ${calendarHit ? "contained" : "DID NOT contain"} the token "${TOKEN}". Calendar renders payee text per scheduled occurrence (cashflow-calendar.tsx:1368-1397), so a miss here points at either the cashflow forecast SQL (server) or the calendar's SWR query / cell-rendering layer (client).`,
+      message: `DOM on /calendar ${calendarHit ? "contained" : "DID NOT contain"} the token "${TOKEN}". Layer: ${calendarLayer}.`,
     });
     runCounters.findingsCount += 1;
 

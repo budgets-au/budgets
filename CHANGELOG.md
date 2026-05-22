@@ -9,6 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.255.0 — 2026-05-22
+
+### Added
+- **E2E spec for the import-commit ↔ undo-commit round-trip**
+  (#9). New `tests/e2e/import-undo-commit.spec.ts` commits two
+  pre-resolved rows on a fresh account, asserts
+  `/api/transactions/count` reflects them, asserts the
+  account's `currentBalance` recomputed to the seeded
+  starting + amounts, then POSTs `/api/import/undo-commit` and
+  asserts count + balance reset. Idempotency leg: a re-undo
+  of the same already-undone log returns 0 for both
+  `deletedTransactions` and `deletedImportLogs` rather than
+  silently lying about what it did (see fix below).
+
+- **E2E spec for account DELETE soft-archive contract** (#19).
+  New `tests/e2e/account-archive.spec.ts` seeds an account +
+  transaction, DELETEs the account, then asserts: GET the
+  account still returns it with `isArchived = true`; GET the
+  transaction still returns it (cascade-delete would have
+  wiped it); DELETE on a missing id → 404. This is the
+  contract the user relies on when un-archiving via the
+  Settings → Accounts toggle — if the route were a hard
+  cascade-delete the recovery path would be impossible.
+
+### Fixed
+- **`/api/import/undo-commit` `deletedImportLogs` is now the
+  rows actually deleted, not the input id count.** Was
+  reporting `importLogIds.length` so a re-undo of an
+  already-undone log falsely reported "1 deleted" while the
+  DELETE was a no-op. Now uses `.returning({ id })` on the
+  log delete and surfaces that length. Caught by the new #9
+  e2e spec on its idempotency leg.
+
 ## 0.254.0 — 2026-05-22
 
 ### Added

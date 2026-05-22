@@ -42,7 +42,13 @@ export const POST = withAuth(async (request) => {
     .where(inArray(transactions.importLogId, importLogIds))
     .returning({ id: transactions.id });
 
-  await db.delete(importLogs).where(inArray(importLogs.id, importLogIds));
+  // .returning() so the response reports the rows actually deleted —
+  // not the input id count, which would falsely report "1 deleted" on
+  // a re-undo of an already-undone log.
+  const deletedLogs = await db
+    .delete(importLogs)
+    .where(inArray(importLogs.id, importLogIds))
+    .returning({ id: importLogs.id });
 
   // Recompute currentBalance for every account whose transactions
   // changed. Issue #74: was N separate UPDATEs in a loop; now one
@@ -61,7 +67,7 @@ export const POST = withAuth(async (request) => {
 
   return NextResponse.json({
     deletedTransactions: deleted.length,
-    deletedImportLogs: importLogIds.length,
+    deletedImportLogs: deletedLogs.length,
     accountsRefreshed: accountIdSet.size,
   });
 });

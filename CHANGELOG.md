@@ -9,6 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.253.0 — 2026-05-22
+
+### Added
+- **E2E spec for the watchlist add → list → history flow** (#25).
+  Five legs covered: POST with explicit `name` (skips the Yahoo
+  lookup to keep the spec network-independent), GET list to
+  verify the row is present, GET `.../history?range=1m` to
+  verify the `{ series, dividends }` contract, duplicate-symbol
+  guard returns 409, DELETE happy-path cleanup. Yahoo
+  upstream-blip handling: a 502 on `/history` logs a warning and
+  skips the shape assertion rather than failing the spec — the
+  contract is the route, not the upstream weather.
+
+- **E2E spec for transfer-pair confirmation removing both legs
+  from the cashflow report** (#13). Seeds two fresh accounts and
+  two opposing-sign txns on the same date, asserts that
+  `/api/reports/cashflow?hideTransfers=true` totals shed both
+  legs after `PATCH /api/transactions/[id]/transfer-pair` is
+  applied. Layered control: the same window re-fetched with
+  `hideTransfers=false` matches the pre-pair totals — proves
+  it's the filter, not the pair, doing the work. The confirm
+  endpoint internally calls the same `manualPair` function, so
+  the contract is identical.
+
+### Fixed
+- **Watchlist duplicate-symbol POST now actually returns 409
+  instead of 500.** The route's catch block matched on the
+  unique-index name (`watchlist_symbol_unique`), but
+  better-sqlite3 reports the column-qualified form (`UNIQUE
+  constraint failed: watchlist.symbol`) — so the 409 path never
+  fired and clients got a 500 from `withAuth`'s default error
+  handler. Now matches both. Caught by the new #25 e2e spec.
+
 ## 0.252.0 — 2026-05-22
 
 ### Added

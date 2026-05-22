@@ -84,8 +84,14 @@ export const POST = withAuth(async (request) => {
       .returning();
     return NextResponse.json(row, { status: 201 });
   } catch (err) {
-    // Unique violation on symbol → friendly 409.
-    if (err instanceof Error && err.message.includes("watchlist_symbol_unique")) {
+    // Unique violation on symbol → friendly 409. better-sqlite3
+    // reports `UNIQUE constraint failed: watchlist.symbol`; the
+    // index-name form was never produced, so match both for safety.
+    if (
+      err instanceof Error &&
+      (err.message.includes("UNIQUE constraint failed: watchlist.symbol") ||
+        err.message.includes("watchlist_symbol_unique"))
+    ) {
       return NextResponse.json(
         { error: `${data.symbol} is already on the watchlist` },
         { status: 409 },

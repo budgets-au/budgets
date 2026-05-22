@@ -9,6 +9,43 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.240.0 — 2026-05-22
+
+### Fixed
+- **SQLITE_BUSY during `next build` page-data collection — eliminated**
+  (#81). The auto-unlock-from-env path used to live at module-eval
+  position in `src/db/index.ts:593-601`. Next.js page-data collection
+  forks 4 worker processes by default; each evaluated every API
+  route module, each route module top-level `import { db } from "@/db"`,
+  each `@/db` load hit that `if (process.env.SQLITE_KEY) { unlock(...) }`
+  block → 4 concurrent SQLCipher handles racing on the probe SELECT
+  under DELETE journaling. SQLITE_BUSY: "Failed to collect page data
+  for /api/<route>" was the result.
+  - Extracted the block into `autoUnlockFromEnv()` (exported function,
+    no module-eval side effects).
+  - New `src/instrumentation.ts` calls `autoUnlockFromEnv()` from
+    Next.js's `register()` hook — runs once per server process on
+    `next start` boot, NOT during `next build`'s page-data fan-out.
+  - Secondary fix: `busy_timeout = 5000` now applied BEFORE the
+    SQLCipher probe SELECT, so a contended lock waits rather than
+    erroring instantly.
+  - `tests/e2e/global-setup.ts` also cleans up the `-journal` sidecar
+    (was only cleaning `-wal` / `-shm`) — a crashed prior run could
+    leave the DELETE-mode journal orphaned.
+
+  Verified: cold `pnpm test:e2e tests/e2e/scheduled-transfer-missed.spec.ts`
+  with `.next-e2e` wiped passes on first try with zero `SQLITE_BUSY` /
+  "database is locked" entries in the web-server log. Was previously
+  taking 2–3 retries on average.
+
+- **TDZ-cycle risk in `src/lib/auth.ts`** (#94). Top-level
+  `import { db } from "@/db"` was reachable from `src/proxy.ts`'s
+  unlock-path bundle — the exact pattern that caused the
+  `ReferenceError: Cannot access 'al' before initialization` crash
+  in 0.213/0.214. Switched to lazy `require("@/db")` inside the
+  `authorize()` callback, matching the pattern in
+  `src/lib/backup/scheduler.ts` and `src/db/index.ts`'s lazy helpers.
+
 ## 0.239.0 — 2026-05-22
 
 ### Security

@@ -21,7 +21,11 @@ export default async function globalSetup(): Promise<void> {
   // starting state, not preserving test data.
   mkdirSync(dirname(dbPath), { recursive: true });
   if (existsSync(dbPath)) rmSync(dbPath);
-  for (const sidecar of [`${dbPath}-wal`, `${dbPath}-shm`]) {
+  // -wal, -shm, AND -journal: a crashed prior run can leave the
+  // DELETE-mode journal orphaned; SQLite's open-time recovery would
+  // try to roll it back under a contended lock. Issue #81's secondary
+  // fix list.
+  for (const sidecar of [`${dbPath}-wal`, `${dbPath}-shm`, `${dbPath}-journal`]) {
     if (existsSync(sidecar)) rmSync(sidecar);
   }
 

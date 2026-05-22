@@ -1,9 +1,16 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
-import { db } from "@/db";
 import { users } from "@/db/schema";
 import { eq } from "drizzle-orm";
+
+// Issue #94: `@/db` is loaded LAZILY inside the authorize() callback,
+// not at module-evaluation time. `auth.ts` is reachable from
+// `src/proxy.ts` (the middleware) which the unlock-path bundle drags
+// in eagerly; a top-level `import { db } from "@/db"` here re-trips
+// the production TDZ cycle that bit 0.213/0.214
+// (`ReferenceError: Cannot access 'al' before initialization`).
+// Mirrors the lazy-require pattern in `src/lib/backup/scheduler.ts`.
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
@@ -16,6 +23,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) return null;
 
+        const { db } = require("@/db") as typeof import("@/db");
         const [user] = await db
           .select()
           .from(users)

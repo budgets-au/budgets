@@ -146,6 +146,15 @@ function openWithKey(passphrase: string): OpenResult {
     // before any read or write.
     client.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
     client.pragma("cipher_compatibility = 4");
+    // Issue #81: set busy_timeout BEFORE the probe. The probe SELECT
+    // can race a concurrent opener; without a busy timeout the loser
+    // gets SQLITE_BUSY instantly rather than waiting out the contended
+    // lock. (The full live-connection pragmas — WAL, foreign_keys —
+    // get applied only after promotion at line 219; setting WAL
+    // before the probe also helps but the build-time race is the
+    // bigger fish here, addressed by the lazy autoUnlockFromEnv()
+    // move.)
+    client.pragma("busy_timeout = 5000");
     // SELECT against sqlite_master forces SQLCipher to decrypt at
     // least one page; a wrong key surfaces here as
     // "file is not a database".
@@ -587,10 +596,25 @@ export function lock(): void {
   state.openProfileId = null;
 }
 
-// Auto-unlock from env if the operator chose to inject the key that
-// way (containers, tests). Failure is logged but doesn't crash the
-// process — the user can still unlock via /unlock.
-if (process.env.SQLITE_KEY) {
+/** Auto-unlock from env if the operator chose to inject the key that
+ *  way (containers, tests). Failure is logged but doesn't crash the
+ *  process — the user can still unlock via /unlock.
+ *
+ *  Issue #81: this used to run at module-evaluation time
+ *  (`if (process.env.SQLITE_KEY) { unlock(...) }` at file scope),
+ *  which meant Next.js's page-data collection phase fan-out (4 worker
+ *  processes by default) each opened a SQLCipher handle and ran
+ *  `runPendingMigrations()` in parallel. Multiple writers under the
+ *  initial DELETE journaling (WAL gets enabled AFTER the probe SELECT)
+ *  → recurring SQLITE_BUSY: "Failed to collect page data for /api/<route>".
+ *
+ *  The fix is to make `@/db` truly lazy on import. Callers explicitly
+ *  invoke `autoUnlockFromEnv()` at server-request time
+ *  (`src/instrumentation.ts:register()` for `next start`, or any
+ *  per-request gate that wants the env-key path). Build-time route
+ *  evaluation no longer touches SQLite. */
+export function autoUnlockFromEnv(): void {
+  if (state.client || !process.env.SQLITE_KEY) return;
   const r = unlock(process.env.SQLITE_KEY);
   if (!r.ok) {
     console.error(

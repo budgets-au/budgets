@@ -13,7 +13,7 @@ import { dirname, resolve } from "node:path";
 
 const APP_MAP_PATH = resolve("./tests/e2e/.data/app-map.json");
 
-const APP_MAP_SCHEMA_VERSION = 9 as const;
+const APP_MAP_SCHEMA_VERSION = 10 as const;
 
 export type ControlKind = "button" | "switch" | "select" | "input" | "link";
 
@@ -61,7 +61,8 @@ export type GoalKey =
   | "multiDbSwitcher"
   | "lockUnlockRoundTrip"
   | "savedFilterDeleteReorder"
-  | "resetBrowserData";
+  | "resetBrowserData"
+  | "addSampleData";
 
 export const GOAL_KEYS: readonly GoalKey[] = [
   "createTransaction",
@@ -78,6 +79,7 @@ export const GOAL_KEYS: readonly GoalKey[] = [
   "lockUnlockRoundTrip",
   "savedFilterDeleteReorder",
   "resetBrowserData",
+  "addSampleData",
 ];
 
 /** Recipe for repeating a previously-successful goal attempt. The
@@ -192,6 +194,7 @@ export function emptyAppMap(): AppMap {
       lockUnlockRoundTrip: goal(),
       savedFilterDeleteReorder: goal(),
       resetBrowserData: goal(),
+      addSampleData: goal(),
     },
     runs: [],
   };

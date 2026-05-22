@@ -21,7 +21,7 @@ const T1 = "2026-05-20T01:00:00.000Z";
 describe("emptyAppMap", () => {
   it("returns a schema-versioned shell with all goals reset", () => {
     const m = emptyAppMap();
-    expect(m.schemaVersion).toBe(9);
+    expect(m.schemaVersion).toBe(10);
     expect(m.routes).toEqual({});
     expect(m.runs).toEqual([]);
     for (const g of GOAL_KEYS) {
@@ -238,7 +238,7 @@ describe("migrateAppMap", () => {
       },
     };
     const m = migrateAppMap(old as Record<string, unknown>);
-    expect(m.schemaVersion).toBe(9);
+    expect(m.schemaVersion).toBe(10);
     // Preserved.
     expect(m.goals.createTransaction.achieved).toBe(true);
     expect(m.goals.createTransaction.attempts).toBe(3);
@@ -265,7 +265,7 @@ describe("migrateAppMap", () => {
   it("returns a fresh map when given garbage / unparseable input", () => {
     // Empty object → fresh map with current schema.
     const m = migrateAppMap({});
-    expect(m.schemaVersion).toBe(9);
+    expect(m.schemaVersion).toBe(10);
     expect(m.routes).toEqual({});
     expect(m.runs).toEqual([]);
     // All goals reset to defaults.

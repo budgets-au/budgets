@@ -1347,6 +1347,107 @@ test.describe("smart monkey: goal-driven crawl", () => {
     }
   });
 
+  /** Verify the sample-data seeder fired on first unlock (#27).
+   *
+   * The "add sample data" path the issue calls out has no in-app
+   * UI — `seedSampleDataIfMissing()` runs once at install time on
+   * the first unlock of the default profile. POST /api/databases
+   * deliberately PRE-SETS `sample_data_seeded = 1` on new profiles
+   * via `initProfileFile()` (so operators get a blank book for
+   * their second/third profile), which means we can't trigger the
+   * seeder by creating a fresh profile mid-test.
+   *
+   * Instead this goal probes the e2e fixture's default profile,
+   * which `global-setup.ts` migrated from scratch — so its first
+   * /unlock via `signInAsAdmin` fired the production
+   * `seedSampleDataIfMissing()` code path. The goal asserts the
+   * post-seed state is correct AND every seeded row carries
+   * `isSample = true` so `clearSampleData` later (or the operator's
+   * "Remove sample data" button) can identify them.
+   *
+   * Pinned BEFORE `clearSampleData` — that goal wipes the same
+   * sample rows; running this after it would always see zero
+   * counts and false-fail.
+   *
+   * Two legs:
+   *   1. GET /api/sample-data/remove (doubles as counts endpoint)
+   *      → `sampleAccounts > 0`, `sampleTransactions > 0`,
+   *      `sampleScheduled > 0`. This is the strong assertion —
+   *      the counts query goes straight to the `isSample` column
+   *      in the DB.
+   *   2. GET /api/accounts → at least one row carries
+   *      `isSample = true`. Not "every row" — the orphan-transfer
+   *      backfill auto-creates an "External" account on first
+   *      unlock and that one ISN'T tagged `isSample`. (Past me
+   *      tripped on this; comment kept so future me doesn't.) */
+  test("goal: verify sample-data seeder fired on first unlock", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    // Leg 1: counts endpoint shows non-zero sample rows.
+    const countsRes = await request.get("/api/sample-data/remove");
+    const counts = countsRes.ok()
+      ? ((await countsRes.json()) as {
+          sampleAccounts: number;
+          sampleTransactions: number;
+          sampleScheduled: number;
+        })
+      : null;
+    const countsOk =
+      counts !== null &&
+      counts.sampleAccounts > 0 &&
+      counts.sampleTransactions > 0 &&
+      counts.sampleScheduled > 0;
+    await recordFinding({
+      page: "/settings",
+      action: `goal "addSampleData" — verify counts`,
+      severity: countsOk ? "info" : "error",
+      kind: countsOk ? "verified" : "issue",
+      message: `GET /api/sample-data/remove → ${countsRes.status()}; sampleAccounts=${counts?.sampleAccounts ?? "n/a"}, sampleTransactions=${counts?.sampleTransactions ?? "n/a"}, sampleScheduled=${counts?.sampleScheduled ?? "n/a"} (expected all > 0).`,
+    });
+    runCounters.findingsCount += 1;
+
+    // Leg 2: at least one account row is tagged isSample = true.
+    // Not "every row" — the orphan-transfer backfill auto-creates
+    // an "External" account on first unlock whose isSample=false.
+    const accountsRes = await request.get("/api/accounts");
+    const accountsList = accountsRes.ok()
+      ? ((await accountsRes.json()) as Array<{
+          id: string;
+          isSample?: boolean;
+        }>)
+      : [];
+    const sampleAccountCount = accountsList.filter(
+      (a) => a.isSample === true,
+    ).length;
+    const accountsOk = sampleAccountCount > 0;
+    await recordFinding({
+      page: "/settings",
+      action: `goal "addSampleData" — verify account isSample tagging`,
+      severity: accountsOk ? "info" : "error",
+      kind: accountsOk ? "verified" : "issue",
+      message: `GET /api/accounts returned ${accountsList.length} row(s); ${sampleAccountCount} carry isSample=true (expected ≥1 — others may be the External auto-account).`,
+    });
+    runCounters.findingsCount += 1;
+
+    if (countsOk && accountsOk) {
+      recordGoalAttempt(appMap, "addSampleData", {
+        timestamp: new Date().toISOString(),
+        route: "/settings",
+        triggerLabel: "seedSampleDataIfMissing() on first unlock",
+        fillSpec: {},
+        submitLabel: "GET /api/sample-data/remove",
+        verified: "api",
+      });
+      runCounters.goalsAchieved += 1;
+    } else {
+      recordGoalAttempt(appMap, "addSampleData", null);
+    }
+  });
+
   /** Clear sample data via the Settings → Sample data panel.
    *
    * Pinned as the LAST goal in monkey-goals.spec.ts because the

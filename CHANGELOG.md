@@ -9,6 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.237.0 — 2026-05-22
+
+### Added
+- **New monkey-goal `addSampleData` (#27)** covers the sample-data
+  seeder. The issue's premise ("destructive-banned in the crawl;
+  the corresponding 'remove' path is covered by clearSampleData
+  but the add side is not") was based on a misremembered "Add
+  sample data" UI button — there isn't one. `seedSampleDataIfMissing()`
+  runs once at install time on the first unlock of the default
+  profile, and `POST /api/databases` deliberately pre-sets the
+  flag on new profiles (so operators get a blank book for their
+  second/third profile), so the seeder can only be triggered by
+  the install-time path.
+  - Probes the e2e fixture's default profile (which
+    `global-setup.ts` migrated from scratch — so its first unlock
+    via `signInAsAdmin` fired the production
+    `seedSampleDataIfMissing()` code path).
+  - **Leg 1**: GET `/api/sample-data/remove` shows
+    `sampleAccounts > 0`, `sampleTransactions > 0`,
+    `sampleScheduled > 0`. Strong assertion — the endpoint
+    queries the `isSample` column directly.
+  - **Leg 2**: GET `/api/accounts` returns at least one row with
+    `isSample === true`. Not "every row" — the orphan-transfer
+    backfill auto-creates an "External" account on first unlock
+    whose `isSample` is false. Comment in the spec notes that
+    gotcha so future me doesn't trip on it again.
+  - **Pinned before `clearSampleData`** in the spec declaration
+    order so the wipe doesn't precede the probe.
+- **AppMap schema 9 → 10** — `addSampleData` joins the `GoalKey`
+  union. Schema bump triggers the migrate-forward path shipped
+  in 0.235.0 — existing on-disk maps' prior achievements survive,
+  with `addSampleData` initialised to defaults.
+
 ## 0.236.0 — 2026-05-22
 
 ### Added

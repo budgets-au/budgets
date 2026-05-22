@@ -54,6 +54,36 @@ export const GET = withAuth(async (request) => {
   const now = new Date();
   const from = searchParams.get("from") ?? format(startOfMonth(subMonths(now, 5)), "yyyy-MM-dd");
   const to = searchParams.get("to") ?? format(endOfMonth(now), "yyyy-MM-dd");
+
+  // Issue #51: validate after defaulting. Caller-supplied junk like
+  // `?from=banana&to=zzzz` would otherwise silently pass through to
+  // `gte(...)` as lexicographic comparison (matches everything) and
+  // `parseISO("banana")` → `Invalid Date` makes generateMonths()
+  // emit an empty array. Defaults are ISO-shaped by construction
+  // so they validate cleanly.
+  const ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+  if (!ISO_RE.test(from) || !ISO_RE.test(to)) {
+    return NextResponse.json(
+      { error: "from / to must be YYYY-MM-DD" },
+      { status: 400 },
+    );
+  }
+  const fromMs = Date.parse(from);
+  const toMs = Date.parse(to);
+  if (Number.isNaN(fromMs) || Number.isNaN(toMs) || toMs < fromMs) {
+    return NextResponse.json(
+      { error: "from must be <= to" },
+      { status: 400 },
+    );
+  }
+  const MAX_RANGE_DAYS = 365 * 12;
+  if ((toMs - fromMs) / 86_400_000 > MAX_RANGE_DAYS) {
+    return NextResponse.json(
+      { error: `range too large (max ${MAX_RANGE_DAYS} days)` },
+      { status: 400 },
+    );
+  }
+
   const hideTransfers = searchParams.get("hideTransfers") === "true";
 
   const accountIds = parseAccountIds(searchParams);

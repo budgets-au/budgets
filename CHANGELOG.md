@@ -9,6 +9,43 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.245.0 — 2026-05-22
+
+### Fixed
+- **`/api/reports` and `/api/reports/cashflow` now validate
+  `from`/`to`** (#51). New `src/lib/api/date-range.ts` shared
+  helper enforces `^\d{4}-\d{2}-\d{2}$` + a 12-year max-range cap
+  (already in place on `/api/cashflow`). Without this,
+  `?from=banana&to=zzzz` silently passed lexicographic comparison
+  to `gte(transactions.date, ...)` (matched everything), and
+  multi-decade `from=1900-01-01&to=2100-12-31` requests loaded the
+  whole transactions table while `generateMonths()` CPU-spun for
+  thousands of months.
+- **Calendar `matchScheduledToReal` is now deterministic** (#55).
+  Pre-sorts scheduled occurrences by `(date, scheduledId, idx)`
+  before the greedy assignment, so a paused-and-replaced
+  predecessor still emitting from history can't race the current
+  schedule for the same real txn by Map-insertion order.
+- **`/api/transactions/count` now applies the `hideTransfers`
+  filter** (#70). Was missing parity with `/api/transactions`, so
+  the pagination footer ("showing 1-50 of 1235") could over-report
+  when the list had `hideTransfers=true` active.
+- **`/api/version-check` and `/api/github-stats` use a stable
+  nullable shape** (#52). Previously success returned
+  `{ latest: "..." }` and failure returned `{ error: "..." }`,
+  both at HTTP 200 — letting a future `if (res.ok) data.latest.split(...)`
+  consumer blow up on undefined. Now: `{ latest: string | null }`
+  and `{ downloads: number | null, stars: number | null }`.
+  Detail messages logged server-side only.
+- **`BuyFromWatchlistDialog` refreshes `purchaseDate` to today on
+  every open** (#71). Was captured once at first mount; if the
+  watchlist panel sat open overnight the default lagged.
+- **Transaction-filter search box syncs from URL on external
+  navigation** (#61). Browser back/forward or sibling-component
+  pushes to `?search=` now flow into the visible input. Without
+  this, the input could show a stale value after navigation while
+  the table reflected the URL state.
+
 ## 0.244.0 — 2026-05-22
 
 ### Fixed

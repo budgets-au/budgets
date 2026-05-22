@@ -1466,7 +1466,21 @@ function matchScheduledToReal(byDate: Map<string, DailyBalance>): {
   const claimedReal = new Set<string>();
   const claimedSched = new Set<string>();
   const realToSched = new Map<string, { scheduledId: string; scheduledDate: string }>();
-  for (const s of scheds) {
+  // Issue #55: pre-sort scheds for deterministic claim order. Without
+  // this, two schedules on the same account/cadence/amount (e.g. a
+  // paused-and-replaced predecessor still emitting from history)
+  // would race on the same real txn by Map-insertion order — the
+  // older one in iteration order won, even if the newer one was the
+  // actual fulfilment. Sort by (date, scheduledId, idx) so the
+  // earliest occurrence claims first, ties broken stably.
+  const sortedScheds = [...scheds].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    const aSid = a.scheduledId ?? "";
+    const bSid = b.scheduledId ?? "";
+    if (aSid !== bSid) return aSid < bSid ? -1 : 1;
+    return a.idx - b.idx;
+  });
+  for (const s of sortedScheds) {
     let best: { r: RealPos; days: number } | null = null;
     for (const r of reals) {
       if (claimedReal.has(r.id)) continue;

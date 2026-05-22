@@ -3,18 +3,24 @@ import { db } from "@/db";
 import { transactions, categories } from "@/db/schema";
 import { and, gte, lte, eq, sql, inArray, ne } from "drizzle-orm";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseDateRange } from "@/lib/api/date-range";
 
 export const GET = withAuth(async (request) => {
   const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
+  // Issue #51: shared range-validation gate. Was previously taking
+  // raw strings into `gte(transactions.date, from)`, which a hostile
+  // `?from=banana&to=zzzz` quietly accepted as lexicographic
+  // comparison (matched everything). Also caps the range at 12y.
+  const range = parseDateRange(searchParams);
+  if (!range.ok) return range.response;
+  const { from, to } = range;
   const groupBy = searchParams.get("groupBy") ?? "category"; // category | month
   const accountIds = searchParams.get("accountIds")?.split(",").filter(Boolean);
   const hideTransfers = searchParams.get("hideTransfers") === "true";
 
   const conditions = [];
-  if (from) conditions.push(gte(transactions.date, from));
-  if (to) conditions.push(lte(transactions.date, to));
+  conditions.push(gte(transactions.date, from));
+  conditions.push(lte(transactions.date, to));
   // When the user picks accounts, scope to those. Otherwise default to
   // non-archived accounts only — archived accounts are hidden in the UI
   // and shouldn't be silently included in an "All accounts" total.

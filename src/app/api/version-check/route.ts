@@ -34,18 +34,19 @@ interface ErrorResp {
 export const revalidate = 3600;
 
 export const GET = withAuth(async () => {
+  // Issue #52: every branch now returns a stable
+  // `{ latest: string | null }` shape with status 200. Previously
+  // success was `{ latest }` and failure was `{ error }` both at 200,
+  // letting `if (res.ok) data.latest.split(...)` blow up on undefined.
+  // Detail strings for upstream / parse failures go to the server log
+  // only (no operator-facing toast for a transient registry blip).
   try {
     const latest = await fetchLatestTag();
-    if (latest == null) {
-      return NextResponse.json(
-        { error: "no semver tags on package" },
-        { status: 200 },
-      );
-    }
-    return NextResponse.json({ latest });
+    return NextResponse.json({ latest: latest ?? null });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: message }, { status: 200 });
+    console.error("[version-check]", message);
+    return NextResponse.json({ latest: null });
   }
 });
 

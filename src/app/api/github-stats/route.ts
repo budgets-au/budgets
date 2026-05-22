@@ -41,15 +41,17 @@ export const GET = withAuth(async () => {
       cache: "no-store",
     });
     if (!res.ok) {
-      return NextResponse.json(
-        { error: `GitHub ${res.status}` },
-        { status: 200 },
-      );
+      // Issue #52: stable `{ downloads, stars }` shape with nulls on
+      // failure (was 200 + `{ error }` which conflated payload
+      // shapes). Detail logged server-side.
+      console.error(`[github-stats] upstream returned ${res.status}`);
+      return NextResponse.json({ downloads: null, stars: null });
     }
     const html = await res.text();
     return NextResponse.json(extractGithubStats(html));
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: message }, { status: 200 });
+    console.error("[github-stats]", message);
+    return NextResponse.json({ downloads: null, stars: null });
   }
 });

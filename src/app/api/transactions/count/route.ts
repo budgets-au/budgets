@@ -63,6 +63,18 @@ export const GET = withAuth(async (request) => {
   if (direction === "out") conditions.push(sql`CAST(${transactions.amount} AS REAL) < 0`);
   else if (direction === "in") conditions.push(sql`CAST(${transactions.amount} AS REAL) > 0`);
 
+  // Issue #70: mirror the `hideTransfers` filter from /api/transactions
+  // so the count agrees with the list. Pagination footer (e.g.
+  // "showing 1-50 of 1235") previously over-reported when the list
+  // had hideTransfers=true active.
+  if (searchParams.get("hideTransfers") === "true") {
+    conditions.push(
+      sql`(${transactions.categoryId} IS NULL OR EXISTS (
+        SELECT 1 FROM categories c WHERE c.id = ${transactions.categoryId} AND c.transfer_kind != 'internal'
+      ))`,
+    );
+  }
+
   const [row] = await db
     .select({ total: sql<number>`COUNT(*)` })
     .from(transactions)

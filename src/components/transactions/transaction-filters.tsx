@@ -103,6 +103,20 @@ export function TransactionFilters({ accounts, categories, current }: Props) {
     router.replace(qs ? `${pathname}?${qs}` : pathname);
   }
 
+  // Issue #61: sync local `search` from the URL when it changes
+  // externally (browser back/forward, sibling component pushes a
+  // query). Without this, the visible input goes stale on external
+  // navigation. Only fires when the URL value diverges from the
+  // local one to avoid clobbering mid-debounce keystrokes.
+  const lastExternalSearch = useRef(current.search ?? "");
+  useEffect(() => {
+    const fromUrl = current.search ?? "";
+    if (fromUrl !== lastExternalSearch.current) {
+      lastExternalSearch.current = fromUrl;
+      setSearch(fromUrl);
+    }
+  }, [current.search]);
+
   // Search debounce — give a slow typer enough breathing room. Enter
   // applies immediately for impatient users.
   const isFirstSearch = useRef(true);

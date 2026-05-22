@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { mutate } from "swr";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import {
@@ -351,6 +351,13 @@ function BuyFromWatchlistDialog({
   const [notes, setNotes] = useState("");
   const [removeAfter, setRemoveAfter] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  // Issue #71: refresh `purchaseDate` to today every time the dialog
+  // re-opens. Without this, the date is captured once at first mount;
+  // if the panel sits open overnight the default lags by a day.
+  useEffect(() => {
+    if (open) setPurchaseDate(new Date().toISOString().slice(0, 10));
+  }, [open]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

@@ -9,6 +9,47 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.243.0 — 2026-05-22
+
+### Fixed
+- **External account `currentBalance` now updates after synthetic
+  mints / deletes** (#65). `manualPairExternal`,
+  `backfillOrphanTransfers`, and `manualUnpair`-of-synthetic all
+  recompute the External account's `currentBalance` via the same
+  `starting_balance + SUM(amount)` pattern every other insert path
+  uses. Previously the External account's reported balance stayed
+  at $0.00 regardless of synthetic count → accounts list, dashboard
+  tile, and cashflow back-compute anchor all drifted by however
+  many dollars of synthetic mints had landed.
+- **`manualPair` now validates both transactions are on different
+  accounts AND amounts cancel within ±$0.01** (#46). Auto-pairing's
+  SQL enforced this; manual pairing accepted anything (two same-
+  account rows, two same-sign rows) and downstream asset-pool
+  netting / transfer-aware reports / the orphan backfill silently
+  produced wrong totals.
+- **`manualPair` no longer leaves orphan synthetic counterparts
+  when displacing a pre-existing pair** (#59). Synthetic stubs
+  whose pair the operator just re-routed now get DELETED (matching
+  the `manualUnpair`-of-synthetic shape) and the External
+  account's `currentBalance` is recomputed afterwards.
+- **`pairTransfersInWindow` UPDATEs now re-assert
+  `transfer_pair_id IS NULL`** (#60). A concurrent `manualPair` (or
+  another matcher run on a parallel import) landing between the
+  candidate SELECT and the symmetric UPDATEs could clobber a
+  freshly-set pair, leaving a half-paired leg. The transaction now
+  rolls back and `paired` doesn't count the loser if either side's
+  pair-id was claimed since the SELECT.
+- **`manualPairExternal` now skips ARCHIVED externals** when
+  case-insensitively matching the counterparty name (#64). Was
+  landing synthetics in archived accounts, invisible from the
+  accounts list but still on the pair.
+- **Yearly + quarterly recurrence now re-anchors via
+  `dayOfMonth`** (#63). A schedule starting 2024-02-29 used to
+  clamp to Feb 28 in 2025 then preserve the 28th forever, missing
+  Feb 29 in 2028. Same shape on quarterly schedules anchored on
+  the 31st. Now both re-anchor to the original day each step,
+  matching the monthly branch. Two new unit tests pin the contract.
+
 ## 0.242.0 — 2026-05-22
 
 ### Fixed

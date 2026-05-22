@@ -108,6 +108,9 @@ export function backfillOrphanTransfers(db: typeof dbType): { paired: number } {
   // 3. For each orphan, insert a synthetic counterpart in the External
   // account with the opposite amount + same date, then link both sides.
   // Per-row try/catch so one bad row doesn't abort the whole sweep.
+  // Issue #65: after the loop we'll recompute the External account's
+  // currentBalance once so the dashboard / accounts list / cashflow
+  // back-compute don't anchor at the now-stale zero.
   let paired = 0;
   for (const orphan of orphans) {
     try {
@@ -144,6 +147,20 @@ export function backfillOrphanTransfers(db: typeof dbType): { paired: number } {
       );
     }
   }
+  // Recompute the External account's currentBalance after the batch
+  // — see #65 for why this is needed. Standard pattern: starting
+  // balance + sum(amount) of every txn on the account.
+  if (paired > 0) {
+    db
+      .update(accounts)
+      .set({
+        currentBalance: sql`(SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = ${externalAccountId}) + ${accounts.startingBalance}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(accounts.id, externalAccountId))
+      .run();
+  }
+
   return { paired };
 }
 

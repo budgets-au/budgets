@@ -119,6 +119,54 @@ describe("expandRecurrence — monthly drift", () => {
   });
 });
 
+describe("expandRecurrence — yearly Feb 29 anchor (#63)", () => {
+  // Pre-fix: addYears(2024-02-29, 1) returns 2025-02-28 via date-fns
+  // clamp; the cursor then preserves the 28th forever. The 2028 leap
+  // year's Feb 29 was missed.
+  it("yearly on Feb 29 recovers the 29th in subsequent leap years", () => {
+    const s = makeSchedule({
+      startDate: "2024-02-29",
+      dayOfMonth: null,
+      frequency: "yearly",
+      interval: 1,
+    });
+    const events = expandRecurrence(
+      s,
+      parseISO("2024-02-01"),
+      parseISO("2030-12-31"),
+    );
+    expect(events.map((e) => e.date)).toEqual([
+      "2024-02-29",
+      "2025-02-28",
+      "2026-02-28",
+      "2027-02-28",
+      "2028-02-29", // leap year — recovers from the anchor
+      "2029-02-28",
+      "2030-02-28",
+    ]);
+  });
+
+  it("quarterly on the 31st re-anchors each quarter", () => {
+    const s = makeSchedule({
+      startDate: "2026-01-31",
+      dayOfMonth: null,
+      frequency: "quarterly",
+      interval: 1,
+    });
+    const events = expandRecurrence(
+      s,
+      parseISO("2026-01-01"),
+      parseISO("2026-12-31"),
+    );
+    expect(events.map((e) => e.date)).toEqual([
+      "2026-01-31",
+      "2026-04-30", // April has 30 days — clamp
+      "2026-07-31",
+      "2026-10-31",
+    ]);
+  });
+});
+
 describe("expandRecurrence — basics", () => {
   it("weekly expansion emits every 7 days", () => {
     const s = makeSchedule({

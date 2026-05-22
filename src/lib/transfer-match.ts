@@ -389,29 +389,52 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
       }
     }
 
-    await db.transaction(async (tx) => {
-      await tx
+    // Issue #60: re-assert `transfer_pair_id IS NULL` on both UPDATEs.
+    // Without it, a concurrent manualPair (or another matcher run)
+    // landing between the SELECT and these UPDATEs would clobber the
+    // other side's pair pointer, leaving a half-paired leg. Abort the
+    // pair (transaction rollback) if either UPDATE affected zero rows.
+    const pairOk = await db.transaction(async (tx) => {
+      const aRes = await tx
         .update(transactions)
         .set({
           transferPairId: cand.bId,
           ...(aPatchCategoryId ? { categoryId: aPatchCategoryId } : {}),
           updatedAt: new Date(),
         })
-        .where(eq(transactions.id, cand.aId));
-      await tx
+        .where(
+          and(eq(transactions.id, cand.aId), isNull(transactions.transferPairId)),
+        )
+        .returning({ id: transactions.id });
+      if (aRes.length === 0) {
+        throw new Error("transfer-pair race: aId already paired");
+      }
+      const bRes = await tx
         .update(transactions)
         .set({
           transferPairId: cand.aId,
           ...(bPatchCategoryId ? { categoryId: bPatchCategoryId } : {}),
           updatedAt: new Date(),
         })
-        .where(eq(transactions.id, cand.bId));
+        .where(
+          and(eq(transactions.id, cand.bId), isNull(transactions.transferPairId)),
+        )
+        .returning({ id: transactions.id });
+      if (bRes.length === 0) {
+        throw new Error("transfer-pair race: bId already paired");
+      }
       await tx.run(sql`
         DELETE FROM transfer_suggestions
         WHERE transaction_id IN (${cand.aId}, ${cand.bId})
            OR candidate_id   IN (${cand.aId}, ${cand.bId})
       `);
-    });
+      return true;
+    }).catch(() => false);
+    if (!pairOk) {
+      // Race or stale-candidate: skip this pair and let the next run
+      // re-evaluate fresh state. Don't count it as paired.
+      continue;
+    }
     taken.add(cand.aId);
     taken.add(cand.bId);
     paired++;
@@ -456,19 +479,80 @@ export async function pairTransfersInWindow(opts: PairOpts = {}): Promise<PairRe
  */
 export async function manualPair(aId: string, bId: string): Promise<void> {
   await db.transaction(async (tx) => {
-    // Clear any pre-existing pairs first so we don't orphan a third row.
-    const existing = await tx
-      .select({ id: transactions.id, pairId: transactions.transferPairId })
+    // Issue #46: validate that the pair is meaningful — different
+    // accounts AND opposing-sign amounts that cancel within a cent.
+    // Auto-pairing's SQL enforces both; manual pairing accepted
+    // anything. Nonsensical pairs subsequently confuse asset-pool
+    // netting, transfer-aware reports, and the orphan backfill.
+    const rows = await tx
+      .select({
+        id: transactions.id,
+        accountId: transactions.accountId,
+        amount: transactions.amount,
+        pairId: transactions.transferPairId,
+      })
       .from(transactions)
       .where(inArray(transactions.id, [aId, bId]));
-    const pairsToClear = existing
+    const aRow = rows.find((r) => r.id === aId);
+    const bRow = rows.find((r) => r.id === bId);
+    if (!aRow || !bRow) {
+      throw new Error(`manualPair: transaction ${!aRow ? aId : bId} not found`);
+    }
+    if (aRow.accountId === bRow.accountId) {
+      throw new Error(
+        "manualPair: both transactions are on the same account — transfers move between accounts.",
+      );
+    }
+    const sumCents = Math.round(
+      (parseFloat(aRow.amount) + parseFloat(bRow.amount)) * 100,
+    );
+    if (Math.abs(sumCents) > 1) {
+      throw new Error(
+        `manualPair: amounts must cancel (got ${aRow.amount} + ${bRow.amount}).`,
+      );
+    }
+    // Clear any pre-existing pairs first so we don't orphan a third row.
+    // Issue #59: if the displaced counterpart is a synthetic stub
+    // minted by manualPairExternal, DELETE it instead of just nulling
+    // — orphan synthetics with no pair point to nowhere and clutter
+    // the External account indefinitely. After delete/null, recompute
+    // the affected accounts' currentBalance via the standard pattern.
+    const pairsToClear = rows
       .map((r) => r.pairId)
       .filter((p): p is string => !!p && p !== aId && p !== bId);
+    const accountsToRecompute = new Set<string>();
     for (const pid of pairsToClear) {
-      await tx
-        .update(transactions)
-        .set({ transferPairId: null, updatedAt: new Date() })
+      const [partner] = await tx
+        .select({
+          id: transactions.id,
+          accountId: transactions.accountId,
+          isSynthetic: transactions.isSynthetic,
+        })
+        .from(transactions)
         .where(eq(transactions.id, pid));
+      if (!partner) continue;
+      if (partner.isSynthetic) {
+        await tx
+          .delete(transactions)
+          .where(eq(transactions.id, partner.id));
+        accountsToRecompute.add(partner.accountId);
+      } else {
+        await tx
+          .update(transactions)
+          .set({ transferPairId: null, updatedAt: new Date() })
+          .where(eq(transactions.id, pid));
+      }
+    }
+    if (accountsToRecompute.size > 0) {
+      for (const accountId of accountsToRecompute) {
+        await tx
+          .update(accounts)
+          .set({
+            currentBalance: sql`(SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = ${accountId}) + ${accounts.startingBalance}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(accounts.id, accountId));
+      }
     }
     await tx
       .update(transactions)
@@ -553,11 +637,14 @@ export async function manualPairExternal(
 
     // Find-or-create the external account. Case-insensitive lookup so
     // typing "hsbc savings" once and "HSBC Savings" later resolves to
-    // one account, not two.
+    // one account, not two. Issue #64: skip ARCHIVED externals so a
+    // fresh active one is created when the original was archived —
+    // landing the synthetic in an archived account hides it from the
+    // accounts list.
     const existingExternals = await tx
       .select({ id: accounts.id, name: accounts.name })
       .from(accounts)
-      .where(eq(accounts.isExternal, true));
+      .where(and(eq(accounts.isExternal, true), eq(accounts.isArchived, false)));
     const lowered = trimmed.toLowerCase();
     let externalAccountId = existingExternals.find(
       (a) => a.name.toLowerCase() === lowered,
@@ -626,6 +713,20 @@ export async function manualPairExternal(
         ),
       );
 
+    // Issue #65: recompute the External account's currentBalance so
+    // it reflects the new synthetic. Every other transaction-insert
+    // path follows insert with this same recompute; the synthetic-
+    // mint paths used to skip it, which silently anchored every
+    // downstream balance / dashboard tile / cashflow back-compute
+    // at zero on External accounts with synthetic counterparts.
+    await tx
+      .update(accounts)
+      .set({
+        currentBalance: sql`(SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = ${externalAccountId}) + ${accounts.startingBalance}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(accounts.id, externalAccountId));
+
     return { syntheticId: synthetic.id, externalAccountId };
   });
 }
@@ -662,8 +763,22 @@ export async function manualUnpair(id: string): Promise<void> {
       // side. Once the pair is gone the stub has no purpose — leaving
       // it would just clutter the external account with a spurious
       // "External transfer" row that the operator can't even click into
-      // for context. Delete outright.
+      // for context. Delete outright + recompute the External account's
+      // currentBalance (issue #65 — same drift bug as the mint path).
+      const [partner] = await tx
+        .select({ accountId: transactions.accountId })
+        .from(transactions)
+        .where(eq(transactions.id, pairId));
       await tx.delete(transactions).where(eq(transactions.id, pairId));
+      if (partner) {
+        await tx
+          .update(accounts)
+          .set({
+            currentBalance: sql`(SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = ${partner.accountId}) + ${accounts.startingBalance}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(accounts.id, partner.accountId));
+      }
     } else {
       await tx
         .update(transactions)

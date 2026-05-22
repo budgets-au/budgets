@@ -69,10 +69,31 @@ function nextOccurrence(
       }
       return next;
     }
-    case "quarterly":
-      return addMonths(current, 3 * interval);
-    case "yearly":
-      return addYears(current, interval);
+    case "quarterly": {
+      const next = addMonths(current, 3 * interval);
+      // Issue #63: re-anchor like the monthly branch. addMonths clamps
+      // anchorDay=31 onto a 30-day month, then preserves the (clamped)
+      // day on the next call — a "31st every quarter" schedule lands on
+      // the 30th forever after.
+      if (dayOfMonth) {
+        const maxDay = endOfMonth(next).getDate();
+        return setDate(next, Math.min(dayOfMonth, maxDay));
+      }
+      return next;
+    }
+    case "yearly": {
+      const next = addYears(current, interval);
+      // Issue #63: re-anchor. addYears clamps Feb 29 → Feb 28 in non-
+      // leap years and then preserves the (clamped) 28th forever —
+      // misses Feb 29 in the next leap year. dayOfMonth defaulted from
+      // the schedule's startDate by expandRecurrence's
+      // effectiveDayOfMonth lets us recover the original anchor.
+      if (dayOfMonth) {
+        const maxDay = endOfMonth(next).getDate();
+        return setDate(next, Math.min(dayOfMonth, maxDay));
+      }
+      return next;
+    }
     default:
       return addMonths(current, 1);
   }

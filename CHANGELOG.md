@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.256.0 — 2026-05-22
+
+### Added
+- **E2E spec for the category-delete contract** (#21). New
+  `tests/e2e/category-delete.spec.ts` builds a fresh 3-level
+  tree (grandparent → parent → child), links a transaction
+  to the middle node, then DELETEs the middle node and
+  asserts:
+  - Children are PROMOTED one level (child's `parentId`
+    rewrites to the grandparent's id, not null).
+  - The deleted node is gone from `/api/categories?type=expense`.
+  - The linked transaction survives with `categoryId = null`
+    (FK is `ON DELETE SET NULL`).
+  - DELETE on a missing id → 404.
+
+  Self-contained tree means the assertions don't tangle with
+  seed-data categories; cleanup in `finally` drops the
+  remaining nodes so the next spec starts clean.
+
 ## 0.255.0 — 2026-05-22
 
 ### Added

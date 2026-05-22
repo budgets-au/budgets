@@ -1,47 +1,31 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { readSchedule, writeSchedule } from "@/lib/backup/sqlite-backup";
 import { withAdminAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
+
+// Issue #58: migrate from raw `request.json()` to the canonical
+// `parseJsonBody` + zod schema so the error envelope matches the
+// rest of the API (`BadRequestBody.issues[]`).
+const patchSchema = z.object({
+  enabled: z.boolean().optional(),
+  intervalDays: z.number().positive().finite().optional(),
+  retain: z.number().int().nonnegative().finite().optional(),
+});
 
 /** PATCH /api/backup/schedule — partial update of the singleton
- * schedule config. Admin-only; backup cadence is household-wide.
- * Validation is permissive: any subset of
- * {enabled, intervalDays, retain} is accepted, anything else is
- * dropped. The scheduler picks up the new values within ~60s. */
+ * schedule config. Admin-only; backup cadence is household-wide. Any
+ * subset of {enabled, intervalDays, retain} is accepted; the scheduler
+ * picks up the new values within ~60s. */
 export const PATCH = withAdminAuth(async (request) => {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  const parsed = await parseJsonBody(request, patchSchema);
+  if (!parsed.ok) return parsed.response;
+  if (Object.keys(parsed.data).length === 0) {
     return NextResponse.json(
-      { ok: false, error: "Invalid JSON body" },
+      { error: "No valid fields supplied" },
       { status: 400 },
     );
   }
-  if (typeof body !== "object" || body === null) {
-    return NextResponse.json(
-      { ok: false, error: "Body must be an object" },
-      { status: 400 },
-    );
-  }
-  const b = body as Record<string, unknown>;
-  const patch: Partial<{
-    enabled: boolean;
-    intervalDays: number;
-    retain: number;
-  }> = {};
-  if (typeof b.enabled === "boolean") patch.enabled = b.enabled;
-  if (typeof b.intervalDays === "number" && Number.isFinite(b.intervalDays) && b.intervalDays > 0) {
-    patch.intervalDays = b.intervalDays;
-  }
-  if (typeof b.retain === "number" && Number.isFinite(b.retain) && b.retain >= 0) {
-    patch.retain = Math.floor(b.retain);
-  }
-  if (Object.keys(patch).length === 0) {
-    return NextResponse.json(
-      { ok: false, error: "No valid fields supplied" },
-      { status: 400 },
-    );
-  }
-  writeSchedule(patch);
+  writeSchedule(parsed.data);
   return NextResponse.json({ ok: true, schedule: readSchedule() });
 });

@@ -9,6 +9,50 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.239.0 — 2026-05-22
+
+### Security
+- **`POST /api/databases/switch` now requires a same-origin POST**
+  (#89). Anonymous LAN attackers could previously force-lock the
+  active DB and steer the profile pointer by hitting the endpoint
+  with a registered id. Browser semantics mandate `Origin` on
+  cross-origin POSTs and cross-origin callers can't spoof it, so
+  the same-origin check blocks the threat without breaking
+  `/unlock` (which is legitimately unauthenticated). Direct curl
+  from the host still works for the trusted-LAN operator. Also
+  tightened the id schema from `z.string().min(1).max(40)` to
+  the profile-id charset regex.
+- **`POST /api/transfers/repair` and `POST /api/transfers/reset-and-rescan`
+  now require `withAdminAuth`** (#48). Both perform household-wide
+  destructive writes (delete every `is_synthetic=true` row, re-pair
+  across the whole DB); the equivalent maintenance routes
+  (`/api/transfers/backfill`, `/api/sample-data/remove`,
+  `/api/maintenance/analyze`, `/api/lock`) were already admin-gated.
+  Non-admin members could previously fire either.
+- **`POST /api/rekey` now rate-limits BEFORE the passphrase probe**
+  (#50). Previously the bucket fired after `validatePassphrase` +
+  `openWithKey()` — giving the file comment's "slow a hostile admin
+  session" goal nothing to slow. Now mirrors `/api/unlock`'s
+  correct ordering (rate limit first, parse + probe second).
+- **`POST /api/unlock` no longer leaks deploy-state messages on
+  401** (#47). `EACCES` / `EROFS` / `ENOSPC` from `describeOpenError`
+  used to land on the wire pre-auth, letting an attacker fingerprint
+  filesystem state. Now redacted to "Unable to open database — check
+  the server log for details" with the detail logged server-side.
+  The "Wrong passphrase or corrupted database file" string stays on
+  the wire (operator-friendly, no fingerprinting value).
+
+### Changed
+- **`PATCH /api/backup/schedule` and `PATCH /api/display-prefs`
+  now use `parseJsonBody` + zod** (#58, partial). Migrating both
+  from raw `request.json()` so they emit the canonical
+  `BadRequestBody.issues[]` envelope the rest of the API uses.
+  `parseDisplayPrefs` stays as the per-key gatekeeper; the zod
+  schema is permissive (`z.record(z.string(), z.unknown())`) just
+  to standardise the error shape. Other routes flagged in #58
+  (`/api/users`, `/api/users/[id]`, `/api/unlock`, `/api/rekey`)
+  ship in a follow-up batch — they need bigger schema work.
+
 ## 0.238.0 — 2026-05-22
 
 ### Added

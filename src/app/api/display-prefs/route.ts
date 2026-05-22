@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "@/db";
 import { appSettings, categories } from "@/db/schema";
 import { withAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
 import {
   DISPLAY_PREFS_DEFAULT,
   parseDisplayPrefs,
@@ -39,24 +41,21 @@ export const GET = withAuth(async () => {
   return NextResponse.json(parseDisplayPrefs(stored));
 });
 
+// Issue #58: dynamic-key body, so the zod schema is a permissive
+// `record<string, unknown>` — `parseDisplayPrefs` is the real
+// gatekeeper for individual field shapes. The schema is here so the
+// error envelope matches the rest of the API (BadRequestBody).
+const patchSchema = z.record(z.string(), z.unknown());
+
 /** Patch one or more pref keys. Request body is a partial
  * DisplayPrefs object; only keys present in the body are updated,
  * everything else is left untouched (deep-merge over the current
  * blob). Response is the full merged + defaulted blob so the
  * client's SWR cache lands with a complete picture. */
 export const PATCH = withAuth(async (request) => {
-  let patch: unknown;
-  try {
-    patch = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-  if (!patch || typeof patch !== "object") {
-    return NextResponse.json(
-      { error: "Body must be a JSON object" },
-      { status: 400 },
-    );
-  }
+  const parsed = await parseJsonBody(request, patchSchema);
+  if (!parsed.ok) return parsed.response;
+  const patch = parsed.data;
 
   const existing = await db
     .select({ displayPrefs: appSettings.displayPrefs })

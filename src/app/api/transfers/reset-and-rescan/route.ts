@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { withAuth } from "@/lib/api/route-guards";
+import { withAdminAuth } from "@/lib/api/route-guards";
 import { db } from "@/db";
 import { transactions } from "@/db/schema";
 import { pairTransfersInWindow } from "@/lib/transfer-match";
@@ -27,7 +27,9 @@ import { pairTransfersInWindow } from "@/lib/transfer-match";
  *
  * Returns counts for the toast in the UI.
  */
-export const POST = withAuth(async () => {
+// Admin-only because every household member shares this state — and
+// the delete cascades through every paired counterpart's FK. (Issue #48.)
+export const POST = withAdminAuth(async () => {
   const deleted = await db
     .delete(transactions)
     .where(eq(transactions.isSynthetic, true))

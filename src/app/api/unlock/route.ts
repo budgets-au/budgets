@@ -67,8 +67,22 @@ export async function POST(request: Request) {
 
   const result = unlock(passphrase as string);
   if (!result.ok) {
+    // Issue #47: `describeOpenError` distinguishes EACCES / EROFS /
+    // ENOSPC / wrong-key in the wire body — useful for the operator
+    // debugging a fresh deploy, but it's a pre-auth disclosure of
+    // deployment-time filesystem state. Keep the wrong-passphrase
+    // ambiguity on the wire (the operator-friendly string) and
+    // redact the deploy-state messages to a generic body; the
+    // detailed string still lands in the server log.
+    const detail = result.error ?? "Failed to open the database.";
+    const wireSafe = detail.includes("Wrong passphrase")
+      ? detail
+      : "Unable to open database — check the server log for details.";
+    if (wireSafe !== detail) {
+      console.error(`[unlock] ${detail}`);
+    }
     return NextResponse.json(
-      { ok: false, error: result.error },
+      { ok: false, error: wireSafe },
       { status: 401 },
     );
   }

@@ -14,6 +14,22 @@ import { withAdminAuth } from "@/lib/api/route-guards";
  * working since the connection is keyed with the new value in place.
  */
 export const POST = withAdminAuth(async (request) => {
+  // Throttle rekey attempts FIRST, before any work. Issue #50: previously
+  // this ran after the passphrase validation + the (expensive) SQLCipher
+  // decrypt probe, which gave the file comment's "slow a hostile admin
+  // session" goal nothing to slow. Mirrors /api/unlock's correct
+  // ordering — rate limit first, parse + key probe second.
+  const rl = rateLimit("rekey:POST", { max: 5, windowMs: 60_000 });
+  if (!rl.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `Too many rekey attempts. Try again in ${rl.retryAfter}s.`,
+      },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -58,20 +74,6 @@ export const POST = withAdminAuth(async (request) => {
     return NextResponse.json(
       { ok: false, error: "New passphrase must differ from the current one." },
       { status: 400 },
-    );
-  }
-  // Throttle rekey attempts — same shape as /api/unlock. Lower max
-  // because rekey is admin-gated already, but we still want to slow
-  // a hostile session that's somehow gained admin from grinding the
-  // current-passphrase check.
-  const rl = rateLimit("rekey:POST", { max: 5, windowMs: 60_000 });
-  if (!rl.ok) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: `Too many rekey attempts. Try again in ${rl.retryAfter}s.`,
-      },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
     );
   }
 

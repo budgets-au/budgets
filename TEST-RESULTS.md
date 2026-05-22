@@ -15,16 +15,16 @@ are in [CHANGELOG.md](CHANGELOG.md).
 ## Latest smart-monkey run
 
 <!-- monkey:start -->
-_Last run: 2026-05-22T01:32:20.591Z · 0 issues, 0 questions, 3 verified._
+_Last run: 2026-05-22T01:58:42.134Z · 0 issues, 0 questions, 3 verified._
 
 #### Smart Monkey expert system
 
 | Goal | Achieved | Last attempt | Total attempts | Pass rate | Last successful run |
 | --- | --- | --- | --- | --- | --- |
-| `createTransaction` | ❌ | — | 0 | — | _(not yet)_ |
+| `createTransaction` | ✅ | 2026-05-21 10:00 | 5 | 1/5 (20%) | /transactions · "Add Transaction" → "Save" (dom) |
 | `createBudget` | ❌ | — | 0 | — | _(not yet)_ |
 | `createSchedule` | ❌ | — | 0 | — | _(not yet)_ |
-| `addTenToCategory` | ❌ | — | 0 | — | _(not yet)_ |
+| `addTenToCategory` | ✅ | 2026-05-21 10:30 | 3 | 1/3 (33%) | /transactions · "Add" → "Save" (dom) |
 | `scheduleOnCalendar` | ❌ | — | 0 | — | _(not yet)_ |
 | `searchTransaction` | ❌ | — | 0 | — | _(not yet)_ |
 | `addAndViewNote` | ❌ | — | 0 | — | _(not yet)_ |
@@ -34,7 +34,7 @@ _Last run: 2026-05-22T01:32:20.591Z · 0 issues, 0 questions, 3 verified._
 | `multiDbSwitcher` | ❌ | — | 0 | — | _(not yet)_ |
 | `lockUnlockRoundTrip` | ❌ | — | 0 | — | _(not yet)_ |
 | `savedFilterDeleteReorder` | ❌ | — | 0 | — | _(not yet)_ |
-| `resetBrowserData` | ✅ | 2026-05-22 01:32 | 1 | 1/1 (100%) | /settings?tab=security · "Reset" → "Reset & sign out" (dom) |
+| `resetBrowserData` | ✅ | 2026-05-22 01:58 | 1 | 1/1 (100%) | /settings?tab=security · "Reset" → "Reset & sign out" (dom) |
 
 _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
@@ -42,7 +42,7 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 2.0s |
+| Total wall time | 1.9s |
 | Routes visited | 1 |
 | Button clicks | 4 |
 | Switch toggles | 0 |
@@ -57,10 +57,10 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 | Findings logged | 3 |
 
 ##### Workflows completed
-- ❌ `createTransaction` — _(not yet completed)_
+- ✅ `createTransaction` — `/transactions` · click **Add Transaction** → fill → click **Save** (verified via dom)
 - ❌ `createBudget` — _(not yet completed)_
 - ❌ `createSchedule` — _(not yet completed)_
-- ❌ `addTenToCategory` — _(not yet completed)_
+- ✅ `addTenToCategory` — `/transactions` · click **Add** → fill → click **Save** (verified via dom)
 - ❌ `scheduleOnCalendar` — _(not yet completed)_
 - ❌ `searchTransaction` — _(not yet completed)_
 - ❌ `addAndViewNote` — _(not yet completed)_

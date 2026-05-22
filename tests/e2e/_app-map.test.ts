@@ -8,6 +8,7 @@ import {
   ensureRoute,
   GOAL_KEYS,
   isInternalPath,
+  migrateAppMap,
   recordControl,
   recordGoalAttempt,
   recordLink,
@@ -181,6 +182,112 @@ describe("appendRun", () => {
     // (indices 0-4 were dropped).
     expect(m.runs[0].ts).toBe("2026-05-20T00:05:00.000Z");
     expect(m.runs[19].ts).toBe("2026-05-20T00:24:00.000Z");
+  });
+});
+
+describe("migrateAppMap", () => {
+  // The bug this guards against: a schema bump used to wipe the
+  // whole persisted state, so a single-test run after bumping
+  // would render TEST-RESULTS.md with one ✅ row and every other
+  // goal back at ❌ / 0 attempts. The migrator preserves prior
+  // achievements while folding in new fields / goals.
+  const runSummary = {
+    ts: T1,
+    durationMs: 1000,
+    routesVisited: 0,
+    buttonClicks: 0,
+    switchToggles: 0,
+    selectChanges: 0,
+    textInputsFilled: 0,
+    dialogsOpened: 0,
+    formSubmits: 0,
+    linksDiscovered: 0,
+    consoleErrors: 0,
+    goalsAttempted: 0,
+    goalsAchieved: 0,
+    findingsCount: 0,
+  };
+  const recipe: SuccessfulRun = {
+    timestamp: T1,
+    route: "/transactions",
+    triggerLabel: "Add Transaction",
+    fillSpec: { amount: "42" },
+    submitLabel: "Save",
+    verified: "dom",
+  };
+
+  it("preserves existing goal achievements from an older-schema map", () => {
+    const old = {
+      schemaVersion: 7,
+      routes: { "/dashboard": { firstSeen: T0, lastVisited: T1, visits: 3, linksOut: [], controls: {}, consoleErrorCount: 0 } },
+      runs: [runSummary],
+      goals: {
+        createTransaction: {
+          achieved: true,
+          attempts: 3,
+          lastAttempt: T1,
+          successfulRun: recipe,
+          // NOTE: no `successes` field — added in schema 8
+        },
+        createBudget: {
+          achieved: false,
+          attempts: 1,
+          lastAttempt: T1,
+          successfulRun: null,
+        },
+      },
+    };
+    const m = migrateAppMap(old as Record<string, unknown>);
+    expect(m.schemaVersion).toBe(9);
+    // Preserved.
+    expect(m.goals.createTransaction.achieved).toBe(true);
+    expect(m.goals.createTransaction.attempts).toBe(3);
+    expect(m.goals.createTransaction.successfulRun).toEqual(recipe);
+    // Backfilled from successfulRun presence (schema-8 default).
+    expect(m.goals.createTransaction.successes).toBe(1);
+    // createBudget: not achieved, no successfulRun → successes 0.
+    expect(m.goals.createBudget.successes).toBe(0);
+    expect(m.goals.createBudget.attempts).toBe(1);
+    // Goals not in the old map (e.g. resetBrowserData added in
+    // schema 9) initialise to fresh defaults — not wiped.
+    expect(m.goals.resetBrowserData).toEqual({
+      achieved: false,
+      attempts: 0,
+      successes: 0,
+      lastAttempt: null,
+      successfulRun: null,
+    });
+    // Routes + runs preserved as-is.
+    expect(m.routes["/dashboard"].visits).toBe(3);
+    expect(m.runs).toHaveLength(1);
+  });
+
+  it("returns a fresh map when given garbage / unparseable input", () => {
+    // Empty object → fresh map with current schema.
+    const m = migrateAppMap({});
+    expect(m.schemaVersion).toBe(9);
+    expect(m.routes).toEqual({});
+    expect(m.runs).toEqual([]);
+    // All goals reset to defaults.
+    for (const k of GOAL_KEYS) {
+      expect(m.goals[k].attempts).toBe(0);
+      expect(m.goals[k].achieved).toBe(false);
+    }
+  });
+
+  it("drops goals from old maps that no longer exist in GOAL_KEYS", () => {
+    const old = {
+      schemaVersion: 5,
+      routes: {},
+      runs: [],
+      goals: {
+        createTransaction: { achieved: true, attempts: 1, lastAttempt: T1, successfulRun: recipe, successes: 1 },
+        retiredOldGoal: { achieved: true, attempts: 99, lastAttempt: T1, successfulRun: recipe, successes: 99 },
+      },
+    };
+    const m = migrateAppMap(old as Record<string, unknown>);
+    expect(m.goals.createTransaction.attempts).toBe(1);
+    expect((m.goals as Record<string, unknown>)["retiredOldGoal"]).toBeUndefined();
   });
 });
 

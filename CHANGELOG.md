@@ -9,6 +9,38 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.235.0 — 2026-05-22
+
+### Fixed
+- **AppMap schema bumps no longer wipe every prior goal
+  achievement on the next test run.** Until now `loadAppMap`
+  returned a fresh empty map on any `schemaVersion` mismatch,
+  so the 8 → 9 bump for `resetBrowserData` blanked the goal
+  table in `TEST-RESULTS.md`: a single-test run after the bump
+  produced a one-✅-row table with every other goal back at
+  ❌ / 0 attempts, even though they'd been achieved on prior
+  runs.
+  - New `migrateAppMap(raw)` helper folds the old shape into a
+    fresh `emptyAppMap()`: routes preserved, runs preserved
+    (trimmed to ring size), goals merged per-key — achieved
+    state, attempts, `lastAttempt`, and `successfulRun` survive.
+    Missing-in-old-schema `successes` is backfilled from
+    `successfulRun ? 1 : 0`.
+  - Goals that no longer exist in `GOAL_KEYS` (removed between
+    versions) get dropped; new goals start at default state.
+  - Bad JSON / non-object input still falls through to a fresh
+    map — the safety branch is unchanged.
+  - Three new unit tests in `_app-map.test.ts` lock the contract:
+    schema-7 map with `createTransaction` + `addTenToCategory`
+    achieved → both survive the migration to schema 9 with
+    `successes` backfilled.
+
+  Verified end-to-end: seeded a synthetic schema-7
+  `app-map.json` with two achievements, ran just the
+  `resetBrowserData` goal in isolation, confirmed
+  `TEST-RESULTS.md` showed both prior achievements AND the new
+  `resetBrowserData` ✅ row (instead of wiping the prior two).
+
 ## 0.234.0 — 2026-05-22
 
 ### Added

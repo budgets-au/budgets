@@ -309,26 +309,71 @@ export function isInternalPath(path: string | null | undefined): boolean {
   return path.startsWith("/") && !path.startsWith("//");
 }
 
-/** Read the app-map from disk; return a fresh empty one if the
- * file doesn't exist or the schema version mismatches. (A bumped
- * schema invalidates prior learning rather than risking a
- * half-read partial map.) */
+/** Read the app-map from disk. On schema mismatch, migrate the
+ * persisted state forward into the current shape rather than
+ * dropping it on the floor — a bumped schema almost always means
+ * "a new goal was added" or "a new counter field was added", and
+ * losing every prior goal achievement just because of that is
+ * the bug that made single-test runs blank TEST-RESULTS.md
+ * (one-row goal table after a schema bump). The migrator is
+ * additive: existing goal state survives, new goals/fields get
+ * defaults, removed goals get dropped. */
 export async function loadAppMap(): Promise<AppMap> {
   if (!existsSync(APP_MAP_PATH)) return emptyAppMap();
   try {
     const raw = JSON.parse(await readFile(APP_MAP_PATH, "utf8")) as unknown;
-    if (
-      raw &&
-      typeof raw === "object" &&
-      (raw as { schemaVersion?: unknown }).schemaVersion ===
-        APP_MAP_SCHEMA_VERSION
-    ) {
+    if (!raw || typeof raw !== "object") return emptyAppMap();
+    const sv = (raw as { schemaVersion?: unknown }).schemaVersion;
+    if (sv === APP_MAP_SCHEMA_VERSION) {
       return raw as AppMap;
     }
+    return migrateAppMap(raw as Record<string, unknown>);
   } catch {
-    /* fall through to fresh map */
+    return emptyAppMap();
   }
-  return emptyAppMap();
+}
+
+/** Forward-migrate a persisted AppMap from any prior schema into
+ * the current shape. Strategy: start from `emptyAppMap()` (which
+ * has the current schemaVersion + every current GoalKey present
+ * with default state), then layer the old fields on top where
+ * the shape is still recognisable.
+ *
+ * - `routes` is preserved as-is — analytics only, schema hasn't
+ *   changed structurally between versions.
+ * - `runs` is preserved (trimmed to ring size).
+ * - `goals` is merged per-key: any old goal that is still in
+ *   `GOAL_KEYS` keeps its achieved/attempts/lastAttempt/successfulRun;
+ *   `successes` is backfilled from `successfulRun ? 1 : 0` if absent
+ *   (the field was added in schema 8). Goals that no longer exist
+ *   in the union are dropped; new goals start at default. */
+export function migrateAppMap(raw: Record<string, unknown>): AppMap {
+  const fresh = emptyAppMap();
+
+  if (raw.routes && typeof raw.routes === "object") {
+    fresh.routes = raw.routes as AppMap["routes"];
+  }
+
+  if (Array.isArray(raw.runs)) {
+    fresh.runs = (raw.runs as RunSummary[]).slice(-RUNS_RING_SIZE);
+  }
+
+  if (raw.goals && typeof raw.goals === "object") {
+    const oldGoals = raw.goals as Record<string, Partial<GoalState>>;
+    for (const key of GOAL_KEYS) {
+      const og = oldGoals[key];
+      if (!og || typeof og !== "object") continue;
+      fresh.goals[key] = {
+        achieved: og.achieved ?? false,
+        attempts: og.attempts ?? 0,
+        successes: og.successes ?? (og.successfulRun ? 1 : 0),
+        lastAttempt: og.lastAttempt ?? null,
+        successfulRun: og.successfulRun ?? null,
+      };
+    }
+  }
+
+  return fresh;
 }
 
 export async function saveAppMap(map: AppMap): Promise<void> {

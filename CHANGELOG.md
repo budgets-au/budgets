@@ -9,6 +9,44 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.231.0 — 2026-05-22
+
+### Fixed
+- **Dashboard screenshot caught the Net Worth Trend chart and the
+  React-Grid-Layout widget arrangement mid-render.** User noticed
+  the chart line was still being drawn and called it out as a
+  general issue: "this will impact your tests as well."
+  `waitForLoadState("networkidle") + page.waitForTimeout(2000)`
+  fired BEFORE Recharts finished animating path geometry from a
+  placeholder up to the final curve and BEFORE RGL settled
+  widget transforms.
+  - New `waitForChartsDrawn(page)` helper waits until every
+    `.recharts-line-curve / .recharts-area-area /
+    .recharts-bar-rectangle / .recharts-sankey-link` element
+    has a fully-drawn `d` attribute (length > 20 chars — Recharts
+    emits short `M0,0…` strings mid-animation) or a non-zero
+    width (for bars).
+  - New `waitForGridSettled(page)` helper waits for every
+    `.react-grid-item` to have a concrete `translate(…)`
+    transform and for `.react-grid-placeholder` to be absent
+    (RGL settles within ~300 ms of mount but the prior code
+    didn't gate on it).
+  - Trailing `settleMs` dropped to 300–500 ms across the board;
+    it's now strictly for hover/focus pulses, not the primary
+    done-signal.
+- **Transactions screenshot was ~3× taller than every other shot**
+  because `page.screenshot({ fullPage: true })` captured the
+  full scrollable 25-row table. Switched to viewport-only
+  captures (`fullPage: false`) so every README thumbnail is
+  exactly `VIEWPORT.height` tall — the 3-up grid in the README
+  finally reads as a uniform thumbnail wall.
+
+### Changed
+- **Re-captured all 6 README screenshots** under the new wait
+  protocol. Dashboard now shows the Net Worth Trend area fully
+  shaded and widgets in their final grid positions; transactions
+  fits a single viewport.
+
 ## 0.230.0 — 2026-05-22
 
 ### Changed

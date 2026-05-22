@@ -14,8 +14,16 @@ import { signInAsAdmin } from "./_helpers";
  * investment / super / paper-trade rows on top via the public API
  * since the autoseed doesn't cover those tables yet.
  *
- * Capture resolution matches the prior in-repo screenshots
- * (≈ 2700 × 1400 at 2× DPR for retina-quality assets).
+ * Capture is **viewport-only** (not fullPage) so every screenshot is
+ * exactly VIEWPORT.height tall — the README lays them out as
+ * uniform 3-up thumbnails, and a fullPage capture would make the
+ * /transactions row (25-deep table) tower over the others.
+ *
+ * Wait protocol: `networkidle` + chart-drawn detection (Recharts
+ * path elements have non-trivial `d` attributes) + a small fixed
+ * settle for hover/focus pulses. The fixed-timer pattern alone
+ * caught the dashboard mid-render — RGL grid settle and Recharts
+ * animation both run after `networkidle` fires.
  *
  * Usage:
  *   pnpm test:e2e tests/e2e/screenshots.spec.ts
@@ -31,19 +39,20 @@ interface PageCfg {
   path: string;
   /** File-name stem; `${name}-${theme}.png` is what lands in screenshots/. */
   name: string;
-  /** Extra wait after networkidle (Recharts / RGL mount on a delay). */
+  /** Trailing fixed settle (after charts-drawn + networkidle). Keep small —
+   *  for hover/focus pulses, not the primary done-signal. */
   settleMs?: number;
 }
 
 const THEMES = ["light", "dark"] as const;
 
 const PAGES: ReadonlyArray<PageCfg> = [
-  { path: "/dashboard", name: "dashboard", settleMs: 2000 },
-  { path: "/transactions", name: "transactions", settleMs: 800 },
-  { path: "/calendar", name: "calendar", settleMs: 1200 },
-  { path: "/reports", name: "reports-cashflow", settleMs: 1500 },
-  { path: "/reports?tab=sankey", name: "reports-sankey", settleMs: 1500 },
-  { path: "/scheduled", name: "scheduled", settleMs: 1500 },
+  { path: "/dashboard", name: "dashboard", settleMs: 500 },
+  { path: "/transactions", name: "transactions", settleMs: 300 },
+  { path: "/calendar", name: "calendar", settleMs: 500 },
+  { path: "/reports", name: "reports-cashflow", settleMs: 500 },
+  { path: "/reports?tab=sankey", name: "reports-sankey", settleMs: 500 },
+  { path: "/scheduled", name: "scheduled", settleMs: 300 },
 ];
 
 test.use({ viewport: VIEWPORT, deviceScaleFactor: DEVICE_SCALE });
@@ -73,17 +82,79 @@ test.describe("screenshot regeneration", () => {
         await signInAsAdmin(page);
         await page.goto(cfg.path);
         await page.waitForLoadState("networkidle");
+        await waitForChartsDrawn(page);
+        await waitForGridSettled(page);
         if (cfg.settleMs) {
           await page.waitForTimeout(cfg.settleMs);
         }
         await page.screenshot({
           path: `${SHOTS_DIR}/${cfg.name}-${theme}.png`,
-          fullPage: true,
+          fullPage: false,
         });
       });
     }
   }
 });
+
+/** Block until every mounted Recharts chart has finished drawing its
+ *  primary shapes. The default Recharts `isAnimationActive: true`
+ *  animates path `d` attributes from a zero-bbox placeholder up to
+ *  the final geometry — the SVG surface mounts immediately on data
+ *  arrival, so `networkidle` + a short timer races the animation. */
+async function waitForChartsDrawn(page: Page): Promise<void> {
+  if ((await page.locator(".recharts-surface").count()) === 0) return;
+  await page
+    .waitForFunction(
+      () => {
+        const shapes = Array.from(
+          document.querySelectorAll<SVGPathElement | SVGRectElement>(
+            ".recharts-line-curve, .recharts-area-area, .recharts-bar-rectangle, .recharts-sankey-link",
+          ),
+        );
+        if (shapes.length === 0) return false; // surface up but shapes not mounted yet
+        return shapes.every((s) => {
+          if (s instanceof SVGPathElement) {
+            const d = s.getAttribute("d") ?? "";
+            // Mid-animation Recharts emits very short `d` strings
+            // (`M0,0`-style). Real paths are 50+ characters.
+            return d.length > 20;
+          }
+          // SVGRectElement (bar) — width > 0 means drawn.
+          const w = Number(s.getAttribute("width") ?? "0");
+          return w > 0;
+        });
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
+    .catch(() => {});
+}
+
+/** Block until react-grid-layout has settled its widget transforms.
+ *  RGL adds `.react-grid-placeholder` during drag/init and animates
+ *  `transform: translate(...)` on each widget — capturing mid-settle
+ *  catches widgets in non-final positions. */
+async function waitForGridSettled(page: Page): Promise<void> {
+  if ((await page.locator(".react-grid-layout").count()) === 0) return;
+  await page
+    .waitForFunction(
+      () => {
+        const items = Array.from(
+          document.querySelectorAll<HTMLElement>(".react-grid-item"),
+        );
+        if (items.length === 0) return false;
+        // No placeholders, and every item has a concrete transform
+        // (RGL pre-mount items have no inline transform).
+        return (
+          !document.querySelector(".react-grid-placeholder") &&
+          items.every((it) => /translate\(/.test(it.style.transform || ""))
+        );
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
+    .catch(() => {});
+}
 
 /** Theme is server-driven: layout.tsx reads the `theme` cookie and
  * renders `<html class="dark">` on the SSR pass. Set the cookie at

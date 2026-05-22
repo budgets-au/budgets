@@ -9,6 +9,27 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.257.0 — 2026-05-22
+
+### Added
+- **E2E spec for the RSU vest-schedule flow** (#24). New
+  `tests/e2e/rsu-vest-schedule.spec.ts` POSTs an RSU
+  investment with quantity 100, then two vests — one 30 days
+  ago for 40 shares, one 30 days in the future for 60. Asserts:
+  - `/api/investments` list rollup: `vestedQuantity = 40`
+    (only the past+satisfied vest counts), `maturationDate`
+    is the LATEST vest date (future one).
+  - `/api/investments/{id}` detail: full `vests` array
+    contains both rows (40, 60).
+  - DELETE the future vest → list still shows
+    `vestedQuantity = 40`, `maturationDate` flips to the
+    past date (now the latest), detail shrinks to 1 vest.
+  - Cleanup in `finally` deletes any remaining vests + the
+    investment.
+
+  Network-independent: explicit `name` + `purchasePrice` on
+  the POST so the route's Yahoo fallback never fires.
+
 ## 0.256.0 — 2026-05-22
 
 ### Added

@@ -9,6 +9,38 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.241.0 — 2026-05-22
+
+### Fixed
+- **Three dashboard widgets now correctly swap to the
+  "Chart hidden while editing" placeholder during dashboard
+  edit-mode drags / resizes** (#97). `StocksSummaryCard`,
+  `OptionsSummaryCard`, and `SuperSummaryCard` accepted no
+  `editMode` prop and kept the live Recharts subscribers wired
+  during RGL drags — the exact subscriber-loop cascade that
+  triggers React error #185 ("Maximum update depth exceeded").
+  `CategorySpendCard` took `editMode` but didn't gate its BarChart;
+  fixed there too. AGENTS.md's canonical placeholder pattern from
+  `net-worth-trend-card.tsx` now applied to all four. Widget
+  registry in `widgets.tsx:110, 118, 134` updated to plumb
+  `editMode` through.
+- **`AccountVisibility` no longer ships stale account names /
+  colours / balances** after `EditAccountDialog` calls
+  `router.refresh()` (#99). Was using the `useState(prop)`
+  anti-pattern; added the canonical `lastSeenProp` ref +
+  `useEffect` sync from `category-picker.tsx`.
+- **`SnapshotForm` in Super now re-mounts when the operator
+  switches edit targets** before saving (#100, part 1). Was
+  reusing the same form instance with a new `snapshot` prop, but
+  the local `useState` initialisers didn't re-run → A's values
+  stayed visible when editing B. Added `key={editingId}` on the
+  form element.
+- **`EditableHeading` in Super now syncs `draft` to the latest
+  `heading` prop when not actively editing** (#100, part 2). Was
+  stuck at the initial-mount value if a bulk import / sibling
+  tab updated the heading while the component was mounted —
+  saving could overwrite a fresher value with stale draft.
+
 ## 0.240.0 — 2026-05-22
 
 ### Fixed

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { mutate } from "swr";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent } from "@/components/ui/card";
@@ -209,7 +209,14 @@ export function SuperView({
               No snapshots yet — use the button above to add the first one.
             </p>
           ) : editingId ? (
+            // Issue #100: key on editingId so the form re-mounts when
+            // the operator switches from editing snapshot A to B
+            // before saving. Without the key, React reuses the form
+            // instance with a new `snapshot` prop, but the internal
+            // useState initialisers don't re-run — A's values stay in
+            // the visible fields.
             <SnapshotForm
+              key={editingId}
               person={person}
               snapshot={snapshots.find((s) => s.id === editingId)!}
               onCancel={() => setEditingId(null)}
@@ -280,6 +287,16 @@ function EditableHeading({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(heading);
   const [saving, setSaving] = useState(false);
+
+  // Issue #100: keep `draft` in sync with the `heading` prop when the
+  // operator ISN'T mid-edit. Without this, a heading change pushed
+  // from another tab / bulk import while this component is mounted
+  // leaves `draft` stuck at the pre-change value; the next time the
+  // operator enters edit mode the button's `setDraft(heading)` fixes
+  // it, but a stale render in between flashes the wrong label.
+  useEffect(() => {
+    if (!editing) setDraft(heading);
+  }, [heading, editing]);
 
   async function save() {
     if (draft === heading) {

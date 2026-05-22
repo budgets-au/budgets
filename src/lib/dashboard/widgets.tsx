@@ -107,7 +107,7 @@ export const WIDGETS: WidgetSpec[] = [
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
     feature: "investments",
-    render: () => <StocksSummaryCard />,
+    render: ({ editMode }) => <StocksSummaryCard editMode={editMode} />,
   },
   {
     id: "options-summary",
@@ -115,7 +115,7 @@ export const WIDGETS: WidgetSpec[] = [
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
     feature: "investments",
-    render: () => <OptionsSummaryCard />,
+    render: ({ editMode }) => <OptionsSummaryCard editMode={editMode} />,
   },
   {
     id: "paper-trade-summary",
@@ -131,7 +131,7 @@ export const WIDGETS: WidgetSpec[] = [
     defaultLayout: { w: 2, h: 2 },
     minSize: { w: 2, h: 2 },
     feature: "super",
-    render: () => <SuperSummaryCard />,
+    render: ({ editMode }) => <SuperSummaryCard editMode={editMode} />,
   },
   {
     id: "github-stats",

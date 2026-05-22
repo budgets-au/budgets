@@ -21,7 +21,13 @@ interface TrendResp {
   series: { date: string; value: number }[];
 }
 
-export function StocksSummaryCard() {
+// Issue #97: accept `editMode` so the chart can swap to a placeholder
+// during dashboard drags / resizes. Recharts' ResponsiveContainer
+// drives an internal react-redux subscriber; rapid resize during an
+// RGL drag can push the subscriber loop past React's update-depth
+// ceiling (error #185). Same fix the canonical
+// `net-worth-trend-card.tsx` already applies.
+export function StocksSummaryCard({ editMode }: { editMode?: boolean } = {}) {
   const { data: rows = [], isLoading } = useSwrJson<InvestmentRow[]>(
     "/api/investments",
   );
@@ -132,6 +138,13 @@ export function StocksSummaryCard() {
         we deliberately omit axes / tooltip / numeric labels. */}
         {history.length >= 2 && (
           <div className="flex-1 min-h-0 -mx-1 mt-1">
+            {editMode ? (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Chart hidden while editing
+                </p>
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={history}>
                 <defs>
@@ -160,6 +173,7 @@ export function StocksSummaryCard() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         )}
       </CardContent>

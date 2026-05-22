@@ -27,7 +27,8 @@ interface TrendResp {
  * per-currency totals so AUD + USD don't FX-add silently — and adds
  * a count of options whose expiry is within the next 30 days as a
  * quick "what's about to expire" signal. */
-export function OptionsSummaryCard() {
+// Issue #97: see `net-worth-trend-card.tsx` for the editMode rationale.
+export function OptionsSummaryCard({ editMode }: { editMode?: boolean } = {}) {
   const { data: rows = [], isLoading } = useSwrJson<InvestmentRow[]>(
     "/api/investments",
   );
@@ -149,6 +150,13 @@ export function OptionsSummaryCard() {
         the authoritative figure. */}
         {history.length >= 2 && (
           <div className="flex-1 min-h-0 -mx-1 mt-1">
+            {editMode ? (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  Chart hidden while editing
+                </p>
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={history}>
                 <defs>
@@ -173,6 +181,7 @@ export function OptionsSummaryCard() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         )}
       </CardContent>

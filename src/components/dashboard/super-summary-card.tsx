@@ -15,7 +15,8 @@ interface SuperRow {
   person: "self" | "partner";
 }
 
-export function SuperSummaryCard() {
+// Issue #97: see `net-worth-trend-card.tsx` for the editMode rationale.
+export function SuperSummaryCard({ editMode }: { editMode?: boolean } = {}) {
   // Combined household super: both self + partner snapshots.
   const { data: rows = [], isLoading } = useSwrJson<SuperRow[]>("/api/super");
 
@@ -122,6 +123,13 @@ export function SuperSummaryCard() {
                 green) so the colour reinforces the headline change. */}
             {history.length >= 2 && (
               <div className="flex-1 min-h-0 -mx-1 mt-1">
+                {editMode ? (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                      Chart hidden while editing
+                    </p>
+                  </div>
+                ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={history}
@@ -139,6 +147,7 @@ export function SuperSummaryCard() {
                     />
                   </BarChart>
                 </ResponsiveContainer>
+                )}
               </div>
             )}
           </>

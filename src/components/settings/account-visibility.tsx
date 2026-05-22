@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { mutate } from "swr";
@@ -15,6 +15,19 @@ import type { Account } from "@/db/schema";
 
 export function AccountVisibility({ initialAccounts }: { initialAccounts: Account[] }) {
   const [accounts, setAccounts] = useState(initialAccounts);
+  // Issue #99: keep `accounts` in sync with `initialAccounts` when the
+  // parent server component re-renders after EditAccountDialog calls
+  // `router.refresh()`. Without this, the local optimistic state from
+  // a prior toggle never reconciles with the freshly-fetched
+  // (renamed / recoloured / re-balanced) account rows. Canonical
+  // pattern from `category-picker.tsx`.
+  const lastSeen = useRef(initialAccounts);
+  useEffect(() => {
+    if (lastSeen.current !== initialAccounts) {
+      lastSeen.current = initialAccounts;
+      setAccounts(initialAccounts);
+    }
+  }, [initialAccounts]);
 
   async function toggle(id: string, isArchived: boolean) {
     const res = await fetch(`/api/accounts/${id}`, {

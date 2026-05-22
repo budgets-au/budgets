@@ -258,25 +258,6 @@ function appendRunReport(lines: string[], map: AppMap): void {
   lines.push(`| Goals achieved | ${sum.goalsAchieved} |`);
   lines.push(`| Findings logged | ${sum.findingsCount} |`);
   lines.push("");
-
-  // Workflows-completed list. A workflow is "completed" if the
-  // smart monkey has EVER achieved it — `goals.<key>.achieved`
-  // sticks once flipped. The recipe in `successfulRun` is the
-  // proof; we surface its route + trigger + submit so the
-  // operator can read the exact path.
-  lines.push("##### Workflows completed");
-  for (const key of GOAL_KEYS) {
-    const g = map.goals[key];
-    if (g.achieved && g.successfulRun) {
-      const r = g.successfulRun;
-      lines.push(
-        `- ✅ \`${key}\` — \`${r.route}\` · click **${r.triggerLabel}** → fill → click **${r.submitLabel}** (verified via ${r.verified})`,
-      );
-    } else {
-      lines.push(`- ❌ \`${key}\` — _(not yet completed)_`);
-    }
-  }
-  lines.push("");
 }
 
 /** Vitest report sidecar — populated by `pnpm test:report`. The

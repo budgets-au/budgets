@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.260.0 — 2026-05-22
+
+### Changed
+- **Monkey writeback drops the duplicate "Workflows completed"
+  bullet list.** The Smart Monkey expert-system table at the top
+  of the monkey block already carries the same information per
+  goal (Achieved + Last attempt + Total attempts + Pass rate +
+  Last successful run — including route, trigger label, submit
+  label, and verification layer in the recipe column). The
+  separate bullet list at the bottom of the run-report was pure
+  duplication and bloated the writeback by ~15 lines per run.
+  Removed from `tests/e2e/global-teardown.ts:appendRunReport`;
+  the table remains the source of truth for per-goal state.
+
 ## 0.259.0 — 2026-05-22
 
 ### Added

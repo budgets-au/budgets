@@ -362,7 +362,7 @@ export function DashboardGrid({
             const widget = WIDGETS_BY_ID.get(entry.widgetId);
             if (!widget) return null;
             return (
-              <div key={l.i}>
+              <div key={l.i} data-widget-id={entry.widgetId}>
                 <WidgetTile
                   widget={widget}
                   editMode={editMode}

@@ -9,6 +9,41 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.233.0 — 2026-05-22
+
+### Added
+- **Dashboard visual-regression spec (#42) at
+  `tests/e2e/dashboard-visual.spec.ts`.** Playwright
+  `expect(page).toHaveScreenshot(...)` against committed baselines
+  in `tests/e2e/dashboard-visual.spec.ts-snapshots/` (one per
+  theme: dashboard-light, dashboard-dark). Re-bless intentional UI
+  changes with `--update-snapshots`; otherwise the spec fails
+  loudly on any drift from baseline.
+  - Distinct from `screenshots.spec.ts` (which overwrites README
+    PNGs unconditionally) — the visual spec is a *gate*, not a
+    publisher.
+  - `maxDiffPixelRatio: 0.01` — tolerant of anti-aliasing /
+    sub-pixel font hinting, intolerant of a missing widget /
+    flipped colour / mis-laid grid.
+  - **Stability strategy**: fresh DB + autoseed-only (no
+    showcase investments — Yahoo-priced stocks change daily
+    and would drift the entire Net Worth headline). The
+    `github-stats` widget is masked because it pings
+    api.github.com for live counts; Playwright paints its
+    bounding box magenta before the diff so the rest of the
+    dashboard still compares.
+  - Reuses the same `waitForChartsDrawn` / `waitForGridSettled`
+    helpers `screenshots.spec.ts` uses, so the spec keys off
+    actual completion signals (Recharts path-drawn,
+    react-grid-layout settled) rather than arbitrary timers.
+
+### Changed
+- **Dashboard widget wrapper now carries `data-widget-id`** in
+  `dashboard-grid.tsx:365`. One-line attribute, neutral for users,
+  gives the visual-regression spec (and any future testing /
+  scripting / observability hook) a stable per-widget selector
+  without reaching into class names.
+
 ## 0.232.0 — 2026-05-22
 
 ### Changed

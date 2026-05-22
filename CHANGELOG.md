@@ -9,6 +9,36 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.244.0 — 2026-05-22
+
+### Fixed
+- **`runOrphanTransferBackfill` is now transactional** (#49).
+  Read-flag → backfill → write-flag was three separate statements;
+  two concurrent unlocks (NextAuth sign-in fan-out, env-key
+  auto-unlock racing /api/unlock) could both pass the gate and
+  double-mint synthetic counterparts. Now wrapped in
+  `state.drizzleDb.transaction(..., { behavior: "immediate" })` so
+  the second unlock waits on the write lock and finds the flag
+  already set. Inner `backfillOrphanTransfers` call receives the
+  `tx` so its inserts stay within the same scope.
+- **`seedSystemCategoriesIfMissing` actually uses `BEGIN IMMEDIATE`
+  now** (#53). The block comment promised IMMEDIATE serialisation
+  but the call defaulted to DEFERRED, so two concurrent unlocks
+  passed the gate under SHARED locks before either UPGRADE'd to
+  write. The loser hit SQLITE_BUSY and the gate's protection
+  reduced to deadlock-rejection rather than serialisation. One-line
+  fix to add the `{ behavior: "immediate" }` option that was
+  already documented.
+- **`POST /api/sample-data/remove` no longer orphans manually-paired
+  non-sample transfer legs** (#56). When the operator had manually
+  paired one of their real transactions to a sample transaction,
+  the sample-side delete left the surviving non-sample row with
+  `is_transfer = true` but `transfer_pair_id = NULL` (FK
+  ON-DELETE-SET-NULL). The orphan-backfill flag is already true at
+  this point so the next unlock wouldn't repair. Now sweeps
+  `is_transfer = false` on those partners before the sample-side
+  delete.
+
 ## 0.243.0 — 2026-05-22
 
 ### Fixed

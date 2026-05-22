@@ -142,6 +142,31 @@ export const POST = withAdminAuth(async () => {
       .where(eq(accounts.isSample, true));
     const sampleAccountIds = sampleAccountRows.map((a) => a.id);
 
+    // Issue #56: surviving non-sample partners of a sample transfer
+    // pair would be left with `is_transfer = true` and a NULL'd
+    // `transfer_pair_id` (the FK's ON DELETE SET NULL kicks in when
+    // the sample side gets deleted below). Clear `is_transfer` on
+    // those partners now so they don't surface as orphan flagged-
+    // but-unpaired rows downstream. The orphan-backfill flag is
+    // already true at this point, so the next unlock won't repair.
+    const sampleTxnIds = (
+      await tx
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(eq(transactions.isSample, true))
+    ).map((r) => r.id);
+    if (sampleTxnIds.length > 0) {
+      await tx
+        .update(transactions)
+        .set({ isTransfer: false, updatedAt: new Date() })
+        .where(
+          and(
+            eq(transactions.isSample, false),
+            inArray(transactions.transferPairId, sampleTxnIds),
+          ),
+        );
+    }
+
     await tx.delete(transactions).where(eq(transactions.isSample, true));
     await tx
       .delete(scheduledTransactions)

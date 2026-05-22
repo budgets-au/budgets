@@ -303,37 +303,41 @@ export function switchProfile(id: string): void {
 function runOrphanTransferBackfill(): void {
   if (!state.drizzleDb || !state.client) return;
   try {
-    const flagRow = state.client
-      .prepare(
-        `SELECT transfer_backfill_done FROM app_settings WHERE id = 1`,
-      )
-      .get() as { transfer_backfill_done?: number } | undefined;
-    if (flagRow?.transfer_backfill_done === 1) {
-      // Already done on this DB — restore-safe no-op.
-      return;
-    }
-    // Lazy import keeps the unlock path off of the helper's chunk
-    // at module-init time. The helper no longer reaches back for
-    // `db` via require — we PASS the live drizzle handle in, which
-    // fully breaks the cycle that used to cause the production-
-    // bundle TDZ `ReferenceError: Cannot access 'D' before
-    // initialization`.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const m = require("@/lib/backfill-orphan-transfers");
-    const result = m.backfillOrphanTransfers(state.drizzleDb);
-    if (result.paired > 0) {
-      console.log(
-        `[db] Backfilled ${result.paired} orphan transfer row(s) with synthetic counterparts.`,
-      );
-    }
-    // Mark the flag regardless of whether anything was paired — a
-    // fresh DB with zero orphans still "counts" as backfilled, and
-    // we don't want to re-scan on every unlock thereafter.
-    state.client
-      .prepare(
-        `UPDATE app_settings SET transfer_backfill_done = 1 WHERE id = 1`,
-      )
-      .run();
+    // Issue #49: the flag-read + backfill call + flag-write was not
+    // transactional. Two concurrent unlock paths (e.g. /api/unlock
+    // racing the env-key auto-unlock at boot, or a NextAuth
+    // sign-in fan-out before the flag committed) could both pass
+    // the gate and double-mint synthetic counterparts. Wrap the
+    // whole sequence in a BEGIN IMMEDIATE transaction. The
+    // backfill helper takes a drizzle handle as a parameter, so we
+    // pass `tx` in to keep the inner inserts within the same
+    // transactional scope.
+    state.drizzleDb.transaction((tx) => {
+      const flagRows = tx
+        .select({ flag: appSettings.transferBackfillDone })
+        .from(appSettings)
+        .where(eq(appSettings.id, 1))
+        .all();
+      if (flagRows[0]?.flag) return; // already-done, no-op
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const m = require("@/lib/backfill-orphan-transfers");
+      const result = m.backfillOrphanTransfers(tx);
+      if (result.paired > 0) {
+        console.log(
+          `[db] Backfilled ${result.paired} orphan transfer row(s) with synthetic counterparts.`,
+        );
+      }
+      // Mark the flag regardless of whether anything was paired —
+      // a fresh DB with zero orphans still "counts" as backfilled.
+      tx
+        .insert(appSettings)
+        .values({ id: 1, transferBackfillDone: true })
+        .onConflictDoUpdate({
+          target: appSettings.id,
+          set: { transferBackfillDone: true, updatedAt: new Date() },
+        })
+        .run();
+    }, { behavior: "immediate" });
   } catch (e) {
     console.error("[db] Orphan-transfer backfill failed:", e);
   }
@@ -410,6 +414,13 @@ export function seedSystemCategoriesIfMissing(): void {
     // blocks until the first commits, then re-checks the gate and
     // finds rows. Mirrors the same pattern in
     // `seedSampleDataIfMissing` below.
+    // Issue #53: was missing `{ behavior: "immediate" }` — the
+    // documenting comment promised BEGIN IMMEDIATE serialisation
+    // but the call defaulted to BEGIN DEFERRED, so two concurrent
+    // unlocks could both pass the gate under SHARED locks before
+    // either UPGRADE'd to a write. The loser then hit SQLITE_BUSY
+    // and the gate's protection was "deadlock rejection" rather than
+    // serialisation. Now actually IMMEDIATE.
     state.drizzleDb.transaction((tx) => {
       const existing = tx
         .select({ id: categories.id })
@@ -425,7 +436,7 @@ export function seedSystemCategoriesIfMissing(): void {
       }));
       tx.insert(categories).values(rows).run();
       console.log(`[db] Seeded ${rows.length} default categories.`);
-    });
+    }, { behavior: "immediate" });
   } catch (e) {
     console.error("[db] Failed to seed default categories:", e);
   }

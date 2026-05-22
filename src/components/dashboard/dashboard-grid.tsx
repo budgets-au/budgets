@@ -104,11 +104,25 @@ export function DashboardGrid({
     return true;
   }
 
+  // Issue #72: memoise the derivation chain so SWR-driven re-renders
+  // don't churn `activeLayout`'s reference identity. Without the
+  // memo, `prefs.dashboardLayout` is a fresh array on every SWR
+  // revalidate → `.filter(...)` is a fresh array → `draftLayout ?? …`
+  // is fresh → all three useMemos below recompute → RGL sees a new
+  // `layouts` prop, re-mounts widget subscribers, and chart-heavy
+  // widgets (Recharts ResponsiveContainer) cascade toward React #185.
   const rawBaseLayout: LayoutEntry[] =
     prefs.dashboardLayout.length > 0
       ? prefs.dashboardLayout
       : DEFAULT_DASHBOARD_LAYOUT;
-  const baseLayout = rawBaseLayout.filter((l) => isFeatureEnabled(l.widgetId));
+  const baseLayout = useMemo(
+    () => rawBaseLayout.filter((l) => isFeatureEnabled(l.widgetId)),
+    // Depend on the raw layout reference + the two feature flags
+    // that drive `isFeatureEnabled`. Stable when SWR returns the
+    // same blob unchanged.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawBaseLayout, prefs.featureInvestments, prefs.featureSuper],
+  );
   const activeLayout = draftLayout ?? baseLayout;
 
   // Memoise the derived RGL layout + the layouts prop object so RGL

@@ -86,6 +86,20 @@ export const POST = withAuth(async (request) => {
     formatsByAccount.set(r.accountId, cur);
   }
 
+  // Issue #84: pre-fetch every requested accountId in ONE query
+  // instead of looping a per-id SELECT for the brand-new-account
+  // branch below. Trivial savings at typical scale (handful of
+  // accounts per import), but the loop was the wrong shape and grows
+  // linearly with multi-account QIF files.
+  const accountNameById = new Map<string, string>(
+    (
+      await db
+        .select({ id: accounts.id, name: accounts.name })
+        .from(accounts)
+        .where(inArray(accounts.id, accountIds))
+    ).map((r) => [r.id, r.name]),
+  );
+
   // accountIds the caller asked about that have *never* seen this
   // exact format committed to them. Includes brand-new accounts (no
   // prior imports at all) so the user is reassured a fresh account
@@ -98,14 +112,9 @@ export const POST = withAuth(async (request) => {
   for (const id of accountIds) {
     const entry = formatsByAccount.get(id);
     if (!entry) {
-      const [acc] = await db
-        .select({ name: accounts.name })
-        .from(accounts)
-        .where(eq(accounts.id, id))
-        .limit(1);
       newFormatAccounts.push({
         accountId: id,
-        name: acc?.name ?? "?",
+        name: accountNameById.get(id) ?? "?",
         priorFormats: [],
       });
       continue;

@@ -9,6 +9,47 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.246.0 — 2026-05-22
+
+### Added
+- **UI now polls `/api/unlock` every 15s and force-redirects to
+  `/unlock` when the server reports `unlocked: false`.** New
+  `LockStatePoller` mounted once at `(app)/layout.tsx` covers every
+  authenticated route. Catches the case where the Node process
+  restarted (k8s rollout, container redeploy, manual restart) while
+  the operator had an open browser session — pre-poll, the UI sat
+  stale against the locked backend until the first API call
+  returned a 3xx (which only triggers on real network activity).
+  Skips while `document.hidden`, runs an immediate check on
+  visibility return so a returning operator sees the redirect
+  promptly. Preserves the destination as `?next=` so the unlock
+  flow drops them back where they were.
+
+### Fixed
+- **`dashboard-grid.tsx` no longer recomputes derived layouts on
+  every SWR revalidate** (#72). Wrapped `baseLayout` in a `useMemo`
+  keyed on `[prefs.dashboardLayout, prefs.featureInvestments,
+  prefs.featureSuper]`. Without this, the three downstream useMemos
+  on `[activeLayout]` recomputed on every render because
+  `baseLayout` was a fresh array, defeating the memoisation the
+  call-site comment claimed to provide — exactly the cascade
+  AGENTS.md warns triggers React error #185 with Recharts widgets.
+- **`/api/dashboard/net-worth-trend` issues 1 grouped query
+  instead of 12 sequential cumulative-sums** (#75). One
+  `SELECT substr(date, 1, 7) AS month, SUM(amount) GROUP BY month`,
+  then cumulative-sum in JS. Trim down from ~150k row reads on a
+  12k-row table per dashboard load to a single grouped scan.
+- **`/api/import/format-check` pre-fetches accounts in one
+  `inArray` query** (#84). Was issuing a per-id SELECT for the
+  brand-new-account branch in a loop; now one bulk fetch into a
+  `Map`, looked up per id.
+
+### Deferred
+- **#92 (`/api/transactions` running-balance O(N²) subquery)** —
+  the rewrite needs a CTE + window function with proper
+  before/after benchmarks; deferring to a focused PR rather than
+  ship blind. Commented on the issue.
+
 ## 0.245.0 — 2026-05-22
 
 ### Fixed

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { SessionProvider } from "@/components/layout/session-provider";
 import { MustChangePasswordBanner } from "@/components/layout/must-change-password-banner";
+import { LockStatePoller } from "@/components/layout/lock-state-poller";
 import { ConfirmDialogProvider } from "@/hooks/use-confirm-dialog";
 import { AddCategoryProvider } from "@/hooks/use-add-category-dialog";
 import { AddAccountProvider } from "@/hooks/use-add-account-dialog";
@@ -15,6 +16,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <SessionProvider>
+      {/* Background poll for server-side lock state — see
+          `lock-state-poller.tsx` for the rationale. Mounted once
+          here so every authenticated route inherits it. */}
+      <LockStatePoller />
       <ConfirmDialogProvider>
         <AddCategoryProvider>
         <AddAccountProvider>

@@ -32,22 +32,40 @@ export const GET = withAuth(async () => {
   `);
   const startingTotal = (startingRow as { total: number }).total ?? 0;
 
-  // Cumulative sum of txn amounts up to and including each period
-  // end-date. SQLite doesn't have a great built-in "running total
-  // matrix" so we do 12 sums; for a 12k-row table this is sub-ms
-  // each.
+  // Issue #75: was 12 separate `SELECT SUM(amount) WHERE date <= $d`
+  // queries, each scanning the full transactions table — O(12 × N)
+  // sequential reads. One GROUP BY + cumulative-sum in JS does the
+  // same in one round-trip.
+  const earliest = points[0];
+  const latest = points[points.length - 1];
+  const byMonth = (await db.all(sql`
+    SELECT substr(date, 1, 7) AS month,
+           CAST(COALESCE(SUM(amount), 0) AS REAL) AS sum
+    FROM transactions
+    WHERE date <= ${latest}
+      AND account_id IN (SELECT id FROM accounts WHERE is_archived = 0)
+    GROUP BY substr(date, 1, 7)
+    ORDER BY month
+  `)) as Array<{ month: string; sum: number }>;
+  // monthlySum[YYYY-MM] = net delta that month (across visible
+  // accounts). For pre-earliest months, fold into a single "everything
+  // before the window" baseline so the cumulative sum at the first
+  // point still reflects history.
+  const earliestMonth = earliest.slice(0, 7);
+  let preWindowSum = 0;
+  const monthDelta = new Map<string, number>();
+  for (const r of byMonth) {
+    if (r.month < earliestMonth) preWindowSum += r.sum;
+    else monthDelta.set(r.month, r.sum);
+  }
   const trend: Array<{ date: string; netWorth: number }> = [];
+  let cum = preWindowSum;
   for (const d of points) {
-    const [row] = await db.all(sql`
-      SELECT CAST(COALESCE(SUM(amount), 0) AS REAL) AS sum
-      FROM transactions
-      WHERE date <= ${d}
-        AND account_id IN (SELECT id FROM accounts WHERE is_archived = 0)
-    `);
-    const sum = (row as { sum: number }).sum ?? 0;
+    const m = d.slice(0, 7);
+    cum += monthDelta.get(m) ?? 0;
     trend.push({
       date: d,
-      netWorth: startingTotal + sum,
+      netWorth: startingTotal + cum,
     });
   }
 

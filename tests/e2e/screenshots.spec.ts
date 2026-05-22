@@ -1,6 +1,7 @@
 import { test, type Page, type BrowserContext } from "@playwright/test";
 import { resolve } from "node:path";
 import { signInAsAdmin } from "./_helpers";
+import { currentFyEndYear, fyDateRange } from "@/lib/tax/fy";
 
 /** Refreshes every PNG referenced by the project README.
  *
@@ -68,6 +69,7 @@ test.describe("screenshot regeneration", () => {
     try {
       await signInAsAdmin(page);
       await seedShowcaseInvestments(ctx);
+      await setCashflowRangeToFy(ctx);
     } finally {
       await page.close();
       await ctx.close();
@@ -178,6 +180,23 @@ async function setTheme(
       sameSite: "Lax",
     },
   ]);
+}
+
+/** Pre-seed the Cashflow tab's date range to the current Australian
+ *  financial year (1 Jul → 30 Jun) so the screenshot captures a full
+ *  year of data rather than the default single-month "this month"
+ *  window. /reports persists per-tab from/to in displayPrefs and
+ *  reads it on mount; setting it via the API before navigation skips
+ *  the click-the-quick-range dance. */
+async function setCashflowRangeToFy(context: BrowserContext): Promise<void> {
+  const { from, to } = fyDateRange(currentFyEndYear());
+  await context.request
+    .patch("/api/display-prefs", {
+      data: {
+        reportsPeriodByTab: { cashflow: { from, to } },
+      },
+    })
+    .catch(() => {});
 }
 
 async function seedShowcaseInvestments(

@@ -44,9 +44,26 @@ what's due in the next 30 days.
 fortnight or Eating Out per month and watch progress in the
 dashboard widget.
 
-**See where money goes.** Cashflow chart, monthly breakdown,
-category subtree drill-down, Sankey diagram of where dollars
-flow, tax-deductions report for any date range.
+**See where money goes.** Fifteen built-in reports — pick the one
+that answers the question you have:
+
+| Report | What it shows |
+|---|---|
+| **Cash Flow** | Category × month matrix of income & expenses with per-row totals and rolling averages. The default landing tab. |
+| **Category** | The same data rolled up to one row per category for the selected period, no monthly columns — for a one-screen "where did the money go this period". |
+| **Monthly** | Income vs expenses bar chart per month over the period; quick visual on whether you're banking or burning. |
+| **Year over Year** | Side-by-side category totals for the last 5 financial years, anchored to today's FY (ignores the page from/to). |
+| **Expenses by Category** | Drill-down tree of expense categories with parent subtotals; click a row to expand its children. |
+| **Income by Category** | Same drill-down shape, restricted to income categories. |
+| **Envelope** | Weekly / per-month roll-up of top-level expense categories — frames spend as "how much you have left per week" rather than per-period totals. |
+| **Accounts** | Per-account credit / debit / closing-balance by month — same column layout as Cash Flow but grouped by account. |
+| **Flow** | Sankey of money moving *between accounts* (transfers). Root-account picker narrows the ribbons to flows through one chosen account. |
+| **Sankey** | Income → hub → expenses money-flow visualisation, with a Saved / Savings node on whichever side balances the period. |
+| **Treemap** | Category hierarchy at a glance — rectangles sized by absolute spend; click a sub-rectangle to drill in. |
+| **Heatmap** | GitHub-contributions-style daily-spend grid; cell colour intensity tracks day-total absolute spend across the period. |
+| **Scatter** | Every transaction as a dot (date × amount), colour by category, with a smoothing line on top — useful for spotting outliers. |
+| **Payees** | Top-25 payees by absolute spend with a cumulative-% overlay; surfaces the 80 / 20. |
+| **Tax Deductions** | Per-FY summary of deductible expenses + WFH hours; ignores the page from/to (owns its own FY scope). |
 
 **Track investments.** Stocks (real and paper-trade), watchlist
 of tickers you're keeping an eye on, superannuation snapshots

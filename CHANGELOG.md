@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.232.0 — 2026-05-22
+
+### Changed
+- **Cashflow report screenshot now spans the current financial
+  year (1 Jul → 30 Jun) instead of just the current month.** A
+  single-month roll-up reads as "what about the other 11 months?"
+  in a marketing context; a full FY shows the seasonal shape of
+  income / expenses / surplus the report is actually for. New
+  `setCashflowRangeToFy()` helper in the screenshots beforeAll
+  PATCHes `displayPrefs.reportsPeriodByTab.cashflow` to
+  `fyDateRange(currentFyEndYear())` before navigation — /reports
+  loads with the FY range already applied so the capture
+  doesn't need a click-the-preset dance.
+- **README now lists all 15 built-in reports in a table** with a
+  one-line description per report (Cash Flow, Category, Monthly,
+  YoY, Expenses by Category, Income by Category, Envelope,
+  Accounts, Flow, Sankey, Treemap, Heatmap, Scatter, Payees, Tax
+  Deductions). Replaces the prior single-line "Cashflow, monthly
+  breakdown, …" sentence which buried 12 of the 15 reports.
+
 ## 0.231.0 — 2026-05-22
 
 ### Fixed

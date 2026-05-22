@@ -9,6 +9,29 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.250.0 — 2026-05-22
+
+### Security
+- **`/api/users/[id]` PATCH/DELETE now use `withAdminAuthAndId`**
+  (#45). Was hand-rolled `if (!isAdmin(session))` returning 401 for
+  any non-admin (authenticated or not). The wrapper correctly
+  returns 403 (Forbidden) for an authenticated non-admin and 401
+  only for missing-session, matching the rest of the API. The
+  guard's id-parse also runs the standard uuid validation before
+  the handler.
+
+### Changed
+- **`/api/users`, `/api/users/[id]`, `/api/unlock`, `/api/rekey`
+  migrated from raw `request.json()` to `parseJsonBody` + zod**
+  (#58 fully closed). Validation errors now emit the canonical
+  `BadRequestBody.issues[]` shape that every other API route uses;
+  the hand-rolled validator wrappers in `lib/user-rules.ts` stay
+  for unit-test use but the constants (`USERNAME_RE`, `USERNAME_MAX`,
+  `PASSWORD_MIN`, `VALID_ROLES`) are now exported and reused as the
+  zod schema's source of truth. `validatePassphrase` still runs
+  after parseJsonBody for the control-char rejection that zod
+  can't express.
+
 ## 0.249.0 — 2026-05-22
 
 ### Changed

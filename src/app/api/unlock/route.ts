@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { unlock, isUnlocked, dbExists } from "@/db";
 import { validatePassphrase } from "@/lib/passphrase";
 import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
+import { parseJsonBody } from "@/lib/api/parse-body";
+
+// Issue #58: parseJsonBody envelope so the wire error shape matches
+// the rest of the API. validatePassphrase is still called below for
+// the control-char rejection — zod alone can't express that.
+const unlockSchema = z.object({
+  passphrase: z.string(),
+});
 
 /**
  * Web-side unlock endpoint. Accepts `{ passphrase }` JSON, runs it
@@ -44,19 +53,12 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "Invalid JSON body" },
-      { status: 400 },
-    );
-  }
-  const passphrase =
-    typeof body === "object" && body !== null && "passphrase" in body
-      ? (body as { passphrase: unknown }).passphrase
-      : null;
+  const parsed = await parseJsonBody(request, unlockSchema);
+  if (!parsed.ok) return parsed.response;
+  const passphrase = parsed.data.passphrase;
+  // validatePassphrase still runs because zod can't express the
+  // control-char rejection — the same characters that would break
+  // a PRAGMA key statement mid-quote (NUL, CR, LF).
   const validationError = validatePassphrase(passphrase);
   if (validationError) {
     return NextResponse.json(
@@ -65,7 +67,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = unlock(passphrase as string);
+  const result = unlock(passphrase);
   if (!result.ok) {
     // Issue #47: `describeOpenError` distinguishes EACCES / EROFS /
     // ENOSPC / wrong-key in the wire body — useful for the operator

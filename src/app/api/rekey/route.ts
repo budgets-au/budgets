@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { rekey } from "@/db";
 import { validatePassphrase } from "@/lib/passphrase";
 import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { withAdminAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
+
+// Issue #58: parseJsonBody envelope so the wire error shape matches.
+// validatePassphrase + the cross-field "differs from current" /
+// "min 8 chars" checks still run below — zod can't express them.
+const rekeySchema = z.object({
+  current: z.string(),
+  next: z.string(),
+});
 
 /**
  * Rotate the SQLCipher passphrase. Admin-only — rotating the
@@ -30,29 +40,9 @@ export const POST = withAdminAuth(async (request) => {
     );
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: "Invalid JSON body" },
-      { status: 400 },
-    );
-  }
-  const current =
-    typeof body === "object" && body !== null && "current" in body
-      ? (body as { current: unknown }).current
-      : null;
-  const next =
-    typeof body === "object" && body !== null && "next" in body
-      ? (body as { next: unknown }).next
-      : null;
-  if (typeof current !== "string" || typeof next !== "string") {
-    return NextResponse.json(
-      { ok: false, error: "Both current and next passphrases are required." },
-      { status: 400 },
-    );
-  }
+  const parsed = await parseJsonBody(request, rekeySchema);
+  if (!parsed.ok) return parsed.response;
+  const { current, next } = parsed.data;
   // Same control-char rejection both unlock + rekey use — a rotated
   // key with a CR/LF/NUL embedded would break the next PRAGMA cycle
   // mid-statement just as easily as the initial unlock would.

@@ -10,16 +10,17 @@
  * common "I typed a trailing space" footgun.
  */
 
-const USERNAME_MIN = 1;
-const USERNAME_MAX = 32;
-const PASSWORD_MIN = 4; // weak by design — local-only LAN tool, the
-                        // SQLCipher passphrase is the real perimeter.
-                        // Anyone wanting more can pick a longer one.
+export const USERNAME_MIN = 1;
+export const USERNAME_MAX = 32;
+export const PASSWORD_MIN = 4; // weak by design — local-only LAN tool,
+                               // the SQLCipher passphrase is the real
+                               // perimeter. Anyone wanting more can
+                               // pick a longer one.
 
 /** Allowed username shape: ASCII letters / digits / `._-`. No
  * whitespace, no `@` (avoids confusion with email-shaped logins),
  * no path separators. */
-const USERNAME_RE = /^[A-Za-z0-9._-]+$/;
+export const USERNAME_RE = /^[A-Za-z0-9._-]+$/;
 
 export interface ValidationResult {
   ok: boolean;

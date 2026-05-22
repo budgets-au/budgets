@@ -1,10 +1,37 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { hash } from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { validateUsername, validatePassword, validateRole } from "@/lib/user-rules";
+import {
+  USERNAME_MIN,
+  USERNAME_MAX,
+  USERNAME_RE,
+  PASSWORD_MIN,
+  VALID_ROLES,
+} from "@/lib/user-rules";
 import { withAdminAuth } from "@/lib/api/route-guards";
+import { parseJsonBody } from "@/lib/api/parse-body";
+
+// Issue #58: zod schema mirroring the standalone validators in
+// `lib/user-rules.ts`. The validators stay around for the unit
+// tests (`user-rules.test.ts`) — this schema is just the route-
+// boundary version so the error envelope matches the rest of the
+// API (`BadRequestBody.issues[]`).
+const createSchema = z.object({
+  name: z.string().optional(),
+  username: z
+    .string()
+    .trim()
+    .min(USERNAME_MIN, "Username is required.")
+    .max(USERNAME_MAX, `Username must be ${USERNAME_MAX} characters or fewer.`)
+    .regex(USERNAME_RE, "Username may only contain letters, digits, dot, underscore, or dash."),
+  password: z
+    .string()
+    .min(PASSWORD_MIN, `Password must be at least ${PASSWORD_MIN} characters.`),
+  role: z.enum(VALID_ROLES, { message: "Role must be 'admin' or 'member'." }),
+});
 
 export const GET = withAdminAuth(async () => {
   const rows = await db
@@ -21,23 +48,12 @@ export const GET = withAdminAuth(async () => {
 });
 
 export const POST = withAdminAuth(async (request) => {
-  let body: { name?: unknown; username?: unknown; password?: unknown; role?: unknown };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  const u = validateUsername(body.username);
-  if (!u.ok) return NextResponse.json({ error: u.error }, { status: 400 });
-  const p = validatePassword(body.password);
-  if (!p.ok) return NextResponse.json({ error: p.error }, { status: 400 });
-  const r = validateRole(body.role);
-  if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
-
-  const username = (body.username as string).trim();
-  const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : username;
-  const passwordHash = await hash(body.password as string, 12);
+  const parsed = await parseJsonBody(request, createSchema);
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
+  const username = data.username; // already trimmed by the schema
+  const name = data.name?.trim() || username;
+  const passwordHash = await hash(data.password, 12);
 
   // Reject duplicates with a friendlier 409 than letting the unique
   // index throw. The race between this check and the insert is fine
@@ -57,7 +73,7 @@ export const POST = withAdminAuth(async (request) => {
       name,
       username,
       passwordHash,
-      role: body.role as "admin" | "member",
+      role: data.role,
     })
     .returning({
       id: users.id,

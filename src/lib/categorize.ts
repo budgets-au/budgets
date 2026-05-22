@@ -148,8 +148,26 @@ const AMOUNT_BAND_RATIO = 0.5;
  * The trigram match form drops "reference-shaped" tokens that appear only
  * once (per-transaction noise like HCFHEALTH's …S91WCCJY6 tail) but keeps
  * stable identifiers that recur across the corpus (AAMI policy numbers).
+ *
+ * Issue #96: was a full-table SELECT on every call. Each POST
+ * `/api/transactions` (every keystroke save in the add-transaction
+ * dialog), every import categorise, and every commit-batched call
+ * paid the cost of loading every categorised payee from disk. On a
+ * 50k-row table that's real. Now cached in-process with a 60 s TTL;
+ * write-paths in `/api/transactions`, `/api/import/categorise`,
+ * `/api/import/commit-batched`, `/api/import/undo-commit`,
+ * `/api/transactions/bulk` should call `invalidateTokenFreqCache()`
+ * after a mutation that could change token counts.
  */
+const TOKEN_FREQ_TTL_MS = 60_000;
+let tokenFreqCache: { map: Map<string, number>; expiresAt: number } | null =
+  null;
+
 export async function loadTokenFreq(): Promise<Map<string, number>> {
+  const now = Date.now();
+  if (tokenFreqCache && tokenFreqCache.expiresAt > now) {
+    return tokenFreqCache.map;
+  }
   const rows = await db
     .select({ normalizedPayee: transactions.normalizedPayee })
     .from(transactions)
@@ -163,7 +181,16 @@ export async function loadTokenFreq(): Promise<Map<string, number>> {
       map.set(tok, (map.get(tok) ?? 0) + 1);
     }
   }
+  tokenFreqCache = { map, expiresAt: now + TOKEN_FREQ_TTL_MS };
   return map;
+}
+
+/** Drop the cached freq map. Write-paths that mutate transactions in
+ *  ways that could change token counts should call this so the next
+ *  loadTokenFreq() reflects the new corpus. The TTL is the
+ *  conservative fallback; explicit invalidation is the precise one. */
+export function invalidateTokenFreqCache(): void {
+  tokenFreqCache = null;
 }
 
 /**

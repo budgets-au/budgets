@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.251.0 — 2026-05-22
+
+### Fixed
+- **`loadTokenFreq()` is now cached in-process with a 60s TTL +
+  explicit invalidation** (#96). Was full-table scanning every
+  categorised payee on EVERY POST `/api/transactions`, every
+  import categorise, and every commit-batched call. On a 50k-row
+  table that's real work the operator pays per keystroke save.
+  Now built once per minute (or per import commit, whichever comes
+  first). Exported `invalidateTokenFreqCache()` for write-paths to
+  call after mutations; commit-batched wired up.
+- **`screenshots.spec.ts:waitForChartsDrawn` now waits for Sankey
+  shapes specifically** (#66). The previous selector union short-
+  circuited as soon as a fast-rendering line/area/bar chart drew,
+  even when a slow-mounting Sankey on the same page hadn't started
+  — the Sankey screenshot could capture a partial diagram. Now
+  includes `.recharts-sankey-node` alongside `.recharts-sankey-link`.
+- **Backup-scheduler logs a hourly warning while DB is locked**
+  (#93). Was only logging on entry to the locked state — a
+  midnight restart that stayed unlocked until lunch took zero
+  backups silently. Now logs a warning every 60 ticks (~1 hour at
+  the default cadence) with the elapsed-tick count, so an extended
+  outage produces a steady drumbeat in the server log instead of
+  silence.
+
 ## 0.250.0 — 2026-05-22
 
 ### Security

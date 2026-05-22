@@ -108,9 +108,17 @@ async function waitForChartsDrawn(page: Page): Promise<void> {
   await page
     .waitForFunction(
       () => {
+        // Issue #66: also wait for Sankey-specific shapes to be
+        // present. The previous selector union would short-circuit
+        // as soon as a fast-rendering line/area/bar chart drew, even
+        // if the slow-mounting Sankey diagram hadn't started yet.
+        // Now we wait for ALL chart kinds whose shapes are visible
+        // in the DOM to be drawn.
+        const surfaces = document.querySelectorAll(".recharts-surface");
+        if (surfaces.length === 0) return false;
         const shapes = Array.from(
           document.querySelectorAll<SVGPathElement | SVGRectElement>(
-            ".recharts-line-curve, .recharts-area-area, .recharts-bar-rectangle, .recharts-sankey-link",
+            ".recharts-line-curve, .recharts-area-area, .recharts-bar-rectangle, .recharts-sankey-link, .recharts-sankey-node",
           ),
         );
         if (shapes.length === 0) return false; // surface up but shapes not mounted yet

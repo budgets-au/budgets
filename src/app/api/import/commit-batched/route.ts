@@ -8,6 +8,7 @@ import {
   normalizePayee,
   deriveMatchPayee,
   loadTokenFreq,
+  invalidateTokenFreqCache,
 } from "@/lib/categorize";
 import { learnAccountAlias } from "@/lib/import/resolve-account";
 import { pairTransfersInWindow } from "@/lib/transfer-match";
@@ -674,6 +675,11 @@ async function runCommit(request: Request) {
     pairError = e instanceof Error ? e.message : String(e);
     console.error("[commit-batched] transfer-match sweep failed:", e);
   }
+
+  // Issue #96: the import just changed (potentially many) normalised
+  // payees in the corpus. Drop the token-freq cache so the next
+  // `loadTokenFreq()` rebuilds against the new state.
+  invalidateTokenFreqCache();
 
   return NextResponse.json({
     imported,

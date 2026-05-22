@@ -77,11 +77,25 @@ function tick(): void {
   if (!isUnlocked()) {
     const handle = globalForScheduler.__backupScheduler;
     if (handle) {
-      // Log only on the first locked tick so the dev console isn't
-      // flooded.
-      if (handle.lockedTickCount === 0) {
+      // Issue #93: previously logged only once on entering the
+      // locked state. A silent restart at 2am that's not unlocked
+      // until lunchtime would then take zero backups for hours
+      // without any operator-visible signal. Now we log loudly:
+      //   - The first locked tick (entering the state).
+      //   - Every 60 ticks (~1 hour at the default 60s interval),
+      //     so an extended outage produces a steady drumbeat in
+      //     the server log.
+      // Format includes the locked-tick count so the operator can
+      // see how long it's been since the DB was last accessible.
+      const count = handle.lockedTickCount;
+      if (count === 0) {
         console.log(
           "[backup-scheduler] DB is locked — skipping until unlocked.",
+        );
+      } else if (count % 60 === 0) {
+        const minutes = count; // each tick is ~1 minute by default
+        console.warn(
+          `[backup-scheduler] DB still locked after ${minutes} ticks (~${minutes}min) — no backups have run since the lock. Unlock to resume.`,
         );
       }
       handle.lockedTickCount += 1;

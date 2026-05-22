@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.258.0 — 2026-05-22
+
+### Added
+- **E2E spec for the category-color edit propagation** (#20).
+  New `tests/e2e/category-color-edit.spec.ts` POSTs a
+  category with the OLD color, PATCHes to a NEW color, then
+  asserts:
+  - PATCH response carries the new color (write-through
+    contract for optimistic UI).
+  - GET `/api/categories?type=expense` reflects the new color
+    in the list view that dashboard / cashflow render from.
+  - A seeded transaction tagged with that category, when
+    fetched via `/api/transactions/{id}`, returns the
+    category color from the live join (not a stale snapshot
+    — the historical failure mode).
+  - Cleanup deletes the category in `finally`.
+
 ## 0.257.0 — 2026-05-22
 
 ### Added

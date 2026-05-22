@@ -61,5 +61,11 @@ export const DELETE = withAuth(async (request) => {
       });
   }
 
-  return NextResponse.json({ deleted: deleted.length, dismissed: dismissals.length });
+  // Issue #69: surface `requested` so the client can distinguish
+  // "all gone, success" from "all already gone, nothing happened".
+  return NextResponse.json({
+    deleted: deleted.length,
+    requested: ids.length,
+    dismissed: dismissals.length,
+  });
 });

@@ -40,7 +40,14 @@ export const DELETE = withAuth<{ params: Promise<{ vestId: string }> }>(
     const idParse = z.string().uuid().safeParse(rawId);
     if (!idParse.success) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-    await db.delete(investmentVests).where(eq(investmentVests.id, idParse.data));
+    // Issue #67: 404 when no row matched.
+    const deleted = await db
+      .delete(investmentVests)
+      .where(eq(investmentVests.id, idParse.data))
+      .returning({ id: investmentVests.id });
+    if (deleted.length === 0) {
+      return NextResponse.json({ error: "Vest not found" }, { status: 404 });
+    }
     return NextResponse.json({ ok: true });
   },
 );

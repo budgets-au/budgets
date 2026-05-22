@@ -69,6 +69,13 @@ export const DELETE = withAuthAndId(async (id) => {
       payee: scheduledTransactions.payee,
     });
 
+  // Issue #67: 404 when no row matched (no .returning() rows means
+  // the delete affected nothing). Doing this BEFORE the suggestion-
+  // dismissal block since that block already guards on row?.payee.
+  if (!row) {
+    return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+  }
+
   if (row?.payee) {
     const norm = normalizePayee(row.payee);
     if (norm.length >= 3) {

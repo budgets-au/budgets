@@ -1683,19 +1683,23 @@ function RuleCreator({
         toast.error(error ?? "Save failed");
         return;
       }
-      const json = await res.json();
+      const json = (await res.json()) as
+        | { kind: "deleted"; ruleId: string }
+        | { kind: "noop"; reason: string }
+        | { kind: "updated"; id: string }
+        | { kind: "created"; id: string };
       onCreated(cat);
-      if (json.deleted) {
+      if (json.kind === "deleted") {
         toast.success(
           `Rule removed — trigram already picks ${cat.name} for "${normalizedPayee}"`,
         );
-      } else if (json.noop) {
+      } else if (json.kind === "noop") {
         toast.success(
           json.reason === "trigram-suffices"
             ? `${cat.name} — trigram already gets it; no rule needed`
             : `${cat.name}`,
         );
-      } else if (json.updated) {
+      } else if (json.kind === "updated") {
         toast.success(`Rule updated — ${normalizedPayee} → ${cat.name}`);
       } else {
         toast.success(

@@ -9,6 +9,51 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.242.0 — 2026-05-22
+
+### Fixed
+- **DELETE handlers now 404 cleanly instead of silently 200ing on a
+  missing id** (#67). Six handlers were doing unconditional
+  `db.delete(...).where(eq(id, …))` without checking affected-row
+  count: `/api/accounts/[id]` (soft-archive), `/api/scheduled/[id]`,
+  `/api/investments/[id]`, `/api/watchlist/[id]`,
+  `/api/investments/vests/[vestId]`, `/api/super/[id]`. All now use
+  `.returning({ id })` and 404 with a typed message when nothing
+  matched. A stale tab issuing DELETE on an already-removed row
+  used to get a misleading "deleted" toast and a phantom row in
+  the refetched list.
+- **`/api/import/categorise` parse errors now 400, not 422** (#98).
+  Standardising on 400 across the codebase — every other validation
+  failure already uses 400.
+- **`PATCH/DELETE /api/super/people/[key]` now 404 on unknown keys**
+  (#91). PATCH used to silently upsert on a typo'd key; DELETE used
+  to return 200 even when the key was neither in the people list
+  nor any snapshot. Both now hard-fail with `{ error: "Person key
+  not found: <key>" }` when the key doesn't exist in either place.
+- **Dashboard query-validation routes now emit `BadRequestBody`
+  instead of a joined-string error** (#54).
+  `/api/dashboard/account-balance-trend` and
+  `/api/dashboard/category-spend` previously emitted
+  `{ error: "Invalid accountId/days/..." }`; now they map the zod
+  `error.issues` into the standard `{ error, issues: [...] }`
+  envelope.
+- **`DELETE /api/scheduled/bulk` now surfaces `requested` count**
+  (#69). Client can distinguish "all gone, success" from "all
+  already gone, nothing happened."
+
+### Changed
+- **`POST /api/payee-rules` now uses a `kind` discriminator on every
+  response branch + returns 201 on insert** (#88). Previously emitted
+  three different shapes (`{noop, reason}`, `{deleted, ruleId}`,
+  `{id, updated}`) all with HTTP 200 even on insert. Now:
+  - `{ kind: "created", id }` with **201**
+  - `{ kind: "updated", id }` with 200
+  - `{ kind: "deleted", ruleId }` with 200
+  - `{ kind: "noop", reason }` with 200
+
+  Single consumer (`import-view.tsx:1686`) updated to switch on the
+  new discriminator.
+
 ## 0.241.0 — 2026-05-22
 
 ### Fixed

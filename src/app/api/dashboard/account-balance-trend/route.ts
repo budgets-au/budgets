@@ -18,8 +18,18 @@ export const GET = withAuth(async (request) => {
     days: searchParams.get("days") ?? undefined,
   });
   if (!parsed.success) {
+    // Issue #54: standard `BadRequestBody.issues[]` shape instead of
+    // a flat joined string, so the client error-render path stays
+    // uniform with the rest of the API.
     return NextResponse.json(
-      { error: "Invalid accountId/days" },
+      {
+        error: "Invalid query params.",
+        issues: parsed.error.issues.map((i) => ({
+          path: i.path.join("."),
+          message: i.message,
+          code: i.code,
+        })),
+      },
       { status: 400 },
     );
   }

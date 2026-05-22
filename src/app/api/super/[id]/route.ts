@@ -31,8 +31,13 @@ export const PATCH = withAuthAndId(async (id, request) => {
 });
 
 export const DELETE = withAuthAndId(async (id) => {
-  await db
+  // Issue #67: 404 when no row matched.
+  const deleted = await db
     .delete(superannuationSnapshots)
-    .where(eq(superannuationSnapshots.id, id));
+    .where(eq(superannuationSnapshots.id, id))
+    .returning({ id: superannuationSnapshots.id });
+  if (deleted.length === 0) {
+    return NextResponse.json({ error: "Snapshot not found" }, { status: 404 });
+  }
   return NextResponse.json({ ok: true });
 });

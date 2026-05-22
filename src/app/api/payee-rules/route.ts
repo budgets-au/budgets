@@ -86,16 +86,27 @@ export const POST = withAuth(async (request) => {
     existingRuleId: existing?.id ?? null,
   });
 
+  // Issue #88: previously all four branches returned 200 with three
+  // different ad-hoc shapes (`{noop, reason}`, `{deleted, ruleId}`,
+  // `{id, updated}`). Now: 201 on insert (matches every other create
+  // endpoint in the API), 200 on update / noop / delete; every
+  // response carries a `kind` discriminator so callers can switch on
+  // it cleanly.
   if (decision.action === "noop") {
-    return NextResponse.json({ noop: true, reason: decision.reason });
+    return NextResponse.json({
+      kind: "noop",
+      reason: decision.reason,
+    });
   }
 
   if (decision.action === "delete") {
     await db.delete(payeeRules).where(eq(payeeRules.id, decision.ruleId));
-    return NextResponse.json({ deleted: true, ruleId: decision.ruleId });
+    return NextResponse.json({
+      kind: "deleted",
+      ruleId: decision.ruleId,
+    });
   }
 
-  // Upsert.
   if (existing) {
     await db
       .update(payeeRules)
@@ -106,7 +117,10 @@ export const POST = withAuth(async (request) => {
         updatedAt: new Date(),
       })
       .where(eq(payeeRules.id, existing.id));
-    return NextResponse.json({ id: existing.id, updated: true });
+    return NextResponse.json({
+      kind: "updated",
+      id: existing.id,
+    });
   }
 
   const [row] = await db
@@ -120,5 +134,8 @@ export const POST = withAuth(async (request) => {
       confidence: 100,
     })
     .returning({ id: payeeRules.id });
-  return NextResponse.json({ id: row.id, updated: false });
+  return NextResponse.json(
+    { kind: "created", id: row.id },
+    { status: 201 },
+  );
 });

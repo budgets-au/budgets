@@ -173,7 +173,9 @@ export const POST = withAuth(async (request) => {
   } catch (e) {
     return NextResponse.json(
       { error: `Parse error: ${(e as Error).message}` },
-      { status: 422 },
+      // Issue #98: was 422; every other validation failure in the
+      // codebase is 400. Standardising.
+      { status: 400 },
     );
   }
 

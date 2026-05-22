@@ -63,6 +63,16 @@ export const PATCH = withAuthAndId(async (id, request) => {
 });
 
 export const DELETE = withAuthAndId(async (id) => {
-  await db.update(accounts).set({ isArchived: true }).where(eq(accounts.id, id));
+  // Soft-archive, not hard-delete — the cascade FK on `transactions`
+  // would wipe ledger history otherwise. Issue #67: 404 when no row
+  // matched so a stale client doesn't get a misleading "deleted" toast.
+  const archived = await db
+    .update(accounts)
+    .set({ isArchived: true })
+    .where(eq(accounts.id, id))
+    .returning({ id: accounts.id });
+  if (archived.length === 0) {
+    return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  }
   return NextResponse.json({ ok: true });
 });

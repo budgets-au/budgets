@@ -21,7 +21,15 @@ export const GET = withAuth(async (request) => {
   });
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Invalid categoryId/days/includeChildren" },
+      {
+        // Issue #54: standard BadRequestBody shape.
+        error: "Invalid query params.",
+        issues: parsed.error.issues.map((i) => ({
+          path: i.path.join("."),
+          message: i.message,
+          code: i.code,
+        })),
+      },
       { status: 400 },
     );
   }

@@ -76,6 +76,13 @@ export const PATCH = withAuthAndId(async (id, request) => {
 });
 
 export const DELETE = withAuthAndId(async (id) => {
-  await db.delete(investments).where(eq(investments.id, id));
+  // Issue #67: 404 when no row matched.
+  const deleted = await db
+    .delete(investments)
+    .where(eq(investments.id, id))
+    .returning({ id: investments.id });
+  if (deleted.length === 0) {
+    return NextResponse.json({ error: "Investment not found" }, { status: 404 });
+  }
   return NextResponse.json({ ok: true });
 });

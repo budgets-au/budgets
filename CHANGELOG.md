@@ -9,6 +9,30 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.259.0 — 2026-05-22
+
+### Added
+- **E2E spec for the Reports tab walk** (#39). New
+  `tests/e2e/reports-tabs.spec.ts` parameterises across all
+  15 entries in `REPORT_TABS` (cashflow, category, monthly,
+  yoy, expenses, income, envelope, accounts, flow, sankey,
+  treemap, heatmap, scatter, payees, tax) — one Playwright
+  test per tab. Per-tab walk:
+  - GOTO `/reports?tab=<id>`
+  - Wait for network-idle + 500ms for Recharts
+  - Collect any `/api/*` 4xx/5xx response during the visit
+    window (excluding `/api/auth/*` per the documented
+    NextAuth session-ping noise pattern); fail with the
+    specific failing URL when one occurs
+  - `assertNoReactErrors(consoleErrors, pageErrors)`
+  - Assert `pageErrors` is empty
+
+  Parameterised so a single bad tab fails ONLY that tab, not
+  the whole suite — the test ID names the tab precisely.
+  Covers the gap the breadth-first monkey crawl left
+  (tab changes are `router.push` URL writes, which
+  `fillAndSubmitForms` doesn't reach).
+
 ## 0.258.0 — 2026-05-22
 
 ### Added

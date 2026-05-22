@@ -15,7 +15,7 @@ are in [CHANGELOG.md](CHANGELOG.md).
 ## Latest smart-monkey run
 
 <!-- monkey:start -->
-_Last run: 2026-05-22T02:41:17.471Z · 0 issues, 0 questions, 2 verified._
+_Last run: 2026-05-22T02:54:39.786Z · 0 issues, 0 questions, 0 verified._
 
 #### Smart Monkey expert system
 
@@ -43,7 +43,7 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 2.8s |
+| Total wall time | 1.4s |
 | Routes visited | 0 |
 | Button clicks | 0 |
 | Switch toggles | 0 |
@@ -53,9 +53,9 @@ _Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links di
 | Form submits | 0 |
 | Links discovered | 0 |
 | Console errors | 0 |
-| Goals attempted | 2 |
+| Goals attempted | 1 |
 | Goals achieved | 1 |
-| Findings logged | 5 |
+| Findings logged | 2 |
 
 ##### Workflows completed
 - ✅ `createTransaction` — `/transactions` · click **Add Transaction** → fill → click **Save** (verified via dom)
@@ -80,12 +80,6 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 ✅ **353 passed** across 38 files (13.3s).
 
-#### Verified
-
-_Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
-
-##### /settings
-- ✅ **goal "addSampleData" — verify counts** — GET /api/sample-data/remove → 200; sampleAccounts=2, sampleTransactions=25, sampleScheduled=3 (expected all > 0).
-- ✅ **goal "addSampleData" — verify account isSample tagging** — GET /api/accounts returned 3 row(s); 2 carry isSample=true (expected ≥1 — others may be the External auto-account).
+_No issues, questions, or verifications on the last run — only the expert-system summary above._
 
 <!-- monkey:end -->

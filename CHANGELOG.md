@@ -9,6 +9,41 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.238.0 — 2026-05-22
+
+### Added
+- **E2E spec for CSV import → commit → verify → dedup (#8)** at
+  `tests/e2e/import-csv-commit.spec.ts`. `/import` is destructive-
+  banned in the breadth-first monkey crawl
+  (`monkey.spec.ts:CRAWL_PAGES`), so the headline feature of the
+  app — drop a real bank file, commit it — had **zero**
+  end-to-end coverage. A regression here corrupts the ledger
+  silently; this spec catches it.
+  - Wipes sample-data; creates a fresh "Westpac Checking"
+    account; pre-seeds a bank-id alias so the upload doesn't hit
+    the Unresolved Accounts combobox (separately scoped UI).
+  - Drives the parse-time "Use CSV" confirm + the commit-time
+    "Import CSV" first-format-for-account confirm — both took an
+    iteration to wire correctly (parse-time appears after
+    format-check round-trip; commit-time appears AFTER a separate
+    format-check post-click).
+  - Reads `N` from the dynamic `"Commit N rows"` button label,
+    asserts `POST /api/import/commit-batched` returns
+    `{ imported: N, importLogIds: [...] }`, then verifies
+    `GET /api/transactions?accountId=<id>` returns exactly `N`
+    rows.
+  - **Re-import dedup**: drops the SAME file a second time and
+    asserts the row count stays at `N` (no duplicates landed via
+    `importHash`). The button label after re-import can be
+    `"Nothing to commit"`, `"Update N"`, or
+    `"Fix N balance mismatches"` depending on chain-hash state;
+    the hard invariant is the row count, not the label.
+  - Console + page errors captured throughout; any runtime error
+    fails the test.
+
+  Fixture: `tests/fixtures/csv-westpac-sample.csv` (23 rows;
+  already wired through `parse-csv.test.ts`).
+
 ## 0.237.0 — 2026-05-22
 
 ### Added

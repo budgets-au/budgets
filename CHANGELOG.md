@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.249.0 — 2026-05-22
+
+### Changed
+- **`POST /api/transactions` (transfer branch) now returns the source
+  row directly with `transferPairId` populated** (#87). Was previously
+  `{ source, dest }` wrapping pre-UPDATE row objects (no `transferPairId`
+  on the source object) — three incompatible response shapes on one
+  endpoint (GET array vs. transfer-POST wrapper vs. single-POST row).
+  Now uniform: the response is always a single row. Re-fetches the
+  source after the symmetric `transferPairId` UPDATE so the wire
+  payload carries the populated link. `scheduled-transfer-missed.spec.ts`
+  updated accordingly.
+- **`PATCH /api/transactions/[id]/transfer-pair` returns a unified
+  `{ ok, syntheticId, externalAccountId, pairId }` envelope across
+  every variant** (#57). Was `{ok, syntheticId, externalAccountId}`
+  on the external branch and just `{ok}` on link/unpair. Today's
+  consumer (`link-transfer-dialog.tsx`) only checks `res.ok`, so
+  this is a non-breaking widen.
+
+### Fixed
+- **`/api/cashflow` projects only the 6 fields `computeCashflow`
+  actually reads** (#77). Previously `SELECT *` loaded every txn
+  column (notes, importHash, rawFitid, postedAt, isTransfer,
+  transferPairId, balance — all unused) on every request. On a
+  50k-row table this shipped a huge JSON payload + drizzle row
+  hydration cost for nothing. Now a typed `CashflowTransaction`
+  pick. The 12-year max-range cap added in 0.245.0 plus this
+  projection together bound the route's worst-case memory.
+
 ## 0.248.0 — 2026-05-22
 
 ### Fixed

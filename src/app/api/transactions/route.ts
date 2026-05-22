@@ -426,7 +426,20 @@ export const POST = withAuth(async (request) => {
       }
       return { source, dest };
     });
-    return NextResponse.json(result, { status: 201 });
+    // Issue #87: unify response shape. Previously transfer creates
+    // returned `{ source, dest }` and single-leg creates returned
+    // just the row, with `GET` returning a flat array — three
+    // incompatible shapes on the same endpoint. Now return the
+    // source row directly with `transferPairId` populated; callers
+    // wanting the destination follow that link. The pair-id is
+    // written by the UPDATE above so re-read the source to surface
+    // the populated value.
+    const [sourceWithPair] = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, result.source.id))
+      .limit(1);
+    return NextResponse.json(sourceWithPair ?? result.source, { status: 201 });
   }
 
   const {

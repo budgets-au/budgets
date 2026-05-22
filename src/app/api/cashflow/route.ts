@@ -73,8 +73,21 @@ export const GET = withAuth(async (request) => {
     txnConditions.push(inArray(transactions.accountId, accountIds));
   }
 
+  // Issue #77: project only the columns `computeCashflow` actually
+  // reads. The previous `SELECT *` shipped every txn column over
+  // the wire including notes / importHash / rawFitid / postedAt /
+  // isTransfer / transferPairId / balance — all unused by the
+  // compute step. On a 50k-row table the JSON payload + drizzle row
+  // hydration was wasted work.
   const realTxns = await db
-    .select()
+    .select({
+      id: transactions.id,
+      accountId: transactions.accountId,
+      date: transactions.date,
+      amount: transactions.amount,
+      payee: transactions.payee,
+      description: transactions.description,
+    })
     .from(transactions)
     .where(and(...txnConditions));
 

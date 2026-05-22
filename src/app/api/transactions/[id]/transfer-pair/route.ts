@@ -24,6 +24,21 @@ const schema = z.union([
   }),
 ]);
 
+/** Issue #57: unified response shape across all three variants. Every
+ *  branch returns the same `{ ok: true, syntheticId, externalAccountId,
+ *  pairId }` envelope with nulls where the field doesn't apply. Was
+ *  previously `{ok, syntheticId, externalAccountId}` for the external
+ *  branch and `{ok}` for link/unpair — same endpoint, three shapes.
+ *  Today's lone consumer (`link-transfer-dialog.tsx`) only reads
+ *  `res.ok`, so this is non-breaking; the change is for future
+ *  callers that want to follow the new pair id without a re-fetch. */
+interface PairResponse {
+  ok: true;
+  syntheticId: string | null;
+  externalAccountId: string | null;
+  pairId: string | null;
+}
+
 export const PATCH = withAuthAndId(async (id, request) => {
   const parsed = await parseJsonBody(request, schema);
   if (!parsed.ok) return parsed.response;
@@ -33,18 +48,38 @@ export const PATCH = withAuthAndId(async (id, request) => {
       id,
       parsed.data.external,
     );
-    return NextResponse.json({ ok: true, syntheticId, externalAccountId });
+    const body: PairResponse = {
+      ok: true,
+      syntheticId,
+      externalAccountId,
+      pairId: syntheticId,
+    };
+    return NextResponse.json(body);
   }
 
   const { pairId } = parsed.data;
   if (pairId === null) {
     await manualUnpair(id);
-  } else {
-    if (pairId === id) {
-      return NextResponse.json({ error: "Cannot pair a transaction with itself" }, { status: 400 });
-    }
-    await manualPair(id, pairId);
+    const body: PairResponse = {
+      ok: true,
+      syntheticId: null,
+      externalAccountId: null,
+      pairId: null,
+    };
+    return NextResponse.json(body);
   }
-
-  return NextResponse.json({ ok: true });
+  if (pairId === id) {
+    return NextResponse.json(
+      { error: "Cannot pair a transaction with itself" },
+      { status: 400 },
+    );
+  }
+  await manualPair(id, pairId);
+  const body: PairResponse = {
+    ok: true,
+    syntheticId: null,
+    externalAccountId: null,
+    pairId,
+  };
+  return NextResponse.json(body);
 });

@@ -100,6 +100,18 @@ function computeAccountSeries({
   return out;
 }
 
+/** The narrow projection `computeCashflow` actually reads from each
+ *  transaction row. Issue #77: declaring this narrower than
+ *  `Transaction` lets `/api/cashflow` SELECT just these fields
+ *  instead of `SELECT *` — material savings on accounts with deep
+ *  history because every other column (notes, isTransfer, importHash,
+ *  rawFitid, postedAt, etc.) gets skipped over the wire and through
+ *  JSON.stringify. */
+export type CashflowTransaction = Pick<
+  Transaction,
+  "id" | "accountId" | "date" | "amount" | "payee" | "description"
+>;
+
 export function computeCashflow({
   accounts,
   realTransactions,
@@ -109,7 +121,7 @@ export function computeCashflow({
   accountIds,
 }: {
   accounts: Account[];
-  realTransactions: Transaction[];
+  realTransactions: CashflowTransaction[];
   scheduledTransactions: ScheduledTransaction[];
   from: Date;
   to: Date;

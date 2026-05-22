@@ -147,22 +147,18 @@ test.describe("scheduled-transfer false-missed (#17)", () => {
       },
     });
     expect(txnRes.ok()).toBeTruthy();
-    // When `transferToAccountId` is supplied, the POST handler
-    // returns `{ source, dest }` and cross-links them via
-    // `transferPairId` in a transaction after the inserts. The
-    // in-memory `source` object captured before the UPDATE doesn't
-    // carry the pair id, so re-read both rows to verify the link
-    // landed in the DB (this is the assertion the panel relies on).
-    const txnBody = (await txnRes.json()) as {
-      source: { id: string };
-      dest: { id: string };
+    // Issue #87 (0.249.0): POST /api/transactions now returns the
+    // source row directly with `transferPairId` populated (was
+    // previously a `{ source, dest }` wrapper with the pair id
+    // unset because the source object was captured pre-UPDATE).
+    // Verify the pair id landed on the source row before we drive
+    // the panel; the panel matches the dest via this link.
+    const sourceRow = (await txnRes.json()) as {
+      id: string;
+      transferPairId: string | null;
     };
-    expect(txnBody.source.id).toBeTruthy();
-    expect(txnBody.dest.id).toBeTruthy();
-    const srcCheck = (await (
-      await request.get(`/api/transactions/${txnBody.source.id}`)
-    ).json()) as { transferPairId: string | null };
-    expect(srcCheck.transferPairId).toBe(txnBody.dest.id);
+    expect(sourceRow.id).toBeTruthy();
+    expect(sourceRow.transferPairId).toBeTruthy();
 
     // Navigate to /transactions and wait for the panel's data deps to
     // resolve. Issue #62: replaced `waitForTimeout(800)` with a

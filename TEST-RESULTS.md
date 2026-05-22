@@ -15,60 +15,62 @@ are in [CHANGELOG.md](CHANGELOG.md).
 ## Latest smart-monkey run
 
 <!-- monkey:start -->
-_Last run: 2026-05-22T01:12:42.666Z · 0 issues, 0 questions, 0 verified._
+_Last run: 2026-05-22T01:32:20.591Z · 0 issues, 0 questions, 3 verified._
 
 #### Smart Monkey expert system
 
 | Goal | Achieved | Last attempt | Total attempts | Pass rate | Last successful run |
 | --- | --- | --- | --- | --- | --- |
-| `createTransaction` | ✅ | 2026-05-21 23:57 | 1 | 1/1 (100%) | /transactions · "Add transaction" → "Add" (dom) |
-| `createBudget` | ✅ | 2026-05-21 23:57 | 1 | 1/1 (100%) | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `createSchedule` | ✅ | 2026-05-21 23:57 | 1 | 1/1 (100%) | /scheduled · "New scheduled transaction" → "Create" (dom) |
-| `addTenToCategory` | ✅ | 2026-05-22 00:04 | 2 | 2/2 (100%) | /transactions · "POST /api/transactions × 10" → "POST /api/transactions" (api) |
-| `scheduleOnCalendar` | ✅ | 2026-05-22 00:04 | 1 | 1/1 (100%) | /calendar · "POST /api/scheduled" → "POST /api/scheduled" (dom) |
-| `searchTransaction` | ✅ | 2026-05-22 00:04 | 2 | 2/2 (100%) | /transactions · "?search=monkey-goal-mpg5qxq8-search-payee" → "GET /api/transactions?search=…" (dom) |
-| `addAndViewNote` | ✅ | 2026-05-22 00:04 | 2 | 2/2 (100%) | /transactions · "POST /api/transactions (with notes)" → "GET /api/transactions" (dom) |
-| `searchForNote` | ✅ | 2026-05-22 00:04 | 2 | 2/2 (100%) | /transactions · "?search=find-me-monkey-goal-mpg5qxq8 (notes-only)" → "GET /api/transactions?search=…" (dom) |
-| `clearSampleData` | ✅ | 2026-05-22 00:04 | 2 | 2/2 (100%) | /settings · "POST /api/sample-data/remove" → "POST /api/sample-data/remove" (api) |
-| `rekeyPassphrase` | ✅ | 2026-05-22 00:04 | 2 | 2/2 (100%) | /settings · "POST /api/rekey" → "POST /api/rekey" (api) |
-| `multiDbSwitcher` | ✅ | 2026-05-22 00:04 | 2 | 2/2 (100%) | /dashboard · "Switcher → Create new database…" → "Create + switch back to Default" (dom) |
-| `lockUnlockRoundTrip` | ❌ | 2026-05-22 00:04 | 2 | 0/2 (0%) | _(not yet)_ |
-| `savedFilterDeleteReorder` | ✅ | 2026-05-22 00:04 | 2 | 2/2 (100%) | /transactions · "Saved Filters → trash icon on M-entry" → "PATCH /api/display-prefs (via setPref)" (dom) |
+| `createTransaction` | ❌ | — | 0 | — | _(not yet)_ |
+| `createBudget` | ❌ | — | 0 | — | _(not yet)_ |
+| `createSchedule` | ❌ | — | 0 | — | _(not yet)_ |
+| `addTenToCategory` | ❌ | — | 0 | — | _(not yet)_ |
+| `scheduleOnCalendar` | ❌ | — | 0 | — | _(not yet)_ |
+| `searchTransaction` | ❌ | — | 0 | — | _(not yet)_ |
+| `addAndViewNote` | ❌ | — | 0 | — | _(not yet)_ |
+| `searchForNote` | ❌ | — | 0 | — | _(not yet)_ |
+| `clearSampleData` | ❌ | — | 0 | — | _(not yet)_ |
+| `rekeyPassphrase` | ❌ | — | 0 | — | _(not yet)_ |
+| `multiDbSwitcher` | ❌ | — | 0 | — | _(not yet)_ |
+| `lockUnlockRoundTrip` | ❌ | — | 0 | — | _(not yet)_ |
+| `savedFilterDeleteReorder` | ❌ | — | 0 | — | _(not yet)_ |
+| `resetBrowserData` | ✅ | 2026-05-22 01:32 | 1 | 1/1 (100%) | /settings?tab=security · "Reset" → "Reset & sign out" (dom) |
 
-_Coverage: 10 routes mapped, 319 interactive controls catalogued, 82 in-app links discovered._
+_Coverage: 0 routes mapped, 0 interactive controls catalogued, 0 in-app links discovered._
 
 #### Smart Monkey run report
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 15.9s |
-| Routes visited | 6 |
-| Button clicks | 0 |
+| Total wall time | 2.0s |
+| Routes visited | 1 |
+| Button clicks | 4 |
 | Switch toggles | 0 |
 | Select cycles | 0 |
 | Text inputs filled | 0 |
-| Dialogs opened | 0 |
-| Form submits | 11 |
+| Dialogs opened | 1 |
+| Form submits | 0 |
 | Links discovered | 0 |
 | Console errors | 0 |
-| Goals attempted | 10 |
-| Goals achieved | 9 |
-| Findings logged | 20 |
+| Goals attempted | 1 |
+| Goals achieved | 1 |
+| Findings logged | 3 |
 
 ##### Workflows completed
-- ✅ `createTransaction` — `/transactions` · click **Add transaction** → fill → click **Add** (verified via dom)
-- ✅ `createBudget` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `createSchedule` — `/scheduled` · click **New scheduled transaction** → fill → click **Create** (verified via dom)
-- ✅ `addTenToCategory` — `/transactions` · click **POST /api/transactions × 10** → fill → click **POST /api/transactions** (verified via api)
-- ✅ `scheduleOnCalendar` — `/calendar` · click **POST /api/scheduled** → fill → click **POST /api/scheduled** (verified via dom)
-- ✅ `searchTransaction` — `/transactions` · click **?search=monkey-goal-mpg5qxq8-search-payee** → fill → click **GET /api/transactions?search=…** (verified via dom)
-- ✅ `addAndViewNote` — `/transactions` · click **POST /api/transactions (with notes)** → fill → click **GET /api/transactions** (verified via dom)
-- ✅ `searchForNote` — `/transactions` · click **?search=find-me-monkey-goal-mpg5qxq8 (notes-only)** → fill → click **GET /api/transactions?search=…** (verified via dom)
-- ✅ `clearSampleData` — `/settings` · click **POST /api/sample-data/remove** → fill → click **POST /api/sample-data/remove** (verified via api)
-- ✅ `rekeyPassphrase` — `/settings` · click **POST /api/rekey** → fill → click **POST /api/rekey** (verified via api)
-- ✅ `multiDbSwitcher` — `/dashboard` · click **Switcher → Create new database…** → fill → click **Create + switch back to Default** (verified via dom)
+- ❌ `createTransaction` — _(not yet completed)_
+- ❌ `createBudget` — _(not yet completed)_
+- ❌ `createSchedule` — _(not yet completed)_
+- ❌ `addTenToCategory` — _(not yet completed)_
+- ❌ `scheduleOnCalendar` — _(not yet completed)_
+- ❌ `searchTransaction` — _(not yet completed)_
+- ❌ `addAndViewNote` — _(not yet completed)_
+- ❌ `searchForNote` — _(not yet completed)_
+- ❌ `clearSampleData` — _(not yet completed)_
+- ❌ `rekeyPassphrase` — _(not yet completed)_
+- ❌ `multiDbSwitcher` — _(not yet completed)_
 - ❌ `lockUnlockRoundTrip` — _(not yet completed)_
-- ✅ `savedFilterDeleteReorder` — `/transactions` · click **Saved Filters → trash icon on M-entry** → fill → click **PATCH /api/display-prefs (via setPref)** (verified via dom)
+- ❌ `savedFilterDeleteReorder` — _(not yet completed)_
+- ✅ `resetBrowserData` — `/settings?tab=security` · click **Reset** → fill → click **Reset & sign out** (verified via dom)
 
 #### Vitest summary
 
@@ -76,6 +78,13 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 ✅ **353 passed** across 38 files (13.3s).
 
-_No issues, questions, or verifications on the last run — only the expert-system summary above._
+#### Verified
+
+_Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
+
+##### /settings
+- ✅ **goal "resetBrowserData" — cancel leg** — Confirm dialog shown; Cancel kept session alive (200) and URL on /settings (true).
+- ✅ **goal "resetBrowserData" — confirm leg (redirect + sign-out)** — Landed on /login: true (url=http://0.0.0.0:3003/login); subsequent GET /api/accounts → 401 (expected 401 or 3xx → /login).
+- ✅ **goal "resetBrowserData" — local-state cleanup** — localStorage.length=0, sessionStorage.length=0; theme cookie gone=true; NextAuth session cookie gone=true.
 
 <!-- monkey:end -->

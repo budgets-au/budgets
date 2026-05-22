@@ -1978,6 +1978,195 @@ test.describe("smart monkey: goal-driven crawl", () => {
     }
   });
 
+  /** "Reset browser data" (#40) — Settings → Security ships an
+   * escape-hatch button that signs the operator out, drops the
+   * theme cookie, and wipes localStorage / sessionStorage. The
+   * button itself was untested; a regression that broke the
+   * sign-out chain (e.g. `signOut({ redirect: true })` landing on
+   * NextAuth's localhost:3000 default behind a LAN proxy) would
+   * have shipped silently.
+   *
+   * Three legs:
+   *   1. **Cancel leg.** Open /settings?tab=security, click
+   *      "Reset", confirm the dialog appears, hit Cancel —
+   *      session stays alive (subsequent /api/accounts still
+   *      200s) and URL stays on /settings. Pins the regression
+   *      that an unconfirmed click should NOT fire the
+   *      destructive action.
+   *   2. **Confirm leg — redirect + sign-out.** Click Reset
+   *      again, confirm with "Reset & sign out". Page lands on
+   *      /login; subsequent /api/accounts (no session) 307s
+   *      back to /login.
+   *   3. **Confirm leg — local-state cleanup.** On the /login
+   *      page, assert `localStorage.length === 0`,
+   *      `sessionStorage.length === 0`, no `theme` cookie, no
+   *      NextAuth session cookie.
+   *
+   * After the test, the spec's `beforeEach(signInAsAdmin)`
+   * re-establishes the session for downstream tests. */
+  test("goal: reset browser data signs out + clears local state", async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(60_000);
+    const request = page.context().request;
+    runCounters.goalsAttempted += 1;
+
+    let cancelOk = false;
+    let confirmRedirectOk = false;
+    let stateCleared = false;
+
+    try {
+      // Leg 1: Cancel-the-confirm path.
+      await page.goto("/settings?tab=security");
+      await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
+      runCounters.routesVisited += 1;
+
+      const resetBtn = page.getByRole("button", { name: /^Reset$/ }).first();
+      if (!(await resetBtn.isVisible().catch(() => false))) {
+        await recordFinding({
+          page: "/settings",
+          action: `goal "resetBrowserData" — find Reset button`,
+          severity: "error",
+          kind: "issue",
+          message: `Reset button not visible at /settings?tab=security — component path may have changed (was components/settings/reset-browser-data.tsx).`,
+        });
+        runCounters.findingsCount += 1;
+        recordGoalAttempt(appMap, "resetBrowserData", null);
+        return;
+      }
+      await resetBtn.click();
+      runCounters.buttonClicks += 1;
+
+      const dialog = page.getByRole("alertdialog");
+      await dialog.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
+      const dialogVisible = await dialog.isVisible().catch(() => false);
+      runCounters.dialogsOpened += 1;
+
+      const cancelBtn = dialog.getByRole("button", { name: /^Cancel$/ });
+      if (dialogVisible && (await cancelBtn.isVisible().catch(() => false))) {
+        await cancelBtn.click();
+        runCounters.buttonClicks += 1;
+        await dialog.waitFor({ state: "hidden", timeout: 3_000 }).catch(() => {});
+      }
+
+      // Session should still be live + URL still on /settings.
+      const stillSignedInRes = await request.get("/api/accounts");
+      const stillOnSettings = page.url().includes("/settings");
+      cancelOk = stillSignedInRes.ok() && stillOnSettings && dialogVisible;
+
+      await recordFinding({
+        page: "/settings",
+        action: `goal "resetBrowserData" — cancel leg`,
+        severity: cancelOk ? "info" : "error",
+        kind: cancelOk ? "verified" : "issue",
+        message: `Confirm dialog ${dialogVisible ? "shown" : "DID NOT show"}; Cancel kept session alive (${stillSignedInRes.status()}) and URL on /settings (${stillOnSettings}).`,
+      });
+      runCounters.findingsCount += 1;
+
+      // Leg 2: Confirm-the-reset path.
+      await resetBtn.click();
+      runCounters.buttonClicks += 1;
+      await dialog.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {});
+
+      const confirmBtn = dialog.getByRole("button", {
+        name: /Reset.*sign out/i,
+      });
+      await confirmBtn.click();
+      runCounters.buttonClicks += 1;
+
+      // Wait for the post-reset nav. ResetBrowserData uses
+      // `window.location.href = "/login"`, not router.push, so the
+      // browser fires a hard nav — waitForURL with the /login glob.
+      await page
+        .waitForURL(/\/login(\?|$)/, { timeout: 10_000 })
+        .catch(() => {});
+
+      const landedOnLogin = /\/login(\?|$)/.test(page.url());
+      // Auth-gated API route: `withAuth()` returns 401 when the
+      // session token cookie is gone (the /login redirect happens
+      // in middleware for HTML routes, not API routes). Either
+      // 401 or a 3xx → /login proves the session is dead.
+      const postResetRes = await request.get("/api/accounts", {
+        maxRedirects: 0,
+      });
+      const postResetStatus = postResetRes.status();
+      const postResetLocation = postResetRes.headers()["location"] ?? "";
+      const sessionGone =
+        postResetStatus === 401 ||
+        (postResetStatus >= 300 &&
+          postResetStatus < 400 &&
+          postResetLocation.includes("/login"));
+
+      confirmRedirectOk = landedOnLogin && sessionGone;
+
+      await recordFinding({
+        page: "/settings",
+        action: `goal "resetBrowserData" — confirm leg (redirect + sign-out)`,
+        severity: confirmRedirectOk ? "info" : "error",
+        kind: confirmRedirectOk ? "verified" : "issue",
+        message: `Landed on /login: ${landedOnLogin} (url=${page.url()}); subsequent GET /api/accounts → ${postResetStatus}${postResetLocation ? ` Location:${postResetLocation}` : ""} (expected 401 or 3xx → /login).`,
+      });
+      runCounters.findingsCount += 1;
+
+      // Leg 3: local-state cleanup. On /login the page should have
+      // empty storage and no theme / session cookies.
+      const storageSizes = await page
+        .evaluate(() => ({
+          local: localStorage.length,
+          session: sessionStorage.length,
+        }))
+        .catch(() => ({ local: -1, session: -1 }));
+      const cookies = await context.cookies();
+      const themeCookieGone = !cookies.some((c) => c.name === "theme");
+      const sessionCookieGone = !cookies.some(
+        (c) =>
+          c.name === "next-auth.session-token" ||
+          c.name === "__Secure-next-auth.session-token",
+      );
+
+      stateCleared =
+        storageSizes.local === 0 &&
+        storageSizes.session === 0 &&
+        themeCookieGone &&
+        sessionCookieGone;
+
+      await recordFinding({
+        page: "/settings",
+        action: `goal "resetBrowserData" — local-state cleanup`,
+        severity: stateCleared ? "info" : "error",
+        kind: stateCleared ? "verified" : "issue",
+        message: `localStorage.length=${storageSizes.local}, sessionStorage.length=${storageSizes.session}; theme cookie gone=${themeCookieGone}; NextAuth session cookie gone=${sessionCookieGone}.`,
+      });
+      runCounters.findingsCount += 1;
+
+      const allOK = cancelOk && confirmRedirectOk && stateCleared;
+      if (allOK) {
+        recordGoalAttempt(appMap, "resetBrowserData", {
+          timestamp: new Date().toISOString(),
+          route: "/settings?tab=security",
+          triggerLabel: "Reset",
+          fillSpec: {},
+          submitLabel: "Reset & sign out",
+          verified: "dom",
+        });
+        runCounters.goalsAchieved += 1;
+      } else {
+        recordGoalAttempt(appMap, "resetBrowserData", null);
+      }
+    } catch (err) {
+      await recordFinding({
+        page: "/settings",
+        action: `goal "resetBrowserData" — unexpected error`,
+        severity: "error",
+        kind: "issue",
+        message: String((err as Error)?.message ?? err).slice(0, 200),
+      });
+      runCounters.findingsCount += 1;
+      recordGoalAttempt(appMap, "resetBrowserData", null);
+    }
+  });
+
   /** Saved-filter delete (TODO ask: "delete + reorder" — but the
    * app exposes no explicit reorder UI; `saveCurrent()` auto-
    * sorts by name on every write, so a separate reorder concept

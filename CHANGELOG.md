@@ -9,6 +9,37 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.234.0 — 2026-05-22
+
+### Added
+- **New monkey-goal `resetBrowserData` (#40)** covers the
+  Settings → Security "Reset browser data" affordance, which
+  was untested. Three legs:
+  - **Cancel leg** — click Reset, dismiss the confirm dialog,
+    verify the session stays alive (`GET /api/accounts` 200s)
+    and the URL stays on /settings. Pins the regression that
+    an unconfirmed click should NOT fire the destructive op.
+  - **Confirm leg (redirect + sign-out)** — click Reset → "Reset
+    & sign out", verify the page lands on `/login` and a
+    follow-up `GET /api/accounts` is either 401 (no session)
+    or a 3xx → /login. Catches the gotcha
+    `reset-browser-data.tsx:46-49` documents: a regression
+    that left the post-signout nav at NextAuth's
+    `localhost:3000` default would have shipped silently
+    behind a LAN proxy.
+  - **Local-state cleanup** — on the post-reset /login page,
+    `localStorage.length === 0`, `sessionStorage.length === 0`,
+    `theme` cookie gone, NextAuth session-token cookie gone.
+  After the test, the spec's
+  `beforeEach(signInAsAdmin)` re-establishes the session for
+  downstream tests.
+
+### Changed
+- **AppMap schema 8 → 9** — `resetBrowserData` joins the
+  `GoalKey` union + `GOAL_KEYS` order array. Schema bump
+  invalidates stale on-disk maps; the next e2e run starts
+  fresh.
+
 ## 0.233.0 — 2026-05-22
 
 ### Added

@@ -589,6 +589,7 @@ export function MissedScheduledPanel({ accounts }: { accounts: Account[] }) {
   return (
     <>
       <div
+        data-testid="missed-scheduled-panel"
         className={`rounded-md border ${
           active.length > 0
             ? "border-amber-500/40 bg-amber-500/5"

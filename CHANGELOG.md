@@ -9,6 +9,42 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.236.0 — 2026-05-22
+
+### Added
+- **E2E spec for the scheduled-transfer false-missed regression
+  (#17)** at `tests/e2e/scheduled-transfer-missed.spec.ts`.
+  Pure-unit coverage of the 0.136 fix lives at
+  `src/lib/scheduled-match.transfer.test.ts`; this new spec catches
+  a regression at the panel render layer (which the unit test
+  can't see).
+  - Wipes sample-data, seeds two accounts, creates a weekly
+    transfer schedule starting 14 days ago. Two past occurrences
+    land in the 30-day panel window outside the 4-day grace
+    cutoff: the -14d occurrence gets real paired legs seeded via
+    `POST /api/transactions { transferToAccountId: … }`; the -7d
+    occurrence stays unpaired (the control).
+  - Asserts the missed panel header reads **exactly** "1 missed
+    scheduled transaction" (a regression on the fix would surface
+    2 or 3 — both legs of the paired occurrence falsely flagged).
+  - Asserts the unpaired date string is visible in the panel body
+    and the paired date string is NOT — scoped to a new
+    `data-testid="missed-scheduled-panel"` selector on the panel
+    container, so the main `/transactions` table legitimately
+    rendering the real paired-leg txn doesn't trip the
+    negative-check.
+  - Captures console + page errors and fails the test if any
+    fire during the walk.
+
+### Changed
+- **`MissedScheduledPanel` outer container now carries
+  `data-testid="missed-scheduled-panel"`** in
+  `src/components/transactions/missed-scheduled-panel.tsx:592`.
+  One-line attribute, neutral for users, gives e2e + any future
+  testing hook a stable scoped selector without reaching into
+  class names. Same pattern as the `data-widget-id` shipped in
+  0.233.0 for the dashboard.
+
 ## 0.235.0 — 2026-05-22
 
 ### Fixed

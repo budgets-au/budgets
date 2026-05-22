@@ -46,16 +46,34 @@ import { captureErrors, signInAsAdmin } from "./_helpers";
 
 const RUN_TOKEN = `e2e-transfer-${Date.now().toString(36)}`;
 
-// Today (per AGENTS.md the e2e clock follows real time) is 2026-05-22.
+// Issue #83: dates derived from `new Date()` so the spec doesn't flip
+// red on real-clock drift (running this on the wrong day used to make
+// the panel window slide past the "control" occurrence and the
+// assertion silently switched to "0 missed" or "2 missed"). Display
+// strings derived from the same format the panel uses
+// (`src/lib/utils.ts:formatDate` — `d MMM yyyy`).
+function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+function displayDate(iso: string): string {
+  const [yyyy, mm, dd] = iso.split("-");
+  const months = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  return `${parseInt(dd, 10)} ${months[parseInt(mm, 10) - 1]} ${yyyy}`;
+}
 // startDate -14d, occurrences every 7d:
-//   2026-05-08  (-14d) → paired
-//   2026-05-15  (-7d)  → control (unpaired)
-//   2026-05-22  (today) → inside 4-day grace window, ignored
-const SCHEDULE_START = "2026-05-08";
-const PAIRED_OCC_DATE = "2026-05-08";
-const PAIRED_OCC_DISPLAY = "8 May 2026";
-const UNPAIRED_OCC_DATE = "2026-05-15";
-const UNPAIRED_OCC_DISPLAY = "15 May 2026";
+//   -14d → paired
+//   -7d  → control (unpaired)
+//   today → inside 4-day grace window, ignored
+const SCHEDULE_START = isoDaysAgo(14);
+const PAIRED_OCC_DATE = SCHEDULE_START;
+const PAIRED_OCC_DISPLAY = displayDate(PAIRED_OCC_DATE);
+const UNPAIRED_OCC_DATE = isoDaysAgo(7);
+const UNPAIRED_OCC_DISPLAY = displayDate(UNPAIRED_OCC_DATE);
 
 test.describe("scheduled-transfer false-missed (#17)", () => {
   test("paired transfer-leg occurrences don't surface in the missed panel; unpaired ones still do", async ({
@@ -146,22 +164,39 @@ test.describe("scheduled-transfer false-missed (#17)", () => {
     ).json()) as { transferPairId: string | null };
     expect(srcCheck.transferPairId).toBe(txnBody.dest.id);
 
-    // Navigate to /transactions and wait for the panel.
-    await page.goto("/transactions");
-    await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(800); // SWR + panel render + matcher walk
+    // Navigate to /transactions and wait for the panel's data deps to
+    // resolve. Issue #62: replaced `waitForTimeout(800)` with a
+    // deterministic wait on the GETs the panel SWR-subscribes to
+    // having returned (`/api/scheduled` + the txn page). Without a
+    // deterministic signal, busy CI machines hit the 800ms timer
+    // before the matcher walk finishes.
+    await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/scheduled") && r.request().method() === "GET",
+        { timeout: 10_000 },
+      ),
+      page.waitForResponse(
+        (r) =>
+          r.url().includes("/api/transactions") &&
+          r.request().method() === "GET",
+        { timeout: 10_000 },
+      ),
+      page.goto("/transactions"),
+    ]);
 
     // Scope all assertions to the panel container — the main
-    // /transactions table renders the real paired-date txn (8 May)
-    // as a row, so a body-wide negative-check would always fail.
+    // /transactions table renders the real paired-date txn as a
+    // row, so a body-wide negative-check would always fail.
     const panel = page.getByTestId("missed-scheduled-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
 
     // Regression assertion: exactly 1 missed transaction in the
     // panel header. Pre-fix would have surfaced 2 (both legs of the
     // paired occurrence flagged) PLUS the unpaired one = 3-ish.
     await expect(
       panel.getByText(/^1 missed scheduled transaction\b/i),
-    ).toBeVisible({ timeout: 5_000 });
+    ).toBeVisible({ timeout: 10_000 });
 
     // Expand the panel to inspect the row dates.
     await panel

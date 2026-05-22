@@ -129,7 +129,15 @@ async function waitForChartsDrawn(page: Page): Promise<void> {
       undefined,
       { timeout: 10_000 },
     )
-    .catch(() => {});
+    .catch(() => {
+      // Issue #78: docs-publisher spec (not a regression gate), so
+      // we log a loud warning rather than failing the run — the
+      // visual-regression spec (dashboard-visual.spec.ts) DOES
+      // hard-fail. Either way, the timeout is now visible.
+      console.warn(
+        "[screenshots] waitForChartsDrawn timed out after 10s — capture may include mid-animation state",
+      );
+    });
 }
 
 /** Block until react-grid-layout has settled its widget transforms.
@@ -155,7 +163,12 @@ async function waitForGridSettled(page: Page): Promise<void> {
       undefined,
       { timeout: 10_000 },
     )
-    .catch(() => {});
+    .catch(() => {
+      // Issue #78: see waitForChartsDrawn above for the rationale.
+      console.warn(
+        "[screenshots] waitForGridSettled timed out after 10s — capture may include mid-settle widgets",
+      );
+    });
 }
 
 /** Theme is server-driven: layout.tsx reads the `theme` cookie and

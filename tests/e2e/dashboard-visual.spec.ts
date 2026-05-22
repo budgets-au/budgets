@@ -110,8 +110,8 @@ async function setTheme(
 
 async function waitForChartsDrawn(page: Page): Promise<void> {
   if ((await page.locator(".recharts-surface").count()) === 0) return;
-  await page
-    .waitForFunction(
+  try {
+    await page.waitForFunction(
       () => {
         const shapes = Array.from(
           document.querySelectorAll<SVGPathElement | SVGRectElement>(
@@ -130,14 +130,23 @@ async function waitForChartsDrawn(page: Page): Promise<void> {
       },
       undefined,
       { timeout: 10_000 },
-    )
-    .catch(() => {});
+    );
+  } catch (err) {
+    // Issue #78: was silently swallowing the timeout — a chart that
+    // never drew let the visual diff proceed against a half-rendered
+    // page, and the maxDiffPixelRatio threshold could let the
+    // regression slip through. Now fail loudly. The whole purpose
+    // of this wait is "I refuse to screenshot mid-animation".
+    throw new Error(
+      `waitForChartsDrawn timed out after 10s — chart never reached drawn state. Original: ${(err as Error).message}`,
+    );
+  }
 }
 
 async function waitForGridSettled(page: Page): Promise<void> {
   if ((await page.locator(".react-grid-layout").count()) === 0) return;
-  await page
-    .waitForFunction(
+  try {
+    await page.waitForFunction(
       () => {
         const items = Array.from(
           document.querySelectorAll<HTMLElement>(".react-grid-item"),
@@ -150,6 +159,11 @@ async function waitForGridSettled(page: Page): Promise<void> {
       },
       undefined,
       { timeout: 10_000 },
-    )
-    .catch(() => {});
+    );
+  } catch (err) {
+    // Issue #78: see waitForChartsDrawn — same rationale.
+    throw new Error(
+      `waitForGridSettled timed out after 10s — RGL never settled. Original: ${(err as Error).message}`,
+    );
+  }
 }

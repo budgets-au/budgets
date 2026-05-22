@@ -376,21 +376,61 @@ export function migrateAppMap(raw: Record<string, unknown>): AppMap {
   }
 
   if (raw.goals && typeof raw.goals === "object") {
-    const oldGoals = raw.goals as Record<string, Partial<GoalState>>;
+    // Issue #73: type-check each field rather than just
+    // nullish-coalescing. Pre-fix, a corrupt persisted map (hand-
+    // edited app-map.json, partial write) like
+    // `{ attempts: "lots", achieved: 1 }` would survive the
+    // migration and then `appendRun(map)` / the
+    // global-teardown.ts pass-rate math would emit `NaN%`. Each
+    // field is now explicitly type-checked; bad values fall
+    // through to defaults instead of being preserved.
+    const oldGoals = raw.goals as Record<string, unknown>;
     for (const key of GOAL_KEYS) {
       const og = oldGoals[key];
       if (!og || typeof og !== "object") continue;
-      fresh.goals[key] = {
-        achieved: og.achieved ?? false,
-        attempts: og.attempts ?? 0,
-        successes: og.successes ?? (og.successfulRun ? 1 : 0),
-        lastAttempt: og.lastAttempt ?? null,
-        successfulRun: og.successfulRun ?? null,
-      };
+      const rec = og as Record<string, unknown>;
+      const achieved = typeof rec.achieved === "boolean" ? rec.achieved : false;
+      const attempts =
+        typeof rec.attempts === "number" &&
+        Number.isFinite(rec.attempts) &&
+        rec.attempts >= 0
+          ? Math.floor(rec.attempts)
+          : 0;
+      const successes =
+        typeof rec.successes === "number" &&
+        Number.isFinite(rec.successes) &&
+        rec.successes >= 0
+          ? Math.floor(rec.successes)
+          : isValidSuccessfulRun(rec.successfulRun)
+            ? 1
+            : 0;
+      const lastAttempt =
+        typeof rec.lastAttempt === "string" ? rec.lastAttempt : null;
+      const successfulRun = isValidSuccessfulRun(rec.successfulRun)
+        ? (rec.successfulRun as SuccessfulRun)
+        : null;
+      fresh.goals[key] = { achieved, attempts, successes, lastAttempt, successfulRun };
     }
   }
 
   return fresh;
+}
+
+/** Recogniser for the SuccessfulRun shape. Used by the migrator to
+ *  reject half-filled objects (`{ route: "/x" }` missing `fillSpec`)
+ *  before they corrupt the in-memory map. */
+function isValidSuccessfulRun(v: unknown): boolean {
+  if (!v || typeof v !== "object") return false;
+  const r = v as Record<string, unknown>;
+  return (
+    typeof r.timestamp === "string" &&
+    typeof r.route === "string" &&
+    typeof r.triggerLabel === "string" &&
+    typeof r.submitLabel === "string" &&
+    typeof r.verified === "string" &&
+    typeof r.fillSpec === "object" &&
+    r.fillSpec !== null
+  );
 }
 
 export async function saveAppMap(map: AppMap): Promise<void> {

@@ -41,9 +41,15 @@ test.describe("CSV import → commit end-to-end (#8)", () => {
     await signInAsAdmin(page);
 
     // ── Setup ──────────────────────────────────────────────────────
-    // Wipe sample-data so the post-commit count assertion is clean.
-    const wipeRes = await request.post("/api/sample-data/remove");
-    expect(wipeRes.ok()).toBeTruthy();
+    // Issue #85: previously wiped sample data here so the post-commit
+    // count assertion was "clean". That side-effect stranded the
+    // `addSampleData` monkey-goal (which runs AFTER this spec under
+    // alphabetic ordering) at perpetual ❌ because by the time it
+    // probed `/api/sample-data/remove` the counts were already
+    // zeroed. We don't actually need the wipe — every count
+    // assertion in this spec is scoped to `accountId=${account.id}`
+    // (the freshly-created import target), so seeded sample data on
+    // OTHER accounts can coexist without polluting the math.
 
     // Fresh account to import into.
     const acctRes = await request.post("/api/accounts", {
@@ -144,17 +150,21 @@ test.describe("CSV import → commit end-to-end (#8)", () => {
     const fileInput2 = page.locator('input[type="file"]').first();
     await fileInput2.setInputFiles(FIXTURE);
 
-    // After re-parse, the Commit button should NOT show
-    // "Commit N rows" — every row is dedup'd via importHash so
-    // newCount is 0. The button label switches to one of:
-    //   "Nothing to commit"  — when chain hash also matches
-    //   "Update N"           — non-key fields drifted (rare)
-    //   "Fix N balance mismatches" — parser sees a chain delta
-    // We don't care which; the invariant is "no new commit".
+    // After re-parse the Commit button must end up in one of three
+    // no-new-commit states (Nothing-to-commit / Update / Fix) and
+    // explicitly NOT in the dedup-broken "Commit N rows" state.
+    // Issue #82: previous assertion only checked the positive side
+    // and would have masked a dedup regression that produced
+    // "Commit N rows" — the row-count check immediately after WOULD
+    // still pass if the operator hadn't clicked Commit, but the bug
+    // would slip through silently. Adding the negative assertion.
     const reimportBtn = page.getByRole("button", {
       name: /^(Nothing to commit|Update \d+|Fix \d+ balance mismatch)/i,
     });
     await expect(reimportBtn).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole("button", { name: /^Commit \d+ rows?/i }),
+    ).toBeHidden();
 
     // The hard assertion: no new rows landed on the account.
     const txnsRes2 = await request.get(

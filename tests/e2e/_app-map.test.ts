@@ -275,6 +275,72 @@ describe("migrateAppMap", () => {
     }
   });
 
+  it("coerces wrong-type fields to defaults (#73)", () => {
+    const old = {
+      schemaVersion: 9,
+      routes: {},
+      runs: [],
+      goals: {
+        createTransaction: {
+          // All bogus types.
+          achieved: 1, // boolean expected
+          attempts: "lots", // number expected
+          successes: { broken: true }, // number expected
+          lastAttempt: 42, // string expected
+          successfulRun: 42, // object expected
+        },
+      },
+    };
+    const m = migrateAppMap(old as Record<string, unknown>);
+    expect(m.goals.createTransaction).toEqual({
+      achieved: false,
+      attempts: 0,
+      successes: 0,
+      lastAttempt: null,
+      successfulRun: null,
+    });
+  });
+
+  it("drops half-filled successfulRun objects (#73)", () => {
+    const old = {
+      schemaVersion: 9,
+      routes: {},
+      runs: [],
+      goals: {
+        createTransaction: {
+          achieved: true,
+          attempts: 3,
+          // Missing fillSpec / submitLabel / verified — half-filled.
+          successfulRun: { route: "/transactions" },
+        },
+      },
+    };
+    const m = migrateAppMap(old as Record<string, unknown>);
+    expect(m.goals.createTransaction.successfulRun).toBeNull();
+    // The valid fields still pass through.
+    expect(m.goals.createTransaction.achieved).toBe(true);
+    expect(m.goals.createTransaction.attempts).toBe(3);
+  });
+
+  it("rejects non-string lastAttempt and non-object successfulRun (#73)", () => {
+    const old = {
+      schemaVersion: 9,
+      routes: {},
+      runs: [],
+      goals: {
+        createTransaction: {
+          achieved: true,
+          attempts: 5,
+          lastAttempt: { not: "a string" },
+          successfulRun: "not an object",
+        },
+      },
+    };
+    const m = migrateAppMap(old as Record<string, unknown>);
+    expect(m.goals.createTransaction.lastAttempt).toBeNull();
+    expect(m.goals.createTransaction.successfulRun).toBeNull();
+  });
+
   it("drops goals from old maps that no longer exist in GOAL_KEYS", () => {
     const old = {
       schemaVersion: 5,

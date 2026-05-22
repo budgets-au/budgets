@@ -9,6 +9,49 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.248.0 — 2026-05-22
+
+### Fixed
+- **`scheduled-transfer-missed.spec.ts` dates derived at runtime**
+  (#83). Previously hard-coded "8 May 2026" / "15 May 2026" strings
+  flipped from passing to failing as the real clock moved off the
+  May 22 anchor the comments named. Now `isoDaysAgo()` /
+  `displayDate()` compute everything from `new Date()` so the spec
+  works in perpetuity.
+- **`scheduled-transfer-missed.spec.ts` uses deterministic
+  `waitForResponse` instead of `waitForTimeout(800)`** (#62). Was
+  flake-bait on busy CI; now waits on the actual `/api/scheduled`
+  + `/api/transactions` GETs the panel SWR-subscribes to.
+- **`import-csv-commit.spec.ts` no longer wipes shared sample data
+  at setup** (#85). The wipe was unnecessary (every count assertion
+  is scoped to the freshly-created import account) and side-effect-
+  ed the `addSampleData` monkey-goal — running alphabetically
+  later, it'd find zero sample rows and record a perpetual ❌.
+- **`import-csv-commit.spec.ts` re-import assertion now also asserts
+  the dedup-broken `Commit N rows` label is NOT present** (#82).
+  Previously only checked one of the three no-new-commit labels
+  was visible, which would have masked a dedup regression that
+  let the parser produce "Commit N rows" while the operator
+  hadn't clicked it.
+- **`dashboard-visual.spec.ts` chart-drawn / grid-settled waits now
+  hard-fail on timeout** (#78). Was silently swallowing the
+  10s timeout via `.catch(() => {})` then proceeding to screenshot
+  a half-rendered page — the visual diff might still pass under
+  `maxDiffPixelRatio: 0.01` and let a real regression slip through.
+  `screenshots.spec.ts` (docs publisher) gets a `console.warn`
+  instead since it's not a regression gate.
+- **`migrateAppMap` now type-checks every persisted goal field
+  individually** (#73). Previous version only nullish-coalesced —
+  a corrupt persisted `app-map.json` (hand-edited / partial write)
+  with `attempts: "lots"` / `successfulRun: { route: "/x" }` would
+  survive intact and corrupt every subsequent run's expert-system
+  table. Now type-checks numbers, strings, the full SuccessfulRun
+  shape; bad values fall through to defaults. Three new unit
+  tests pin the contract.
+- **`isInternalPath` rejects `/login/*` and `/unlock/*` subtrees
+  explicitly** (#68 — re-verified after the symmetry fix in
+  0.247.0; the subtree exclusion was the load-bearing rule).
+
 ## 0.247.0 — 2026-05-22
 
 ### Fixed

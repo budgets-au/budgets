@@ -40,17 +40,10 @@ const THEMES = ["light", "dark"] as const;
 const PAGES: ReadonlyArray<PageCfg> = [
   { path: "/dashboard", name: "dashboard", settleMs: 2000 },
   { path: "/transactions", name: "transactions", settleMs: 800 },
-  { path: "/scheduled", name: "scheduled", settleMs: 1500 },
   { path: "/calendar", name: "calendar", settleMs: 1200 },
   { path: "/reports", name: "reports-cashflow", settleMs: 1500 },
   { path: "/reports?tab=sankey", name: "reports-sankey", settleMs: 1500 },
-  { path: "/reports?tab=envelope", name: "reports-envelope", settleMs: 1500 },
-  { path: "/reports?tab=accounts", name: "reports-accounts", settleMs: 1500 },
-  { path: "/reports?tab=tax", name: "reports-tax-deductions", settleMs: 1500 },
-  { path: "/investments", name: "investments", settleMs: 1000 },
-  { path: "/superannuation", name: "super", settleMs: 1000 },
-  { path: "/settings?tab=backups", name: "settings-backups", settleMs: 600 },
-  { path: "/settings?tab=security", name: "settings-security", settleMs: 600 },
+  { path: "/scheduled", name: "scheduled", settleMs: 1500 },
 ];
 
 test.use({ viewport: VIEWPORT, deviceScaleFactor: DEVICE_SCALE });

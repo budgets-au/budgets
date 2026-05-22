@@ -10,25 +10,15 @@ box.
 
 ## Screenshots
 
-| Dashboard | Transactions |
-|---|---|
-| ![Dashboard](screenshots/dashboard-light.png) | ![Transactions](screenshots/transactions-dark.png) |
+| Dashboard | Transactions | Calendar |
+|---|---|---|
+| <img src="screenshots/dashboard-light.png" width="260" /> | <img src="screenshots/transactions-light.png" width="260" /> | <img src="screenshots/calendar-light.png" width="260" /> |
+| <img src="screenshots/dashboard-dark.png" width="260" /> | <img src="screenshots/transactions-dark.png" width="260" /> | <img src="screenshots/calendar-dark.png" width="260" /> |
 
-| Scheduled & budgets | Calendar |
-|---|---|
-| ![Scheduled](screenshots/scheduled-light.png) | ![Calendar](screenshots/calendar-light.png) |
-
-| Cashflow report | Sankey report |
-|---|---|
-| ![Cashflow](screenshots/reports-cashflow-light.png) | ![Sankey](screenshots/reports-sankey-light.png) |
-
-| Envelope (income, expenses, affordability) | Accounts (per-account credits / debits / balance) |
-|---|---|
-| ![Envelope](screenshots/reports-envelope-light.png) | ![Accounts](screenshots/reports-accounts-light.png) |
-
-| Investments | Superannuation |
-|---|---|
-| ![Investments](screenshots/investments-light.png) | ![Super](screenshots/super-light.png) |
+| Cashflow report | Sankey report | Scheduled & budgets |
+|---|---|---|
+| <img src="screenshots/reports-cashflow-light.png" width="260" /> | <img src="screenshots/reports-sankey-light.png" width="260" /> | <img src="screenshots/scheduled-light.png" width="260" /> |
+| <img src="screenshots/reports-cashflow-dark.png" width="260" /> | <img src="screenshots/reports-sankey-dark.png" width="260" /> | <img src="screenshots/scheduled-dark.png" width="260" /> |
 
 ## What it does
 

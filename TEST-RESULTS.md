@@ -15,7 +15,7 @@ are in [CHANGELOG.md](CHANGELOG.md).
 ## Latest smart-monkey run
 
 <!-- monkey:start -->
-_Last run: 2026-05-22T00:04:58.153Z · 2 issues, 0 questions, 18 verified._
+_Last run: 2026-05-22T00:51:54.660Z · 0 issues, 0 questions, 0 verified._
 
 #### Smart Monkey expert system
 
@@ -41,7 +41,7 @@ _Coverage: 10 routes mapped, 319 interactive controls catalogued, 82 in-app link
 
 | Metric | Count |
 | --- | --- |
-| Total wall time | 376.7s |
+| Total wall time | 15.9s |
 | Routes visited | 6 |
 | Button clicks | 0 |
 | Switch toggles | 0 |
@@ -51,7 +51,7 @@ _Coverage: 10 routes mapped, 319 interactive controls catalogued, 82 in-app link
 | Form submits | 11 |
 | Links discovered | 0 |
 | Console errors | 0 |
-| Goals attempted | 13 |
+| Goals attempted | 10 |
 | Goals achieved | 9 |
 | Findings logged | 20 |
 
@@ -76,46 +76,6 @@ _Last run: 2026-05-20T09:26:06.823Z._
 
 ✅ **353 passed** across 38 files (13.3s).
 
-#### Issues
-
-##### /settings
-- 🔴 **goal "rekeyPassphrase" — revert leg** — Revert POST /api/rekey 1111…→0000… returned 400. Next next-start boot may fail to unlock.
-- 🔴 **goal "lockUnlockRoundTrip" — POST /api/unlock** — POST /api/unlock → 200; post-unlock GET /api/accounts → 401 body: {"error":"Unauthorized"}.
-
-#### Verified
-
-_Goal verification legs that passed. Surfaced so the operator can sanity-check what the monkey looked at, without mixing into the silent-no-op questions above._
-
-##### /calendar
-- ✅ **goal "scheduleOnCalendar" — verify cashflow projection** — GET /api/cashflow projected an occurrence with payee "monkey-goal-mpg5qxq8-cal-sched" on 2026-05-22. Day had 1 scheduledEvents in total. Pre-POST claim-match candidates (-$50 ±3 days, same account): none.
-- ✅ **goal "scheduleOnCalendar" — verify /calendar DOM** — DOM on /calendar contained the token "monkey-goal-mpg5qxq8-cal-sched". Layer: ok.
-
-##### /dashboard
-- ✅ **goal "multiDbSwitcher" — create + auto-switch** — POST /api/databases → 200; new profile "MD-mpg5qxq8" is the active one.
-
-##### /reports
-- ✅ **goal "addTenToCategory" — verify category report total** — Cashflow report for category "Bank Fees" — totalCount=10 (expected 10), |total|=250 (expected 250.00).
-
-##### /scheduled
-- ✅ **goal "scheduleOnCalendar" — verify API list** — GET /api/scheduled found a row with payee "monkey-goal-mpg5qxq8-cal-sched".
-- ✅ **goal "scheduleOnCalendar" — verify /scheduled DOM** — DOM on /scheduled contained the token "monkey-goal-mpg5qxq8-cal-sched".
-
-##### /settings
-- ✅ **goal "clearSampleData" — wipe round-trip** — Before: accts=2 txns=25 schedules=3. Wipe OK ({"sampleAccounts":0,"sampleTransactions":0,"sampleScheduled":0,"samplePayeeRules":0,"dependentNonSample":{"transactions":0,"scheduled":0},"sampleDataSeeded":true}). After: accts=0 txns=0 schedules=0 seededFlag=true.
-- ✅ **goal "rekeyPassphrase" — reject wrong current** — POST /api/rekey with wrong current → 400 (rejected as expected).
-- ✅ **goal "rekeyPassphrase" — reject too-short next** — POST /api/rekey with next="short" → 400 (rejected as expected).
-- ✅ **goal "rekeyPassphrase" — rotate and keep session** — POST /api/rekey → 200; post-rotate GET /api/accounts → 200.
-- ✅ **goal "lockUnlockRoundTrip" — POST /api/lock** — POST /api/lock → 200; subsequent GET /api/accounts → 307 Location:/unlock?next=%2Fapi%2Faccounts (expected 3xx → /unlock).
-
-##### /transactions
-- ✅ **goal "addTenToCategory" — verify list (API)** — GET /api/transactions found 10/10 rows matching "monkey-goal-mpg5qxq8-bulk-*".
-- ✅ **goal "addTenToCategory" — verify list (DOM)** — DOM on /transactions contained 10 matches for "monkey-goal-mpg5qxq8-bulk-".
-- ✅ **goal "searchTransaction" — verify search filters to payee** — API matched + DOM rendered payee "monkey-goal-mpg5qxq8-search-payee" with search=monkey-goal-mpg5qxq8-search-payee.
-- ✅ **goal "addAndViewNote" — note round-trips API + DOM** — API echoed notes + DOM rendered "note-from-monkey-goal-mpg5qxq8".
-- ✅ **goal "searchForNote" — ?search= matches notes column** — API matched + DOM rendered the matching row for notes-only needle "find-me-monkey-goal-mpg5qxq8".
-- ✅ **goal "savedFilterDeleteReorder" — delete M-entry** — After click-delete on "M-monkey-goal-mpg5qxq8-middle", server prefs has 2/2 expected entries: [z-monkey-goal-mpg5qxq8, a-monkey-goal-mpg5qxq8].
-
-##### /unlock
-- ✅ **goal "multiDbSwitcher" — switch back to Default** — After switch+unlock, activeProfileId=default (expected default).
+_No issues, questions, or verifications on the last run — only the expert-system summary above._
 
 <!-- monkey:end -->

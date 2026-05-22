@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.230.0 — 2026-05-22
+
+### Changed
+- **README screenshots re-captured against a fresh seeded DB and
+  re-laid-out as 3-up rows of matched light/dark pairs.** A recent
+  full-suite e2e run had wiped the seeded sample dataset (the new
+  `clearSampleData` goal removes accounts/transactions/schedules
+  by design), leaving the README's dashboard / transactions /
+  cashflow / sankey shots showing an empty book — net worth
+  $0.00, no upcoming, blank charts. Re-ran the screenshots spec
+  on a freshly-wiped `tests/e2e/.data/test.db` so the autoseed
+  fires on first unlock and the captures show the showcase data
+  again ($27,405.86 net worth, 3 accounts, populated charts).
+- **Trimmed the screenshots spec from 13 pages to the 6 the
+  README actually uses** (dashboard, transactions, calendar,
+  cashflow, sankey, scheduled). The dropped pages (envelope,
+  accounts, tax-deductions, investments, super,
+  settings-backups, settings-security) were nice but bloated
+  the spec runtime to ~3 minutes for assets nothing rendered.
+  Spec is now ~110 s for 12 captures.
+- **README screenshot block** is now a 3-column table with the
+  light row above its matching dark row, using `<img width="260" />`
+  so the page reads as a thumbnail wall rather than a wall of
+  full-resolution PNGs. Hi-res still lives in the repo for direct
+  link / download.
+
+### Removed
+- `screenshots/{reports-accounts,reports-envelope,reports-tax-deductions,investments,super,settings-backups,settings-security}-{light,dark}.png` (14 files, ~5 MB) — no longer referenced by the README and the spec no longer regenerates them.
+
 ## 0.229.0 — 2026-05-22
 
 ### Changed

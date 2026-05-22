@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.254.0 — 2026-05-22
+
+### Added
+- **E2E spec for the user-management lifecycle** (#28). New
+  `tests/e2e/user-management.spec.ts` walks the full
+  create → promote → demote → delete loop against
+  `/api/users` + `/api/users/[id]` plus the two guards that
+  keep the system from ending up with zero admins:
+  - GET `/api/users` baseline (verifies the seed admin is the
+    only admin — required for the last-admin assertion below).
+  - POST → 201; duplicate username POST → 409 (the explicit
+    pre-check fires before the unique index would throw, so
+    the user sees `already taken`, not a 500).
+  - PATCH role promote/demote round-trip — promote member →
+    admin, demote them back — verifies the route returns the
+    updated row.
+  - PATCH self-demote when last admin → 409 (lastAdminGuard);
+    cross-check via GET that the seed admin's role is
+    unchanged.
+  - PATCH / DELETE missing id → 404.
+  - DELETE happy-path cleanup in `finally`.
+
+  Final invariant pinned: the created member is gone and the
+  seed admin is still an admin — leaves the test fixture in
+  the same state the next spec expects.
+
 ## 0.253.0 — 2026-05-22
 
 ### Added

@@ -9,6 +9,49 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.265.0 — 2026-05-23
+
+### Added
+- **E2E spec for the schedule-replace ("rate change") flow** (#15).
+  New `tests/e2e/scheduled-replace.spec.ts` POSTs a monthly
+  predecessor schedule, calls `POST /api/scheduled/[id]/replace`
+  with a new amount and effective date, then asserts:
+  - Response: `{ predecessorId, successor }`; successor carries
+    `startDate = effective`, `endDate = null`, `isActive = true`,
+    `lineageId` matching the predecessor's, and the signed amount
+    preserving the predecessor's expense → negative-magnitude
+    convention.
+  - Predecessor (fetched via the list endpoint since
+    `/api/scheduled/[id]` has no GET) now has
+    `endDate = effective - 1 day`, `isActive = false`,
+    `amount` untouched.
+  - Bad effective date (≤ predecessor.startDate) → 400.
+  - Missing scheduledId → 404.
+  - Payee override: `{ payee: "..." }` on the replace call sets
+    the successor's payee to the override (not the predecessor's).
+
+- **E2E spec for the add-investment → dashboard-data path** (#23).
+  New `tests/e2e/investment-quantity.spec.ts` POSTs a stock
+  holding (with explicit `name` + `purchasePrice` so the route's
+  Yahoo fallback never fires), then GETs `/api/investments` and
+  asserts: row present with `quantity` reflecting the POST, and
+  `costBasis = quantity × purchasePrice` (the value the
+  `stocks-summary-card` dashboard widget reads).
+
+- **E2E spec for the Investments/Super feature-toggle downstream
+  effects** (#26). New
+  `tests/e2e/feature-toggle-downstream.spec.ts` PATCHes
+  `/api/display-prefs` to flip the flags off, then asserts the
+  three user-visible knock-ons the monkey crawl misses:
+  - `/investments` and `/superannuation` page navigation redirects
+    to `/dashboard` (page-level `redirect()`).
+  - Sidebar links for both pages disappear from the DOM.
+  - After flipping back on, links reappear and the pages stay on
+    their own URLs.
+
+  `finally` block restores both flags to true so subsequent specs
+  + the next run start from a known fixture state.
+
 ## 0.264.0 — 2026-05-23
 
 ### Performance

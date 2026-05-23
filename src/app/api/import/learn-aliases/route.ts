@@ -30,10 +30,13 @@ export const POST = withAuth(async (request) => {
   const { aliases } = parsed.data;
 
   // Each alias upsert is independent — fire them in parallel so a 20-row
-  // batch doesn't take 20 sequential round-trips.
-  await Promise.all(
+  // batch doesn't take 20 sequential round-trips. `learnAccountAlias`
+  // returns true only on a fresh insert; re-saving an already-known
+  // mapping is a no-op. `saved` reports the truthful count.
+  const results = await Promise.all(
     aliases.map((a) => learnAccountAlias(a.kind, a.value, a.accountId)),
   );
+  const saved = results.filter(Boolean).length;
 
-  return NextResponse.json({ saved: aliases.length });
+  return NextResponse.json({ saved });
 });

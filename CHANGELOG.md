@@ -9,6 +9,76 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.263.0 — 2026-05-23
+
+### Added
+- **E2E spec for learn-aliases-on-commit** (#10). New
+  `tests/e2e/import-learn-aliases.spec.ts` pins:
+  - First commit with a fresh `bankAccountId` →
+    `aliasesLearned: 1`.
+  - Re-commit with the same `bankAccountId` →
+    `aliasesLearned: 0` (idempotent — already learned).
+  - Direct POST to `/api/import/learn-aliases` with fresh
+    mapping → `saved: 1`; re-POST with same mapping →
+    `saved: 0`.
+
+- **Unit tests for `migrateLegacyBackups`** (#11). Extends
+  `src/lib/backup/sqlite-backup.test.ts` with 5 cases against
+  a real temp dir:
+  - Legacy `budgets_*.sqlite` + `.meta.json` files move into
+    `<base>/default/`.
+  - Non-backup files (README, .DS_Store) stay at root.
+  - Idempotent — re-running with `default/` already present
+    is a no-op.
+  - Subdirectories (already per-profile-organised) are
+    skipped.
+  - Missing root → silent return (pre-first-unlock state).
+
+- **Unit tests for orphan-transfer backfill gate** (#12). New
+  `src/lib/backfill-orphan-transfers.test.ts` covers:
+  - `backfillOrphanTransfers(db)` worker: orphan + minted
+    synthetic on External, pair link bidirectional,
+    opposite-sign amount preserved.
+  - `runOrphanBackfillIfNeeded(db)` gate: first call runs +
+    sets the `app_settings.transfer_backfill_done` flag;
+    second call no-ops (no double-mint on restart, even with
+    fresh orphans present); zero-orphan fresh DB still sets
+    the flag; clearing the flag re-fires the backfill (the
+    Settings → Maintenance → "Re-run" path).
+
+- **E2E spec for cross-account synthetic-counterparty
+  promotion** (#14). New
+  `tests/e2e/import-promote-synthetic.spec.ts` pins:
+  - PATCH transfer-pair with `{ external: "External" }`
+    mints a synthetic on the External account.
+  - POST `/api/import/commit-batched` against the External
+    account with an amount-matching row PROMOTES the
+    synthetic in place — same id, real payee + importHash,
+    `isSynthetic: false`, `transferPairId` still points at
+    the source leg, count of External-account txns
+    unchanged.
+  - Strict-amount-match guard: row off by 1 cent inserts
+    fresh; pair2's synthetic stays synthetic.
+
+### Changed
+- **Extracted `runOrphanBackfillIfNeeded` from `src/db/index.ts`
+  into `src/lib/backfill-orphan-transfers.ts`**. The flag-check
+  + worker + flag-set sequence still runs in the same `BEGIN
+  IMMEDIATE` transaction (the #49 race fix is intact), but the
+  gate is now testable in isolation against any drizzle
+  handle. `src/db/index.ts`'s unlock-path wrapper became a
+  three-line delegation.
+
+### Fixed
+- **`learnAccountAlias` reports actual inserts, not input
+  count** — `commit-batched`'s `aliasesLearned` and
+  `learn-aliases`'s `saved` both used to count the input rows
+  blindly (a re-commit of the same `bankAccountId` falsely
+  reported "1 learned"). `learnAccountAlias` now returns a
+  boolean from its `INSERT ... ON CONFLICT DO NOTHING`'s
+  `.returning()`, and both callers sum the truthful inserts.
+  Surfaced by the new #10 spec on its idempotency leg.
+
 ## 0.262.0 — 2026-05-23
 
 ### Added

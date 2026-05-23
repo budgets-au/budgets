@@ -648,13 +648,22 @@ async function runCommit(request: Request) {
   // Auto-learn account_aliases from any non-empty bankAccountId we saw,
   // mapped to whichever accountId those rows ended up routed to. Same
   // idempotency rules as the regular commit.
+  //
+  // `aliasesLearned` (returned below) is the count of aliases that
+  // ACTUALLY got inserted on this call — not the input-row count.
+  // `learnAccountAlias` returns true only on a fresh insert; a
+  // re-commit of the same bankAccountId reports 0, matching the
+  // user's intuition.
   const aliasesToLearn = new Map<string, string>();
   for (const r of rows) {
     const id = r.bankAccountId?.trim();
     if (id) aliasesToLearn.set(id, r.accountId);
   }
+  let aliasesLearned = 0;
   for (const [aliasValue, accountId] of aliasesToLearn) {
-    await learnAccountAlias("bank-account", aliasValue, accountId);
+    if (await learnAccountAlias("bank-account", aliasValue, accountId)) {
+      aliasesLearned += 1;
+    }
   }
 
   // Auto-run transfer-pair matching against every unpaired row.
@@ -692,7 +701,7 @@ async function runCommit(request: Request) {
     correctedPostedSeq,
     importLogIds,
     accountsTouched: insertsByAccount.size,
-    aliasesLearned: aliasesToLearn.size,
+    aliasesLearned,
     transfersPaired: pairResult?.paired ?? 0,
     transfersSuggested: pairResult?.suggested ?? 0,
     transferMatchError: pairError,

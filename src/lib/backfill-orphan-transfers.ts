@@ -8,7 +8,7 @@
 // through Module.db's getter before its closure had finished
 // initialising. Passing the handle in inverts the dependency and
 // removes the cycle entirely.
-import { accounts, transactions, categories } from "@/db/schema";
+import { accounts, appSettings, transactions, categories } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import type { db as dbType } from "@/db";
 
@@ -169,3 +169,47 @@ export function backfillOrphanTransfers(db: typeof dbType): { paired: number } {
  *  identical to `backfillOrphanTransfers` because `db` is always a
  *  parameter. */
 export const backfillOrphanTransfersWith = backfillOrphanTransfers;
+
+/**
+ * Gate + run the backfill within a single `BEGIN IMMEDIATE`
+ * transaction. The flag-read + backfill + flag-write must be atomic
+ * (issue #49: two concurrent unlock paths racing the gate could
+ * double-mint synthetic counterparts). Designed to be called from
+ * the unlock path with `state.drizzleDb`, but also testable in
+ * isolation against any drizzle handle.
+ *
+ * Returns `{ ran, paired }`:
+ * - `ran: false` → flag was already set; nothing executed.
+ * - `ran: true` → backfill executed; `paired` is the count of
+ *   newly-minted synthetic counterparties (may be 0 on a fresh DB).
+ *
+ * Re-runs are opt-in via Settings → Maintenance → "Re-run transfer
+ * backfill", which clears the flag before calling this again.
+ */
+export function runOrphanBackfillIfNeeded(
+  db: typeof dbType,
+): { ran: boolean; paired: number } {
+  return db.transaction((tx) => {
+    const flagRows = tx
+      .select({ flag: appSettings.transferBackfillDone })
+      .from(appSettings)
+      .where(eq(appSettings.id, 1))
+      .all();
+    if (flagRows[0]?.flag) return { ran: false, paired: 0 };
+
+    const result = backfillOrphanTransfers(tx as typeof dbType);
+
+    // Mark the flag regardless of whether anything was paired —
+    // a fresh DB with zero orphans still "counts" as backfilled.
+    tx
+      .insert(appSettings)
+      .values({ id: 1, transferBackfillDone: true })
+      .onConflictDoUpdate({
+        target: appSettings.id,
+        set: { transferBackfillDone: true, updatedAt: new Date() },
+      })
+      .run();
+
+    return { ran: true, paired: result.paired };
+  }, { behavior: "immediate" });
+}

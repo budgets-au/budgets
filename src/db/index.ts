@@ -303,41 +303,20 @@ export function switchProfile(id: string): void {
 function runOrphanTransferBackfill(): void {
   if (!state.drizzleDb || !state.client) return;
   try {
-    // Issue #49: the flag-read + backfill call + flag-write was not
-    // transactional. Two concurrent unlock paths (e.g. /api/unlock
-    // racing the env-key auto-unlock at boot, or a NextAuth
-    // sign-in fan-out before the flag committed) could both pass
-    // the gate and double-mint synthetic counterparts. Wrap the
-    // whole sequence in a BEGIN IMMEDIATE transaction. The
-    // backfill helper takes a drizzle handle as a parameter, so we
-    // pass `tx` in to keep the inner inserts within the same
-    // transactional scope.
-    state.drizzleDb.transaction((tx) => {
-      const flagRows = tx
-        .select({ flag: appSettings.transferBackfillDone })
-        .from(appSettings)
-        .where(eq(appSettings.id, 1))
-        .all();
-      if (flagRows[0]?.flag) return; // already-done, no-op
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const m = require("@/lib/backfill-orphan-transfers");
-      const result = m.backfillOrphanTransfers(tx);
-      if (result.paired > 0) {
-        console.log(
-          `[db] Backfilled ${result.paired} orphan transfer row(s) with synthetic counterparts.`,
-        );
-      }
-      // Mark the flag regardless of whether anything was paired —
-      // a fresh DB with zero orphans still "counts" as backfilled.
-      tx
-        .insert(appSettings)
-        .values({ id: 1, transferBackfillDone: true })
-        .onConflictDoUpdate({
-          target: appSettings.id,
-          set: { transferBackfillDone: true, updatedAt: new Date() },
-        })
-        .run();
-    }, { behavior: "immediate" });
+    // The gate + backfill + flag-set sequence runs in a BEGIN
+    // IMMEDIATE transaction so two concurrent unlock paths (e.g.
+    // /api/unlock racing the env-key auto-unlock at boot) can't
+    // double-mint synthetic counterparts (#49). The gate logic
+    // lives in `runOrphanBackfillIfNeeded` so it's testable in
+    // isolation against any drizzle handle.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const m = require("@/lib/backfill-orphan-transfers");
+    const result = m.runOrphanBackfillIfNeeded(state.drizzleDb);
+    if (result.ran && result.paired > 0) {
+      console.log(
+        `[db] Backfilled ${result.paired} orphan transfer row(s) with synthetic counterparts.`,
+      );
+    }
   } catch (e) {
     console.error("[db] Orphan-transfer backfill failed:", e);
   }

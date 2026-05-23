@@ -58,9 +58,15 @@ export async function learnAccountAlias(
   aliasKind: string,
   aliasValue: string,
   accountId: string,
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  // .returning() so callers can distinguish "first time we saw this
+  // alias" from "already learned, no-op". Used by commit-batched to
+  // report the truthful `aliasesLearned` count rather than the
+  // input-row count.
+  const inserted = await db
     .insert(accountAliases)
     .values({ accountId, aliasKind, aliasValue })
-    .onConflictDoNothing({ target: [accountAliases.aliasKind, accountAliases.aliasValue] });
+    .onConflictDoNothing({ target: [accountAliases.aliasKind, accountAliases.aliasValue] })
+    .returning({ id: accountAliases.id });
+  return inserted.length > 0;
 }

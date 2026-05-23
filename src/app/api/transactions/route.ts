@@ -275,7 +275,30 @@ export const GET = withAuth(async (request) => {
   // on two consecutive infinite-scroll pages and React errors.
   const tieSort = desc(transactions.id);
 
-  const rows = await db
+  // #92: Running balance was a per-row correlated subquery — O(N²) on
+  // a big single-account view (10k rows ≈ 50M row scans). Replaced with
+  // a single-pass window function over the account's full ledger,
+  // exposed as a `ledger` CTE that the outer SELECT LEFT JOINs by row id.
+  // The window's ORDER BY matches the canonical lineage order (date,
+  // posted_seq, posted_at|created_at, id) — same tuple the old subquery
+  // compared on. ROWS frame (not RANGE) because the ORDER BY ends in
+  // `id` which is unique → no tie semantics to worry about, but the
+  // explicit ROWS frame makes the intent clear and avoids any future
+  // surprise if a SQLite version adjusts default frame behaviour.
+  const ledger = singleAccountId
+    ? db.$with("ledger").as(
+        db
+          .select({
+            id: transactions.id,
+            cumulative_sum: sql<string>`SUM(CAST(${transactions.amount} AS REAL)) OVER (ORDER BY ${transactions.date}, COALESCE(${transactions.postedSeq}, 0), COALESCE(${transactions.postedAt}, ${transactions.createdAt}), ${transactions.id} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`.as("cumulative_sum"),
+          })
+          .from(transactions)
+          .where(eq(transactions.accountId, singleAccountId)),
+      )
+    : null;
+  const baseQuery = ledger ? db.with(ledger) : db;
+
+  const rowsBuilder = baseQuery
     .select({
       id: transactions.id,
       date: transactions.date,
@@ -302,16 +325,14 @@ export const GET = withAuth(async (request) => {
       pairAmount: pairTxn.amount,
       pairDate: pairTxn.date,
       pairPayee: pairTxn.payee,
-      // Running balance after this transaction posts. Sums every txn that
-      // sorts at-or-before this one in the lineage (date, posted_seq,
-      // posted_at|created_at, id) and adds the account's starting balance.
-      // Tuple comparison matches the ORDER BY above key-for-key so the
-      // visible list and the balance column always agree. Only set on
-      // single-account queries; null otherwise.
+      // Running balance after this transaction posts. Computed via the
+      // `ledger` CTE below using a single window-function pass over the
+      // account's ledger — was a correlated subquery that re-scanned the
+      // full account per output row (O(N²) on big single-account views,
+      // issue #92). The CTE is only built on single-account queries; on
+      // multi-account / unfiltered views the balance column is NULL.
       balance: singleAccountId
-        ? sql<
-            string | null
-          >`CAST((CAST(${accounts.startingBalance} AS REAL) + COALESCE((SELECT SUM(CAST(t2.amount AS REAL)) FROM ${transactions} t2 WHERE t2.account_id = ${transactions.accountId} AND (t2.date, COALESCE(t2.posted_seq, 0), COALESCE(t2.posted_at, t2.created_at), t2.id) <= (${transactions.date}, COALESCE(${transactions.postedSeq}, 0), COALESCE(${transactions.postedAt}, ${transactions.createdAt}), ${transactions.id})), 0)) AS TEXT)`
+        ? sql<string | null>`CAST((CAST(${accounts.startingBalance} AS REAL) + COALESCE(ledger.cumulative_sum, 0)) AS TEXT)`
         : sql<string | null>`NULL`,
       // Extra metadata surfaced in the row-expansion panel — everything
       // the user might want to see when troubleshooting an import or
@@ -336,6 +357,15 @@ export const GET = withAuth(async (request) => {
     .leftJoin(pairTxn, eq(transactions.transferPairId, pairTxn.id))
     .leftJoin(pairAcct, eq(pairTxn.accountId, pairAcct.id))
     .leftJoin(importLogs, eq(transactions.importLogId, importLogs.id))
+    .$dynamic();
+  // Only add the ledger LEFT JOIN on single-account queries — the
+  // CTE doesn't exist on multi-account / unfiltered views, and the
+  // SELECT's balance field is `sql\`NULL\`` in that branch.
+  const filtered = ledger
+    ? rowsBuilder.leftJoin(ledger, eq(ledger.id, transactions.id))
+    : rowsBuilder;
+
+  const rows = await filtered
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(primarySort, ...dateExtraSorts, tieSort)
     .limit(limit)

@@ -9,6 +9,37 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.264.0 — 2026-05-23
+
+### Performance
+- **`/api/transactions` running-balance is now linear, not O(N²)**
+  (#92). Was a correlated subquery
+  (`SELECT SUM(t2.amount) FROM transactions t2 WHERE t2.account_id = X
+  AND lineage_tuple <= row.lineage_tuple`) computed per output row —
+  10k single-account rows triggered ~50M row scans, with the slow
+  growth showing up in the `/transactions` list under big account
+  histories. Replaced with a single-pass window function inside a
+  `ledger` CTE: `SUM(amount) OVER (ORDER BY date, COALESCE(posted_seq,0),
+  COALESCE(posted_at, created_at), id ROWS BETWEEN UNBOUNDED PRECEDING
+  AND CURRENT ROW)`. Outer SELECT LEFT JOINs the CTE on `id` and adds
+  the account's `starting_balance`.
+
+  The CTE is only built on single-account queries (multi-account /
+  unfiltered views still return `balance: null` since one running
+  balance can't represent multiple accounts). Per-row balance values
+  are identical to the old subquery — the lineage tuple is the same
+  one the ORDER BY uses, and the window's `ROWS` frame matches the
+  `<=` tuple-compare semantics row-for-row.
+
+### Added
+- **Integration test for the running-balance contract**
+  (`src/app/api/transactions/route.integration.test.ts`). Seeds an
+  account + 5 transactions (with one same-day pair to exercise the
+  `id` tiebreaker), drives the real `GET` handler via
+  `installTestDb`, asserts the per-row `balance` matches a
+  hand-computed cumulative sum down the lineage. A second test
+  asserts `balance` is `null` on a multi-account view.
+
 ## 0.263.0 — 2026-05-23
 
 ### Added

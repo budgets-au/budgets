@@ -9,6 +9,41 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.262.0 — 2026-05-23
+
+### Added
+- **E2E spec for the reconcile flow** (#18). New
+  `tests/e2e/reconcile-flow.spec.ts` pins the
+  `POST /api/accounts/[id]/reconcile` contract:
+  - Matched leg: balance matches → every txn on/before `date`
+    flips `isReconciled = true`; response is `{ matched: true,
+    reconciled: N }`.
+  - Idempotent re-match: same call returns `reconciled: 0`
+    (already-reconciled rows aren't touched).
+  - Mismatch leg: wrong balance returns `{ matched: false,
+    expected, stated, diff }` with cents-rounded strings.
+  - Missing accountId → 404.
+
+  Cross-checks via `GET /api/transactions/{id}` that the
+  `isReconciled` flag actually flipped on the rows the route
+  reported it touched — the historical failure mode (route
+  reports OK but rows didn't update) is the one this guards.
+
+- **E2E spec for the unlock rate-limit** (#32). New
+  `tests/e2e/unlock-rate-limit.spec.ts` pins the 5/60s window
+  added in 0.144. Fires 10 wrong-passphrase attempts and
+  asserts:
+  - At least one returns 429 + `Retry-After` header.
+  - The 429 body is `{ ok: false, error: "Too many ..." }`.
+  - `Retry-After` parses as a positive integer ≤ 60.
+
+  Doesn't pin "the Nth attempt is rate-limited" — the budget
+  is process-global and other specs (`lockUnlockRoundTrip`
+  goal) may have consumed some — so the assertion is the more
+  robust "we drove the bucket empty within 10 tries". Spec
+  deliberately leaves the budget consumed (no teardown);
+  workers:1 keeps subsequent specs' interactions deterministic.
+
 ## 0.261.0 — 2026-05-23
 
 ### Added

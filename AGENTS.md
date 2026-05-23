@@ -250,6 +250,28 @@ When adding code that touches the on-disk DB or its backups:
 | `pnpm test` | Vitest single pass (unit + colocated integration) |
 | `pnpm test:watch` | Vitest watch mode |
 | `pnpm test:e2e` | Playwright suite — pages-smoke, monkey crawl, saved filters, dashboard, screenshots |
+| `pnpm coverage` | Unit (vitest) coverage report at `.coverage/report/index.html` |
+| `pnpm coverage --no-e2e` | Same as `pnpm coverage` for now (e2e leg is wired but blocked by upstream — see below) |
+
+The infra is wired for **unit + e2e merged coverage** but the e2e
+leg currently contributes 0 files due to a Next 16 Turbopack
+limitation. Both `next build` and `next dev` under Next 16 emit
+source maps with empty `"sources":[]` / `"sections":[]` — c8 /
+v8-to-istanbul then has nothing to map the V8-dump URLs
+(`file:///.../.next-e2e/dev/server/chunks/<hash>.js`) back to
+`src/**`. Until upstream Turbopack fixes this, the unit-only
+floor (`~11.5%`) is what the report shows.
+
+When upstream fixes source maps (or we switch to webpack mode for
+the coverage runs), the merge script picks up the e2e leg
+automatically — no script changes needed. The wired plumbing:
+
+1. Vitest runs with `@vitest/coverage-v8`; pure-logic coverage lands in `.coverage/unit/coverage-final.json`.
+2. Playwright boots the Next.js server with `NODE_V8_COVERAGE=.coverage/e2e/raw/` (gated on `COLLECT_COVERAGE=1`) and drives the full suite; raw V8 dumps land there.
+3. `c8 report --reporter=json` source-maps the V8 dumps back to `src/**` and writes `.coverage/e2e/coverage-final.json`. Today this is `{}`.
+4. `scripts/coverage-merge.mjs` loads both Istanbul JSONs into one `CoverageMap`, sums per-file counts, and emits a combined text + HTML report. The script logs a warning when either input has 0 files so the gap is visible at run time.
+
+The vitest-only number is a misleading floor for this project — most production code is `src/app/**` + `src/components/**`, exercised only by the Playwright tier. The actual covered LOC is much higher (the monkey crawl + ~60 focused specs touch most routes); we just can't currently measure it.
 
 The E2E rig builds a separate `.next-e2e` (controlled by
 `E2E_TEST_BUILD=1` in `next.config.ts`) so it doesn't fight

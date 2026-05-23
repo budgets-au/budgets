@@ -9,6 +9,49 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.261.0 — 2026-05-23
+
+### Added
+- **Combined code-coverage tooling.** New `pnpm coverage` runs
+  `@vitest/coverage-v8` against the unit suite and writes a
+  text + HTML + JSON report to `.coverage/report/`. The infra
+  is wired for a merged unit + e2e flow:
+  - `pnpm coverage:unit` — vitest's V8 coverage hooked into
+    the Vite transform pipeline; pure-logic coverage lands in
+    `.coverage/unit/coverage-final.json`.
+  - `pnpm coverage:e2e` — boots the Playwright rig with
+    `COLLECT_COVERAGE=1`, which sets `NODE_V8_COVERAGE` on the
+    Next.js server and dumps raw V8 coverage to
+    `.coverage/e2e/raw/`.
+  - `pnpm coverage:e2e-report` — runs `c8 report --reporter=json`
+    over the raw dumps with `--max-old-space-size=8192` so the
+    multi-gig dev-mode dumps fit in heap; emits
+    `.coverage/e2e/coverage-final.json`.
+  - `pnpm coverage:report` — `scripts/coverage-merge.mjs`
+    loads both Istanbul JSONs into a single `CoverageMap`,
+    sums per-file counts, and emits a combined report.
+
+  The orchestrator at `scripts/coverage.mjs` runs the unit
+  leg by default and skips the e2e leg (see Known limitations
+  below). Pass `--with-e2e` to opt in.
+
+### Known limitations
+- **E2E coverage leg currently contributes 0 files.** Next 16
+  Turbopack ships source maps with empty `"sources":[]` /
+  `"sections":[]` in BOTH `next build` and `next dev` modes,
+  regardless of the `productionBrowserSourceMaps` /
+  `experimental.serverSourceMaps` flags. c8 /
+  `v8-to-istanbul` then has nothing to remap the V8-dump
+  URLs (`.next-e2e/.../chunks/<hash>.js`) back to `src/**`,
+  so the e2e Istanbul JSON comes out as `{}` and the
+  combined % reflects unit coverage only (~11.5%). The
+  merge script logs a clear warning when this happens.
+
+  When upstream Turbopack fixes source maps (or we patch the
+  build to use webpack for coverage runs), the e2e leg picks
+  up automatically — no script changes needed. The plumbing
+  is in place.
+
 ## 0.260.0 — 2026-05-22
 
 ### Changed

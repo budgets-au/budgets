@@ -48,10 +48,31 @@ export default defineConfig({
   // E2E_TEST_BUILD in next.config.ts) and `next start`. The live
   // dev server on :3002 is untouched.
   webServer: {
-    command: `next build && next start -H 0.0.0.0 -p ${E2E_PORT}`,
+    // `next build && next start` is the normal e2e mode — production
+    // bundle, closest to what we actually ship.
+    //
+    // When COLLECT_COVERAGE=1 we switch to `next dev` because Turbopack
+    // production builds in Next 16 emit empty `.js.map` files
+    // (`sources:[]`, `sections:[]`) regardless of the
+    // `productionBrowserSourceMaps` / `experimental.serverSourceMaps`
+    // flags — c8 / v8-to-istanbul then have nothing to map back to
+    // `src/**`. Dev mode emits real source maps, so the V8 dumps the
+    // Playwright run produces translate cleanly. Dev mode is slower
+    // first-load but fast enough for the e2e suite, and the
+    // distinct `.next-e2e/` distDir keeps it from fighting the live
+    // dev server on :3002.
+    command:
+      process.env.COLLECT_COVERAGE === "1"
+        ? `next dev -H 0.0.0.0 -p ${E2E_PORT}`
+        : `next build && next start -H 0.0.0.0 -p ${E2E_PORT}`,
     url: `http://0.0.0.0:${E2E_PORT}/api/auth/csrf`,
     timeout: 600_000,
-    reuseExistingServer: !process.env.CI,
+    // Reuse a hot server when iterating locally; force a fresh
+    // boot when collecting coverage so NODE_V8_COVERAGE actually
+    // takes effect (env vars don't propagate into an already-
+    // running process).
+    reuseExistingServer:
+      !process.env.CI && process.env.COLLECT_COVERAGE !== "1",
     env: {
       E2E_TEST_BUILD: "1",
       SQLITE_PATH: E2E_SQLITE_PATH,
@@ -62,6 +83,21 @@ export default defineConfig({
       NEXTAUTH_SECRET:
         process.env.NEXTAUTH_SECRET ??
         "0000000000000000000000000000000000000000000000000000000000000000",
+      // V8 coverage capture for the Next.js Node process. Active only
+      // when the wrapper script sets COLLECT_COVERAGE=1 — keeps the
+      // normal `pnpm test:e2e` run zero-overhead. Raw `coverage-*.json`
+      // dumps land in `.coverage/raw/`; `c8 report` reads them and
+      // merges with the vitest unit-test coverage that drops to the
+      // same directory.
+      ...(process.env.COLLECT_COVERAGE === "1"
+        ? {
+            NODE_V8_COVERAGE: ".coverage/e2e/raw",
+            // Forward to the child shell so `next build` sees it and
+            // enables `productionBrowserSourceMaps` +
+            // `experimental.serverSourceMaps` in next.config.ts.
+            COLLECT_COVERAGE: "1",
+          }
+        : {}),
     },
   },
   projects: [

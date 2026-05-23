@@ -23,5 +23,26 @@ export default defineConfig({
     // Tests are pure logic only — no Next.js runtime, no DB, no network.
     // Anything that needs the DB lives behind an interface that the test
     // shims with an in-memory fake.
+    coverage: {
+      provider: "v8",
+      // Emit Istanbul-compatible JSON next to a text + HTML report.
+      // The JSON is what the merge script consumes; text gives us
+      // a quick console summary; HTML is the drill-down view.
+      reporter: ["text", "text-summary", "html", "json"],
+      reportsDirectory: ".coverage/unit",
+      include: ["src/**"],
+      exclude: [
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/*.d.ts",
+        "src/db/migrations/**",
+      ],
+      // The coverage map should reflect the FULL source tree even
+      // for files no test imports — otherwise the denominator
+      // shrinks to "files we happened to touch", inflating the
+      // headline %. `excludeAfterRemap` keeps the all-files set
+      // honest against the exclude globs above.
+      excludeAfterRemap: true,
+    },
   },
 });

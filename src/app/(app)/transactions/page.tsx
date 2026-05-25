@@ -6,6 +6,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { TransactionsView } from "@/components/transactions/transactions-view";
 import { ImportTransactionsButton } from "@/components/import/import-transactions-button";
 import { UndoLastImportButton } from "@/components/transactions/undo-last-import-button";
+import { CategoriseUncategorisedButton } from "@/components/transactions/categorise-uncategorised-button";
 import { SampleDataNotice } from "@/components/transactions/sample-data-notice";
 
 export default async function TransactionsPage() {
@@ -24,6 +25,7 @@ export default async function TransactionsPage() {
         actions={
           <div className="flex items-center gap-2">
             <UndoLastImportButton />
+            <CategoriseUncategorisedButton />
             <ImportTransactionsButton />
           </div>
         }

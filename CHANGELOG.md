@@ -9,6 +9,47 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.272.0 — 2026-05-25
+
+### Added
+- **"Categorise" entry point on `/transactions`.** New topbar
+  button between Undo Import and Import. Click takes the operator
+  to `/transactions/categorise` — a focused queue of every
+  uncategorised transaction in the DB, each pre-scored by the
+  same `suggestCategoryByHistory` trigram suggester the CSV
+  import flow uses. Useful for the long-tail backlog from large
+  imports where category coverage by the import's per-row pickers
+  was incomplete.
+
+  - Rows sorted by suggestion score DESC so the easy wins come
+    first; rows with no suggestion sink to the bottom.
+  - Picker pre-filled with the suggestion; expense vs income
+    filter applied automatically based on the row's amount sign.
+  - **Per-row immediate save**: picking a category PATCHes
+    `/api/transactions/{id}` right away and the row gets
+    struck-through + dimmed (no jumpy reflow). No "apply all"
+    step — the user just keeps picking.
+  - Confidence column shows score% + support count so the user
+    can see why a suggestion was made (and which to scrutinise).
+  - Topbar button shows the count (`Categorise (N)`); hides
+    entirely when the queue is empty.
+
+- **New endpoint `GET /api/transactions/uncategorised-categorise`**
+  — pre-loads the token-frequency map and the trigram candidate
+  pool once, scores every uncategorised row in JS, returns a
+  shaped list ready for the UI. Avoids the per-row full-table
+  scan that the import flow's batched pattern (#95) already
+  worked around.
+
+### Fixed
+- **Running-balance integration test was env-flaky.** The seeded
+  rows relied on `created_at` ties resolving lexicographically by
+  id, but `timestamp_ms`-resolution inserts on a slow worker
+  sometimes landed in DIFFERENT milliseconds, flipping the
+  lineage order and failing the per-row balance assertion. Pinned
+  `postedSeq` per row to make the lineage tuple
+  fully deterministic.
+
 ## 0.271.0 — 2026-05-25
 
 ### Fixed

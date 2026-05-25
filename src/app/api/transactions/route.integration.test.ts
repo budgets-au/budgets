@@ -74,9 +74,12 @@ describe("/api/transactions running balance (#92)", () => {
 
     // Insert in non-chronological order on purpose — the route's
     // ORDER BY tuple should still produce the correct cumulative sum
-    // regardless of physical insert order. `postedSeq` is left null
-    // so the COALESCE(...) fallback in the lineage tuple kicks in,
-    // and `created_at` becomes the tiebreaker for same-date rows.
+    // regardless of physical insert order. `postedSeq` is pinned per
+    // row (matching LEDGER's declaration order) so the lineage tuple
+    // is fully deterministic — relying on the `created_at` fallback
+    // tiebreaker is environment-sensitive (ties resolve differently
+    // depending on whether successive inserts land in the same
+    // millisecond, which varies across CI vs. local).
     const shuffled = [...LEDGER].reverse();
     for (const r of shuffled) {
       db.drizzleDb
@@ -87,6 +90,10 @@ describe("/api/transactions running balance (#92)", () => {
           date: r.date,
           amount: String(r.amount),
           payee: r.payee,
+          // LEDGER's declared order = canonical lineage order;
+          // index in array maps to postedSeq so the (date,
+          // postedSeq, …) tuple sorts predictably on ties.
+          postedSeq: LEDGER.findIndex((l) => l.id === r.id),
         })
         .run();
     }
@@ -118,12 +125,11 @@ describe("/api/transactions running balance (#92)", () => {
     const byId = new Map(rows.map((r) => [r.id, r]));
 
     // Lineage tuple: (date, COALESCE(posted_seq, 0),
-    // COALESCE(posted_at, created_at), id). With posted_seq and
-    // posted_at null, the fallback is created_at — but the rapid
-    // synchronous inserts land in the same millisecond, so
-    // created_at ties between t02 and t03. The final `id`
-    // tiebreaker resolves: lexicographic "t02" < "t03", so t02
-    // sorts first within the 2026-01-06 day:
+    // COALESCE(posted_at, created_at), id). Each seeded row has an
+    // explicit posted_seq (= its index in LEDGER), so the (date,
+    // posted_seq) prefix fully determines lineage order — no
+    // dependence on insert-time created_at, which varied between
+    // runs and made this assertion flaky:
     //   t01 → 1000 - 100              =  900
     //   t02 → 900  - 50               =  850
     //   t03 → 850  + 200              = 1050

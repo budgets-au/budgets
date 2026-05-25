@@ -1445,7 +1445,7 @@ export function CashflowReport({
         of doubling up with a wrapper-border line at the top. */}
     <div
       className={`overflow-auto rounded-lg border-x border-b max-h-[calc(100vh-220px)] mx-auto ${
-        monthAxis ? "max-w-7xl" : "max-w-3xl"
+        monthAxis ? "" : "max-w-3xl"
       }`}
     >
       <table className="w-full text-sm border-collapse">

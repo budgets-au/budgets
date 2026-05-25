@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.278.0 — 2026-05-26
+
+### Changed
+- **Cashflow report fills the screen on wide monitors.** Dropped
+  the `max-w-7xl` (1280 px) cap on the Cashflow tab's table
+  wrapper. The cap was added in 0.186 for column readability,
+  but with `w-[80px]` per-month cells the table grows by adding
+  cells, not by stretching them — so on a 1920+ px monitor users
+  were hitting horizontal scroll well before the viewport ran
+  out of room. Uncapped, additional months render natively up to
+  the viewport edge before any internal scroll kicks in.
+
+  Category-mode keeps its tighter `max-w-3xl` (768 px) cap — the
+  category table's wider per-row content still benefits from the
+  intentional narrowing.
+
 ## 0.277.0 — 2026-05-26
 
 ### Added

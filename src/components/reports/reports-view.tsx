@@ -104,8 +104,10 @@ interface RangePreset {
   to: string;
 }
 
-/** Build the eight popover options. Returned as 4 pairs so the
- * popover can render them in 2 columns (this / last) per row. */
+/** Build the eight paired popover options. Returned as 4 pairs so
+ * the popover can render them in 2 columns (this / last) per row.
+ * The "All" option is built separately by `buildAllPreset` because
+ * it has no "last" sibling and renders as a full-width row. */
 function buildRangePresets(now: Date): RangePreset[][] {
   const iso = (d: Date) => format(d, "yyyy-MM-dd");
   const prevMonth = subMonths(now, 1);
@@ -129,6 +131,24 @@ function buildRangePresets(now: Date): RangePreset[][] {
       { key: "lastFY", label: "Last Financial", from: iso(startOfFinancialYear(prevYear)), to: iso(endOfFinancialYear(prevYear)) },
     ],
   ];
+}
+
+/** "All" preset bounded by the actual MIN/MAX transaction date —
+ *  passing an unbounded range to the report endpoints would force
+ *  the monthly generators (cashflow, accounts-cashflow, etc.) to
+ *  enumerate empty buckets back to whatever sentinel was used.
+ *  Returns null when the ledger is empty, so the popover can omit
+ *  the option until there's data. */
+function buildAllPreset(
+  dateRange: { minDate: string | null; maxDate: string | null } | undefined,
+): RangePreset | null {
+  if (!dateRange?.minDate || !dateRange?.maxDate) return null;
+  return {
+    key: "all",
+    label: "All",
+    from: dateRange.minDate,
+    to: dateRange.maxDate,
+  };
 }
 
 import { CashflowReport } from "./cashflow-report";
@@ -264,6 +284,14 @@ export function ReportsView({
   const { ids: accountIds } = useAccountFilter();
   const accountIdsParam = accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
 
+  // Seeds the popover's "All" preset with the actual MIN/MAX
+  // ledger dates. Cheap (one indexed SQL aggregate); cached by
+  // SWR so it's a single round-trip per page entry.
+  const { data: dateRange } = useSwrJson<{
+    minDate: string | null;
+    maxDate: string | null;
+  }>("/api/transactions/date-range");
+
   const { data: catData = [] } = useSwrJson<CategoryRow[]>(
     `/api/reports?groupBy=category&from=${from}&to=${to}${accountIdsParam}`,
   );
@@ -310,7 +338,13 @@ export function ReportsView({
           <label className="text-xs text-muted-foreground block mb-1">
             Quick range
           </label>
-          <RangePresetPopover from={from} to={to} now={now} onApply={applyRange} />
+          <RangePresetPopover
+            from={from}
+            to={to}
+            now={now}
+            dateRange={dateRange}
+            onApply={applyRange}
+          />
         </div>
 
         {/* Print moved to the Topbar (left of the profile chip) in
@@ -553,19 +587,25 @@ function RangePresetPopover({
   from,
   to,
   now,
+  dateRange,
   onApply,
 }: {
   from: string;
   to: string;
   now: Date;
+  /** MIN/MAX transaction dates from `/api/transactions/date-range`,
+   *  used to bound the "All" preset. Undefined while in-flight or
+   *  null-bounded for an empty ledger — both cases omit the preset. */
+  dateRange?: { minDate: string | null; maxDate: string | null };
   onApply: (from: string, to: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const presetRows = buildRangePresets(now);
+  const allPreset = buildAllPreset(dateRange);
   // Active preset = the one whose computed from/to matches the
   // current state. Stable highlight after manual edits that happen
   // to land on a preset boundary too.
-  const allPresets = presetRows.flat();
+  const allPresets = [...presetRows.flat(), ...(allPreset ? [allPreset] : [])];
   const active = allPresets.find((p) => p.from === from && p.to === to);
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -603,6 +643,17 @@ function RangePresetPopover({
               />
             </Fragment>
           ))}
+          {allPreset && (
+            <PresetButton
+              preset={allPreset}
+              isActive={active?.key === allPreset.key}
+              wide
+              onPick={() => {
+                onApply(allPreset.from, allPreset.to);
+                setOpen(false);
+              }}
+            />
+          )}
         </div>
       </PopoverContent>
     </Popover>
@@ -613,16 +664,20 @@ function PresetButton({
   preset,
   isActive,
   onPick,
+  wide = false,
 }: {
   preset: RangePreset;
   isActive: boolean;
   onPick: () => void;
+  /** Span both columns of the grid — used by the "All" row that
+   *  sits below the 4×2 paired presets. */
+  wide?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onPick}
-      className={`text-left rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+      className={`${wide ? "col-span-2 text-center" : "text-left"} rounded-md px-3 py-2 text-xs font-medium transition-colors ${
         isActive
           ? "bg-indigo-600 text-white hover:bg-indigo-700"
           : "hover:bg-muted"

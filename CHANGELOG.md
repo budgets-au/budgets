@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.277.0 — 2026-05-26
+
+### Added
+- **"All" quick range on /reports.** New 9th preset in the
+  Quick-range popover, rendered as a single full-width button
+  below the 4×2 paired this/last grid. Bounded by the actual
+  earliest/latest transaction date so the report endpoints'
+  monthly generators (cashflow, accounts-cashflow, etc.) don't
+  enumerate empty buckets back to a sentinel.
+
+  Backed by a new tiny endpoint `/api/transactions/date-range`
+  returning `{ minDate, maxDate }` from `MIN()` / `MAX()`
+  aggregates. SWR-cached, one round-trip per /reports page
+  entry. When the ledger is empty (both bounds null) the preset
+  is omitted entirely.
+
 ## 0.276.0 — 2026-05-26
 
 ### Fixed

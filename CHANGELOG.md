@@ -9,6 +9,37 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.268.0 — 2026-05-25
+
+### Added
+- **Manual category sorting at every level via ↑/↓ row buttons.**
+  Previously categories sorted alphabetically (via the
+  default `sortOrder = 9999` tiebreaker on the
+  `categories_sort_idx`). The Settings → Categories manager
+  now exposes ↑ and ↓ buttons on each row — hover-visible on
+  desktop (`lg:opacity-0 lg:group-hover:opacity-100`),
+  always-visible on touch viewports per the
+  AGENTS.md hover-fallback convention. Click swaps the row's
+  `sortOrder` with the adjacent sibling at the same level
+  (works for top-level categories, subcategories, AND
+  sub-subcategories — the helper computes the sibling group
+  via `parentId + type`).
+
+  Persistence: each click does an optimistic state update
+  then PATCH `/api/categories/{id}` (the route's existing
+  `sortOrder` field) — no new endpoint, no schema change. On
+  first reorder within a sibling group that's still at the
+  default 9999, the group is renumbered with gaps of 10 so
+  subsequent reorders land in the fast-path (swap two
+  distinct integer values, two PATCHes, no other rows
+  touched). The drag-to-nest workflow continues to work as
+  before; ↑/↓ is just for sibling-order.
+
+  Drag-based sibling reorder was tried in 0.196.0 and reverted
+  because Safari's HTML5 drag was unreliable (stuck-drag
+  state, missing `dragend`). The button approach sidesteps
+  that entirely.
+
 ## 0.267.0 — 2026-05-25
 
 ### Fixed

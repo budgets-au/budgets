@@ -18,7 +18,7 @@ import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn, formatAUD } from "@/lib/utils";
-import { Plus, Trash2, ChevronDown, ChevronRight, Pencil, GripVertical } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, ChevronUp, Pencil, GripVertical } from "lucide-react";
 import type { Category, TaxConfig } from "@/db/schema";
 import { buildCategoryMeta } from "@/lib/category-path";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
@@ -41,10 +41,12 @@ const EMPTY_FORM: FormState = { name: "", type: "expense", color: COLORS[0], par
 
 // Drop targets: a category id (= nest the dragged row under it) or one
 // of the two section roots (= move to the top level of that section).
-// We previously also supported `before:` / `after:` for sibling reorder
-// but that drag mode was unreliable on Safari (stuck-drag state, missing
-// dragend events) so it was reverted; categories sort by their backfilled
-// sortOrder which mirrors the original alphabetical order.
+// Sibling reorder is handled by the ↑/↓ buttons in each row (see
+// `moveSibling` below) — a drag-based sibling reorder was tried in
+// 0.196.0 but was unreliable on Safari (stuck-drag state, missing
+// dragend events) so it was reverted. The buttons sidestep that
+// entirely while still letting the user customise order at every
+// level (top-level, subcategory, sub-subcategory).
 type DropTarget = string | "income-root" | "expense-root";
 
 export function CategoryManager({
@@ -83,8 +85,18 @@ export function CategoryManager({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<DropTarget | null>(null);
 
-  const parents = cats.filter((c) => !c.parentId);
-  const childrenOf = (parentId: string) => cats.filter((c) => c.parentId === parentId);
+  // Sort by sortOrder ASC then name ASC — same lineage the
+  // /api/categories list uses. Without this, optimistic state
+  // mutations would render in insertion order.
+  const sortSiblings = (rows: Category[]): Category[] =>
+    [...rows].sort(
+      (a, b) =>
+        (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) ||
+        a.name.localeCompare(b.name),
+    );
+  const parents = sortSiblings(cats.filter((c) => !c.parentId));
+  const childrenOf = (parentId: string) =>
+    sortSiblings(cats.filter((c) => c.parentId === parentId));
   const { meta: catMeta } = buildCategoryMeta(cats);
 
   // ── Drag helpers ──────────────────────────────────────────────────────────
@@ -171,6 +183,76 @@ export function CategoryManager({
         setDragOverTarget(null);
       },
     };
+  }
+
+  // ── Manual reorder (sibling level) ────────────────────────────
+  // Up/down arrow buttons on each row swap the row's `sortOrder`
+  // with its adjacent sibling. Works at all 3 levels — the
+  // sibling group is always rows that share the same `parentId`
+  // (and `type` at the top level).
+  //
+  // Two cases:
+  //   1. Siblings ALREADY have distinct `sortOrder` values
+  //      (i.e. the user has reordered before, or the seeding
+  //      assigned distinct values). Just swap the two affected
+  //      values — two PATCHes, no other rows touched.
+  //   2. Siblings still share the default (everyone at 9999).
+  //      Renumber the whole group to gaps of 10 based on the
+  //      visible order, then apply the swap. Parallel PATCH
+  //      every row in the group ONCE; subsequent reorders fall
+  //      into case 1.
+  async function moveSibling(catId: string, dir: "up" | "down") {
+    const cat = cats.find((c) => c.id === catId);
+    if (!cat) return;
+    const siblings = sortSiblings(
+      cats.filter((c) => c.parentId === cat.parentId && c.type === cat.type),
+    );
+    const idx = siblings.findIndex((s) => s.id === catId);
+    if (idx < 0) return;
+    if (dir === "up" && idx === 0) return;
+    if (dir === "down" && idx === siblings.length - 1) return;
+    const otherIdx = dir === "up" ? idx - 1 : idx + 1;
+
+    // Case 2: any two adjacent siblings share a sortOrder → renumber.
+    const needsRenumber = siblings.some(
+      (s, i) => i > 0 && s.sortOrder === siblings[i - 1].sortOrder,
+    );
+
+    const reordered = [...siblings];
+    [reordered[idx], reordered[otherIdx]] = [
+      reordered[otherIdx],
+      reordered[idx],
+    ];
+
+    const updates: Array<{ id: string; sortOrder: number }> = needsRenumber
+      ? // Renumber the whole group with gaps of 10 so future
+        // single-swap reorders stay in case 1.
+        reordered.map((c, i) => ({ id: c.id, sortOrder: i * 10 }))
+      : // Distinct values — swap the two affected rows.
+        [
+          { id: siblings[idx].id, sortOrder: siblings[otherIdx].sortOrder },
+          { id: siblings[otherIdx].id, sortOrder: siblings[idx].sortOrder },
+        ];
+
+    // Optimistic state update — visible reorder happens
+    // immediately. SWR-equivalent revalidation isn't wired here;
+    // we just trust the PATCHes to land.
+    const updateMap = new Map(updates.map((u) => [u.id, u.sortOrder]));
+    setCats((prev) =>
+      prev.map((c) =>
+        updateMap.has(c.id) ? { ...c, sortOrder: updateMap.get(c.id)! } : c,
+      ),
+    );
+
+    await Promise.all(
+      updates.map((u) =>
+        fetch(`/api/categories/${u.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sortOrder: u.sortOrder }),
+        }),
+      ),
+    );
   }
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -294,6 +376,19 @@ export function CategoryManager({
     const signedAmount = txAmounts[cat.id] ?? 0;
     const displayAmount = Math.abs(signedAmount);
 
+    // Sibling-position context for the up/down reorder buttons.
+    // Hide ↑ at the top and ↓ at the bottom of the group.
+    const siblings = cat.parentId
+      ? children // unused — cat is a parent here
+      : null;
+    void siblings;
+    const sameLevel = sortSiblings(
+      cats.filter((c) => c.parentId === cat.parentId && c.type === cat.type),
+    );
+    const siblingIdx = sameLevel.findIndex((s) => s.id === cat.id);
+    const canMoveUp = siblingIdx > 0;
+    const canMoveDown = siblingIdx >= 0 && siblingIdx < sameLevel.length - 1;
+
     return (
       <div key={cat.id}>
         <div
@@ -321,7 +416,10 @@ export function CategoryManager({
           // Safari is doing to multi-track templates with `minmax()`.
           style={{
             display: "grid",
-            gridTemplateColumns: "16px minmax(0, 1fr) 3rem 5rem 2rem",
+            // 7 cols: drag handle | reorder ↑↓ | name | kind chip
+            //         | amount / tx-count | edit
+            // ↑↓ column is hover-visible (lg:opacity-0 lg:group-hover:opacity-100)
+            gridTemplateColumns: "16px 1.25rem minmax(0, 1fr) 3rem 5rem 2rem",
             alignItems: "center",
             columnGap: "0.5rem",
           }}
@@ -342,6 +440,45 @@ export function CategoryManager({
             title="Drag to move (or drop another row onto this one to nest)"
           >
             <GripVertical className="h-4 w-4" />
+          </span>
+
+          {/* Col 2: ↑↓ reorder buttons. Hover-visible on desktop
+              (lg:opacity-0 lg:group-hover:opacity-100 per AGENTS.md
+              touch-fallback convention — touch viewports without
+              :hover see them always). Each click swaps sortOrder
+              with the adjacent sibling via the moveSibling helper. */}
+          <span
+            className="flex flex-col items-center justify-center -my-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+            // Inline style so the column has predictable height
+            // and the two icons stack tightly without a flex gap.
+            style={{ lineHeight: 0 }}
+          >
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void moveSibling(cat.id, "up");
+              }}
+              disabled={!canMoveUp}
+              className="h-3.5 w-4 flex items-center justify-center text-muted-foreground/70 hover:text-foreground disabled:opacity-0 disabled:pointer-events-none"
+              aria-label={`Move ${cat.name} up`}
+              title="Move up"
+            >
+              <ChevronUp className="h-3 w-3" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void moveSibling(cat.id, "down");
+              }}
+              disabled={!canMoveDown}
+              className="h-3.5 w-4 flex items-center justify-center text-muted-foreground/70 hover:text-foreground disabled:opacity-0 disabled:pointer-events-none"
+              aria-label={`Move ${cat.name} down`}
+              title="Move down"
+            >
+              <ChevronDown className="h-3 w-3" />
+            </button>
           </span>
 
           {/* Col 2: indent + chevron + dot + name (link). */}

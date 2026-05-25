@@ -359,6 +359,12 @@ export function ImportView() {
   const confirmFn = useConfirm();
   const fileNameForPrompt = file?.name ?? null;
   useEffect(() => {
+    // Uncat mode synthesises `data.format = "uncategorised"` to keep
+    // the UI shell happy, but there's no real CSV/OFX/QIF import
+    // happening — the commit path PATCHes existing rows via
+    // /api/transactions/bulk. The format-check + cross-format hash
+    // warning is irrelevant; suppress it entirely.
+    if (isUncat) return;
     const fmt = data?.format;
     if (!fmt) return;
     if (promptedFormatRef.current === fmt) return;
@@ -396,7 +402,7 @@ export function ImportView() {
     return () => {
       cancelled = true;
     };
-  }, [data?.format, fileNameForPrompt, confirmFn]);
+  }, [data?.format, fileNameForPrompt, confirmFn, isUncat]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

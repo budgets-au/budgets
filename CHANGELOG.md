@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.274.0 — 2026-05-26
+
+### Fixed
+- **"First UNCATEGORISED import" confirm dialog popped on entry to
+  `/import?mode=uncat`.** The first-time-format guard runs in a
+  `useEffect` keyed off `data.format`, which the uncat-mode entry
+  point synthesises as `"uncategorised"` to keep the rest of the
+  view happy. That synthesised string hit
+  `/api/import/format-check`, which returned `formatNewGlobally:
+  true` (correct — there are no "uncategorised" format imports in
+  the DB), and the confirm dialog popped with the cross-format-
+  hash warning that's irrelevant in this mode (the commit path
+  PATCHes existing rows; no insert, no hashes). Now the effect
+  short-circuits when `isUncat`.
+
 ## 0.273.0 — 2026-05-26
 
 ### Changed

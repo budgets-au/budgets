@@ -13,6 +13,7 @@ const updateSchema = z.object({
   accountId: z.string().uuid().nullable().optional(),
   payee: z.string().optional(),
   description: z.string().optional(),
+  notes: z.string().nullable().optional(),
   amount: numericString.optional(),
   amountMin: numericString.nullable().optional(),
   type: z.enum(["income", "expense", "transfer"]).optional(),

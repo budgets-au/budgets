@@ -331,6 +331,12 @@ export const scheduledTransactions = sqliteTable(
   }),
   payee: text("payee"),
   description: text("description"),
+  /** Free-form note attached via the popover icon on the scheduled
+   *  list row. Distinct from `description` (which feeds the
+   *  payee-fallback display when no payee is set); `notes` is the
+   *  user's own annotation — gotchas, why the schedule exists, what
+   *  to remember when it's matched. Null when empty. */
+  notes: text("notes"),
   amount: text("amount").notNull(),
   // Optional lower bound for variable-amount schedules (utilities, energy
   // bills, etc.). NULL → single-amount mode (matching uses ±$0.01 tolerance,

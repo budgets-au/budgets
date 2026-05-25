@@ -113,6 +113,13 @@
       "when": 1779700000000,
       "tag": "0015_bank_balances",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1779800000000,
+      "tag": "0016_scheduled_transactions_notes",
+      "breakpoints": true
     }
   ]
 }

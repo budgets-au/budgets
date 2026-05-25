@@ -14,6 +14,7 @@ export default async function ScheduledPage() {
       kind: scheduledTransactions.kind,
       payee: scheduledTransactions.payee,
       description: scheduledTransactions.description,
+      notes: scheduledTransactions.notes,
       amount: scheduledTransactions.amount,
       amountMin: scheduledTransactions.amountMin,
       type: scheduledTransactions.type,

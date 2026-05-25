@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.275.0 — 2026-05-26
+
+### Added
+- **Notes on scheduled transactions + budgets.** New `notes`
+  column on `scheduled_transactions` (migration `0016`) plus a
+  popover-based editor surfaced as a sticky-note icon in the
+  scheduled list row. Icon colour signals state:
+  - Muted, hover-revealed when the row has no note.
+  - Always-visible indigo when content is present.
+
+  Click → popover with a textarea + Cancel / Save. ⌘/Ctrl+Enter
+  saves; Esc reverts and closes. Empty save clears the column
+  (icon flips back to muted). PATCHes `/api/scheduled/[id]` with
+  the new field; no edit-form change — the icon is the only way
+  in, per the user's request to keep the create/edit form lean.
+
 ## 0.274.0 — 2026-05-26
 
 ### Fixed

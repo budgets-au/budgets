@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { Trash2, ChevronUp, ChevronDown, GitBranch } from "lucide-react";
+import { ScheduledNotesPopover } from "@/components/scheduled/scheduled-notes-popover";
+import { mutate as swrMutate } from "swr";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -48,6 +50,7 @@ interface ScheduledRow {
   kind: string;
   payee: string | null;
   description: string | null;
+  notes: string | null;
   amount: string;
   amountMin: string | null;
   type: string;
@@ -1259,25 +1262,37 @@ export function ScheduledListView({
             {totalWeekly === 0 ? "—" : `${formatAUD(totalWeekly).replace("A$", "$")}/wk`}
           </td>
         )}
-        <td className="pl-1 pr-2 py-2 w-8 text-right">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setConfirmDelete({
-                ids: g.members.map((m) => m.id),
-                label:
-                  g.members.length === 1
-                    ? primary.payee || primary.description || "this entry"
-                    : `${g.members.length} schedules in this group`,
-              });
-            }}
-            className="lg:opacity-0 lg:group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-600"
-            title="Delete group"
-            aria-label="Delete scheduled group"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+        <td className="pl-1 pr-2 py-2 w-14 text-right whitespace-nowrap">
+          <div className="inline-flex items-center gap-0.5">
+            <ScheduledNotesPopover
+              scheduledId={primary.id}
+              notes={primary.notes}
+              onSaved={() => {
+                // Refresh the SWR-cached list so the icon reflects
+                // the new value on this row (and stays in sync if
+                // the user opens the popover again).
+                void swrMutate("/api/scheduled");
+              }}
+            />
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmDelete({
+                  ids: g.members.map((m) => m.id),
+                  label:
+                    g.members.length === 1
+                      ? primary.payee || primary.description || "this entry"
+                      : `${g.members.length} schedules in this group`,
+                });
+              }}
+              className="lg:opacity-0 lg:group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-600"
+              title="Delete group"
+              aria-label="Delete scheduled group"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </td>
       </tr>
       {/* Mobile-only second row: full payee on its own line, spanning all

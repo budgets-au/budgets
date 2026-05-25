@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.279.0 — 2026-05-26
+
+### Changed
+- **Cashflow and Category reports no longer lock to viewport
+  height.** Dropped the `max-h-[calc(100vh-220px)]` cap on the
+  shared table wrapper. With the cap, the table got an inner
+  scrollbar at the wrapper boundary as soon as the row count
+  exceeded one screen — annoying because the rest of the page is
+  static and the natural place for vertical scroll is the page
+  itself. Uncapped, the table grows to its natural height and the
+  page handles scrolling normally. `overflow-auto` stays so
+  horizontal scroll still kicks in when there are more months
+  than the viewport can fit (the column-add behaviour from 0.278).
+  Both views share the wrapper because Category-mode is just
+  `<CashflowReport monthAxis={false} />`.
+
 ## 0.278.0 — 2026-05-26
 
 ### Changed

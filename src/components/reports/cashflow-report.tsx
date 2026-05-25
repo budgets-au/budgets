@@ -1444,7 +1444,7 @@ export function CashflowReport({
         the split visually at the BOTTOM of the header cells instead
         of doubling up with a wrapper-border line at the top. */}
     <div
-      className={`overflow-auto rounded-lg border-x border-b max-h-[calc(100vh-220px)] mx-auto ${
+      className={`overflow-auto rounded-lg border-x border-b mx-auto ${
         monthAxis ? "" : "max-w-3xl"
       }`}
     >

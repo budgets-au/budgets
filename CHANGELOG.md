@@ -9,6 +9,40 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.276.0 — 2026-05-26
+
+### Fixed
+- **/transactions and /import?mode=uncat slow first-load past ~5k
+  transactions.** Two issues with one shared cause.
+
+  - The /transactions topbar's "Categorise (N)" badge fetched
+    `/api/transactions/uncategorised-categorise` purely to read
+    `result.length`. That endpoint runs the **full trigram
+    suggester pipeline** for every uncategorised row — token-
+    frequency table load + ~2.4k-candidate pool + a sequential
+    `await suggestCategoryByHistory(...)` per row — and ships
+    back a ~2 MB JSON payload the badge never inspected past
+    `length`. New `/api/transactions/uncategorised-count`
+    endpoint runs a single `SELECT COUNT(*) WHERE category_id IS
+    NULL` and returns `{ count }`. The topbar button switches to
+    it; first-paint cost drops from tens-of-seconds to one
+    cheap round-trip.
+
+  - The categorise endpoint itself had no `LIMIT` — opening
+    `/import?mode=uncat` with 5k+ uncategorised rows loaded
+    them all and trigram-scored them all up-front. Now paged:
+    `?limit=` / `?offset=` (defaults 500, capped at 2000) +
+    a new `{ rows, total, hasMore, limit, offset }` envelope.
+    ImportView consumes the envelope, shows
+    `Showing N of TOTAL uncategorised · Load next 500` above the
+    table, and concatenates the next page when clicked. The
+    sequential suggester loop is fine at N=500 (~1 s of trigram
+    work); the win was bounding N.
+
+  Integration tests pin the count endpoint shape and the
+  envelope contract (default limit, offset paging, LIMIT_MAX
+  ceiling).
+
 ## 0.275.0 — 2026-05-26
 
 ### Added

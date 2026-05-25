@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { accounts, categories, transactions } from "@/db/schema";
-import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { withAuth } from "@/lib/api/route-guards";
 import {
   loadTokenFreq,
   normalizePayee,
   suggestCategoryByHistory,
 } from "@/lib/categorize";
+
+/** Server-side cap so the trigram pipeline + JSON payload stay
+ *  bounded even with thousands of uncategorised rows. The UI
+ *  pages through with `?offset=...` as the operator works through
+ *  the queue. */
+const DEFAULT_LIMIT = 500;
+const LIMIT_MAX = 2000;
 
 /** Row shape consumed by `/transactions/categorise` — the "bulk
  *  fix uncategorised" companion to the CSV import flow.
@@ -36,16 +43,50 @@ export interface UncategorisedRow {
   suggestedSupport: number | null;
 }
 
-/** GET /api/transactions/uncategorised-categorise — load every
- *  uncategorised transaction with a category suggestion attached.
+export interface UncategorisedResponse {
+  rows: UncategorisedRow[];
+  /** Total uncategorised rows in the DB — the UI shows
+   *  "Showing N of TOTAL" when paged. */
+  total: number;
+  /** True when `offset + rows.length < total`; the UI uses this
+   *  to decide whether to render "Load next N". */
+  hasMore: boolean;
+  /** Echoed so the client can confirm the cap it asked for
+   *  matches what came back. */
+  limit: number;
+  offset: number;
+}
+
+/** GET /api/transactions/uncategorised-categorise — load a page of
+ *  uncategorised transactions, each with a category suggestion
+ *  attached.
  *
  *  Pre-loads the token-frequency map and the trigram candidate pool
  *  ONCE, then scores every uncategorised row in JS — the same
  *  bulk-pattern `/api/import/categorise` uses (#95) to avoid one
  *  full-table scan per row.
- */
-export const GET = withAuth(async () => {
-  // Fetch uncategorised txns + their account names in one go.
+ *
+ *  Paged via `?limit=` / `?offset=` (defaults 500/0, max 2000) so
+ *  the trigram pipeline and the JSON payload stay bounded; the
+ *  /import?mode=uncat view pages through with "Load next N". */
+export const GET = withAuth(async (request) => {
+  const { searchParams } = new URL(request.url);
+  const requestedLimit =
+    parseInt(searchParams.get("limit") ?? `${DEFAULT_LIMIT}`) || DEFAULT_LIMIT;
+  const limit = Math.min(LIMIT_MAX, Math.max(1, requestedLimit));
+  const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0") || 0);
+
+  // Total uncategorised count — cheap; same shape as the dedicated
+  // count endpoint, computed here so the client doesn't need a
+  // second round-trip to render "Showing N of TOTAL".
+  const [totalRow] = await db
+    .select({ count: sql<number>`count(*)`.as("count") })
+    .from(transactions)
+    .where(isNull(transactions.categoryId));
+  const total = Number(totalRow?.count ?? 0);
+
+  // Fetch one page of uncategorised txns + their account names in
+  // one go.
   const rows = await db
     .select({
       id: transactions.id,
@@ -59,10 +100,19 @@ export const GET = withAuth(async () => {
     .from(transactions)
     .leftJoin(accounts, eq(transactions.accountId, accounts.id))
     .where(isNull(transactions.categoryId))
-    .orderBy(asc(transactions.date), asc(transactions.id));
+    .orderBy(asc(transactions.date), asc(transactions.id))
+    .limit(limit)
+    .offset(offset);
 
   if (rows.length === 0) {
-    return NextResponse.json([] as UncategorisedRow[]);
+    const empty: UncategorisedResponse = {
+      rows: [],
+      total,
+      hasMore: false,
+      limit,
+      offset,
+    };
+    return NextResponse.json(empty);
   }
 
   // Pre-warm shared inputs — same pattern as the import categorise
@@ -137,5 +187,12 @@ export const GET = withAuth(async () => {
   // their eyes open. Rows with no suggestion sink to the bottom.
   out.sort((a, b) => (b.suggestedScore ?? -1) - (a.suggestedScore ?? -1));
 
-  return NextResponse.json(out);
+  const response: UncategorisedResponse = {
+    rows: out,
+    total,
+    hasMore: offset + out.length < total,
+    limit,
+    offset,
+  };
+  return NextResponse.json(response);
 });

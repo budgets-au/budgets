@@ -227,6 +227,16 @@ export function ImportView() {
 
   const [file, setFile] = useState<File | null>(null);
 
+  /** Uncat mode pages through the queue in chunks of UNCAT_PAGE
+   *  to keep the trigram pipeline + JSON payload bounded. We track
+   *  the server's `total` so the banner can show "Showing N of
+   *  TOTAL", and how many rows we've consumed so the next "Load
+   *  next" round-trip asks for the right offset. */
+  const UNCAT_PAGE = 500;
+  const [uncatTotal, setUncatTotal] = useState(0);
+  const [uncatOffset, setUncatOffset] = useState(0);
+  const [uncatHasMore, setUncatHasMore] = useState(false);
+
   const runCategorise = useCallback(async (target: File) => {
     setLoading(true);
     setExpandedKey(null);
@@ -255,81 +265,106 @@ export function ImportView() {
     setLoading(false);
   }, []);
 
-  /** Uncategorised-mode entry: fetch existing DB rows that still
+  /** Uncategorised-mode entry: fetch a page of DB rows that still
    *  have no category, score each through the same trigram
    *  suggester the CSV path uses, and synthesise a TestResponse so
    *  the rest of the view renders unchanged. The endpoint already
-   *  returns the right per-row shape — we just map field names. */
-  const loadUncategorised = useCallback(async () => {
-    setLoading(true);
-    setExpandedKey(null);
-    const res = await fetch(
-      "/api/transactions/uncategorised-categorise",
-    );
-    if (!res.ok) {
-      toast.error("Failed to load uncategorised transactions");
+   *  returns the right per-row shape — we just map field names.
+   *
+   *  `append=false` (default) replaces the current data — used on
+   *  mount and after a commit clears the visible rows.
+   *  `append=true` concatenates onto the existing rows — used by
+   *  the "Load next N" banner button. */
+  const loadUncategorised = useCallback(
+    async ({
+      append = false,
+      offset = 0,
+    }: { append?: boolean; offset?: number } = {}) => {
+      setLoading(true);
+      setExpandedKey(null);
+      const res = await fetch(
+        `/api/transactions/uncategorised-categorise?limit=${UNCAT_PAGE}&offset=${offset}`,
+      );
+      if (!res.ok) {
+        toast.error("Failed to load uncategorised transactions");
+        setLoading(false);
+        return;
+      }
+      interface UncatRow {
+        id: string;
+        date: string;
+        amount: string;
+        payee: string | null;
+        normalizedPayee: string | null;
+        accountId: string;
+        accountName: string;
+        suggestedCategoryId: string | null;
+        suggestedCategoryName: string | null;
+        suggestedScore: number | null;
+        suggestedSupport: number | null;
+      }
+      interface UncatEnvelope {
+        rows: UncatRow[];
+        total: number;
+        hasMore: boolean;
+        limit: number;
+        offset: number;
+      }
+      const envelope = (await res.json()) as UncatEnvelope;
+      const dbRows = envelope.rows;
+      const synthRows: TestResultRow[] = dbRows.map((r) => ({
+        date: r.date,
+        amount: r.amount,
+        payee: r.payee ?? "",
+        normalizedPayee: r.normalizedPayee ?? "",
+        // Reuse the DB row id as both importHash (table key + expand
+        // toggle) AND rawId (expand-panel footer) — uniqueness is the
+        // only thing the table needs.
+        importHash: r.id,
+        rawId: r.id,
+        resolvedAccountId: r.accountId,
+        resolvedAccountName: r.accountName,
+        resolvedAccountVia: null,
+        categoryId: r.suggestedCategoryId,
+        categoryName: r.suggestedCategoryName,
+        method: r.suggestedScore != null ? "trigram" : "none",
+        score: r.suggestedScore ?? undefined,
+        support: r.suggestedSupport ?? undefined,
+        // matchType undefined => rendered as a "new" row (muted bg),
+        // matching the visual the user wanted preserved.
+      }));
+      setData((prev) => {
+        const mergedRows =
+          append && prev ? [...prev.rows, ...synthRows] : synthRows;
+        return {
+          format: "uncategorised",
+          total: mergedRows.length,
+          summary: {
+            rule: 0,
+            trigram: mergedRows.filter((r) => r.method === "trigram").length,
+            none: mergedRows.filter((r) => r.method === "none").length,
+          },
+          qifAccountSummary: [],
+          fieldStats: {
+            withBankCategory: 0,
+            withCheckNum: 0,
+            withCleared: 0,
+            withSplits: 0,
+            withTrnType: 0,
+            withRefNum: 0,
+            withRunningBalance: 0,
+          },
+          rows: mergedRows,
+        };
+      });
+      setUncatTotal(envelope.total);
+      setUncatOffset(envelope.offset + dbRows.length);
+      setUncatHasMore(envelope.hasMore);
+      if (!append) setAccountFilter("all");
       setLoading(false);
-      return;
-    }
-    interface UncatRow {
-      id: string;
-      date: string;
-      amount: string;
-      payee: string | null;
-      normalizedPayee: string | null;
-      accountId: string;
-      accountName: string;
-      suggestedCategoryId: string | null;
-      suggestedCategoryName: string | null;
-      suggestedScore: number | null;
-      suggestedSupport: number | null;
-    }
-    const dbRows = (await res.json()) as UncatRow[];
-    const synthRows: TestResultRow[] = dbRows.map((r) => ({
-      date: r.date,
-      amount: r.amount,
-      payee: r.payee ?? "",
-      normalizedPayee: r.normalizedPayee ?? "",
-      // Reuse the DB row id as both importHash (table key + expand
-      // toggle) AND rawId (expand-panel footer) — uniqueness is the
-      // only thing the table needs.
-      importHash: r.id,
-      rawId: r.id,
-      resolvedAccountId: r.accountId,
-      resolvedAccountName: r.accountName,
-      resolvedAccountVia: null,
-      categoryId: r.suggestedCategoryId,
-      categoryName: r.suggestedCategoryName,
-      method: r.suggestedScore != null ? "trigram" : "none",
-      score: r.suggestedScore ?? undefined,
-      support: r.suggestedSupport ?? undefined,
-      // matchType undefined => rendered as a "new" row (muted bg),
-      // matching the visual the user wanted preserved.
-    }));
-    const synth: TestResponse = {
-      format: "uncategorised",
-      total: synthRows.length,
-      summary: {
-        rule: 0,
-        trigram: synthRows.filter((r) => r.method === "trigram").length,
-        none: synthRows.filter((r) => r.method === "none").length,
-      },
-      qifAccountSummary: [],
-      fieldStats: {
-        withBankCategory: 0,
-        withCheckNum: 0,
-        withCleared: 0,
-        withSplits: 0,
-        withTrnType: 0,
-        withRefNum: 0,
-        withRunningBalance: 0,
-      },
-      rows: synthRows,
-    };
-    setData(synth);
-    setAccountFilter("all");
-    setLoading(false);
-  }, []);
+    },
+    [],
+  );
 
   // Auto-load on mount when in uncat mode. Plain effect, no
   // dependencies — `loadUncategorised` is stable (useCallback deps
@@ -573,43 +608,77 @@ export function ImportView() {
                     </p>
                   )}
                   <p className="text-xs text-muted-foreground mt-1">
-                    <span className="tabular-nums">{data.total}</span> row
-                    {data.total === 1 ? "" : "s"}
-                    {(newRowCount > 0 || duplicateCount > 0) && " · "}
-                    {newRowCount > 0 && (
-                      <span className="text-amber-700 dark:text-amber-300">
-                        <span className="font-medium tabular-nums">
-                          {newRowCount}
-                        </span>{" "}
-                        new
-                      </span>
-                    )}
-                    {newRowCount > 0 && duplicateCount > 0 && (
-                      <span> · </span>
-                    )}
-                    {duplicateCount > 0 && (
-                      <span className="text-emerald-700 dark:text-emerald-300">
-                        <span className="font-medium tabular-nums">
-                          {duplicateCount}
-                        </span>{" "}
-                        duplicate{duplicateCount === 1 ? "" : "s"}
-                      </span>
-                    )}
-                    {hiddenIdenticalCount > 0 && (
-                      <span className="text-muted-foreground/60">
-                        {" · "}
-                        <span className="tabular-nums">
-                          {hiddenIdenticalCount}
-                        </span>{" "}
-                        identical{" "}
-                        <button
-                          type="button"
-                          onClick={() => setShowIdentical((v) => !v)}
-                          className="underline decoration-dotted underline-offset-2 hover:text-foreground"
-                        >
-                          {showIdentical ? "hide" : "show"}
-                        </button>
-                      </span>
+                    {isUncat ? (
+                      <>
+                        Showing{" "}
+                        <span className="tabular-nums">{data.total}</span> of{" "}
+                        <span className="tabular-nums">{uncatTotal}</span>{" "}
+                        uncategorised
+                        {uncatHasMore && (
+                          <>
+                            {" · "}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void loadUncategorised({
+                                  append: true,
+                                  offset: uncatOffset,
+                                })
+                              }
+                              disabled={loading}
+                              className="underline decoration-dotted underline-offset-2 hover:text-foreground disabled:opacity-50"
+                            >
+                              {loading
+                                ? "Loading…"
+                                : `Load next ${Math.min(
+                                    UNCAT_PAGE,
+                                    uncatTotal - data.total,
+                                  )}`}
+                            </button>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="tabular-nums">{data.total}</span> row
+                        {data.total === 1 ? "" : "s"}
+                        {(newRowCount > 0 || duplicateCount > 0) && " · "}
+                        {newRowCount > 0 && (
+                          <span className="text-amber-700 dark:text-amber-300">
+                            <span className="font-medium tabular-nums">
+                              {newRowCount}
+                            </span>{" "}
+                            new
+                          </span>
+                        )}
+                        {newRowCount > 0 && duplicateCount > 0 && (
+                          <span> · </span>
+                        )}
+                        {duplicateCount > 0 && (
+                          <span className="text-emerald-700 dark:text-emerald-300">
+                            <span className="font-medium tabular-nums">
+                              {duplicateCount}
+                            </span>{" "}
+                            duplicate{duplicateCount === 1 ? "" : "s"}
+                          </span>
+                        )}
+                        {hiddenIdenticalCount > 0 && (
+                          <span className="text-muted-foreground/60">
+                            {" · "}
+                            <span className="tabular-nums">
+                              {hiddenIdenticalCount}
+                            </span>{" "}
+                            identical{" "}
+                            <button
+                              type="button"
+                              onClick={() => setShowIdentical((v) => !v)}
+                              className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                            >
+                              {showIdentical ? "hide" : "show"}
+                            </button>
+                          </span>
+                        )}
+                      </>
                     )}
                   </p>
                 </div>

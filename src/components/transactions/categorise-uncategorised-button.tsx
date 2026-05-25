@@ -12,18 +12,17 @@ import { cn } from "@/lib/utils";
  *  are already in the DB. Badge shows the count so the operator
  *  can see at-a-glance whether there's work to do. */
 export function CategoriseUncategorisedButton() {
-  // Use the categorise endpoint as the count source — it already
-  // counts uncategorised rows (and runs the suggester, which is
-  // wasted for the topbar count). For the topbar we just want the
-  // length; a cheaper dedicated count endpoint isn't worth a new
-  // route until this proves to be a hot path.
-  const { data } = useSwrJson<Array<unknown>>(
-    "/api/transactions/uncategorised-categorise",
+  // Dedicated cheap COUNT(*) endpoint — the full categorise
+  // pipeline (trigram suggestions + 2 MB JSON payload) is wasted
+  // work when we only want the badge number, and dominates
+  // /transactions first-paint once the queue gets large.
+  const { data } = useSwrJson<{ count: number }>(
+    "/api/transactions/uncategorised-count",
     // Don't auto-revalidate this in the background — the user
     // clicking the button is the trigger to refresh.
     { revalidateOnFocus: false, revalidateIfStale: false },
   );
-  const count = data?.length ?? 0;
+  const count = data?.count ?? 0;
 
   // Hide the button entirely when there's nothing to do; the user
   // sees a clean topbar instead of a misleading "(0)" badge.

@@ -8,7 +8,6 @@ import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { Trash2, ChevronUp, ChevronDown, GitBranch } from "lucide-react";
 import { ScheduledNotesPopover } from "@/components/scheduled/scheduled-notes-popover";
-import { mutate as swrMutate } from "swr";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -1268,10 +1267,12 @@ export function ScheduledListView({
               scheduledId={primary.id}
               notes={primary.notes}
               onSaved={() => {
-                // Refresh the SWR-cached list so the icon reflects
-                // the new value on this row (and stays in sync if
-                // the user opens the popover again).
-                void swrMutate("/api/scheduled");
+                // /scheduled/page.tsx is a Server Component — rows
+                // arrive as a prop, not from SWR — so invalidating
+                // /api/scheduled does nothing. `router.refresh()`
+                // re-runs the server fetch so the icon flips colour
+                // on this tick instead of waiting for a hard reload.
+                router.refresh();
               }}
             />
             <button

@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.281.0 — 2026-05-26
+
+### Fixed
+- **Scheduled-row note icon didn't flip colour until page
+  refresh.** `ScheduledNotesPopover` saved the new value via
+  PATCH but then called `swrMutate("/api/scheduled")` —
+  invalidating an SWR cache nobody read, because
+  `/scheduled/page.tsx` is a Server Component that passes rows
+  as a prop (not a client-side SWR fetch). The trigger's
+  `notes` prop therefore stayed stale until a hard reload
+  re-ran the server fetch. Switched the success callback to
+  `router.refresh()` — the canonical pattern in this codebase
+  (EditAccountDialog, ReconcileDialog) for "re-run the parent
+  Server Component's fetch after a write." Icon now flips
+  muted→indigo on the same tick the save completes.
+
 ## 0.280.0 — 2026-05-26
 
 ### Added

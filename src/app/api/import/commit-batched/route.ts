@@ -15,6 +15,7 @@ import { pairTransfersInWindow } from "@/lib/transfer-match";
 import { diffDaysISO } from "@/lib/utils";
 import { withAuth } from "@/lib/api/route-guards";
 import { parseJsonBody } from "@/lib/api/parse-body";
+import { chunkedQuery, chunkedExec } from "@/lib/api/chunked";
 
 const rowSchema = z.object({
   /** Where this row should land. Required — rows without a resolved
@@ -97,21 +98,27 @@ async function runCommit(request: Request) {
   const newHashes = rows.map((r) => r.importHash);
   const oldHashes = rows.map((r) => oldImportHash(r));
   const lookupHashes = [...new Set([...newHashes, ...oldHashes])];
-  const existing = lookupHashes.length
-    ? await db
-        .select({
-          id: transactions.id,
-          importHash: transactions.importHash,
-          accountId: transactions.accountId,
-          categoryId: transactions.categoryId,
-          type: transactions.type,
-          balance: transactions.balance,
-          postedAt: transactions.postedAt,
-          postedSeq: transactions.postedSeq,
-        })
-        .from(transactions)
-        .where(inArray(transactions.importHash, lookupHashes))
-    : [];
+  // SQLite's SQLITE_MAX_VARIABLE_NUMBER cap is 32766 in this build.
+  // A large single-account CSV import generates up to 2 hashes per
+  // input row before dedup, so a 20k-row file would push 40k params
+  // through one inArray and 500 the request with "too many SQL
+  // variables". chunkedQuery splits the lookup into 5000-id slices
+  // (single-column inArray = 1 param per id) — well under the cap.
+  const existing = await chunkedQuery(lookupHashes, 5000, (slice) =>
+    db
+      .select({
+        id: transactions.id,
+        importHash: transactions.importHash,
+        accountId: transactions.accountId,
+        categoryId: transactions.categoryId,
+        type: transactions.type,
+        balance: transactions.balance,
+        postedAt: transactions.postedAt,
+        postedSeq: transactions.postedSeq,
+      })
+      .from(transactions)
+      .where(inArray(transactions.importHash, slice)),
+  );
   const existingByHash = new Map(existing.map((e) => [e.importHash, e]));
   const claimedOldHashes = new Set<string>();
 
@@ -402,30 +409,37 @@ async function runCommit(request: Request) {
     }
 
     if (remainingToInsert.length > 0) {
-      await db.insert(transactions).values(
-        remainingToInsert.map((r) => {
-          const normalized = r.payee ? normalizePayee(r.payee) : null;
-          return {
-            accountId,
-            date: r.date,
-            amount: r.amount,
-            payee: r.payee,
-            normalizedPayee: normalized,
-            matchPayee: deriveMatchPayee(normalized, tokenFreq),
-            description: r.description,
-            categoryId: r.categoryId ?? null,
-            importHash: r.importHash,
-            importLogId: log.id,
-            postedAt: r.postedAt ? new Date(r.postedAt) : null,
-            // Offset the parser's per-file 0..N-1 by the account's
-            // current max+1 so postedSeq stays unique across imports.
-            // Relative order within the file is preserved (constant
-            // offset), so intra-day bank order still wins.
-            postedSeq: r.postedSeq != null ? r.postedSeq + offset : null,
-            type: r.type ?? null,
-            balance: r.balance ?? null,
-          };
-        }),
+      // ~15 fields per row × N rows = total bound parameters.
+      // SQLITE_MAX_VARIABLE_NUMBER caps the statement at 32766 in
+      // this build; 1500 rows × 15 fields = 22500 leaves headroom.
+      // Without chunking a single-account >2200-row CSV 500's the
+      // request with "too many SQL variables".
+      await chunkedExec(remainingToInsert, 1500, (slice) =>
+        db.insert(transactions).values(
+          slice.map((r) => {
+            const normalized = r.payee ? normalizePayee(r.payee) : null;
+            return {
+              accountId,
+              date: r.date,
+              amount: r.amount,
+              payee: r.payee,
+              normalizedPayee: normalized,
+              matchPayee: deriveMatchPayee(normalized, tokenFreq),
+              description: r.description,
+              categoryId: r.categoryId ?? null,
+              importHash: r.importHash,
+              importLogId: log.id,
+              postedAt: r.postedAt ? new Date(r.postedAt) : null,
+              // Offset the parser's per-file 0..N-1 by the account's
+              // current max+1 so postedSeq stays unique across imports.
+              // Relative order within the file is preserved (constant
+              // offset), so intra-day bank order still wins.
+              postedSeq: r.postedSeq != null ? r.postedSeq + offset : null,
+              type: r.type ?? null,
+              balance: r.balance ?? null,
+            };
+          }),
+        ),
       );
     }
     imported += group.length;

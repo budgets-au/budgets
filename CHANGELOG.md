@@ -9,6 +9,42 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.270.0 — 2026-05-25
+
+### Fixed
+- **Large CSV imports failed with "too many SQL variables".**
+  SQLite caps a single prepared statement at 32766 bound
+  parameters (`SQLITE_MAX_VARIABLE_NUMBER` in the
+  `@signalapp/better-sqlite3` build we ship). Two call sites in
+  `src/app/api/import/commit-batched/route.ts` built statements
+  whose parameter count scaled with input-row count and blew past
+  that limit on big single-account imports:
+  - `inArray(transactions.importHash, lookupHashes)` — up to
+    2 hashes per input row (new + legacy), so a 20k-row CSV
+    pushed 40k params through one query.
+  - `db.insert(transactions).values([...])` — ~15 fields per
+    inserted row; ~2200 rows in one chunk hit the cap.
+
+  Both call sites now go through new chunked helpers in
+  `src/lib/api/chunked.ts`:
+  - `chunkedQuery(items, 5000, slice => …)` for the importHash
+    lookup (single-column inArray = 1 param per slice item).
+  - `chunkedExec(items, 1500, slice => …)` for the bulk insert
+    (15 fields × 1500 rows = 22500 params; leaves headroom).
+
+  Each chunk is its own atomic statement; if one chunk fails the
+  route's outer try/catch returns a 500 same as before. No
+  schema change. No API-shape change.
+
+### Added
+- **Integration test for the chunked import paths**
+  (`src/app/api/import/commit-batched/route.integration.test.ts`).
+  Seeds an account, fires a 2000-row payload through the real
+  GET handler via `installTestDb`, asserts every row lands +
+  `currentBalance` reconciles. Second leg re-commits the same
+  payload and verifies the chunked-lookup-by-importHash path
+  dedups every row.
+
 ## 0.269.0 — 2026-05-25
 
 ### Fixed

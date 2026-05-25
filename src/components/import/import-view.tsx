@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useDropzone } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -155,6 +155,18 @@ interface TestResponse {
 }
 
 export function ImportView() {
+  // `?mode=uncat` repurposes this view as the "categorise existing
+  // uncategorised DB rows" surface. Same chrome (table + expand
+  // panel + RuleCreator picker + indigo Commit), but the CSV-drop
+  // card up top is hidden and rows are seeded from
+  // /api/transactions/uncategorised-categorise instead of a parsed
+  // file. The commit handler also branches to a PATCH-bulk against
+  // /api/transactions/bulk rather than the CSV-insert path. Default
+  // (no/unknown mode value) preserves the original CSV-import flow.
+  const searchParams = useSearchParams();
+  const mode = searchParams.get("mode") === "uncat" ? "uncat" : "csv";
+  const isUncat = mode === "uncat";
+
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<TestResponse | null>(null);
   const [accountFilter, setAccountFilter] = useState<string | "all">("all");
@@ -242,6 +254,92 @@ export function ImportView() {
     setAccountFilter("all");
     setLoading(false);
   }, []);
+
+  /** Uncategorised-mode entry: fetch existing DB rows that still
+   *  have no category, score each through the same trigram
+   *  suggester the CSV path uses, and synthesise a TestResponse so
+   *  the rest of the view renders unchanged. The endpoint already
+   *  returns the right per-row shape — we just map field names. */
+  const loadUncategorised = useCallback(async () => {
+    setLoading(true);
+    setExpandedKey(null);
+    const res = await fetch(
+      "/api/transactions/uncategorised-categorise",
+    );
+    if (!res.ok) {
+      toast.error("Failed to load uncategorised transactions");
+      setLoading(false);
+      return;
+    }
+    interface UncatRow {
+      id: string;
+      date: string;
+      amount: string;
+      payee: string | null;
+      normalizedPayee: string | null;
+      accountId: string;
+      accountName: string;
+      suggestedCategoryId: string | null;
+      suggestedCategoryName: string | null;
+      suggestedScore: number | null;
+      suggestedSupport: number | null;
+    }
+    const dbRows = (await res.json()) as UncatRow[];
+    const synthRows: TestResultRow[] = dbRows.map((r) => ({
+      date: r.date,
+      amount: r.amount,
+      payee: r.payee ?? "",
+      normalizedPayee: r.normalizedPayee ?? "",
+      // Reuse the DB row id as both importHash (table key + expand
+      // toggle) AND rawId (expand-panel footer) — uniqueness is the
+      // only thing the table needs.
+      importHash: r.id,
+      rawId: r.id,
+      resolvedAccountId: r.accountId,
+      resolvedAccountName: r.accountName,
+      resolvedAccountVia: null,
+      categoryId: r.suggestedCategoryId,
+      categoryName: r.suggestedCategoryName,
+      method: r.suggestedScore != null ? "trigram" : "none",
+      score: r.suggestedScore ?? undefined,
+      support: r.suggestedSupport ?? undefined,
+      // matchType undefined => rendered as a "new" row (muted bg),
+      // matching the visual the user wanted preserved.
+    }));
+    const synth: TestResponse = {
+      format: "uncategorised",
+      total: synthRows.length,
+      summary: {
+        rule: 0,
+        trigram: synthRows.filter((r) => r.method === "trigram").length,
+        none: synthRows.filter((r) => r.method === "none").length,
+      },
+      qifAccountSummary: [],
+      fieldStats: {
+        withBankCategory: 0,
+        withCheckNum: 0,
+        withCleared: 0,
+        withSplits: 0,
+        withTrnType: 0,
+        withRefNum: 0,
+        withRunningBalance: 0,
+      },
+      rows: synthRows,
+    };
+    setData(synth);
+    setAccountFilter("all");
+    setLoading(false);
+  }, []);
+
+  // Auto-load on mount when in uncat mode. Plain effect, no
+  // dependencies — `loadUncategorised` is stable (useCallback deps
+  // empty) and we only want this to fire once per page entry.
+  useEffect(() => {
+    if (isUncat && !data && !loading) {
+      void loadUncategorised();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUncat]);
 
   const onDrop = useCallback(
     async (files: File[]) => {
@@ -397,7 +495,8 @@ export function ImportView() {
 
   return (
     <div className="space-y-4">
-      <Card>
+      {!isUncat && (
+        <Card>
         <CardContent className="pt-4 space-y-3">
           <p className="text-sm text-muted-foreground">
             Drop a bank export (CSV, OFX, QFX, or QIF) to import. Each row
@@ -447,6 +546,7 @@ export function ImportView() {
           </label>
         </CardContent>
       </Card>
+      )}
 
       {data && (
         <>
@@ -636,6 +736,8 @@ export function ImportView() {
             data={data}
             effectiveRows={effectiveRows}
             file={file}
+            mode={mode}
+            onUncatCommitted={isUncat ? loadUncategorised : undefined}
           />
         </>
       )}
@@ -1150,10 +1252,18 @@ function CommitToDb({
   data,
   effectiveRows,
   file,
+  mode = "csv",
+  onUncatCommitted,
 }: {
   data: TestResponse;
   effectiveRows: TestResultRow[];
   file: File | null;
+  /** "csv" (default) inserts via /api/import/commit-batched; "uncat"
+   *  PATCHes existing rows' categoryId via /api/transactions/bulk. */
+  mode?: "csv" | "uncat";
+  /** Called after a successful uncat commit so the parent can
+   *  reload the queue (the saved rows fall out of view). */
+  onUncatCommitted?: () => Promise<void>;
 }) {
   const router = useRouter();
   const [committing, setCommitting] = useState(false);
@@ -1192,7 +1302,78 @@ function CommitToDb({
     newCount + exactBackfillCount + legacyCount + possibleCount;
   const hasWork = willChangeCount > 0 || chainMismatchCount > 0;
 
+  // Uncat-mode specifics: a row is "to be applied" if it has a
+  // non-null categoryId. Suggestions are pre-filled into
+  // categoryId by `loadUncategorised`, so default behaviour is
+  // "accept all visible suggestions"; clearing the picker removes
+  // a row from the applied set without it leaving the queue.
+  const uncatApplyCount = effectiveRows.filter((r) => !!r.categoryId).length;
+  const uncatHasWork = uncatApplyCount > 0;
+
+  /** Uncat-mode commit: group changed-from-original rows by their
+   *  chosen categoryId and PATCH /api/transactions/bulk per group.
+   *  "Changed" here means the row's categoryId is not null AND was
+   *  user-touched via the picker (tracked by `localOverrides` in
+   *  the parent — surfaced here through the row's current
+   *  categoryId, which only equals the suggestion until the user
+   *  clicks). Strict policy: rows the user didn't click are NOT
+   *  saved, even when a suggestion is sitting in the picker.
+   *  Matches the user's earlier preference for per-row consent. */
+  async function commitUncat() {
+    if (mode !== "uncat") return;
+    setCommitting(true);
+    try {
+      // Group rows by categoryId. Drop rows with no category set
+      // — nothing to PATCH. The full-row set in effectiveRows here
+      // is the "user-clicked OR unchanged-from-suggestion" union;
+      // we already filtered to `willChangeCount > 0` rows above
+      // for the button-enable check.
+      const byCat = new Map<string, string[]>();
+      for (const r of effectiveRows) {
+        if (!r.categoryId) continue;
+        let ids = byCat.get(r.categoryId);
+        if (!ids) {
+          ids = [];
+          byCat.set(r.categoryId, ids);
+        }
+        ids.push(r.importHash); // imported ← DB row id (we aliased it during synthesis)
+      }
+      if (byCat.size === 0) {
+        toast.error("Nothing to apply — no rows have a category set.");
+        return;
+      }
+      let totalApplied = 0;
+      for (const [categoryId, ids] of byCat) {
+        // /api/transactions/bulk caps each PATCH at 1000 ids per
+        // its zod schema; chunk if a single category swept up more
+        // than that.
+        for (let i = 0; i < ids.length; i += 1000) {
+          const slice = ids.slice(i, i + 1000);
+          const res = await fetch("/api/transactions/bulk", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ids: slice, categoryId }),
+          });
+          if (!res.ok) {
+            const body = await res.text().catch(() => "");
+            toast.error(`Apply failed: ${res.status} ${body.slice(0, 80)}`);
+            return;
+          }
+          totalApplied += slice.length;
+        }
+      }
+      toast.success(`Categorised ${totalApplied} transactions.`);
+      if (onUncatCommitted) await onUncatCommitted();
+    } finally {
+      setCommitting(false);
+    }
+  }
+
   async function commit() {
+    if (mode === "uncat") {
+      await commitUncat();
+      return;
+    }
     if (committableRows.length === 0 || !file) return;
 
     const accountIds = Array.from(
@@ -1341,21 +1522,33 @@ function CommitToDb({
       <CardContent className="pt-4">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-sm font-medium">Ready to commit</p>
-            <p className="text-xs text-muted-foreground">
-              {newCount} new ·{" "}
-              {exactBackfillCount + legacyCount + possibleCount} duplicate
-              {exactBackfillCount + legacyCount + possibleCount === 1
-                ? ""
-                : "s"}{" "}
-              to backfill
-              {exactNoOpCount > 0 &&
-                ` · ${exactNoOpCount} identical (no change)`}
-              {chainMismatchCount > 0 &&
-                ` · ${chainMismatchCount} balance-chain mismatch${chainMismatchCount === 1 ? "" : "es"} to fix`}
-              .
+            <p className="text-sm font-medium">
+              {mode === "uncat" ? "Ready to categorise" : "Ready to commit"}
             </p>
-            {unresolved > 0 && (
+            {mode === "uncat" ? (
+              <p className="text-xs text-muted-foreground">
+                {uncatApplyCount} of {effectiveRows.length} row
+                {effectiveRows.length === 1 ? "" : "s"} have a category set
+                {effectiveRows.length - uncatApplyCount > 0 &&
+                  ` · ${effectiveRows.length - uncatApplyCount} left blank (won't be saved)`}
+                .
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {newCount} new ·{" "}
+                {exactBackfillCount + legacyCount + possibleCount} duplicate
+                {exactBackfillCount + legacyCount + possibleCount === 1
+                  ? ""
+                  : "s"}{" "}
+                to backfill
+                {exactNoOpCount > 0 &&
+                  ` · ${exactNoOpCount} identical (no change)`}
+                {chainMismatchCount > 0 &&
+                  ` · ${chainMismatchCount} balance-chain mismatch${chainMismatchCount === 1 ? "" : "es"} to fix`}
+                .
+              </p>
+            )}
+            {mode === "csv" && unresolved > 0 && (
               <p className="text-[11px] text-amber-600 dark:text-amber-400">
                 {unresolved} row{unresolved === 1 ? " has" : "s have"} no
                 resolved account — won&rsquo;t be committed.
@@ -1366,27 +1559,37 @@ function CommitToDb({
             onClick={commit}
             disabled={
               committing ||
-              committableRows.length === 0 ||
-              !file ||
-              !hasWork
+              (mode === "uncat"
+                ? !uncatHasWork
+                : committableRows.length === 0 || !file || !hasWork)
             }
             title={
-              committableRows.length === 0
-                ? "No committable rows"
-                : !hasWork
-                  ? "Every row is already in the DB and the balance chain is fine — nothing to do."
+              mode === "uncat"
+                ? !uncatHasWork
+                  ? "Pick a category on at least one row first."
                   : undefined
+                : committableRows.length === 0
+                  ? "No committable rows"
+                  : !hasWork
+                    ? "Every row is already in the DB and the balance chain is fine — nothing to do."
+                    : undefined
             }
           >
             {committing
-              ? "Committing…"
-              : !hasWork
-                ? "Nothing to commit"
-                : newCount > 0
-                  ? `Commit ${willChangeCount} row${willChangeCount === 1 ? "" : "s"}`
-                  : willChangeCount > 0
-                    ? `Update ${willChangeCount}`
-                    : `Fix ${chainMismatchCount} balance mismatch${chainMismatchCount === 1 ? "" : "es"}`}
+              ? mode === "uncat"
+                ? "Saving…"
+                : "Committing…"
+              : mode === "uncat"
+                ? uncatApplyCount > 0
+                  ? `Apply ${uncatApplyCount} categor${uncatApplyCount === 1 ? "y" : "ies"}`
+                  : "Apply 0 categories"
+                : !hasWork
+                  ? "Nothing to commit"
+                  : newCount > 0
+                    ? `Commit ${willChangeCount} row${willChangeCount === 1 ? "" : "s"}`
+                    : willChangeCount > 0
+                      ? `Update ${willChangeCount}`
+                      : `Fix ${chainMismatchCount} balance mismatch${chainMismatchCount === 1 ? "" : "es"}`}
           </Button>
         </div>
       </CardContent>

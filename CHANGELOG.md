@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.273.0 — 2026-05-26
+
+### Changed
+- **"Categorise uncategorised" now lives at `/import?mode=uncat`,
+  reusing the import view's UI in full.** 0.272.0 wrongly built it
+  as a new page with a homegrown table — column order off,
+  no row expansion, no indigo CTA, generally felt foreign. The
+  topbar button (`Categorise (N)` on `/transactions`) now points
+  at `/import?mode=uncat`, which loads the existing `ImportView`
+  with the upload card hidden and rows seeded from
+  `/api/transactions/uncategorised-categorise`.
+  - Same row layout, same expand panel, same RuleCreator picker,
+    same indigo CTA button. Identical to the post-CSV-upload
+    flow visually.
+  - Commit button switches to "Apply N categories" and PATCHes
+    `/api/transactions/bulk` per (categoryId, ids[]) group
+    (chunked at 1000 per call, matching the route's zod cap).
+  - On success, the queue reloads and saved rows fall out.
+
+### Removed
+- `/transactions/categorise` page and its bespoke view component
+  (homegrown bits from 0.272.0). The endpoint
+  `/api/transactions/uncategorised-categorise` stays — the shape
+  is sound and `ImportView` consumes it directly.
+
 ## 0.272.0 — 2026-05-25
 
 ### Added

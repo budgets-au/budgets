@@ -31,7 +31,7 @@ export function CategoriseUncategorisedButton() {
 
   return (
     <Link
-      href="/transactions/categorise"
+      href="/import?mode=uncat"
       className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
       title={`${count} uncategorised transaction${count === 1 ? "" : "s"}`}
     >

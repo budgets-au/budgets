@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import {
   signInAsAdmin,
   seedAccount,
@@ -29,7 +30,7 @@ import {
  *  to false in Settings → Accounts; if the DELETE were a hard
  *  cascade, that recovery path would be impossible. */
 
-const RUN_TOKEN = Math.random().toString(36).slice(2, 8);
+const RUN_TOKEN = randomBytes(3).toString("hex");
 
 interface AccountRow {
   id: string;

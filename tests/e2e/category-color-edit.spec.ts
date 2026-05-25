@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import {
   signInAsAdmin,
   seedAccount,
@@ -33,7 +34,7 @@ import {
  *  client-side SWR key; the API contract should always
  *  return the live value. */
 
-const RUN_TOKEN = Math.random().toString(36).slice(2, 8);
+const RUN_TOKEN = randomBytes(3).toString("hex");
 
 interface CategoryRow {
   id: string;

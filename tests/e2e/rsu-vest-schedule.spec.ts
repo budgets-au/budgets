@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import { signInAsAdmin, captureErrors } from "./_helpers";
 
 /** E2E coverage for the RSU vest-schedule flow (#24).
@@ -30,7 +31,7 @@ import { signInAsAdmin, captureErrors } from "./_helpers";
  *  Network independence: explicit `name` and `purchasePrice`
  *  on the POST so the route's Yahoo fallback never fires. */
 
-const RUN_TOKEN = Math.random().toString(36).slice(2, 8);
+const RUN_TOKEN = randomBytes(3).toString("hex");
 
 function isoDaysFromNow(days: number): string {
   const d = new Date();

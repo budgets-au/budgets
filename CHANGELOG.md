@@ -9,6 +9,13 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.266.0 — 2026-05-25
+
+### Security
+- **`qs` bumped to `>= 6.15.2` via pnpm overrides** — addresses CVE-2026-8723 (Dependabot #44). `qs.stringify` could crash with a TypeError on null/undefined entries in comma-format arrays when `encodeValuesOnly` was set, allowing a remote DoS. The vulnerable version (6.15.1) reached our tree transitively via `shadcn → @modelcontextprotocol/sdk → express → body-parser → qs`; none of this is in the production runtime path (shadcn is a dev tool), but the override keeps the dependency graph clean for CI/Dependabot.
+
+- **Replaced `Math.random()` with `crypto.randomBytes(3).toString("hex")` for test run-tokens across all 11 e2e specs.** CodeQL flagged 3 instances as "insecure randomness" (security-severity: high); the alerts are false-positives in test-fixture context (the tokens only generate collision-free per-run identifiers), but switching to `crypto.randomBytes` is a 1-line change that silences the warnings and matches what other parts of the codebase already do (e.g. import-hash generation). Same 6-char token length, no behavioural change.
+
 ## 0.265.0 — 2026-05-23
 
 ### Added

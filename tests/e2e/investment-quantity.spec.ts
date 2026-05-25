@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import { signInAsAdmin, captureErrors } from "./_helpers";
 
 /** E2E coverage for the add-investment → dashboard-data path (#23).
@@ -22,7 +23,7 @@ import { signInAsAdmin, captureErrors } from "./_helpers";
  *  one specifically pins the plain-stock flow that drives the
  *  `stocks-summary` widget. */
 
-const RUN_TOKEN = Math.random().toString(36).slice(2, 8);
+const RUN_TOKEN = randomBytes(3).toString("hex");
 
 interface InvestmentRow {
   id: string;

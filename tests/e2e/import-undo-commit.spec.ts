@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   signInAsAdmin,
   seedAccount,
@@ -30,7 +30,7 @@ import {
  *  No tx-level race assertions — that's a separate concern and
  *  has its own coverage. */
 
-const RUN_TOKEN = Math.random().toString(36).slice(2, 8);
+const RUN_TOKEN = randomBytes(3).toString("hex");
 
 function importHashFor(parts: string[]): string {
   // The route uses `crypto.createHash("sha256").update(...).digest("hex")`

@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import { signInAsAdmin, seedAccount, captureErrors } from "./_helpers";
 
 /** E2E coverage for the schedule-replace ("rate change") flow (#15).
@@ -27,7 +28,7 @@ import { signInAsAdmin, seedAccount, captureErrors } from "./_helpers";
  *     → successor.payee reflects the override, NOT the predecessor's
  *     payee. */
 
-const RUN_TOKEN = Math.random().toString(36).slice(2, 8);
+const RUN_TOKEN = randomBytes(3).toString("hex");
 
 interface ScheduledRow {
   id: string;

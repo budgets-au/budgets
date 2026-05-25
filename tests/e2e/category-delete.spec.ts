@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import {
   signInAsAdmin,
   seedAccount,
@@ -24,7 +25,7 @@ import {
  *  self-contained category tree so the assertions don't tangle
  *  with seed-data categories. */
 
-const RUN_TOKEN = Math.random().toString(36).slice(2, 8);
+const RUN_TOKEN = randomBytes(3).toString("hex");
 
 interface CategoryRow {
   id: string;

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   signInAsAdmin,
   seedAccount,
@@ -45,7 +45,7 @@ import {
  *  inserts as a fresh row. The spec adds a second account and
  *  exercises that path to prove the strict-amount-match guard. */
 
-const RUN_TOKEN = Math.random().toString(36).slice(2, 8);
+const RUN_TOKEN = randomBytes(3).toString("hex");
 
 function importHashFor(parts: string[]): string {
   return createHash("sha256").update(parts.join("|")).digest("hex");

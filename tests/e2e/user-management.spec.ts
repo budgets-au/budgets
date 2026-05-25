@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 import { signInAsAdmin, captureErrors } from "./_helpers";
 
 /** E2E coverage for the user-management lifecycle (#28). Admin
@@ -25,7 +26,7 @@ import { signInAsAdmin, captureErrors } from "./_helpers";
  *  All routes go through `withAdminAuthAndId` — auth + admin
  *  gating is implicit in the use of the signed-in admin session. */
 
-const RUN_TOKEN = Math.random().toString(36).slice(2, 8);
+const RUN_TOKEN = randomBytes(3).toString("hex");
 
 interface UserRow {
   id: string;

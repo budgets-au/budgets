@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.280.0 — 2026-05-26
+
+### Added
+- **Accounts is now a top-level page in the sidebar.** Moved out
+  of Settings → Accounts and into its own `/accounts` route,
+  sitting between Reports and Categories in the sidebar nav. The
+  Import + New buttons live on the page's Topbar (where every
+  other page exposes its top-level actions); the Settings tabs
+  shrink to General / Rules / Backups / Databases / Maintenance /
+  Security. Existing `/settings?tab=accounts` links quietly
+  fall back to General (the tab key no longer parses, and the
+  default is General).
+
+- **Accounts list now groups by type and shows balances.** The
+  visible accounts split into **Assets** (checking, savings,
+  cash, investment, super) and **Liabilities** (credit, loan),
+  each with a per-group subtotal. A bottom **Net worth** line
+  totals the lot. Each row carries its `currentBalance` (negative
+  balances rendered in rose) plus a small type-label chip on
+  wider viewports. Unfamiliar types (anything not in the
+  canonical set) fall into a catch-all "Other" group so imported
+  rows with non-standard types stay visible rather than vanishing.
+
+  New unit test pins the grouping / subtotal / net arithmetic
+  (`src/components/accounts/group-accounts.test.ts`).
+
 ## 0.279.0 — 2026-05-26
 
 ### Changed

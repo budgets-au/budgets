@@ -3,13 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { KeyRound, Lock, Loader2 } from "lucide-react";
-import type { Account } from "@/db/schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useLockDatabase } from "@/hooks/use-lock-database";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { ThemeToggle } from "@/components/settings/theme-toggle";
-import { AccountVisibility } from "@/components/settings/account-visibility";
 import { PayeeRulesManager } from "@/components/settings/payee-rules-manager";
 import { BackupList } from "@/components/settings/backup-list";
 import { BackupSchedule } from "@/components/settings/backup-schedule";
@@ -22,14 +20,14 @@ import { ResetBrowserData } from "@/components/settings/reset-browser-data";
 import { SchedulePaletteEditor } from "@/components/settings/schedule-palette-editor";
 import { BraveSearchKeyPanel } from "@/components/settings/brave-search-key-panel";
 
-const SETTINGS_TABS = ["general", "accounts", "rules", "backups", "databases", "maintenance", "security"] as const;
+const SETTINGS_TABS = ["general", "rules", "backups", "databases", "maintenance", "security"] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 function isSettingsTab(value: string | null): value is SettingsTab {
   return value !== null && (SETTINGS_TABS as readonly string[]).includes(value);
 }
 
-export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }) {
+export function SettingsTabs() {
   const { lock: lockNow, locking } = useLockDatabase();
   const { prefs, setPref } = useDisplayPrefs();
 
@@ -54,7 +52,6 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
     <Tabs value={activeTab} onValueChange={setActiveTab}>
       <TabsList variant="line">
         <TabsTrigger value="general">General</TabsTrigger>
-        <TabsTrigger value="accounts">Accounts</TabsTrigger>
         <TabsTrigger value="rules">Rules</TabsTrigger>
         <TabsTrigger value="backups">Backups</TabsTrigger>
         <TabsTrigger value="databases">Databases</TabsTrigger>
@@ -182,10 +179,6 @@ export function SettingsTabs({ initialAccounts }: { initialAccounts: Account[] }
           <p className="font-medium text-foreground">About</p>
           <p>Household Budget Tracker · AUD · Local / Docker</p>
         </div>
-      </TabsContent>
-
-      <TabsContent value="accounts" className="max-w-2xl">
-        <AccountVisibility initialAccounts={initialAccounts} />
       </TabsContent>
 
       <TabsContent value="rules" className="max-w-2xl">

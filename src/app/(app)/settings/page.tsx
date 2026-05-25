@@ -1,17 +1,12 @@
 import { Topbar } from "@/components/layout/topbar";
-import { db } from "@/db";
-import { accounts } from "@/db/schema";
-import { asc } from "drizzle-orm";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 
-export default async function SettingsPage() {
-  const allAccounts = await db.select().from(accounts).orderBy(asc(accounts.name));
-
+export default function SettingsPage() {
   return (
     <div>
       <Topbar title="Settings" />
       <div className="p-4 lg:p-6">
-        <SettingsTabs initialAccounts={allAccounts} />
+        <SettingsTabs />
       </div>
     </div>
   );

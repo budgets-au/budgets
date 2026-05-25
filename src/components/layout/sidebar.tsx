@@ -18,6 +18,7 @@ import {
   Settings,
   TrendingUp,
   PiggyBank,
+  Wallet,
   Menu,
   Plus,
   X,
@@ -50,6 +51,7 @@ const NAV = [
   { href: "/investments", label: "Investments", icon: TrendingUp },
   { href: "/superannuation", label: "Super", icon: PiggyBank },
   { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/accounts", label: "Accounts", icon: Wallet },
   { href: "/categories", label: "Categories", icon: Tag },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

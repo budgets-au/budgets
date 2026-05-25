@@ -223,7 +223,11 @@ export function ImportAccountsButton() {
                           <p className="text-xs text-muted-foreground">····{row.accountNumberLast4}</p>
                         )}
                         {row.existingId && (
-                          <span className="text-[10px] text-amber-600">will update existing balance</span>
+                          <span className="text-[10px] text-amber-600">
+                            {row.existingWasArchived
+                              ? "will un-archive + update balance"
+                              : "will update existing balance"}
+                          </span>
                         )}
                       </td>
                       <td className="px-3 py-2">

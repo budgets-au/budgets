@@ -44,11 +44,19 @@ export const POST = withAuth(async (request) => {
   // source of truth for both historical reconstruction and forward
   // projection. Other fields (name, type, colour, …) are left intact —
   // re-running an import shouldn't clobber names the user has renamed.
+  //
+  // Archive flip: the row's own `isArchived` derives from a "Closing
+  // date" in the CSV. A CSV row without one means "this account is
+  // live"; with one means "this account is closed". Use that to set
+  // is_archived on update too — so re-importing a current statement
+  // un-archives an account previously archived by mistake, and a CSV
+  // marked closed re-archives correctly.
   let updated = 0;
   for (const r of toUpdate) {
     const patch: Partial<typeof accounts.$inferInsert> = {
       startingBalance: r.startingBalance,
       currentBalance: r.startingBalance,
+      isArchived: r.isArchived,
     };
     if (r.startingDate) patch.startingDate = r.startingDate;
     await db.update(accounts).set(patch).where(eq(accounts.id, r.existingId!));

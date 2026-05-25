@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import Papa from "papaparse";
 import { parse, isValid } from "date-fns";
 import { withAuth } from "@/lib/api/route-guards";
@@ -78,6 +77,11 @@ export interface PreviewAccount {
   /** Existing starting balance — shown in the preview row so the user can
    * see what they're about to overwrite. */
   existingBalance: string | null;
+  /** True when the matched existing account was archived. Commit will
+   * un-archive it on update (the CSV's presence is the user's signal
+   * that the account is still in scope). Surfaced separately from
+   * `duplicate` so the UI can show a "will un-archive" note if needed. */
+  existingWasArchived: boolean;
   skip: boolean;
 }
 
@@ -125,10 +129,14 @@ export const POST = withAuth(async (request) => {
   const colOpenDate = findCol("opening date");
   const colCloseDate = findCol("closing date");
 
-  // Load existing accounts for duplicate detection. Build lookup maps keyed
-  // by name and last-4 so duplicates can be turned into updates rather than
-  // skips — re-importing the same bank export then refreshes the balance.
-  const existing = await db.select().from(accounts).where(eq(accounts.isArchived, false));
+  // Load ALL existing accounts (including archived) for duplicate detection.
+  // Re-importing a current bank export that includes a previously-archived
+  // account is the user's signal that the account is back in scope — the
+  // commit-side update path will flip `is_archived` back to false. Skipping
+  // archived rows here was the cause of duplicate accounts being created
+  // when a user re-imported a long-tail account that had been archived
+  // earlier in the same household DB.
+  const existing = await db.select().from(accounts);
   const existingByName = new Map(existing.map((a) => [a.name.toLowerCase(), a]));
   const existingByLast4 = new Map(
     existing.filter((a) => a.accountNumberLast4).map((a) => [a.accountNumberLast4!, a]),
@@ -179,6 +187,7 @@ export const POST = withAuth(async (request) => {
       duplicate,
       existingId: matched?.id ?? null,
       existingBalance: matched?.startingBalance ?? null,
+      existingWasArchived: matched?.isArchived ?? false,
       // Keep duplicates checked so the import refreshes their balance by
       // default. The user can still uncheck individual rows.
       skip: false,

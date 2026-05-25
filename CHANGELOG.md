@@ -9,6 +9,28 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.269.0 — 2026-05-25
+
+### Fixed
+- **Accounts CSV import was duplicating archived accounts instead
+  of matching them.** The dedup pool in
+  `/api/accounts/import/route.ts` filtered to
+  `is_archived = false`, so a CSV row whose name matched an
+  archived account (e.g. one the user archived during cleanup and
+  is now re-onboarding via fresh bank export) was treated as a
+  brand-new account and inserted. The first 2-of-N rows matched
+  the user's non-archived accounts; the rest hit the filter and
+  became duplicates.
+
+  The dedup pool now includes all accounts. When a CSV row
+  matches an archived account, the commit-side update path also
+  flips `is_archived` back to false (the row's own
+  `isArchived` derives from a CSV "Closing date" column — present
+  = closed, absent = live, so it round-trips properly). The
+  preview UI shows "will un-archive + update balance" on those
+  rows so the user can see what will happen before clicking
+  Commit.
+
 ## 0.268.0 — 2026-05-25
 
 ### Added

@@ -54,14 +54,24 @@ export async function POST(request: Request) {
  *  trust boundary) OR when Origin matches the request's own host
  *  (legit same-origin browser POST). Reject every other case — a
  *  cross-origin browser POST from `evil.lan` would set Origin to that
- *  host, and we reject. */
+ *  host, and we reject.
+ *
+ *  IMPORTANT: compare against the client-supplied `Host` header (the
+ *  hostname the browser typed), NOT against `request.url`'s host. The
+ *  latter is the server's bind address (e.g. `0.0.0.0:3002`), which
+ *  doesn't match `Origin` when the user accesses the app via a LAN
+ *  hostname like `budgets.lan` or behind a reverse proxy. Falling back
+ *  to `X-Forwarded-Host` covers proxies that rewrite it. */
 function isSameOriginPost(request: Request): boolean {
   const origin = request.headers.get("origin");
   if (!origin) return true;
   try {
-    const reqUrl = new URL(request.url);
     const originUrl = new URL(origin);
-    return reqUrl.host === originUrl.host;
+    const host =
+      request.headers.get("x-forwarded-host") ??
+      request.headers.get("host") ??
+      new URL(request.url).host;
+    return originUrl.host === host;
   } catch {
     return false;
   }

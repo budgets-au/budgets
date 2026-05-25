@@ -9,6 +9,27 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.267.0 — 2026-05-25
+
+### Fixed
+- **DB switcher fails with "Cross-origin requests are not allowed
+  for this endpoint" when the app is accessed via a LAN hostname
+  or reverse proxy.** The same-origin guard on
+  `/api/databases/switch` (added in #89 to block anonymous LAN
+  attackers from steering the active profile) was comparing the
+  browser's `Origin` header against `request.url`'s host. The
+  latter is the server's bind address (`0.0.0.0:3002` or similar)
+  whereas `Origin` reflects what the user typed
+  (`budgets.lan`, `https://budgets.example.com`, etc.). Mismatch
+  → 403 on every legitimate switch attempt.
+
+  Guard now compares `Origin` against the client-supplied `Host`
+  header (with `X-Forwarded-Host` fallback for reverse proxies),
+  which is what the browser actually targeted. Direct curl from
+  the host (no Origin) still passes; cross-origin browser POSTs
+  still get rejected because the Origin host won't match the
+  Host header.
+
 ## 0.266.0 — 2026-05-25
 
 ### Security

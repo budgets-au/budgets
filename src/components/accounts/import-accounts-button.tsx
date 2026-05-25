@@ -229,6 +229,13 @@ export function ImportAccountsButton() {
                               : "will update existing balance"}
                           </span>
                         )}
+                        {row.balanceSeries.length > 1 && (
+                          <p className="text-[10px] text-muted-foreground">
+                            {row.balanceSeries.length} balance points ·{" "}
+                            {row.balanceSeries[0].date} →{" "}
+                            {row.balanceSeries[row.balanceSeries.length - 1].date}
+                          </p>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <Select

@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { accounts } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { accounts, bankBalances } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { accountTypeEnum } from "@/lib/api/enums";
 import { CATEGORICAL_PALETTE } from "@/lib/colours";
 import { withAuth } from "@/lib/api/route-guards";
 import { parseJsonBody } from "@/lib/api/parse-body";
+import { chunkedExec } from "@/lib/api/chunked";
 
 const COLORS = CATEGORICAL_PALETTE;
+
+const balancePointSchema = z.object({
+  date: z.string(),
+  balance: z.string(),
+});
 
 const rowSchema = z.object({
   name: z.string().min(1),
@@ -21,6 +27,10 @@ const rowSchema = z.object({
   // When set, the row updates the named account's anchor balance instead of
   // inserting a new row.
   existingId: z.string().uuid().nullable().optional(),
+  /** Full daily series the bank gave us — persisted into
+   *  bank_balances after the account row is upsert. Optional for
+   *  back-compat with clients that don't yet send it. */
+  balanceSeries: z.array(balancePointSchema).optional().default([]),
 });
 
 const bodySchema = z.object({
@@ -51,6 +61,15 @@ export const POST = withAuth(async (request) => {
   // is_archived on update too — so re-importing a current statement
   // un-archives an account previously archived by mistake, and a CSV
   // marked closed re-archives correctly.
+  // Track (committedRow → resolved accountId) pairs so the
+  // bank_balances upsert below can attach each series to the right
+  // account. Update rows already know their accountId (existingId);
+  // insert rows get one back from .returning().
+  const seriesTargets: Array<{
+    accountId: string;
+    series: Array<{ date: string; balance: string }>;
+  }> = [];
+
   let updated = 0;
   for (const r of toUpdate) {
     const patch: Partial<typeof accounts.$inferInsert> = {
@@ -60,6 +79,7 @@ export const POST = withAuth(async (request) => {
     };
     if (r.startingDate) patch.startingDate = r.startingDate;
     await db.update(accounts).set(patch).where(eq(accounts.id, r.existingId!));
+    seriesTargets.push({ accountId: r.existingId!, series: r.balanceSeries });
     updated += 1;
   }
 
@@ -82,7 +102,42 @@ export const POST = withAuth(async (request) => {
       )
       .returning({ id: accounts.id });
     created = inserted.length;
+    // Match returned ids back to their source rows in order (drizzle
+    // preserves insert order in the returning result).
+    inserted.forEach((row, i) => {
+      seriesTargets.push({
+        accountId: row.id,
+        series: toInsert[i].balanceSeries,
+      });
+    });
   }
 
-  return NextResponse.json({ created, updated });
+  // Persist the bank-reported daily series. ON CONFLICT DO UPDATE so
+  // re-imports refresh the recorded balance for any given day rather
+  // than duplicating (UNIQUE on account_id + date). chunkedExec keeps
+  // multi-year exports under SQLite's 32766-param cap — 5 fields per
+  // row × 1500 rows = 7500 params per chunk.
+  let balancesUpserted = 0;
+  for (const { accountId, series } of seriesTargets) {
+    if (series.length === 0) continue;
+    await chunkedExec(series, 1500, (slice) =>
+      db
+        .insert(bankBalances)
+        .values(
+          slice.map((p) => ({
+            accountId,
+            date: p.date,
+            balance: p.balance,
+            source: "csv-import",
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [bankBalances.accountId, bankBalances.date],
+          set: { balance: sql`excluded.balance` },
+        }),
+    );
+    balancesUpserted += series.length;
+  }
+
+  return NextResponse.json({ created, updated, balancesUpserted });
 });

@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { accounts } from "@/db/schema";
 import Papa from "papaparse";
+import {
+  groupAccountsCsv,
+  type AccountCsvInputRow,
+} from "@/lib/import/group-accounts-csv";
 import { parse, isValid } from "date-fns";
 import { withAuth } from "@/lib/api/route-guards";
 
@@ -82,6 +86,13 @@ export interface PreviewAccount {
    * that the account is still in scope). Surfaced separately from
    * `duplicate` so the UI can show a "will un-archive" note if needed. */
   existingWasArchived: boolean;
+  /** All (date, balance) pairs the bank gave us for this account during
+   * the export period — Westpac and similar CSVs emit one row per
+   * (account, date). The EARLIEST entry's balance is also reflected in
+   * `startingBalance` above; the commit route persists the full series
+   * into `bank_balances` for future running-balance reconciliation. ASC
+   * by date. */
+  balanceSeries: Array<{ date: string; balance: string }>;
   skip: boolean;
 }
 
@@ -142,7 +153,13 @@ export const POST = withAuth(async (request) => {
     existing.filter((a) => a.accountNumberLast4).map((a) => [a.accountNumberLast4!, a]),
   );
 
-  const rows: PreviewAccount[] = result.data.map((row) => {
+  // Westpac (and similar) export one CSV row per (account, date) with
+  // that day's closing balance — so a 30-day export of 5 accounts is
+  // 150 rows, not 5. Step 1: parse every row into a typed shape with
+  // dates resolved. Step 2: hand them to `groupAccountsCsv` which
+  // collapses by account-identity, anchors at the EARLIEST date, and
+  // carries the full daily series.
+  const parsedRows: AccountCsvInputRow[] = result.data.map((row) => {
     const name = (colName ? row[colName] : "").trim() || "Unnamed Account";
     const rawType = (colType ? row[colType] : "").trim();
     const bsb = (colBSB ? row[colBSB] : "").trim();
@@ -152,9 +169,6 @@ export const POST = withAuth(async (request) => {
     const rawBalDate = (colBalDate ? row[colBalDate] : "").trim();
     const rawOpenDate = (colOpenDate ? row[colOpenDate] : "").trim();
     const rawCloseDate = (colCloseDate ? row[colCloseDate] : "").trim();
-
-    const type = mapAccountType(rawType);
-    const institution = bsbToInstitution(bsb);
 
     const accNumClean = accNum.replace(/[\s\-]/g, "");
     const accountNumberLast4 =
@@ -168,26 +182,44 @@ export const POST = withAuth(async (request) => {
       balance = marketValue;
     }
 
-    const startingDate = parseDate(rawBalDate) ?? parseDate(rawOpenDate);
-    const isArchived = !!parseDate(rawCloseDate);
+    return {
+      name,
+      type: mapAccountType(rawType),
+      institution: bsbToInstitution(bsb),
+      accountNumberLast4,
+      startingBalance: balance,
+      // Prefer the per-row "As at" snapshot date over the static
+      // "Opening date" account-level metadata — the latter could be
+      // years before the CSV's data window, so anchoring there would
+      // claim the balance was correct from a date we have no txns for.
+      startingDate: parseDate(rawBalDate) ?? parseDate(rawOpenDate),
+      isArchived: !!parseDate(rawCloseDate),
+    };
+  });
 
+  const grouped = groupAccountsCsv(parsedRows);
+
+  const rows: PreviewAccount[] = grouped.map((g) => {
     const matched =
-      existingByName.get(name.toLowerCase()) ??
-      (accountNumberLast4 ? existingByLast4.get(accountNumberLast4) : undefined);
+      existingByName.get(g.name.toLowerCase()) ??
+      (g.accountNumberLast4
+        ? existingByLast4.get(g.accountNumberLast4)
+        : undefined);
     const duplicate = !!matched;
 
     return {
-      name,
-      type,
-      institution,
-      accountNumberLast4,
-      startingBalance: balance,
-      startingDate,
-      isArchived,
+      name: g.name,
+      type: g.type,
+      institution: g.institution,
+      accountNumberLast4: g.accountNumberLast4,
+      startingBalance: g.startingBalance,
+      startingDate: g.startingDate,
+      isArchived: g.isArchived,
       duplicate,
       existingId: matched?.id ?? null,
       existingBalance: matched?.startingBalance ?? null,
       existingWasArchived: matched?.isArchived ?? false,
+      balanceSeries: g.balanceSeries,
       // Keep duplicates checked so the import refreshes their balance by
       // default. The user can still uncheck individual rows.
       skip: false,

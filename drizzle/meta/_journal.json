@@ -106,6 +106,13 @@
       "when": 1779590000000,
       "tag": "0014_app_settings_brave_search_api_key",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1779700000000,
+      "tag": "0015_bank_balances",
+      "breakpoints": true
     }
   ]
 }

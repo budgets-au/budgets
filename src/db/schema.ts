@@ -111,6 +111,44 @@ export const accountAliases = sqliteTable(
   ],
 );
 
+/** Bank-reported closing balance per account per date — populated from the
+ *  accounts CSV import (Westpac's "Closing Balance" + "As at date for
+ *  closing balance" columns; other banks similar). UNIQUE(accountId, date)
+ *  so re-imports refresh in place rather than duplicating.
+ *
+ *  Captured for future reconciliation: at any past date, the running
+ *  balance reconstructed from `accounts.startingBalance + Σ amount of
+ *  transactions on/before date` should match `bankBalances.balance` for
+ *  that date. Drift means missing or wrong transactions. No UI consumes
+ *  the table today; capturing it now means we never re-ask the user for
+ *  that CSV.
+ *
+ *  CASCADE on the FK so deleting (or future-merging) an account cleans up
+ *  its balance history. */
+export const bankBalances = sqliteTable(
+  "bank_balances",
+  {
+    id: text("id").primaryKey().$defaultFn(newUuid),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    /** YYYY-MM-DD — the bank's snapshot date. */
+    date: text("date").notNull(),
+    /** Decimal string (cents-precision) — matches `accounts.startingBalance`. */
+    balance: text("balance").notNull(),
+    /** Provenance — e.g. "westpac-csv". Nullable for future hand-entered
+     *  reconciliation rows that don't have a bank source. */
+    source: text("source"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex("bank_balances_account_date_unique").on(t.accountId, t.date),
+    index("bank_balances_account_idx").on(t.accountId, t.date),
+  ],
+);
+
 // ─── Categories ───────────────────────────────────────────────────────────────
 
 export const categories = sqliteTable(

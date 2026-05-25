@@ -9,6 +9,48 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.271.0 — 2026-05-25
+
+### Fixed
+- **Accounts CSV import now anchors at the EARLIEST date per account
+  + persists the full daily series.** Westpac (and similar banks)
+  export their accounts CSV with one row per (account, date) — a
+  30-day period of 5 accounts is 150 rows, not 5. The previous
+  per-row map+dedup let whichever row happened to be last in Map
+  insertion order win, so `startingBalance` ended up pointing at a
+  semi-random day inside the period instead of the historical
+  anchor. Now `groupAccountsCsv` in `src/lib/import/` collapses by
+  `(name, last4)` and picks the earliest `As at date` row's balance
+  as the anchor — that's the moment the figure is correct as-of, so
+  `startingBalance + Σ tracked amount` reconstructs cleanly.
+
+### Added
+- **New `bank_balances` table** captures the FULL daily series
+  alongside the anchor. `UNIQUE(account_id, date)` so re-imports
+  refresh in place. Persisted by `/api/accounts/import/commit`
+  after each account upsert via `chunkedExec` (under the 0.270.0
+  SQL-vars cap). New `GET /api/accounts/[id]/bank-balances`
+  returns the series ASC by date.
+
+  No UI consumes the table yet — captured for a future
+  reconciliation report comparing the running balance
+  (`startingBalance + Σ tracked txns`) against the bank's reported
+  balance per day. Drift = missing or wrong transactions.
+
+- **Preview UI hint** "N balance points · 2026-05-01 → 2026-05-14"
+  under each account in the import dialog, so the operator can see
+  the date range and snapshot count before committing.
+
+- **Migration `0015_bank_balances.sql`** + journal entry.
+- **`src/lib/import/group-accounts-csv.ts`** — pure grouping +
+  earliest-date selection + same-date-dedup logic, with 8 unit
+  tests covering the corner cases (interleaved input, missing
+  last4, missing dates, duplicate dates).
+- **Integration test** (`src/app/api/accounts/import/route.integration.test.ts`)
+  drives 3 accounts × 14 days through the full parse→commit
+  pipeline, then re-commits with bumped balances to verify the
+  upsert refreshes without duplicating.
+
 ## 0.270.0 — 2026-05-25
 
 ### Fixed

@@ -9,6 +9,21 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.294.0 — 2026-05-26
+
+### Removed
+- **Five unused shadcn UI primitives** — `progress.tsx`,
+  `sheet.tsx`, `table.tsx`, `separator.tsx`, `textarea.tsx`.
+  Zero imports anywhere in the repo; they were carried forward
+  from an earlier copy-the-whole-set-of-primitives moment but
+  never actually wired up. **−380 LOC.**
+
+### Changed
+- **`dateToleranceFor` privatised** in
+  `src/lib/scheduled-match.ts`. The function was exported but
+  only called inside its own file — the `export` keyword was
+  dead weight. Dropping it tightens the module's public surface.
+
 ## 0.293.0 — 2026-05-26
 
 ### Added

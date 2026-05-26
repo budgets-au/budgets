@@ -60,7 +60,7 @@ export interface MatchResult {
   unmatched: MatchableOccurrence[];
 }
 
-export function dateToleranceFor(opts: MatchScheduleOptions): number {
+function dateToleranceFor(opts: MatchScheduleOptions): number {
   if (opts.rangeMin == null) return MATCH_TOLERANCE_DAYS;
   const cadence = (APPROX_CADENCE_DAYS[opts.frequency] ?? 30) * (opts.interval || 1);
   return Math.min(MATCH_TOLERANCE_DAYS_RANGE, Math.floor(cadence / 2));

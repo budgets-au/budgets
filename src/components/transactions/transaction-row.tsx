@@ -3,6 +3,9 @@
 import { Fragment, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
+import { useSwrJson } from "@/hooks/use-swr-json";
+import { NeighboursPanel } from "@/components/categorize/neighbours-panel";
+import type { NeighboursResponse } from "@/app/api/transactions/[id]/neighbours/route";
 import { ChevronDown, ChevronUp, Pencil, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -390,8 +393,43 @@ function ExpandedPanel({
             <code className="text-[11px] break-all">{t.id}</code>
           </ExpandedField>
         </div>
+        <TransactionNeighbours transactionId={t.id} />
       </td>
     </tr>
+  );
+}
+
+/** Lazy-loaded trigram neighbours diagnostic — mirrors the panel
+ *  the CSV-import expand panel shows. Fetches only when the row's
+ *  expand panel is open (this component only mounts then), so the
+ *  list itself stays fast. SWR caches per-id so re-expanding within
+ *  the default dedupe window is free. */
+function TransactionNeighbours({ transactionId }: { transactionId: string }) {
+  const { data, isLoading } = useSwrJson<NeighboursResponse>(
+    `/api/transactions/${transactionId}/neighbours`,
+    { revalidateOnFocus: false },
+  );
+  if (isLoading) {
+    return (
+      <p className="mt-4 text-[10px] text-muted-foreground italic">
+        Loading neighbours…
+      </p>
+    );
+  }
+  if (!data) return null;
+  if (data.neighbours.length === 0 && data.categoryRanges.length === 0) {
+    // Row has no normalisedPayee or no similar history — skip the
+    // diagnostic block entirely (the empty-state copy in the
+    // panel is import-flavoured and not helpful here).
+    return null;
+  }
+  return (
+    <div className="mt-4 pt-3 border-t space-y-2 text-xs">
+      <NeighboursPanel
+        neighbours={data.neighbours}
+        categoryRanges={data.categoryRanges}
+      />
+    </div>
   );
 }
 

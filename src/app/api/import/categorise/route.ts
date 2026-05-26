@@ -17,24 +17,11 @@ import {
   suggestCategoryByHistory,
   deriveMatchPayee,
   loadTokenFreq,
+  computeNeighboursAndRanges,
+  type TrigramNeighbour as Neighbour,
+  type TrigramCategoryRange as CategoryRange,
 } from "@/lib/categorize";
-import { trigramSimilarity } from "@/lib/trigram";
 import { withAuth } from "@/lib/api/route-guards";
-
-interface Neighbour {
-  normalizedPayee: string;
-  similarity: number;
-  amount: number;
-  categoryName: string | null;
-}
-
-interface CategoryRange {
-  categoryName: string | null;
-  support: number;
-  minAmount: number;
-  maxAmount: number;
-  isPicked: boolean;
-}
 
 interface TestResultRow {
   date: string;
@@ -501,52 +488,15 @@ export const POST = withAuth(async (request) => {
       if (!suggestion) continue;
       const queryMatch = deriveMatchPayee(it.normalizedPayee, tokenFreq) ?? "";
       if (!queryMatch) continue;
-      // Top 30 nearest neighbours above the same 0.4 floor the suggester
-      // uses, sorted by similarity desc.
-      const scored = trigramPool
-        .map((c) => ({
-          normalized_payee: c.normalizedPayee ?? "",
-          sim: trigramSimilarity(c.matchPayee ?? "", queryMatch),
-          amount: parseFloat(c.amount),
-          category_id: c.categoryId as string,
-        }))
-        .filter((n) => n.sim > 0.4);
-      scored.sort((a, b) => b.sim - a.sim);
-      const widePool = scored.slice(0, 30);
-
-      // Per-category min/max derived from the same neighbourhood the
-      // suggester scored over. ABS so signed amounts (expense rows are
-      // negative) read as a clean magnitude range.
-      const byCat = new Map<string, { support: number; min: number; max: number }>();
-      for (const n of widePool) {
-        const mag = Math.abs(n.amount);
-        const cur = byCat.get(n.category_id);
-        if (cur) {
-          cur.support += 1;
-          if (mag < cur.min) cur.min = mag;
-          if (mag > cur.max) cur.max = mag;
-        } else {
-          byCat.set(n.category_id, { support: 1, min: mag, max: mag });
-        }
-      }
-      const categoryRanges: CategoryRange[] = Array.from(byCat.entries())
-        .map(([cid, v]) => ({
-          categoryName: catName.get(cid) ?? null,
-          support: v.support,
-          minAmount: v.min,
-          maxAmount: v.max,
-          isPicked: cid === suggestion.categoryId,
-        }))
-        .sort((a, b) => Number(b.isPicked) - Number(a.isPicked) || b.support - a.support);
-
+      const { neighbours, categoryRanges } = computeNeighboursAndRanges(
+        queryMatch,
+        trigramPool,
+        catName,
+        suggestion.categoryId,
+      );
       trigramHits.set(it.key, {
         ...suggestion,
-        neighbours: widePool.slice(0, 5).map((n) => ({
-          normalizedPayee: n.normalized_payee,
-          similarity: n.sim,
-          amount: n.amount,
-          categoryName: catName.get(n.category_id) ?? null,
-        })),
+        neighbours,
         categoryRanges,
       });
     }

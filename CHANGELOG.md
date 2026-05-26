@@ -9,6 +9,38 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.286.0 — 2026-05-26
+
+### Added
+- **Trigram neighbours on the /transactions expand panel.** The
+  same diagnostic block the CSV-import expand panel shows
+  (per-category amount ranges from the top-30 neighbourhood +
+  top-5 nearest neighbours with similarity %, payee, amount,
+  category) now appears on every expanded row in the transactions
+  list. Useful for sanity-checking *why* a row was categorised the
+  way it was, or for finding lookalikes when picking a new
+  category.
+
+  Computed lazily on first expand via a new
+  `GET /api/transactions/[id]/neighbours` endpoint, SWR-cached
+  so re-expanding the same row within the dedupe window is free.
+  Rows with no normalised payee silently omit the panel — no
+  empty-state spam in the expand area.
+
+  Internals:
+  - The per-row scoring loop (formerly inlined in
+    `/api/import/categorise`) moved into a shared
+    `computeNeighboursAndRanges` in `src/lib/categorize.ts`.
+    Both endpoints call it; both expand panels render the same
+    new `<NeighboursPanel>` component.
+  - The endpoint excludes the queried transaction from its own
+    pool — otherwise it would always self-match at similarity 1.0
+    and crowd out the real neighbours.
+  - 5 unit tests pin the helper's sort/floor/ranges arithmetic;
+    4 integration tests pin the endpoint's contract (exclude
+    self, empty envelope for no-payee rows, 404 on missing id,
+    400 on malformed uuid).
+
 ## 0.285.0 — 2026-05-26
 
 ### Changed

@@ -240,6 +240,99 @@ export interface SuggestCandidate {
   categoryId: string | null;
   matchPayee: string | null;
   amount: string;
+  /** Optional pre-normalised form for the row — surfaced to the UI
+   *  as the neighbour label (`normalizedPayee` is more readable
+   *  than `matchPayee`, which strips reference IDs). Optional so
+   *  call-sites that only need the suggester (and not the
+   *  neighbours panel) can omit this column from their SELECT. */
+  normalizedPayee?: string | null;
+}
+
+/** Diagnostic shape consumed by the import + transactions
+ *  expand-row panels — see `<NeighboursPanel>`. */
+export interface TrigramNeighbour {
+  normalizedPayee: string;
+  similarity: number;
+  amount: number;
+  categoryName: string | null;
+}
+export interface TrigramCategoryRange {
+  categoryName: string | null;
+  categoryId: string;
+  support: number;
+  minAmount: number;
+  maxAmount: number;
+  isPicked: boolean;
+}
+
+/** Score the candidate pool against a single query and derive the
+ *  diagnostic panel data: top-5 neighbours by similarity + per-
+ *  category amount ranges from the wider top-30 neighbourhood.
+ *  Shared by `/api/import/categorise` (per-row) and the new
+ *  `/api/transactions/[id]/neighbours` endpoint so both surfaces
+ *  render identical detail.
+ *
+ *  Same 0.4 similarity floor and top-30 cap as the import path used
+ *  inline — the cap stops a long tail of marginal matches polluting
+ *  the per-category ranges. */
+export function computeNeighboursAndRanges(
+  queryMatch: string,
+  candidates: ReadonlyArray<SuggestCandidate>,
+  categoryNames: Map<string, string>,
+  pickedCategoryId: string | null,
+): { neighbours: TrigramNeighbour[]; categoryRanges: TrigramCategoryRange[] } {
+  if (!queryMatch) return { neighbours: [], categoryRanges: [] };
+  const scored = candidates
+    .map((c) => ({
+      normalizedPayee: c.normalizedPayee ?? "",
+      sim: trigramSimilarity(c.matchPayee ?? "", queryMatch),
+      amount: parseFloat(c.amount),
+      categoryId: c.categoryId,
+    }))
+    .filter(
+      (n): n is typeof n & { categoryId: string } =>
+        !!n.categoryId && n.sim > 0.4,
+    );
+  scored.sort((a, b) => b.sim - a.sim);
+  const widePool = scored.slice(0, 30);
+
+  // Per-category min/max derived from the top-30 neighbourhood.
+  // ABS so signed amounts (expenses are negative) read as a clean
+  // magnitude range.
+  const byCat = new Map<string, { support: number; min: number; max: number }>();
+  for (const n of widePool) {
+    const mag = Math.abs(n.amount);
+    const cur = byCat.get(n.categoryId);
+    if (cur) {
+      cur.support += 1;
+      if (mag < cur.min) cur.min = mag;
+      if (mag > cur.max) cur.max = mag;
+    } else {
+      byCat.set(n.categoryId, { support: 1, min: mag, max: mag });
+    }
+  }
+  const categoryRanges: TrigramCategoryRange[] = Array.from(byCat.entries())
+    .map(([cid, v]) => ({
+      categoryId: cid,
+      categoryName: categoryNames.get(cid) ?? null,
+      support: v.support,
+      minAmount: v.min,
+      maxAmount: v.max,
+      isPicked: cid === pickedCategoryId,
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.isPicked) - Number(a.isPicked) || b.support - a.support,
+    );
+
+  const neighbours: TrigramNeighbour[] = widePool.slice(0, 5).map((n) => ({
+    normalizedPayee: n.normalizedPayee,
+    similarity: n.sim,
+    amount: n.amount,
+    categoryName: categoryNames.get(n.categoryId) ?? null,
+  }));
+
+  return { neighbours, categoryRanges };
 }
 
 export async function suggestCategoryByHistory(

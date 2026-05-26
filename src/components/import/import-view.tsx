@@ -10,6 +10,11 @@ import { Switch } from "@/components/ui/switch";
 import { Upload, FileText, ChevronDown, ChevronRight } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
+import { NeighboursPanel } from "@/components/categorize/neighbours-panel";
+import type {
+  TrigramNeighbour as Neighbour,
+  TrigramCategoryRange as CategoryRange,
+} from "@/lib/categorize";
 import { useAddAccount } from "@/hooks/use-add-account-dialog";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
@@ -32,20 +37,6 @@ interface AccountOption {
   institution?: string | null;
 }
 
-interface Neighbour {
-  normalizedPayee: string;
-  similarity: number;
-  amount: number;
-  categoryName: string | null;
-}
-
-interface CategoryRange {
-  categoryName: string | null;
-  support: number;
-  minAmount: number;
-  maxAmount: number;
-  isPicked: boolean;
-}
 
 interface QIFAccountInfo {
   name?: string;
@@ -1228,76 +1219,10 @@ function ImportRowExpanded({ row }: { row: TestResultRow }) {
             )}
           </>
         ) : (
-          <>
-            {row.categoryRanges && row.categoryRanges.length > 0 && (
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Categories in matched neighbourhood
-                </p>
-                <ul className="mt-1 space-y-0.5">
-                  {row.categoryRanges.map((cr, j) => (
-                    <li
-                      key={j}
-                      className={cn(
-                        "flex gap-3 items-center",
-                        cr.isPicked && "font-medium",
-                      )}
-                    >
-                      <span className="text-muted-foreground w-12 text-right tabular-nums">
-                        {cr.support}n
-                      </span>
-                      <span className="w-48 truncate">
-                        {cr.categoryName ?? "—"}
-                        {cr.isPicked && (
-                          <span className="ml-1 text-[10px] text-emerald-600">
-                            ◀ picked
-                          </span>
-                        )}
-                      </span>
-                      <span className="tabular-nums text-muted-foreground">
-                        {cr.minAmount === cr.maxAmount
-                          ? formatAUD(cr.minAmount)
-                          : `${formatAUD(cr.minAmount)} – ${formatAUD(cr.maxAmount)}`}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {row.neighbours && row.neighbours.length > 0 && (
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-2">
-                  Nearest neighbours
-                </p>
-                <ul className="mt-1 space-y-0.5">
-                  {row.neighbours.map((n, j) => (
-                    <li key={j} className="flex gap-3">
-                      <span className="tabular-nums text-muted-foreground w-10">
-                        {(n.similarity * 100).toFixed(0)}%
-                      </span>
-                      <span
-                        className="font-mono text-[11px] truncate max-w-[240px]"
-                        title={n.normalizedPayee}
-                      >
-                        {n.normalizedPayee}
-                      </span>
-                      <span className="tabular-nums text-muted-foreground">
-                        {formatAUD(n.amount)}
-                      </span>
-                      <span>{n.categoryName ?? "—"}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {(!row.categoryRanges || row.categoryRanges.length === 0) &&
-              (!row.neighbours || row.neighbours.length === 0) && (
-                <p className="text-[10px] text-muted-foreground italic">
-                  No trigram neighbours — categorise this row manually
-                  using the picker on the left.
-                </p>
-              )}
-          </>
+          <NeighboursPanel
+            neighbours={row.neighbours ?? []}
+            categoryRanges={row.categoryRanges ?? []}
+          />
         )}
       </div>
     </div>

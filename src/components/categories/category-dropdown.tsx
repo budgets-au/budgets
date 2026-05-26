@@ -78,11 +78,16 @@ export interface CategoryDropdownProps {
 interface Entry {
   id: string;
   depth: number;
-  /** "Grandparent / Parent / Child" — used as the search corpus + the
-   * tooltip on the row. The label rendered to the user is the
-   * trailing leaf only; ancestor context is conveyed by indent. */
+  /** "Grandparent › Parent › Child" — used as the search corpus, the
+   *  tooltip on the row, and (split into `ancestors` + `leaf`) the
+   *  rendered label. Same separator the batch-categorise picker
+   *  and the trigram neighbours panel use so the operator sees one
+   *  consistent shape everywhere. */
   fullPath: string;
   haystack: string;
+  /** Everything above the leaf — rendered muted as the prefix on
+   *  each row. Empty for top-level categories. */
+  ancestors: string[];
   leaf: string;
 }
 
@@ -150,12 +155,13 @@ export function CategoryDropdown({
       const m = meta.get(c.id);
       if (!m) continue;
       if (typeof maxDepth === "number" && m.depth > maxDepth) continue;
-      const fullPath = m.path.join(" / ");
+      const fullPath = m.path.join(" › ");
       list.push({
         id: c.id,
         depth: m.depth,
         fullPath,
         haystack: fullPath.toLowerCase(),
+        ancestors: m.path.slice(0, -1),
         leaf: m.path[m.path.length - 1] ?? c.name,
       });
     }
@@ -177,7 +183,7 @@ export function CategoryDropdown({
         if (e.leaf.toLowerCase().startsWith(q)) score = 0;
         else if (
           e.fullPath
-            .split(" / ")
+            .split(" › ")
             .some((seg) => seg.toLowerCase().startsWith(q))
         )
           score = 1;
@@ -347,13 +353,21 @@ export function CategoryDropdown({
                 <Check
                   className={`h-3 w-3 shrink-0 ${isSelected ? "opacity-100" : "opacity-0"}`}
                 />
-                <span
-                  className="truncate min-w-0"
-                  // 14px per depth step — visible without crowding the
-                  // 288px popover at depth 2 (Grandchild → 28px lead).
-                  style={{ paddingLeft: `${e.depth * 14}px` }}
-                >
-                  {e.leaf}
+                <span className="truncate min-w-0">
+                  {/* Ancestors as a muted prefix, leaf in normal weight —
+                      matches the batch-categorise picker so when the
+                      operator searches "Insurance" they can tell
+                      Caravan › Insurance from Ford › Insurance at a
+                      glance, instead of seeing a wall of identical
+                      "Insurance" rows. Depth-indent went away because
+                      the visible path conveys hierarchy explicitly. */}
+                  {e.ancestors.length > 0 && (
+                    <span className="text-muted-foreground/70">
+                      {e.ancestors.join(" › ")}
+                      {" › "}
+                    </span>
+                  )}
+                  <span>{e.leaf}</span>
                 </span>
               </li>
             );

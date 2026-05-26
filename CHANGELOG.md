@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.289.0 — 2026-05-26
+
+### Changed
+- **Every category picker shows the full path in its option list,
+  matching the batch-categorise picker.** Previously, every
+  picker but the batch one (`CategoryDropdown` — used by the
+  per-row /transactions picker, the import / uncategorised
+  expand-row picker, the scheduled-edit form, the add-transaction
+  dialog, and everywhere else) rendered leaf-only with a
+  depth-indented prefix. A search for "Insurance" then returned
+  a wall of identical-looking rows: Caravan › Insurance,
+  Ford › Insurance, Motorbike › Insurance, Health › Insurance
+  all flat-rendered as "Insurance".
+
+  Now every option row shows ancestors as a muted prefix
+  (`Caravan › `) and the leaf in normal weight, joined by " › "
+  to match the batch picker and the trigram neighbours panel.
+  The depth indent went away — the visible path conveys
+  hierarchy explicitly, and the indent became redundant noise
+  once the parent appeared in the label.
+
+  Single-file change to `CategoryDropdown`; every consumer
+  (`category-picker.tsx`, the import + uncategorised pickers,
+  `scheduled-edit-form.tsx`, `add-transaction-dialog.tsx`)
+  inherits the new layout automatically. Triggers (the collapsed
+  selected-value button on each row) stay leaf-only with the
+  existing tooltip-on-hover for the full path — narrow row
+  chrome unchanged.
+
 ## 0.288.0 — 2026-05-26
 
 ### Changed

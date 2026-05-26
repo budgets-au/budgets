@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { User, LogOut } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { ThemeToggle } from "@/components/settings/theme-toggle";
 
 export function Topbar({
   title,
@@ -27,6 +28,7 @@ export function Topbar({
       <h1 className="font-semibold text-base shrink-0">{title}</h1>
       <div className="flex items-center gap-2">
         {actions}
+        <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger className="inline-flex items-center gap-2 rounded-lg px-2.5 h-8 text-sm font-medium hover:bg-muted transition-colors">
             <User className="h-4 w-4" />

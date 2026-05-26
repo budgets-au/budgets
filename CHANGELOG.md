@@ -9,6 +9,18 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.285.0 — 2026-05-26
+
+### Changed
+- **Light/dark toggle moved out of Settings into the Topbar.** A
+  sun/moon icon button (lucide Sun/Moon) sits immediately before
+  the account dropdown on every page — the canonical placement
+  most webapps use for theme switches. Sun icon = currently light
+  (click for dark); Moon icon = currently dark (click for light).
+  The "Appearance" card in Settings → General is gone; everything
+  else on that tab stays as-is. The cookie + class-toggle
+  mechanics are unchanged.
+
 ## 0.284.0 — 2026-05-26
 
 ### Fixed

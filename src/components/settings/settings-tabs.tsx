@@ -7,7 +7,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useLockDatabase } from "@/hooks/use-lock-database";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
-import { ThemeToggle } from "@/components/settings/theme-toggle";
 import { PayeeRulesManager } from "@/components/settings/payee-rules-manager";
 import { BackupList } from "@/components/settings/backup-list";
 import { BackupSchedule } from "@/components/settings/backup-schedule";
@@ -60,7 +59,6 @@ export function SettingsTabs() {
       </TabsList>
 
       <TabsContent value="general" className="space-y-6 max-w-2xl">
-        <ThemeToggle />
         <div className="rounded-xl border bg-card divide-y">
           <div className="px-4 py-3">
             <h2 className="font-medium">Display</h2>

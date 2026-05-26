@@ -52,7 +52,10 @@ export function NeighboursPanel({
                 <span className="text-muted-foreground w-12 text-right tabular-nums">
                   {cr.support}n
                 </span>
-                <span className="w-48 truncate">
+                <span
+                  className="w-64 truncate"
+                  title={cr.categoryName ?? undefined}
+                >
                   {cr.categoryName ?? "—"}
                   {cr.isPicked && (
                     <span className="ml-1 text-[10px] text-emerald-600">

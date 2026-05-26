@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.288.0 — 2026-05-26
+
+### Changed
+- **Neighbours panel "Categories in matched neighbourhood" now
+  shows the full grandparent › parent › child path.** Previously
+  rendered just the leaf name — "Insurance" rows under Caravan /
+  Ford / Motorbike / Health were indistinguishable. The CSV-import
+  panel already did this; the new `/transactions` expand panel
+  inherited a bare-name `Map<id, name>` lookup and missed it.
+
+  Extracted `buildCategoryPathStringMap` to `src/lib/category-path.ts`
+  so both `/api/import/categorise` and
+  `/api/transactions/[id]/neighbours` share one implementation. The
+  per-row category cell in the panel widened from `w-48` → `w-64`
+  and got a `title` attribute so a long truncated path stays
+  readable on hover.
+
+  Depth-capped at 4 levels — defensive against any future
+  pathological parent chain.
+
+  6 new unit tests pin the helper (3-level chain, depth cap,
+  orphan parents, top-level no-op). The neighbours integration
+  fixture grew a parent → child hierarchy so the assertions
+  prove the path is built.
+
 ## 0.287.0 — 2026-05-26
 
 ### Added

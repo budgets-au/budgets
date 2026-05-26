@@ -31,3 +31,30 @@ export function buildCategoryMeta(categories: CategoryLike[]) {
 
   return { meta, byId };
 }
+
+/** Build `Map<categoryId, "Parent › Child › Leaf">` for every
+ *  category — the human-readable form the import expand panel and
+ *  the transactions neighbours panel use as their category label.
+ *  Disambiguates the "Insurance" categories that exist under
+ *  Caravan / Ford / Motorbike / Health, etc. Depth-capped at 4
+ *  levels so a runaway parent chain can't produce an unreadable
+ *  string. */
+export function buildCategoryPathStringMap(
+  categories: CategoryLike[],
+): Map<string, string> {
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const PATH_DEPTH_CAP = 4;
+  const out = new Map<string, string>();
+  for (const cat of categories) {
+    const parts: string[] = [];
+    let cur: CategoryLike | undefined = cat;
+    let depth = 0;
+    while (cur && depth < PATH_DEPTH_CAP) {
+      parts.unshift(cur.name);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+      depth++;
+    }
+    out.set(cat.id, parts.length ? parts.join(" › ") : cat.name);
+  }
+  return out;
+}

@@ -11,6 +11,7 @@ import {
   type TrigramNeighbour,
   type TrigramCategoryRange,
 } from "@/lib/categorize";
+import { buildCategoryPathStringMap } from "@/lib/category-path";
 
 export interface NeighboursResponse {
   /** Trigram-suggested category for the row at the moment of the
@@ -93,14 +94,18 @@ export const GET = withAuthAndId(async (id) => {
     pool,
   );
 
-  // Resolve category names for the panel labels. One query gets
-  // every category since the table is small (typically < 100
-  // rows); cheaper than two roundtrips when the suggestion lands
-  // in one category but the per-cat ranges fan out across many.
+  // Resolve full category PATHS for the panel labels (not just
+  // the leaf name) — disambiguates the half-dozen "Insurance"
+  // categories that exist under Caravan / Ford / Motorbike /
+  // Health, etc. Matches what the CSV-import panel already shows.
   const allCats = await db
-    .select({ id: categories.id, name: categories.name })
+    .select({
+      id: categories.id,
+      name: categories.name,
+      parentId: categories.parentId,
+    })
     .from(categories);
-  const catName = new Map(allCats.map((c) => [c.id, c.name]));
+  const catName = buildCategoryPathStringMap(allCats);
 
   const { neighbours, categoryRanges } = computeNeighboursAndRanges(
     queryMatch,

@@ -22,6 +22,7 @@ import {
   type TrigramCategoryRange as CategoryRange,
 } from "@/lib/categorize";
 import { withAuth } from "@/lib/api/route-guards";
+import { buildCategoryPathStringMap } from "@/lib/category-path";
 
 interface TestResultRow {
   date: string;
@@ -399,26 +400,14 @@ export const POST = withAuth(async (request) => {
     }
   }
 
-  // Pre-load category id+name+parent so we can build the full "Parent > Child"
-  // path and disambiguate the half-dozen "Insurance" categories under
-  // Caravan / Ford / Motorbike / Health.
+  // Pre-load category id+name+parent so we can build the full
+  // "Parent › Child" path and disambiguate the half-dozen
+  // "Insurance" categories under Caravan / Ford / Motorbike /
+  // Health. Shared with the /transactions [id]/neighbours endpoint.
   const cats = await db
     .select({ id: categories.id, name: categories.name, parentId: categories.parentId })
     .from(categories);
-  const byId = new Map(cats.map((c) => [c.id, c]));
-  function pathOf(id: string | null | undefined): string | null {
-    if (!id) return null;
-    const parts: string[] = [];
-    let cur = byId.get(id);
-    let depth = 0;
-    while (cur && depth < 4) {
-      parts.unshift(cur.name);
-      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
-      depth++;
-    }
-    return parts.length ? parts.join(" › ") : null;
-  }
-  const catName = new Map(cats.map((c) => [c.id, pathOf(c.id) ?? c.name]));
+  const catName = buildCategoryPathStringMap(cats);
 
   // Stage 1: explicit payee_rules (the high-priority override layer).
   const lookupItems = rows

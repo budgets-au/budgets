@@ -35,14 +35,20 @@ describe("/api/transactions/[id]/neighbours", () => {
         currency: "AUD",
       })
       .run();
+    // Parent → child hierarchy so the test pins that the
+    //   endpoint returns "Food › Groceries" — the full path —
+    //   for the category label, not just the leaf name.
     db.drizzleDb
       .insert(categories)
-      .values({
-        id: "cat-groceries",
-        name: "Groceries",
-        type: "expense",
-        parentId: null,
-      })
+      .values([
+        { id: "cat-food", name: "Food", type: "expense", parentId: null },
+        {
+          id: "cat-groceries",
+          name: "Groceries",
+          type: "expense",
+          parentId: "cat-food",
+        },
+      ])
       .run();
 
     db.drizzleDb
@@ -111,13 +117,13 @@ describe("/api/transactions/[id]/neighbours", () => {
     // target must NOT appear as its own neighbour.
     expect(body.neighbours.length).toBe(1);
     expect(body.neighbours[0].normalizedPayee).toBe("COLES STORE NUNAWADING");
-    expect(body.neighbours[0].categoryName).toBe("Groceries");
+    expect(body.neighbours[0].categoryName).toBe("Food › Groceries");
     // Support count for the picked category is 1 — the sibling
     // row, not the target row.
     const picked = body.categoryRanges.find((r) => r.isPicked);
     expect(picked).toBeDefined();
     expect(picked!.support).toBe(1);
-    expect(body.suggestion?.categoryName).toBe("Groceries");
+    expect(body.suggestion?.categoryName).toBe("Food › Groceries");
   });
 
   it("returns the empty envelope for a row with no normalisedPayee", async () => {

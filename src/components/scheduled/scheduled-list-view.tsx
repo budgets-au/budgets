@@ -22,7 +22,7 @@ import { currentBudgetPeriod, pastBudgetPeriods } from "@/lib/budget-period";
 import {
   buildChildrenByParent,
   descendantIdsFromMap,
-} from "@/lib/category-descendants";
+} from "@/lib/category-tree";
 import { ScheduledEditForm, type ScheduledFormRow } from "@/components/scheduled/scheduled-edit-form";
 import { NewScheduledDialog } from "@/components/scheduled/new-scheduled-dialog";
 import { ScheduledForecastRows } from "@/components/scheduled/scheduled-forecast-rows";

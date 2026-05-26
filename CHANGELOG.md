@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.296.0 — 2026-05-26
+
+### Fixed
+- **0.295.0 production build failed** because the
+  `descendantIdsFromMap` import from `category-descendants.ts`
+  in `scheduled-list-view.tsx` (a `"use client"` component)
+  pulled `@/db` — and by extension `better-sqlite3` + the
+  backup subsystem — into the browser bundle. Vitest + the
+  dev server didn't catch it; the production Next 16 build did.
+
+  Split the pure tree helpers into a new no-DB module
+  `src/lib/category-tree.ts`. `category-descendants.ts` keeps
+  the async DB-touching exports (`categoryDescendantIds`,
+  `wouldCreateCycle`) and re-exports the pure helpers for
+  backwards compat with the existing server-side consumers.
+  Client components import from `@/lib/category-tree` directly.
+
+  0.295.0's GH release page exists but the image does not —
+  the refactor it advertised ships here as 0.296.0 + this fix.
+
 ## 0.295.0 — 2026-05-26
 
 ### Changed

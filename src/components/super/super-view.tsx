@@ -340,7 +340,13 @@ function EditableHeading({
           maxLength={40}
           className="h-9 text-xl font-semibold w-auto max-w-xs"
         />
-        <Button size="sm" onClick={save} disabled={saving}>
+        <Button
+          size="sm"
+          onClick={save}
+          disabled={saving}
+          aria-label="Save heading"
+          title="Save heading"
+        >
           <Check className="h-3.5 w-3.5" />
         </Button>
         <Button
@@ -350,6 +356,8 @@ function EditableHeading({
             setDraft(heading);
             setEditing(false);
           }}
+          aria-label="Cancel heading edit"
+          title="Cancel heading edit"
         >
           <X className="h-3.5 w-3.5" />
         </Button>
@@ -544,7 +552,18 @@ function SnapshotForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-b bg-muted/30 p-3 space-y-2">
+    <form
+      onSubmit={handleSubmit}
+      // Disable HTML5 native validation — the JS handler at
+      // handleSubmit already validates year + balance and surfaces
+      // toast errors. Without this, the browser's native bad-input
+      // tooltip blocks form submission silently and the JS handler
+      // never runs, leaving the operator staring at a Save button
+      // that "does nothing". Caught by the monkey crawl on
+      // 2026-05-26 — see TEST-RESULTS.md.
+      noValidate
+      className="border-b bg-muted/30 p-3 space-y-2"
+    >
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div>
           <Label className="text-xs" htmlFor="super-year">
@@ -553,11 +572,8 @@ function SnapshotForm({
           <Input
             id="super-year"
             type="number"
-            min="1990"
-            max="2200"
             value={year}
             onChange={(e) => setYear(e.target.value)}
-            required
           />
         </div>
         <div>
@@ -581,7 +597,6 @@ function SnapshotForm({
             step="0.01"
             value={balance}
             onChange={(e) => setBalance(e.target.value)}
-            required
           />
         </div>
       </div>

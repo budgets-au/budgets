@@ -9,6 +9,37 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.297.0 — 2026-05-26
+
+### Fixed
+- **`/superannuation` Save button silently no-op'd on bad input.**
+  Caught by the 2026-05-26 monkey crawl: filling the FY-year /
+  fund / balance inputs with junk ("42" / "monkey-test" / "42")
+  and clicking Save produced no toast, no network call, no
+  navigation.
+
+  Root cause: the year `<Input>` had `type="number" min="1990"
+  max="2200" required`. The browser's HTML5-native validation
+  caught `42 < 1990` BEFORE the form's `onSubmit` fired, blocked
+  submit with a small native tooltip, and the JS `handleSubmit`
+  (which contains the canonical `toast.error("Enter a valid
+  FY-end year")`) never ran. Same shape on the balance field.
+
+  Fix: added `noValidate` to the form and dropped the
+  `min`/`max`/`required` attributes from the two inputs. The JS
+  handler at `super-view.tsx:508` now runs every time and surfaces
+  a clear, persistent toast for invalid input. Happy path
+  unchanged. New e2e spec at
+  `tests/e2e/superannuation-snapshot.spec.ts` pins the contract
+  (invalid year → toast + zero POSTs; valid input → POST + success
+  toast).
+
+  While there: added `aria-label="Save heading"` /
+  `aria-label="Cancel heading edit"` to the icon-only check/X
+  buttons on the inline `EditableHeading` so they're reachable
+  by screen readers + the monkey's button matcher (which
+  searches by accessible name).
+
 ## 0.296.0 — 2026-05-26
 
 ### Fixed

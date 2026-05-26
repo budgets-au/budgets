@@ -9,6 +9,38 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.284.0 — 2026-05-26
+
+### Fixed
+- **`/import?mode=uncat` drains the whole queue in one click.**
+  User reported committing 500-row pages over and over to clear a
+  5237-row backlog: *"after committing, it then had more to commit,
+  like it didn't save all, I hit commit again until they all saved."*
+  Saves WERE working — the categorise endpoint caps each page at
+  500 rows (perf fix from 0.276.0), and after every commit the
+  reload at offset=0 pulled the NEXT 500 uncategorised into view,
+  with fresh suggestions that looked deceptively similar to what
+  had just been committed.
+
+  The commit handler now loops: PATCH visible → reload → repeat
+  until the server reports 0 uncategorised left OR the next page
+  is entirely rows with no suggestion (which the operator
+  hand-picks). Safety net: 50 iterations max (≥ 25k rows).
+
+  Side-by-side with the loop:
+  - **Button label is now honest about scope.** When there's more
+    than one page of suggestable rows the label reads
+    `Apply N (across pages)` where N is the server's total
+    uncategorised, not just the visible-page count.
+  - **Live progress while committing.** Button switches to
+    `Applied N / TOTAL …` and updates after each batch so the
+    operator can see the queue draining.
+  - **Final toast** reports total applied + batch count
+    (`Categorised 5237 transactions across 11 batches.`).
+  - **Stale "strict per-row consent" comment removed.** The code
+    was always permissive ("save everything visible"); the
+    comment was the only thing claiming otherwise.
+
 ## 0.283.0 — 2026-05-26
 
 ### Changed

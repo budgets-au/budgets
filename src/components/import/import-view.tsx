@@ -279,7 +279,18 @@ export function ImportView() {
     async ({
       append = false,
       offset = 0,
-    }: { append?: boolean; offset?: number } = {}) => {
+    }: { append?: boolean; offset?: number } = {}): Promise<{
+      /** Synthesised rows just placed on this page — handed back so
+       *  the commit loop can act on them directly without waiting
+       *  for a React render cycle. */
+      pageRows: TestResultRow[];
+      /** Server's count of all uncategorised rows (across pages). */
+      total: number;
+      /** How many of `pageRows` carry a non-null trigram suggestion
+       *  — the loop stops when this hits 0 because the remaining
+       *  queue is rows the operator has to hand-pick. */
+      suggestableCount: number;
+    }> => {
       setLoading(true);
       setExpandedKey(null);
       const res = await fetch(
@@ -288,7 +299,7 @@ export function ImportView() {
       if (!res.ok) {
         toast.error("Failed to load uncategorised transactions");
         setLoading(false);
-        return;
+        return { pageRows: [], total: 0, suggestableCount: 0 };
       }
       interface UncatRow {
         id: string;
@@ -362,6 +373,11 @@ export function ImportView() {
       setUncatHasMore(envelope.hasMore);
       if (!append) setAccountFilter("all");
       setLoading(false);
+      return {
+        pageRows: synthRows,
+        total: envelope.total,
+        suggestableCount: synthRows.filter((r) => !!r.categoryId).length,
+      };
     },
     [],
   );
@@ -812,6 +828,7 @@ export function ImportView() {
             effectiveRows={effectiveRows}
             file={file}
             mode={mode}
+            uncatTotal={uncatTotal}
             onUncatCommitted={isUncat ? loadUncategorised : undefined}
           />
         </>
@@ -1328,6 +1345,7 @@ function CommitToDb({
   effectiveRows,
   file,
   mode = "csv",
+  uncatTotal = 0,
   onUncatCommitted,
 }: {
   data: TestResponse;
@@ -1336,12 +1354,26 @@ function CommitToDb({
   /** "csv" (default) inserts via /api/import/commit-batched; "uncat"
    *  PATCHes existing rows' categoryId via /api/transactions/bulk. */
   mode?: "csv" | "uncat";
-  /** Called after a successful uncat commit so the parent can
-   *  reload the queue (the saved rows fall out of view). */
-  onUncatCommitted?: () => Promise<void>;
+  /** Server's count of all uncategorised rows across pages — used
+   *  to drive the "Applied N / TOTAL …" progress label while the
+   *  cross-page commit loop runs. */
+  uncatTotal?: number;
+  /** Called after a successful uncat commit. Returns the just-loaded
+   *  page's synthesised rows plus how many of them carry a trigram
+   *  suggestion, so the commit loop can decide whether to keep going
+   *  or hand control back to the operator for the remaining (no-
+   *  suggestion) rows. */
+  onUncatCommitted?: () => Promise<{
+    pageRows: TestResultRow[];
+    total: number;
+    suggestableCount: number;
+  }>;
 }) {
   const router = useRouter();
   const [committing, setCommitting] = useState(false);
+  /** Cross-page progress counter for the uncat loop — drives the
+   *  "Applied N / TOTAL …" button label while running. */
+  const [uncatRunningApplied, setUncatRunningApplied] = useState(0);
   const confirm = useConfirm();
 
   const committableRows = useMemo(
@@ -1385,62 +1417,105 @@ function CommitToDb({
   const uncatApplyCount = effectiveRows.filter((r) => !!r.categoryId).length;
   const uncatHasWork = uncatApplyCount > 0;
 
-  /** Uncat-mode commit: group changed-from-original rows by their
-   *  chosen categoryId and PATCH /api/transactions/bulk per group.
-   *  "Changed" here means the row's categoryId is not null AND was
-   *  user-touched via the picker (tracked by `localOverrides` in
-   *  the parent — surfaced here through the row's current
-   *  categoryId, which only equals the suggestion until the user
-   *  clicks). Strict policy: rows the user didn't click are NOT
-   *  saved, even when a suggestion is sitting in the picker.
-   *  Matches the user's earlier preference for per-row consent. */
+  /** PATCH every row whose `categoryId` is set, grouped by category.
+   *  Returns the number of rows successfully committed; throws if a
+   *  PATCH fails so the caller (the loop) can stop cleanly. The
+   *  helper takes rows as an argument rather than reading
+   *  `effectiveRows` from the closure so the cross-page loop can
+   *  feed it a freshly-reloaded page without waiting for a React
+   *  render cycle. */
+  async function commitRows(rows: TestResultRow[]): Promise<number> {
+    const byCat = new Map<string, string[]>();
+    for (const r of rows) {
+      if (!r.categoryId) continue;
+      let ids = byCat.get(r.categoryId);
+      if (!ids) {
+        ids = [];
+        byCat.set(r.categoryId, ids);
+      }
+      ids.push(r.importHash); // DB row id (aliased into importHash at synth time)
+    }
+    if (byCat.size === 0) return 0;
+    let applied = 0;
+    for (const [categoryId, ids] of byCat) {
+      // /api/transactions/bulk caps each PATCH at 1000 ids per
+      // its zod schema; chunk if a single category swept up more
+      // than that.
+      for (let i = 0; i < ids.length; i += 1000) {
+        const slice = ids.slice(i, i + 1000);
+        const res = await fetch("/api/transactions/bulk", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: slice, categoryId }),
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          toast.error(`Apply failed: ${res.status} ${body.slice(0, 80)}`);
+          throw new Error("uncat PATCH failed");
+        }
+        applied += slice.length;
+      }
+    }
+    return applied;
+  }
+
+  /** Uncat-mode commit: PERMISSIVE policy — every row with a
+   *  non-null `categoryId` (set by the trigram suggester on load,
+   *  or by the user via the picker) gets PATCHed. To skip a
+   *  suggestion the operator clears the picker on that row.
+   *
+   *  Because the server caps each page at 500 rows (perf fix from
+   *  0.276.0), one click on a 5k-row queue used to require N
+   *  manual commit cycles — after each PATCH the saved rows
+   *  dropped out of the WHERE clause and the next 500 slid up
+   *  into the page, looking deceptively similar to what was just
+   *  committed. The loop here drains the whole queue in one
+   *  click: PATCH visible → reload → repeat until either the
+   *  server reports 0 uncategorised left, or the next page is
+   *  entirely rows with no suggestion (the operator hand-picks
+   *  those). Capped at 50 iterations as a safety net (≥ 25k rows).
+   */
   async function commitUncat() {
     if (mode !== "uncat") return;
     setCommitting(true);
+    setUncatRunningApplied(0);
+    let totalApplied = 0;
+    let rowsToCommit = effectiveRows;
+    let iterations = 0;
+    const MAX_ITERATIONS = 50;
     try {
-      // Group rows by categoryId. Drop rows with no category set
-      // — nothing to PATCH. The full-row set in effectiveRows here
-      // is the "user-clicked OR unchanged-from-suggestion" union;
-      // we already filtered to `willChangeCount > 0` rows above
-      // for the button-enable check.
-      const byCat = new Map<string, string[]>();
-      for (const r of effectiveRows) {
-        if (!r.categoryId) continue;
-        let ids = byCat.get(r.categoryId);
-        if (!ids) {
-          ids = [];
-          byCat.set(r.categoryId, ids);
-        }
-        ids.push(r.importHash); // imported ← DB row id (we aliased it during synthesis)
-      }
-      if (byCat.size === 0) {
-        toast.error("Nothing to apply — no rows have a category set.");
-        return;
-      }
-      let totalApplied = 0;
-      for (const [categoryId, ids] of byCat) {
-        // /api/transactions/bulk caps each PATCH at 1000 ids per
-        // its zod schema; chunk if a single category swept up more
-        // than that.
-        for (let i = 0; i < ids.length; i += 1000) {
-          const slice = ids.slice(i, i + 1000);
-          const res = await fetch("/api/transactions/bulk", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ids: slice, categoryId }),
-          });
-          if (!res.ok) {
-            const body = await res.text().catch(() => "");
-            toast.error(`Apply failed: ${res.status} ${body.slice(0, 80)}`);
+      while (iterations < MAX_ITERATIONS) {
+        iterations++;
+        const applied = await commitRows(rowsToCommit);
+        if (applied === 0) {
+          if (iterations === 1) {
+            toast.error("Nothing to apply — no rows have a category set.");
             return;
           }
-          totalApplied += slice.length;
+          break;
         }
+        totalApplied += applied;
+        setUncatRunningApplied(totalApplied);
+        if (!onUncatCommitted) break;
+        const next = await onUncatCommitted();
+        if (next.total === 0 || next.suggestableCount === 0) break;
+        rowsToCommit = next.pageRows;
       }
-      toast.success(`Categorised ${totalApplied} transactions.`);
-      if (onUncatCommitted) await onUncatCommitted();
+      toast.success(
+        `Categorised ${totalApplied} transaction${totalApplied === 1 ? "" : "s"} across ${iterations} batch${iterations === 1 ? "" : "es"}.`,
+      );
+    } catch {
+      // commitRows already surfaced the upstream error via toast;
+      // the partial-progress toast below tells the operator what
+      // landed so they can decide whether to retry the rest.
+      if (totalApplied > 0) {
+        toast.message(
+          `Stopped after ${totalApplied} transaction${totalApplied === 1 ? "" : "s"}.`,
+        );
+      }
     } finally {
       setCommitting(false);
+      setUncatRunningApplied(0);
     }
   }
 
@@ -1652,11 +1727,15 @@ function CommitToDb({
           >
             {committing
               ? mode === "uncat"
-                ? "Saving…"
+                ? uncatTotal > 0
+                  ? `Applied ${uncatRunningApplied} / ${uncatTotal} …`
+                  : "Saving…"
                 : "Committing…"
               : mode === "uncat"
                 ? uncatApplyCount > 0
-                  ? `Apply ${uncatApplyCount} categor${uncatApplyCount === 1 ? "y" : "ies"}`
+                  ? uncatTotal > uncatApplyCount
+                    ? `Apply ${uncatTotal} (across pages)`
+                    : `Apply ${uncatApplyCount} categor${uncatApplyCount === 1 ? "y" : "ies"}`
                   : "Apply 0 categories"
                 : !hasWork
                   ? "Nothing to commit"

@@ -327,4 +327,71 @@ describe("expandRecurrence — basics", () => {
       ),
     ).toEqual(["2026-01-01", "2026-02-01", "2026-03-01"]);
   });
+
+  it("daily frequency emits every `interval` days", () => {
+    const s = makeSchedule({
+      startDate: "2026-01-01",
+      frequency: "daily",
+      interval: 3,
+    });
+    expect(
+      expandRecurrence(s, parseISO("2026-01-01"), parseISO("2026-01-15")).map(
+        (e) => e.date,
+      ),
+    ).toEqual([
+      "2026-01-01",
+      "2026-01-04",
+      "2026-01-07",
+      "2026-01-10",
+      "2026-01-13",
+    ]);
+  });
+
+  it("fortnightly is two weeks per interval step", () => {
+    const s = makeSchedule({
+      startDate: "2026-01-01",
+      frequency: "fortnightly",
+      interval: 1,
+    });
+    expect(
+      expandRecurrence(s, parseISO("2026-01-01"), parseISO("2026-03-01")).map(
+        (e) => e.date,
+      ),
+    ).toEqual([
+      "2026-01-01",
+      "2026-01-15",
+      "2026-01-29",
+      "2026-02-12",
+      "2026-02-26",
+    ]);
+  });
+
+  it("unknown frequency falls through to one-month step (defensive default)", () => {
+    const s = makeSchedule({
+      startDate: "2026-01-01",
+      frequency: "garbled",
+      interval: 1,
+    });
+    expect(
+      expandRecurrence(s, parseISO("2026-01-01"), parseISO("2026-04-15")).map(
+        (e) => e.date,
+      ),
+    ).toEqual(["2026-01-01", "2026-02-01", "2026-03-01", "2026-04-01"]);
+  });
+
+  it("fast-forward break: cursor jumps past rangeEnd before reaching `from`", () => {
+    // start way back; yearly cadence; rangeEnd is just past `from` so
+    // the fast-forward `while (isBefore(cursor, from))` loop has to
+    // break out via the `if (isAfter(cursor, rangeEnd)) break` guard.
+    const s = makeSchedule({
+      startDate: "2020-01-01",
+      frequency: "yearly",
+      interval: 1,
+    });
+    expect(
+      expandRecurrence(s, parseISO("2025-06-01"), parseISO("2025-07-01")).map(
+        (e) => e.date,
+      ),
+    ).toEqual([]);
+  });
 });

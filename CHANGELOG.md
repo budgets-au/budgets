@@ -9,6 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.287.0 — 2026-05-26
+
+### Added
+- **Coverage push, round 1: pure-logic gaps in `src/lib/`.** Six
+  new test files pin behaviour that was previously uncovered by
+  vitest. Targets were the 0%-coverage files with concentrated
+  logic and no React / DB dependencies.
+
+  - `src/lib/investments/calc.test.ts` — vesting math
+    (stock vs paper vs RSU vs option), cost basis, current value
+    with strike, dividends-received over vests, total return,
+    option intrinsic. 18 cases.
+  - `src/lib/super-people-slug.test.ts` — `slugifyPersonKey`
+    edge cases (empty, special chars, length cap). 5 cases.
+  - `src/lib/transfer-filter.test.ts` — `isTransferRow` SQL
+    fragment + `mkIsTransferRow(alias)` factory. 3 cases.
+  - `src/lib/schedule-colours.test.ts` — frequency / lineage /
+    budget-period palette lookups + `dimColour` arithmetic +
+    `freqLabel` formatting. 15 cases.
+  - `src/lib/utils.test.ts` — `formatAUD`, `formatAmount`,
+    `formatDate`, `amountClass`, `diffDaysISO`, `toISO`, `numFmt`,
+    `cn`. 16 cases.
+  - `src/lib/recurrence.test.ts` — 4 new cases (daily,
+    fortnightly, unknown-freq default branch, fast-forward break
+    when cursor skips past rangeEnd).
+
+  Coverage line ratio: **15.58% → 16.26%** (470 → 531 tests, 53 →
+  60 files). Modest absolute lift — most lib gaps are small
+  files where 0%→100% adds only 10-30 lines. Round 2 (API
+  routes) and Round 3 (component-helper extractions) carry the
+  larger remaining headroom, per the plan in
+  `let-s-start-a-brand-hidden-kite.md`.
+
 ## 0.286.0 — 2026-05-26
 
 ### Added

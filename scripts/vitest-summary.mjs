@@ -12,7 +12,11 @@
  * boil-down step keeps the on-disk sidecar small (single-digit KB)
  * so the teardown doesn't have to walk a huge AST every e2e run.
  *
- * Invoked via `pnpm test:report` — see package.json.
+ * Invoked as the second half of `pnpm test` (chained via &&) so the
+ * TEST-RESULTS.md "Vitest summary" block — which the Playwright
+ * teardown writes from this script's output — stays in sync with
+ * the most recent passing test run. `pnpm test:report` is kept as
+ * an alias for backwards compat.
  */
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";

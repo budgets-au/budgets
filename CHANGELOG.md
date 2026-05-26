@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.298.0 — 2026-05-26
+
+### Fixed
+- **`TEST-RESULTS.md` Vitest summary went stale.** The Playwright
+  global teardown writes the "Vitest summary" block from
+  `tests/e2e/.data/vitest-report.json`, but that file was only
+  produced by `pnpm test:report` (the JSON-reporter variant).
+  Plain `pnpm test` skipped the writeback, so unless someone
+  explicitly ran `test:report`, the block kept showing whatever
+  numbers were last written. Today it was claiming
+  "353 passed across 38 files" from a 2026-05-20 run — six days
+  and 200+ tests stale.
+
+  Fix: chained the report emission into the default `pnpm test`
+  script (`vitest run --reporter=json --outputFile=… && node
+  scripts/vitest-summary.mjs`). `pnpm test:report` is kept as a
+  one-line alias for backwards compat. Every `pnpm test` run now
+  refreshes the summary; the next e2e run reads the current state
+  into `TEST-RESULTS.md`.
+
+  Trade-off: the new chain uses `&&` instead of the old `;`, so
+  a failing vitest run no longer also writes a partial summary.
+  Acceptable — failures are obvious from the immediate test
+  output; the summary is for periodic glances, not failure triage.
+
 ## 0.297.0 — 2026-05-26
 
 ### Fixed

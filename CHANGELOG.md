@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.290.0 — 2026-05-26
+
+### Removed
+- **Cashflow report colour-flagging rules that no longer made
+  sense.** Three pieces of red / rose tinting are gone:
+  - **Over-plan cells.** `AmountCell` no longer flips to
+    `text-red-500 font-medium` when actual spend exceeds the
+    scheduled/budgeted plan for that month. The `isOverPlan`
+    helper and the `overPlan` prop are deleted.
+  - **Direct-parent-spend tinting on grandparent rows.** The
+    grandparent category name no longer renders in
+    `text-rose-500/70` when the grandparent itself carried
+    direct transactions (vs. being a pure roll-up of children).
+    The `hasDirect` field on each grandparent group stays in the
+    data layer because it still drives whether the row's name
+    links through to `/transactions?categoryId=…` — only the
+    colour effect is gone.
+  - **Direct-parent-spend tinting on the synthetic parent row**
+    that surfaces when a child category has its own parent-level
+    transactions. Same simplification.
+
+  All three were leftovers from the budgeting visualisation that
+  predated the current cashflow shape; the user confirmed they
+  no longer carry useful signal.
+
 ## 0.289.0 — 2026-05-26
 
 ### Changed

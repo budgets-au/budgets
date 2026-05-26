@@ -94,7 +94,6 @@ function AmountCell({
   mode = "plain",
   negate,
   muted,
-  overPlan,
   borderLeft,
   computed,
   compact,
@@ -106,9 +105,6 @@ function AmountCell({
   mode?: "plain" | "net" | "balance";
   negate?: boolean;
   muted?: boolean;
-  /** Renders the value in red — used when actual spend exceeds the plan
-   * for that cell. */
-  overPlan?: boolean;
   /** Adds a left border so adjacent month groups read as visually distinct. */
   borderLeft?: boolean;
   /** Flags this as a calculated column (Total / Avg / Plan-mo) — adds
@@ -129,11 +125,7 @@ function AmountCell({
 }) {
   const display = negate && value !== undefined ? -value : value;
   const { text, className } = formatAmount(display, mode);
-  const colour = overPlan
-    ? "text-red-500 font-medium"
-    : muted
-      ? "text-muted-foreground"
-      : className;
+  const colour = muted ? "text-muted-foreground" : className;
   const isClickable = onClick && value !== undefined && value !== 0;
   const content = isClickable ? (
     <button
@@ -169,16 +161,6 @@ function AmountCell({
       )}
     </td>
   );
-}
-
-/** True when the row is an expense-style row (negate=true) with a non-zero
- * plan and the actual magnitude exceeds it. Income/uncategorised rows
- * (negate=false) are excluded since "over plan" doesn't read as bad there. */
-function isOverPlan(actual: number | undefined, plan: number | undefined, negate: boolean): boolean {
-  if (!negate) return false;
-  if (plan == null || plan <= 0) return false;
-  if (actual == null) return false;
-  return Math.abs(actual) > plan;
 }
 
 /** Compact secondary cell rendered next to a month's actual when the
@@ -577,9 +559,8 @@ function MonthCells({
   negate?: boolean;
   onOpenMonth?: (m: string) => void;
   /** Parent / sub-parent rows render the Actual cell as
-   *  muted (de-emphasised vs leaf rows) when not over plan.
-   *  Leaf rows omit this so the actual amount reads in
-   *  foreground. */
+   *  muted (de-emphasised vs leaf rows). Leaf rows omit this
+   *  so the actual amount reads in foreground. */
   mutedActual?: boolean;
 }) {
   const opts = useColOpts();
@@ -588,7 +569,6 @@ function MonthCells({
       {months.map((m) => {
         const plan = planAt(budgetByMonth, scheduledByMonth, m);
         const actual = byMonth[m];
-        const over = isOverPlan(actual, plan, !!negate);
         const diff = monthDiff(actual, plan, !!negate);
         return (
           <Fragment key={m}>
@@ -599,8 +579,7 @@ function MonthCells({
               value={actual}
               negate={negate}
               colHighlight={m === thisMonth}
-              muted={mutedActual && !over}
-              overPlan={over}
+              muted={mutedActual}
               borderLeft={!opts.showPlan}
               onClick={onOpenMonth ? () => onOpenMonth(m) : undefined}
             />
@@ -673,7 +652,7 @@ function ParentHeaderRow({
   const opts = useColOpts();
   const display = (v: number | undefined) => (negate && v !== undefined ? -v : v);
   const Chevron = isCollapsed ? ChevronRight : ChevronDown;
-  const nameColor = hasDirect ? "text-rose-500/70" : "text-muted-foreground";
+  const nameColor = "text-muted-foreground";
   const open = useCellOpener();
   const openMonth = open && categoryIdForCell
     ? (m: string) => {
@@ -780,7 +759,7 @@ function SubParentHeaderRow({
     ? `/transactions?categoryId=${encodeURIComponent(sub.parentCat.id)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
     : undefined;
   const Chevron = isCollapsed ? ChevronRight : ChevronDown;
-  const nameColor = sub.parentCat ? "text-rose-500/70" : "text-muted-foreground";
+  const nameColor = "text-muted-foreground";
   const open = useCellOpener();
   const openMonth = open
     ? (m: string) => {

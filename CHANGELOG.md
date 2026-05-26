@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.299.0 — 2026-05-26
+
+### Added
+- **Static client-bundle-leak detector** —
+  `src/__tests__/client-bundle-leak.test.ts`. Runs as part of
+  `pnpm test`. Walks the import graph from every `"use client"`
+  file in `src/` and fails LOUDLY if any chain reaches a
+  server-only module (`@/db` or `@/lib/backup/*`). Would have
+  caught the 0.295.0 build failure
+  (`scheduled-list-view.tsx → category-descendants.ts → @/db`)
+  at vitest time — minutes before the production Next.js build
+  hit it.
+
+  Self-tested against the historical regression: reverting the
+  0.296.0 fix temporarily produces a clear error message naming
+  the exact chain. Type-only imports
+  (`import type { Account } from "@/db/schema"`) are correctly
+  skipped — components legitimately reach into `@/db/schema`
+  for Drizzle row types and those are erased at compile time.
+
+  ~140 emitted assertions (one per `"use client"` file) plus a
+  sanity-check that the walker found > 10 entrypoints; total
+  added test-suite runtime < 100 ms. Pure static analysis,
+  regex-based, no AST/no Next build, no new deps.
+
+  Forbidden prefixes deliberately tight: just `@/db` and
+  `@/lib/backup/`. Extend the array in the test file if a new
+  leak shape emerges.
+
 ## 0.298.0 — 2026-05-26
 
 ### Fixed

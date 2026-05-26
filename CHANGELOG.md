@@ -9,6 +9,36 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.292.0 — 2026-05-26
+
+### Added
+- **Coverage push, round 2: integration tests for hot API
+  routes.** Four new test files pin contracts that previously
+  relied entirely on the Playwright crawl.
+
+  - `src/app/api/transactions/bulk/route.integration.test.ts` —
+    PATCH (bulk recategorise — used by the 0.284 uncat commit
+    loop + the transactions toolbar), DELETE (bulk remove with
+    refresh of touched accounts). 6 cases.
+  - `src/app/api/reports/cashflow/route.integration.test.ts` —
+    income + expense breakdown over a range, opening/closing
+    balance arithmetic, all three date-validation guards
+    (malformed `from`, `to < from`, range > 12 years). 5 cases.
+  - `src/app/api/scheduled/[id]/route.integration.test.ts` —
+    PATCH happy path, the `kind=budget` matcher-field
+    stripping logic, PATCH/DELETE 404s, malformed body,
+    suggestion-dismissal side-effect on DELETE. 6 cases.
+  - `src/app/api/transfers/suggestions/[id]/route.integration.test.ts` —
+    sticky-dismiss contract (0.194): DELETE records the pair
+    in `dismissed_transfer_pairs` so the matcher doesn't
+    re-discover it. 2 cases.
+
+  Coverage line ratio: **16.26% → 16.78%** (537 → 556 tests,
+  61 → 65 files). Two scenarios that the in-memory test DB
+  can't observe across `db.transaction(async cb)` boundaries
+  (post-DELETE row removal) are deferred to Playwright —
+  noted in the test files.
+
 ## 0.291.0 — 2026-05-26
 
 ### Fixed

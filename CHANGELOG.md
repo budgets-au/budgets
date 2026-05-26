@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.293.0 — 2026-05-26
+
+### Added
+- **Coverage push, round 3: pure-helper gaps that were still at 0%.**
+  Four new test files for the small but operationally important
+  utilities that no test had touched:
+
+  - `src/lib/import-undo.test.ts` — `stashPendingUndoImport` /
+    `readPendingUndoImport` / `clearPendingUndoImport`: round-trip,
+    TTL drop, malformed payload, missing-field rejection, SSR
+    no-op, sessionStorage-throws fallback. 7 cases. In-memory
+    sessionStorage polyfill installed on globalThis.window so the
+    tests run without jsdom.
+  - `src/lib/passphrase.test.ts` — `validatePassphrase` guards:
+    accepts printables (incl. Unicode + spaces); rejects non-
+    strings, empty, control chars in `0x00..0x1F`, DEL (`0x7F`).
+    6 cases.
+  - `src/lib/new-id.test.ts` — UUID v4 format check, uniqueness
+    over 50 calls, polyfill fallback when `crypto.randomUUID`
+    throws (the LAN-IP / non-secure-context case the function
+    exists to handle). 3 cases.
+  - `src/lib/rate-limit.test.ts` — fixed-window counter: first
+    call allowed, up-to-max allowed then denied, per-key buckets,
+    window reset, `retryAfter` arithmetic, `resetRateLimit`. 6
+    cases. Fake timers for the window-reset path.
+
+  Coverage line ratio: **16.78% → 17.16%** (556 → 578 tests,
+  65 → 69 files).
+
 ## 0.292.0 — 2026-05-26
 
 ### Added

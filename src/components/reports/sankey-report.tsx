@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useSwrJson } from "@/hooks/use-swr-json";
+import { useToggleSet } from "@/hooks/use-toggle-set";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
-import { formatAUD } from "@/lib/utils";
+import { formatAUD, formatAUDShort } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 import {
   ChartTooltipCard,
@@ -243,7 +244,7 @@ function makeCustomNode(
         ? `${payload.name} ${chevron}`
         : `${chevron} ${payload.name}`
       : payload.name;
-    const valueText = formatAUD(payload.value).replace("A$", "$");
+    const valueText = formatAUDShort(payload.value);
     const APPROX_CHAR_PX = 6.5;
     const labelWidthEst = labelText.length * APPROX_CHAR_PX;
     const valueGap = 8;
@@ -362,20 +363,14 @@ export function SankeyReport({
   // Set of cat ids whose children are revealed. Depth-0 cats are always
   // revealed (showing depth-1 parents) — only depth-1 cats are toggleable
   // here, so the user clicks a parent to bring its grandchildren in.
-  const [expandedCatIds, setExpandedCatIds] = useState<Set<string>>(new Set());
-  function toggleExpanded(catId: string) {
-    setExpandedCatIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(catId)) next.delete(catId);
-      else next.add(catId);
-      return next;
-    });
-  }
+  const {
+    ids: expandedCatIds,
+    toggle: toggleExpanded,
+    set: setExpandedCatIds,
+    clear: collapseAll,
+  } = useToggleSet();
   function expandAll(ids: string[]) {
     setExpandedCatIds(new Set(ids));
-  }
-  function collapseAll() {
-    setExpandedCatIds(new Set());
   }
 
   if (isLoading) {
@@ -673,11 +668,11 @@ export function SankeyReport({
     allExpandableCatIds.every((id) => expandedCatIds.has(id));
 
   const summaryParts: string[] = [
-    `Income ${formatAUD(totalIncome).replace("A$", "$")}`,
-    `Expenses ${formatAUD(totalExpense).replace("A$", "$")}`,
+    `Income ${formatAUDShort(totalIncome)}`,
+    `Expenses ${formatAUDShort(totalExpense)}`,
     surplus >= 0
-      ? `Saved ${formatAUD(surplus).replace("A$", "$")}`
-      : `Deficit ${formatAUD(-surplus).replace("A$", "$")}`,
+      ? `Saved ${formatAUDShort(surplus)}`
+      : `Deficit ${formatAUDShort(-surplus)}`,
   ];
 
   const hasContent = links.length > 0;

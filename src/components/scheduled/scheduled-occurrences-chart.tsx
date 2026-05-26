@@ -16,7 +16,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { format, parseISO } from "date-fns";
-import { formatAUD } from "@/lib/utils";
+import { formatAUD, formatAUDShort } from "@/lib/utils";
 import {
   ChartTooltipCard,
   ChartTooltipHeader,
@@ -436,7 +436,7 @@ export function ScheduledOccurrencesChart({
                 strokeDasharray="4 4"
                 strokeWidth={1}
                 label={{
-                  value: `avg ${formatAUD(matchedAverage).replace("A$", "$")}`,
+                  value: `avg ${formatAUDShort(matchedAverage)}`,
                   position: "right",
                   fill: "#f59e0b",
                   fontSize: 10,
@@ -646,7 +646,7 @@ export function ScheduledOccurrencesChart({
         {matchedAverage !== null && (
           <span className="flex items-center gap-1">
             <span className="inline-block w-3 h-0 border-t border-dashed" style={{ borderColor: "#f59e0b" }} />
-            Avg amount {formatAUD(matchedAverage).replace("A$", "$")}
+            Avg amount {formatAUDShort(matchedAverage)}
           </span>
         )}
         {matchedAveragePeriodDays !== null && (

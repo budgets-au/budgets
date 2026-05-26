@@ -2,6 +2,7 @@
 
 import { Fragment, createContext, useContext, useEffect, useState } from "react";
 import { useSwrJson } from "@/hooks/use-swr-json";
+import { useToggleSet } from "@/hooks/use-toggle-set";
 import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
@@ -1203,17 +1204,17 @@ export function CashflowReport({
     setPref("cashflowTotalsLevel", level);
   }
 
-  const [collapsedGps, setCollapsedGps] = useState<Set<string>>(new Set());
-  const [collapsedSubs, setCollapsedSubs] = useState<Set<string>>(new Set());
+  const {
+    ids: collapsedGps,
+    toggle: toggleGp,
+    set: setCollapsedGps,
+  } = useToggleSet();
+  const {
+    ids: collapsedSubs,
+    toggle: toggleSub,
+    set: setCollapsedSubs,
+  } = useToggleSet();
   const [cellQuery, setCellQuery] = useState<CashflowCellQuery | null>(null);
-
-  function toggleGp(id: string) {
-    setCollapsedGps((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  }
-
-  function toggleSub(id: string) {
-    setCollapsedSubs((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  }
 
   const opts: ColOpts = { showCounts, showAvg, showPlan, showDiff, monthAxis };
 

@@ -5,7 +5,7 @@ import { ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Crosshair } from "lucide-react";
 import Link from "next/link";
-import { formatAUD, amountClass } from "@/lib/utils";
+import { formatAUD, formatAUDShort, amountClass } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
 
@@ -98,7 +98,7 @@ export function OptionsSummaryCard({ editMode }: { editMode?: boolean } = {}) {
                 <p className="text-2xl font-bold">{formatAUD(t.value)}</p>
                 <p className={`text-xs mt-1 ${amountClass(t.ret)}`}>
                   {t.ret >= 0 ? "+" : ""}
-                  {formatAUD(t.ret).replace("A$", "$")}
+                  {formatAUDShort(t.ret)}
                   {pct != null && (
                     <span className="ml-1 text-muted-foreground">
                       ({(pct * 100).toFixed(1)}% · {currency})
@@ -127,7 +127,7 @@ export function OptionsSummaryCard({ editMode }: { editMode?: boolean } = {}) {
                   </p>
                   <p className={`text-xs ${amountClass(t.ret)}`}>
                     {t.ret >= 0 ? "+" : ""}
-                    {formatAUD(t.ret).replace("A$", "$")}
+                    {formatAUDShort(t.ret)}
                     {pct != null && (
                       <span className="ml-1 text-muted-foreground">
                         ({(pct * 100).toFixed(1)}%)

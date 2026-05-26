@@ -11,7 +11,7 @@ import { ScheduledNotesPopover } from "@/components/scheduled/scheduled-notes-po
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { formatAUD, amountClass, formatDate, diffDaysISO, cn } from "@/lib/utils";
+import { formatAUD, formatAUDShort, amountClass, formatDate, diffDaysISO, cn } from "@/lib/utils";
 import { matchSchedule } from "@/lib/scheduled-match";
 import { expandRecurrence } from "@/lib/recurrence";
 import { FORECAST_HORIZON } from "@/lib/forecast";
@@ -19,6 +19,10 @@ import { colourForFrequency, colourForLineageRank, colourForBudgetPeriod, dimCol
 import { invalidateCashflow } from "@/lib/invalidate-cashflow";
 import { TREND_DOWN } from "@/lib/colours";
 import { currentBudgetPeriod, pastBudgetPeriods } from "@/lib/budget-period";
+import {
+  buildChildrenByParent,
+  descendantIdsFromMap,
+} from "@/lib/category-descendants";
 import { ScheduledEditForm, type ScheduledFormRow } from "@/components/scheduled/scheduled-edit-form";
 import { NewScheduledDialog } from "@/components/scheduled/new-scheduled-dialog";
 import { ScheduledForecastRows } from "@/components/scheduled/scheduled-forecast-rows";
@@ -705,28 +709,7 @@ export function ScheduledListView({
     // Range schedules need a category-scoped candidate pool — otherwise any
     // unrelated txn whose magnitude lands in the band gets claimed (e.g. a
     // $280 retail purchase masquerading as a water bill).
-    const childrenByParent = new Map<string, string[]>();
-    for (const c of categories) {
-      if (c.parentId) {
-        const arr = childrenByParent.get(c.parentId) ?? [];
-        arr.push(c.id);
-        childrenByParent.set(c.parentId, arr);
-      }
-    }
-    function descendantSet(rootId: string): Set<string> {
-      const out = new Set<string>([rootId]);
-      const stack = [rootId];
-      while (stack.length) {
-        const cur = stack.pop()!;
-        for (const child of childrenByParent.get(cur) ?? []) {
-          if (!out.has(child)) {
-            out.add(child);
-            stack.push(child);
-          }
-        }
-      }
-      return out;
-    }
+    const childrenByParent = buildChildrenByParent(categories);
 
     const siblings = scheduled
       .filter((s) => s.lineageId === selected.lineageId)
@@ -790,7 +773,9 @@ export function ScheduledListView({
       // category subtree — otherwise a same-account, same-amount txn under a
       // different category would be claimed by this schedule, leaving the
       // category-filtered list and the chart disagreeing.
-      const allowedCats = sib.categoryId ? descendantSet(sib.categoryId) : null;
+      const allowedCats = sib.categoryId
+        ? new Set(descendantIdsFromMap(sib.categoryId, childrenByParent))
+        : null;
 
       const result = matchSchedule(
         projected.map((p) => ({
@@ -1039,28 +1024,7 @@ export function ScheduledListView({
     const scopeToSelected = !!selected && !isDraft && lineageSize > 1 && !showAll;
     // Build a category subtree lookup once for any budget rows that need to
     // sum txns across descendants (matches the matcher's pattern).
-    const childrenByParent = new Map<string, string[]>();
-    for (const c of categories) {
-      if (c.parentId) {
-        const arr = childrenByParent.get(c.parentId) ?? [];
-        arr.push(c.id);
-        childrenByParent.set(c.parentId, arr);
-      }
-    }
-    function descendantSet(rootId: string): Set<string> {
-      const seen = new Set<string>([rootId]);
-      const stack = [rootId];
-      while (stack.length) {
-        const cur = stack.pop()!;
-        for (const child of childrenByParent.get(cur) ?? []) {
-          if (!seen.has(child)) {
-            seen.add(child);
-            stack.push(child);
-          }
-        }
-      }
-      return seen;
-    }
+    const childrenByParent = buildChildrenByParent(categories);
     // segmentResults are sorted oldest → newest; reverse-rank for colour.
     const all = segmentResults.map((seg, i) => {
       const ageRank = segmentResults.length - 1 - i; // 0 = latest
@@ -1082,7 +1046,7 @@ export function ScheduledListView({
         // Source from catTxns (category-scoped, fetched at a higher limit)
         // so heavy-spend categories don't truncate older periods.
         const allowedCats = seg.schedule.categoryId
-          ? descendantSet(seg.schedule.categoryId)
+          ? new Set(descendantIdsFromMap(seg.schedule.categoryId, childrenByParent))
           : null;
         const budgetSource = seg.schedule.categoryId ? catTxns : txns;
         const periods = pastBudgetPeriods(
@@ -1159,7 +1123,7 @@ export function ScheduledListView({
         amountMin = seg.schedule.amountMin != null ? parseFloat(seg.schedule.amountMin) : undefined;
       }
       const startMonth = format(parseISO(seg.schedule.startDate), "MMM yy");
-      const amt = formatAUD(seg.schedule.amount).replace("A$", "$");
+      const amt = formatAUDShort(seg.schedule.amount);
       const labelPrefix = isBudgetSeg ? "Cap" : "";
       return {
         id: seg.schedule.id,
@@ -1242,8 +1206,8 @@ export function ScheduledListView({
           {isBudgetRow ? (
             <span className="flex flex-col items-end leading-tight">
               <span>
-                {formatAUD(spentNum).replace("A$", "$")}
-                <span className="text-muted-foreground"> / {formatAUD(capNum).replace("A$", "$")}</span>
+                {formatAUDShort(spentNum)}
+                <span className="text-muted-foreground"> / {formatAUDShort(capNum)}</span>
               </span>
               <span className="block w-24 h-1 mt-0.5 rounded bg-muted overflow-hidden">
                 <span
@@ -1258,7 +1222,7 @@ export function ScheduledListView({
         </td>
         {showWeekly && (
           <td className={`pl-3 pr-0 py-2 text-right text-xs tabular-nums whitespace-nowrap w-px ${amountClass(totalWeekly)}`}>
-            {totalWeekly === 0 ? "—" : `${formatAUD(totalWeekly).replace("A$", "$")}/wk`}
+            {totalWeekly === 0 ? "—" : `${formatAUDShort(totalWeekly)}/wk`}
           </td>
         )}
         <td className="pl-1 pr-2 py-2 w-14 text-right whitespace-nowrap">
@@ -1423,7 +1387,7 @@ export function ScheduledListView({
                         ? "—"
                         : delta === 0
                         ? "—"
-                        : `${delta > 0 ? "+" : "−"}${formatAUD(Math.abs(delta)).replace("A$", "$")}`;
+                        : `${delta > 0 ? "+" : "−"}${formatAUDShort(Math.abs(delta))}`;
                     const deltaClass =
                       delta === null || delta === 0
                         ? "text-muted-foreground"
@@ -1582,7 +1546,7 @@ export function ScheduledListView({
                           Weekly total
                         </td>
                         <td className={`pl-3 pr-0 py-2 text-right font-semibold tabular-nums whitespace-nowrap ${amountClass(weeklyTotal)}`}>
-                          {`${formatAUD(weeklyTotal).replace("A$", "$")}/wk`}
+                          {`${formatAUDShort(weeklyTotal)}/wk`}
                         </td>
                         <td className="pl-1 pr-2 py-2 w-8" />
                       </tr>
@@ -1954,11 +1918,11 @@ export function ScheduledListView({
                                     className="text-[10px] tabular-nums text-muted-foreground w-16 text-right"
                                     title={
                                       gap
-                                        ? `Under max by ${formatAUD(gap).replace("A$", "$")}`
+                                        ? `Under max by ${formatAUDShort(gap)}`
                                         : undefined
                                     }
                                   >
-                                    {gap ? `−${formatAUD(gap).replace("A$", "$")}` : ""}
+                                    {gap ? `−${formatAUDShort(gap)}` : ""}
                                   </span>
                                   <span className={`font-medium tabular-nums ${amountClass(amt)}`}>
                                     {formatAUD(amt)}
@@ -2096,11 +2060,11 @@ export function ScheduledListView({
                                     className="text-[10px] tabular-nums text-muted-foreground w-16 text-right"
                                     title={
                                       gap
-                                        ? `Under max by ${formatAUD(gap).replace("A$", "$")}`
+                                        ? `Under max by ${formatAUDShort(gap)}`
                                         : undefined
                                     }
                                   >
-                                    {gap ? `−${formatAUD(gap).replace("A$", "$")}` : ""}
+                                    {gap ? `−${formatAUDShort(gap)}` : ""}
                                   </span>
                                   <span className={`font-medium tabular-nums ${amountClass(amt)}`}>
                                     {formatAUD(amt)}

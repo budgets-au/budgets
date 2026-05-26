@@ -14,7 +14,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { formatAUD, formatDate, amountClass } from "@/lib/utils";
+import { formatAUD, formatAUDShort, formatDate, amountClass } from "@/lib/utils";
 import { colourForFrequency, dimColour, freqLabel } from "@/lib/schedule-colours";
 import { invalidateCashflow } from "@/lib/invalidate-cashflow";
 import { toast } from "sonner";
@@ -275,7 +275,7 @@ export function ScheduleSuggestionsPanel({
           </span>
           <span className={`shrink-0 font-medium tabular-nums ${amountClass(s.amount)}`}>
             {s.isRange && s.amountMin
-              ? `${formatAUD(s.amountMin).replace("A$", "$")} – ${formatAUD(s.amount).replace("A$", "$")}`
+              ? `${formatAUDShort(s.amountMin)} – ${formatAUDShort(s.amount)}`
               : formatAUD(s.amount)}
           </span>
 

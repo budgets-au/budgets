@@ -5,6 +5,7 @@ import {
   diffDaysISO,
   formatAmount,
   formatAUD,
+  formatAUDShort,
   formatDate,
   formatDateShort,
   formatMonthYear,
@@ -16,6 +17,21 @@ describe("cn", () => {
   it("merges class strings and dedupes via tailwind-merge", () => {
     expect(cn("p-2", "p-4")).toBe("p-4");
     expect(cn("text-sm", false && "hidden", "font-bold")).toContain("text-sm");
+  });
+});
+
+describe("formatAUDShort", () => {
+  it("strips the A$ country prefix, leaving $ + amount", () => {
+    expect(formatAUDShort(100)).toBe("$100.00");
+    expect(formatAUDShort(1234.56)).toBe("$1,234.56");
+  });
+  it("preserves the leading minus on negative amounts", () => {
+    expect(formatAUDShort(-50)).toBe("-$50.00");
+  });
+  it("matches formatAUD(x).replace('A$', '$') for parity", () => {
+    for (const v of [0, 10, -10, 1234567, -0.99, 12.345]) {
+      expect(formatAUDShort(v)).toBe(formatAUD(v).replace("A$", "$"));
+    }
   });
 });
 

@@ -9,6 +9,43 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.295.0 — 2026-05-26
+
+### Changed
+- **Three high-leverage refactors from the dead-code +
+  simplification audit.**
+
+  - **`formatAUDShort(n)` helper.** Replaces 31 inline copies of
+    `formatAUD(x).replace("A$", "$")` across 12 files (dashboard
+    cards, scheduled list, reports, calendar, investments,
+    category manager). New helper in `src/lib/utils.ts`, 3 unit
+    tests (parity against the old pattern, leading-minus,
+    integers). Removes the whole class of "I forgot the
+    `.replace()`" inconsistencies.
+  - **`useToggleSet()` hook.** New hook at
+    `src/hooks/use-toggle-set.ts` for the
+    `useState<Set<string>>` + hand-rolled toggle pattern. Three
+    pure helpers (`toggleInSet`, `addToSet`, `removeFromSet`)
+    exported separately for unit testing without
+    `@testing-library/react`. Migrated three call sites:
+    `sankey-report`, `cashflow-report` (two sets — collapsed
+    grandparents + collapsed subgroups), `yoy-report`. 7 unit
+    tests on the transition helpers. The remaining three call
+    sites (`envelope-report`, `transactions-view`,
+    `category-manager`) have more intricate orchestration
+    around their sets and are left for a follow-up.
+  - **`descendantIdsFromMap`** (already in
+    `src/lib/category-descendants.ts`) replaces the two inline
+    `function descendantSet()` copies in
+    `scheduled-list-view.tsx`. Local `childrenByParent` builds
+    + recursive walks both shrink to one-line calls to the
+    shared helper. The third copy flagged in the audit lived
+    in a file that doesn't exist — likely renamed or inlined
+    long ago.
+
+  Test count rises 578 → 588 (10 new unit tests for the two
+  pure-helper modules); coverage holds.
+
 ## 0.294.0 — 2026-05-26
 
 ### Removed

@@ -15,6 +15,16 @@ export function formatAUD(amount: number | string): string {
   }).format(num);
 }
 
+/** `formatAUD` without the `A$` country prefix — just `$1,234.56`.
+ *  Used by report cells, dashboard widgets, and per-row summaries
+ *  where the AUD context is already established by the surrounding
+ *  page so the country prefix becomes visual noise. Centralising
+ *  the `.replace("A$", "$")` shortcut removes the entire class of
+ *  "I forgot the .replace()" inconsistencies. */
+export function formatAUDShort(amount: number | string): string {
+  return formatAUD(amount).replace("A$", "$");
+}
+
 /** Cent-accurate string representation of a money amount — the
  * canonical form for storing into the `amount` text column.
  * Centralises `.toFixed(2)` so every importer / migration / API

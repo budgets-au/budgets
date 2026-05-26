@@ -18,7 +18,7 @@ import {
   ChartTooltipRow,
 } from "@/components/ui/chart-tooltip";
 import { useDarkMode } from "@/hooks/use-dark-mode";
-import { formatAUD } from "@/lib/utils";
+import { formatAUD, formatAUDShort } from "@/lib/utils";
 import type { AccountsCashflowReport } from "@/app/api/reports/accounts-cashflow/route";
 
 
@@ -539,7 +539,7 @@ export function TransferFlowReport({
           </div>
           <p className="text-xs text-muted-foreground">
             {hasContent
-              ? `${links.length} flow${links.length === 1 ? "" : "s"} · ${formatAUD(totalFlow).replace("A$", "$")} moved`
+              ? `${links.length} flow${links.length === 1 ? "" : "s"} · ${formatAUDShort(totalFlow)} moved`
               : ""}
           </p>
         </div>

@@ -5,7 +5,7 @@ import { ResponsiveContainer, BarChart, Bar, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PiggyBank } from "lucide-react";
 import Link from "next/link";
-import { formatAUD, amountClass } from "@/lib/utils";
+import { formatAUD, formatAUDShort, amountClass } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
 
 
@@ -109,7 +109,7 @@ export function SuperSummaryCard({ editMode }: { editMode?: boolean } = {}) {
                   {" · "}
                   <span className={amountClass(yoy)}>
                     {yoy >= 0 ? "+" : ""}
-                    {formatAUD(yoy).replace("A$", "$")}
+                    {formatAUDShort(yoy)}
                   </span>
                   {yoyPct != null && (
                     <span> ({(yoyPct * 100).toFixed(1)}% YoY)</span>

@@ -8,7 +8,7 @@ import { Trash2, Pencil, TrendingUp, Gift, Zap, Eye, Dices } from "lucide-react"
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
-import { formatAUD, formatDate, amountClass } from "@/lib/utils";
+import { formatAUD, formatAUDShort, formatDate, amountClass } from "@/lib/utils";
 import { InvestmentDetailPanel } from "./investment-detail-panel";
 import { EditInvestmentDialog } from "./edit-investment-dialog";
 import { WatchlistDetailPanel } from "./watchlist-detail-panel";
@@ -247,7 +247,7 @@ function GainCell({
       )}`}
     >
       {delta >= 0 ? "+" : ""}
-      {formatAUD(delta).replace("A$", "$")}
+      {formatAUDShort(delta)}
       {pct != null && (
         <span className="ml-1 text-[10px]">({(pct * 100).toFixed(1)}%)</span>
       )}
@@ -447,7 +447,7 @@ function InvestmentTable({
                           {r.currentPrice != null ? (
                             <>
                               {r.totalReturnAbs >= 0 ? "+" : ""}
-                              {formatAUD(r.totalReturnAbs).replace("A$", "$")}
+                              {formatAUDShort(r.totalReturnAbs)}
                               {r.totalReturnPct != null && (
                                 <span className="ml-1 text-[10px]">
                                   ({(r.totalReturnPct * 100).toFixed(1)}%)

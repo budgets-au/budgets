@@ -1,6 +1,7 @@
 "use client";
 
 import { useSwrJson } from "@/hooks/use-swr-json";
+import { useToggleSet } from "@/hooks/use-toggle-set";
 import { useEffect, useMemo, useState } from "react";
 import { subYears, format } from "date-fns";
 import {
@@ -253,7 +254,11 @@ export function YoYReport({
   accountIds: string[];
 }) {
   const [scope, setScope] = useState<"expense" | "income" | "all">("expense");
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const {
+    ids: collapsedIds,
+    toggle: toggleCollapsed,
+    set: setCollapsedIds,
+  } = useToggleSet();
   const { prefs, setPref } = useDisplayPrefs();
   const hideTransfers = prefs.yoyHideTransfers;
 
@@ -305,15 +310,6 @@ export function YoYReport({
     }
     setCollapsedIds(new Set(ids));
   }, [tree]);
-
-  function toggleCollapsed(id: string) {
-    setCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   const rows = useMemo(
     () => (tree ? flattenForDisplay(tree, collapsedIds) : []),

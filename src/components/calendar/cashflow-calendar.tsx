@@ -33,7 +33,7 @@ import {
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { formatAUD, formatDateShort, amountClass, cn } from "@/lib/utils";
+import { formatAUD, formatAUDShort, formatDateShort, amountClass, cn } from "@/lib/utils";
 import {
   ChartTooltipCard,
   ChartTooltipHeader,
@@ -1346,7 +1346,7 @@ export function CashflowCalendar({
                             )}
                           >
                             {actualNet > 0 ? "+" : ""}
-                            {formatAUD(actualNet).replace("A$", "$")}
+                            {formatAUDShort(actualNet)}
                           </div>
                         )}
                       </div>

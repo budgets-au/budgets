@@ -17,7 +17,7 @@ import {
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { cn, formatAUD } from "@/lib/utils";
+import { cn, formatAUDShort } from "@/lib/utils";
 import { Plus, Trash2, ChevronDown, ChevronRight, ChevronUp, Pencil, GripVertical } from "lucide-react";
 import type { Category, TaxConfig } from "@/db/schema";
 import { buildCategoryMeta } from "@/lib/category-path";
@@ -571,7 +571,7 @@ export function CategoryManager({
             )}
             title={signedAmount < 0 ? "Outflow total (all-time)" : "Inflow total (all-time)"}
           >
-            {displayAmount > 0 ? formatAUD(displayAmount).replace("A$", "$") : "—"}
+            {displayAmount > 0 ? formatAUDShort(displayAmount) : "—"}
           </span>
 
           {/* Col 5: single Edit button. Opens the dialog with everything

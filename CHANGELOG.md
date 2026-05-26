@@ -9,6 +9,20 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.283.0 — 2026-05-26
+
+### Changed
+- **Active sidebar nav item uses the indigo highlight colour.**
+  Was `bg-muted text-foreground` — a near-neutral grey that
+  blended into hover state, leaving the operator without a
+  strong visual anchor for "where am I". Now
+  `bg-indigo-600 text-white` (with `hover:bg-indigo-700`), the
+  same selected-state pattern the Quick-range popover uses for
+  its active preset. The per-row affordance buttons
+  (Plus next to Transactions / Scheduled / Categories) keep
+  their bordered-white styling so they still read as separate
+  actions on the indigo bar.
+
 ## 0.282.0 — 2026-05-26
 
 ### Fixed

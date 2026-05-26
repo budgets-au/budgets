@@ -150,7 +150,7 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center group pr-3",
                   active
-                    ? "bg-muted text-foreground"
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >

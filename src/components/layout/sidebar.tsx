@@ -302,9 +302,10 @@ function VersionFooter() {
       </Link>
       {hasUpdate && (
         <Link
-          href="https://github.com/budgets-au/budgets/pkgs/container/budgets"
+          href={`https://github.com/budgets-au/budgets/releases/tag/v${latest}`}
           target="_blank"
           rel="noopener noreferrer"
+          title={`View v${latest} release notes on GitHub`}
           className="block mt-0.5 text-emerald-600 hover:text-emerald-500 transition-colors"
         >
           New release

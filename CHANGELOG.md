@@ -9,6 +9,16 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.282.0 — 2026-05-26
+
+### Fixed
+- **"New release" link in the sidebar pointed at the GHCR
+  container page instead of the release notes.** Now mirrors
+  the current-version link: opens
+  `github.com/budgets-au/budgets/releases/tag/v${latest}` so
+  the operator lands on the changelog for the version they're
+  being prompted to pull, not on a wall of image tags.
+
 ## 0.281.0 — 2026-05-26
 
 ### Fixed

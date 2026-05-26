@@ -250,16 +250,21 @@ test.describe("smart monkey: goal-driven crawl", () => {
       runCounters.goalsAttempted += 1;
       let achieved: SuccessfulRun | null = null;
       for (const route of goal.candidateRoutes) {
-        await page.goto(route);
-        // `domcontentloaded` instead of `networkidle` — NextAuth's
+        // `goto` MUST pass `waitUntil: "domcontentloaded"` — the
+        // default `"load"` waits for the load event, which NextAuth's
         // session-fetch retries (especially around the orphan-backfill
-        // TDZ error logged on /api/auth/session) can keep the network
-        // active indefinitely, so `networkidle` would block until the
-        // 30s Playwright default fires + cascade into the 120s
-        // test-timeout. `domcontentloaded` settles deterministically
+        // TDZ error logged on /api/auth/session) can defer
+        // indefinitely by keeping the network active. With the default,
+        // each candidate-route goto would hang to the 30s nav timeout
+        // and a goal with 2-3 candidate routes would blow the 120s
+        // test-timeout (the create-transaction/schedule/budget flake
+        // fixed here). `domcontentloaded` settles deterministically
         // once the SPA shell is hydrated; SWR's data fetch runs after
-        // that and is what the per-test `waitForTimeout`/explicit
-        // queries cover.
+        // that and is covered by the per-step `waitForTimeout` /
+        // explicit queries below.
+        await page.goto(route, { waitUntil: "domcontentloaded" });
+        // Redundant-but-cheap belt-and-braces: confirm the state
+        // (a no-op once goto already resolved on it).
         await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
         await page.waitForTimeout(400);
 
@@ -666,7 +671,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
 
     // 4. DOM verification — load /transactions and look for
     // tokens in the rendered table.
-    await page.goto("/transactions");
+    await page.goto("/transactions", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(500);
     runCounters.routesVisited += 1;
@@ -949,7 +954,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
     }
 
     // Leg 2: /scheduled DOM.
-    await page.goto("/scheduled");
+    await page.goto("/scheduled", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     await page.waitForTimeout(500);
     runCounters.routesVisited += 1;
@@ -963,7 +968,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
     // forecast data for the visible month and renders payee
     // text per scheduled occurrence; today's date should have
     // our token rendered in its cell.
-    await page.goto("/calendar");
+    await page.goto("/calendar", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     runCounters.routesVisited += 1;
     // Poll the body up to 5× 600ms for the token. Calendar fetches
@@ -1114,7 +1119,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       : false;
 
     // DOM leg — navigate with ?search= so the table renders filtered.
-    await page.goto(`/transactions?search=${encodeURIComponent(TOKEN)}`);
+    await page.goto(`/transactions?search=${encodeURIComponent(TOKEN)}`, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     runCounters.routesVisited += 1;
     let domHit = false;
@@ -1215,7 +1220,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
 
     // DOM leg — navigate to /transactions filtered to our row and
     // look for the notes text in the rendered body.
-    await page.goto(`/transactions?search=${encodeURIComponent(PAYEE)}`);
+    await page.goto(`/transactions?search=${encodeURIComponent(PAYEE)}`, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     runCounters.routesVisited += 1;
     let domHit = false;
@@ -1304,7 +1309,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       : false;
 
     // DOM leg — same search, this time check the rendered list.
-    await page.goto(`/transactions?search=${encodeURIComponent(NOTE_NEEDLE)}`);
+    await page.goto(`/transactions?search=${encodeURIComponent(NOTE_NEEDLE)}`, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
     runCounters.routesVisited += 1;
     let domHit = false;
@@ -1777,7 +1782,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
         profiles: Array<{ id: string; label: string }>;
       };
 
-      await page.goto("/dashboard");
+      await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
       await page
         .waitForLoadState("domcontentloaded", { timeout: 8_000 })
         .catch(() => {});
@@ -1855,7 +1860,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       // against it. Re-sign-in is not needed for the switcher action
       // itself (the POST /api/databases/switch is public per the
       // route comment).
-      await page.goto("/dashboard");
+      await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
       await page
         .waitForLoadState("domcontentloaded", { timeout: 8_000 })
         .catch(() => {});
@@ -2119,7 +2124,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
 
     try {
       // Leg 1: Cancel-the-confirm path.
-      await page.goto("/settings?tab=security");
+      await page.goto("/settings?tab=security", { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("domcontentloaded", { timeout: 8_000 }).catch(() => {});
       runCounters.routesVisited += 1;
 
@@ -2322,7 +2327,7 @@ test.describe("smart monkey: goal-driven crawl", () => {
       return;
     }
 
-    await page.goto("/transactions");
+    await page.goto("/transactions", { waitUntil: "domcontentloaded" });
     await page
       .waitForLoadState("domcontentloaded", { timeout: 8_000 })
       .catch(() => {});
@@ -2893,7 +2898,7 @@ async function attemptReplay(
   recipe: SuccessfulRun,
 ): Promise<{ success: boolean }> {
   try {
-    await page.goto(recipe.route);
+    await page.goto(recipe.route, { waitUntil: "domcontentloaded" });
     // See the analogous comment in the exploration goto above —
     // `networkidle` can hang on a NextAuth-poll retry loop and bust
     // the test's 120s budget. `domcontentloaded` is enough to know
@@ -2955,7 +2960,18 @@ async function attemptReplay(
     if (!(await submit.isVisible().catch(() => false))) {
       return { success: false };
     }
-    await submit.click().catch(() => {});
+    // If the replayed fillSpec drifted from the current form (a field
+    // got renamed / added / made required since the recipe was
+    // recorded), the submit stays DISABLED. A bare `.click()` here
+    // inherits the 120s test timeout and retries "element is not
+    // enabled" for the full budget — the create-{transaction,
+    // schedule,budget} flake. Bail to fresh exploration instead so
+    // the recipe gets re-learned, and cap the click at 3s as a
+    // belt-and-braces against any other not-actionable state.
+    if (!(await submit.isEnabled().catch(() => false))) {
+      return { success: false };
+    }
+    await submit.click({ timeout: 3_000 }).catch(() => {});
     await page.waitForTimeout(800);
     return { success: true };
   } catch {

@@ -9,6 +9,33 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.300.0 — 2026-05-27
+
+### Fixed
+- **Smart-monkey `create transaction/schedule/budget` goals timed
+  out (120s) intermittently.** Trace analysis pinned it: the
+  recipe-replay path (`attemptReplay`) clicked the dialog's
+  submit button with a bare `.click()` — no timeout — and no
+  enabled-check. When a saved recipe's field-matching drifted
+  from the current form (a field renamed / added / made required
+  since the recipe was recorded — e.g. the category-path picker
+  and scheduled-notes work in 0.275–0.289), a required field was
+  left unfilled, the "Create" button stayed disabled, and the
+  click retried "element is not enabled" for the full 120s test
+  budget before the timeout killed it. The surfaced error
+  (`page.goto: Target page… has been closed`) was a red herring —
+  just the operation Playwright's teardown interrupted.
+
+  Fix: `attemptReplay` now bails to fresh exploration when the
+  submit is disabled (so the stale recipe gets re-learned) and
+  caps the click at 3s — matching the guard the exploration loop
+  already had. The 3 goals now pass in 6–8s each.
+
+  Also hardened every `page.goto(...)` in `monkey-goals.spec.ts`
+  to pass `waitUntil: "domcontentloaded"` (the default `"load"`
+  can hang ~30s per nav on the NextAuth session-poll retry loop)
+  — defensive against a related timeout class.
+
 ## 0.299.0 — 2026-05-26
 
 ### Added

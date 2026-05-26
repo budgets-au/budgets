@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.291.0 — 2026-05-26
+
+### Fixed
+- **Year-over-year Δ column showed the wrong direction for
+  expense rows.** The diff was computed as
+  `thisYear - lastYear` against the raw signed amounts. For
+  expenses (negative in the DB), an increase in spending — e.g.
+  `-$4k → -$16k` — produced `delta = -12`, which painted a
+  down-arrow + red even though the actual scalar dollar amount
+  went UP. Reverse case (spending dropped) painted up-arrow,
+  doubly confusing.
+
+  Diff is now computed from magnitudes:
+  `Math.abs(thisYear) - Math.abs(lastYear)`. The sign of the
+  delta now mirrors the direction the scalar amount moved —
+  `+$12k` with up-arrow when spending went up, `−$12k` with
+  down-arrow when it dropped. The tone (red/green) still
+  derives from type × direction so red = bad-for-the-row
+  (more spend or less income) regardless of which way the
+  arrow points. The Δ cell also now shows an explicit `+` /
+  `−` prefix instead of leaning on the icon alone.
+
+  Income rows aren't affected by the math change because their
+  amounts are already positive — same number out either way.
+
 ## 0.290.0 — 2026-05-26
 
 ### Removed

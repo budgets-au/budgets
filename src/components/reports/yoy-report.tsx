@@ -182,7 +182,14 @@ function flattenForDisplay(
     const thisYear = tree.rolledThis.get(id) ?? 0;
     const lastYear = tree.rolledLast.get(id) ?? 0;
     if (thisYear === 0 && lastYear === 0) return;
-    const delta = thisYear - lastYear;
+    // Compare MAGNITUDES, not raw signed values — otherwise an
+    // expense going -$4k → -$16k (spending went UP) reads as a
+    // negative delta because the underlying numbers got more
+    // negative, and the row paints a down-arrow when the scalar
+    // amount actually grew. The sign of `delta` now mirrors the
+    // direction the dollar magnitude moved, which is what the
+    // icon / colour / explicit sign on the cell convey.
+    const delta = Math.abs(thisYear) - Math.abs(lastYear);
     const pctDelta =
       lastYear !== 0
         ? (delta / Math.abs(lastYear)) * 100
@@ -464,6 +471,7 @@ export function YoYReport({
                       <td className={`text-right px-3 py-1.5 tabular-nums ${tone}`}>
                         <span className="inline-flex items-center gap-1 justify-end">
                           <Icon className="h-3 w-3" />
+                          {r.delta >= 0 ? "+" : "−"}
                           {formatAUD(Math.abs(r.delta))}
                         </span>
                       </td>

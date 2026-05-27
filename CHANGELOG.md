@@ -9,6 +9,29 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.301.0 — 2026-05-27
+
+### Added
+- **e2e coverage for dashboard widget corner-resize (issue #31).**
+  New `tests/e2e/dashboard-resize.spec.ts`. No spec previously
+  dragged a resize handle. Two cases:
+  - **Grow:** seed a `recent-transactions` widget at w6/h4, enter
+    edit mode, drag the `.react-resizable-handle-se` right + down,
+    Save → assert the persisted `dashboardLayout` entry's `w`/`h`
+    both increased, and the widget re-renders at the new size
+    after a reload.
+  - **minW clamp:** drag the SE handle hard left (enough to push
+    w 6→1 if unclamped), Save → assert the persisted `w` never
+    drops below the widget's `minSize.w` of 3 (RGL enforces minW
+    live).
+
+  Split from `dashboard-edit.spec.ts` (drag-from-drawer) so the
+  geometry-persistence asserts don't share CI fate with the
+  flakier drawer-drag tests. The save helper races the PATCH
+  against a short settle window — a fully-clamped resize leaves
+  the layout unchanged and fires no PATCH (`setPref` skips
+  identical writes).
+
 ## 0.300.0 — 2026-05-27
 
 ### Fixed

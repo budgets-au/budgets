@@ -91,10 +91,25 @@ function extractImports(src: string): string[] {
   // Also strip `import { type X, type Y } from "..."` — when EVERY
   // named import inside the braces is prefixed with `type`, the
   // whole statement is type-only at runtime.
-  const fullyTyped = stripped.replace(
-    /^[ \t]*(?:import|export)\s+\{\s*((?:\s*type\s+[A-Za-z_$][\w$]*\s*,?\s*)+)\}\s+from\s+["'][^"']+["'];?\s*$/gm,
-    "",
-  );
+  //
+  // The previous regex used a nested `+` over a sub-pattern that
+  // started AND ended with `\s*`, which CodeQL flagged as a ReDoS
+  // (js/redos #18 — exponential backtracking on inputs like
+  // `import {{type $type $type $…`). Split into a flat capture of
+  // the braces' content plus a plain-JS all-`type` check; no
+  // nested quantifiers, no backtracking.
+  const importLine = /^[ \t]*(?:import|export)\s+\{([^}]*)\}\s+from\s+["'][^"']+["'];?\s*$/gm;
+  const fullyTyped = stripped.replace(importLine, (full, inside: string) => {
+    const parts = inside
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+    if (parts.length === 0) return full;
+    const allType = parts.every((p) =>
+      /^type\s+[A-Za-z_$][\w$]*(?:\s+as\s+[A-Za-z_$][\w$]*)?$/.test(p),
+    );
+    return allType ? "" : full;
+  });
   const out = new Set<string>();
   for (const m of fullyTyped.matchAll(FROM_RE)) out.add(m[1]);
   for (const m of fullyTyped.matchAll(BARE_IMPORT_RE)) out.add(m[1]);

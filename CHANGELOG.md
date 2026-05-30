@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.302.0 — 2026-05-30
+
+### Security
+- **Fixed CodeQL `js/redos` alert #18 in the client-bundle-leak
+  detector.** The 0.299.0 type-strip regex used a nested `+`
+  over a sub-pattern that started AND ended with `\s*`
+  (`(?:\s*type\s+[A-Za-z_$][\w$]*\s*,?\s*)+`), which CodeQL
+  flagged as exponential backtracking on inputs like
+  `import {{type $type $type $…`. Test-only file, scans
+  operator-controlled source — practical risk is low — but worth
+  closing.
+
+  Replaced the nested-quantifier branch with a flat
+  `[^}]*`-capture of the brace content + a plain-JS check that
+  every comma-separated part matches `type X` (or
+  `type X as Y`). No nested quantifiers, no backtracking, same
+  behaviour. All 719 vitest tests still pass, including the
+  140+ leak-detector assertions.
+
 ## 0.301.0 — 2026-05-27
 
 ### Added

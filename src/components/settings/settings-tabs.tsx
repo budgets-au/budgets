@@ -79,6 +79,24 @@ export function SettingsTabs() {
           </label>
           <label className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
             <div className="min-w-0">
+              <p className="text-sm font-medium">
+                Notes on matched-transactions pane
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Shows each matched transaction's note under its row in the
+                Transactions pane on the scheduled-transaction detail. Off
+                by default — flip on when you want context on what each
+                match was for.
+              </p>
+            </div>
+            <Switch
+              checked={prefs.scheduledShowMatchedNotes}
+              onCheckedChange={(v) => setPref("scheduledShowMatchedNotes", v)}
+              aria-label="Toggle notes under matched transactions on scheduled detail"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+            <div className="min-w-0">
               <p className="text-sm font-medium">Linked transactions panel</p>
               <p className="text-xs text-muted-foreground">
                 The right-side counterpart pane on the transactions list

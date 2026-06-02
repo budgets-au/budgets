@@ -5,6 +5,11 @@ export interface DisplayPrefs {
   // ── Scheduled list ────────────────────────────────────────────
   /** Show the per-row "Weekly" column + footer on the scheduled list. */
   scheduledShowWeekly: boolean;
+  /** Show transaction notes under each row in the "Matched
+   *  transactions" pane on /scheduled. Off by default to keep the
+   *  list compact; flip on when you want context for what each
+   *  match was for. */
+  scheduledShowMatchedNotes: boolean;
 
   // ── Main transactions list ─────────────────────────────────────
   /** Show the linked-transactions panel (direction gutter + counterpart
@@ -217,6 +222,7 @@ export interface DisplayPrefs {
 
 export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   scheduledShowWeekly: true,
+  scheduledShowMatchedNotes: false,
   transactionsShowLinkedPanel: true,
   transactionsShowNotes: false,
   transactionsShowLinkedDetails: false,
@@ -485,6 +491,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
 
   return {
     scheduledShowWeekly: bool("scheduledShowWeekly"),
+    scheduledShowMatchedNotes: bool("scheduledShowMatchedNotes"),
     transactionsShowLinkedPanel: bool("transactionsShowLinkedPanel"),
     transactionsShowNotes: bool("transactionsShowNotes"),
     transactionsShowLinkedDetails: bool("transactionsShowLinkedDetails"),

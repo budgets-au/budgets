@@ -91,6 +91,7 @@ interface TxRow {
   amount: string;
   payee: string | null;
   description: string | null;
+  notes: string | null;
   accountId: string;
   accountName: string | null;
   accountColor: string | null;
@@ -503,6 +504,7 @@ export function ScheduledListView({
   // can't see.
   const { prefs: displayPrefs } = useDisplayPrefs();
   const showWeekly = displayPrefs.scheduledShowWeekly;
+  const showMatchedNotes = displayPrefs.scheduledShowMatchedNotes;
   const effectiveSortColumn: SortColumn =
     !showWeekly && sortColumn === "weekly" ? "next" : sortColumn;
   function toggleSort(col: SortColumn) {
@@ -1937,6 +1939,16 @@ export function ScheduledListView({
                               <div className={`lg:hidden mt-0.5 break-words font-medium ${segment ? "" : "text-muted-foreground"}`}>
                                 {t.payee || t.description || "—"}
                               </div>
+                              {/* Optional transaction note. Opt-in via
+                                  displayPrefs.scheduledShowMatchedNotes
+                                  (Settings → General). Indented past the
+                                  date column so it reads as a sub-line of
+                                  the row. */}
+                              {showMatchedNotes && t.notes && (
+                                <div className="mt-0.5 pl-[88px] text-xs text-muted-foreground italic break-words">
+                                  {t.notes}
+                                </div>
+                              )}
                             </li>,
                           );
                           return items;

@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.304.0 — 2026-05-30
+
+### Added
+- **Toggle: notes on the matched-transactions pane (scheduled
+  detail).** New `displayPrefs.scheduledShowMatchedNotes` (default
+  off). When on, each matched transaction in the Transactions
+  pane on the scheduled-transaction detail renders its `notes`
+  field as a small muted-italic line under the row, indented past
+  the date column. Off by default — keeps the list compact;
+  operators can flip it on in Settings → General when they want
+  context on what each match was for.
+
+  The `notes` field was already in the `/api/transactions`
+  payload — only the local `TxRow` type was missing it (and
+  nothing rendered it on this surface). Follows the canonical
+  pattern: persisted via `display-prefs.ts` so the toggle follows
+  the operator across devices.
+
 ## 0.303.0 — 2026-05-30
 
 ### Changed

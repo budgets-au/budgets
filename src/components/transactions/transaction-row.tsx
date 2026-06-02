@@ -202,7 +202,11 @@ function ExpandedField({
  * changed fields into a single PATCH; Cancel discards. Read-only
  * system fields (timestamps, hashes, normalised payee, transaction
  * ID) stay as `<code>` blocks throughout. */
-function ExpandedPanel({
+/** Body of the expand panel. Exported so non-table consumers (the
+ *  /scheduled matched-pane, which uses a `<ul><li>` layout) can
+ *  mount the same edit / notes / category / reconcile / neighbours
+ *  chrome inside a `<div>` rather than a `<tr><td colSpan>`. */
+export function ExpandedPanelContent({
   t,
   refresh,
 }: {
@@ -269,12 +273,7 @@ function ExpandedPanel({
   }
 
   return (
-    <tr className="bg-muted/40">
-      <td
-        colSpan={100}
-        className="px-6 py-3 border-b"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <>
         <div className="flex justify-end mb-2 gap-1.5">
           {editing ? (
             <>
@@ -394,6 +393,28 @@ function ExpandedPanel({
           </ExpandedField>
         </div>
         <TransactionNeighbours transactionId={t.id} />
+    </>
+  );
+}
+
+/** Table-row variant of the expand panel — what `TransactionRow`
+ *  renders below an expanded row. Thin shim around
+ *  `ExpandedPanelContent` so the body markup stays single-sourced. */
+function ExpandedPanel({
+  t,
+  refresh,
+}: {
+  t: TransactionRowData;
+  refresh: () => void;
+}) {
+  return (
+    <tr className="bg-muted/40">
+      <td
+        colSpan={100}
+        className="px-6 py-3 border-b"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ExpandedPanelContent t={t} refresh={refresh} />
       </td>
     </tr>
   );

@@ -9,6 +9,36 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.306.0 — 2026-06-02
+
+### Changed
+- **Matched-transactions pane on /scheduled now opens the same
+  expand panel as /transactions.** Click any matched row inside a
+  schedule's detail (both the category-budget and non-budget
+  variants of the pane) and it expands in place with the
+  identical edit / notes / category-picker / reconcile / trigram-
+  neighbours chrome the main transactions list uses. Single
+  source for that UI now — `ExpandedPanelContent` is extracted
+  from `transaction-row.tsx` and reused by the matched pane.
+  - **Why this matters.** Previously the matched pane was a
+    bespoke `<ul><li>` block: rows displayed date / account /
+    payee / drift / amount but offered no edit affordance.
+    0.304.0 added an opt-in read-only notes line; 0.305.0
+    landed the row-decoration props (`payeeSuffix`,
+    `amountTooltip`) in prep for unifying. This release wires
+    the click-to-expand and renders the shared content inside
+    each `<li>`. One row open at a time across both list
+    variants. Edits revalidate the pane's SWR cache so the
+    updated note/category/etc. appears immediately.
+  - **What stays.** The scheduled-only chrome around each row
+    is untouched: segment-colour stripe, drift `(+2d)`,
+    `unmatched` badge, "Under max by $X" tooltip, group gaps
+    between lineage segments / budget periods, missed-row
+    italic. The opt-in inline notes preview
+    (`displayPrefs.scheduledShowMatchedNotes` from 0.304.0)
+    also stays — it's a glance preview; the expand panel is
+    where you actually edit.
+
 ## 0.305.0 — 2026-05-30
 
 ### Added

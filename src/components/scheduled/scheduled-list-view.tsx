@@ -2,6 +2,11 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSwrJson } from "@/hooks/use-swr-json";
+import { mutate as swrMutate } from "swr";
+import {
+  ExpandedPanelContent,
+  type TransactionRowData,
+} from "@/components/transactions/transaction-row";
 import { addMonths, addWeeks, addYears, format, parseISO, subMonths } from "date-fns";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -85,22 +90,14 @@ interface AccountLite {
   isExternal: boolean;
 }
 
-interface TxRow {
-  id: string;
-  date: string;
-  amount: string;
-  payee: string | null;
-  description: string | null;
-  notes: string | null;
-  accountId: string;
-  accountName: string | null;
-  accountColor: string | null;
-  categoryId: string | null;
-  /** Set when this row is one half of a matched transfer pair. The
-   * scheduled view's pair-display block uses it to render the
-   * destination leg without re-running the matcher on it. */
-  transferPairId: string | null;
-}
+/** The matched-pane below now opens TransactionRow's
+ *  ExpandedPanelContent inline when a row is expanded — that
+ *  panel reads many fields the legacy local `TxRow` didn't
+ *  declare (postedAt, postedSeq, importHash, normalizedPayee,
+ *  etc.). The wire data from `/api/transactions` already carries
+ *  all of them; alias to `TransactionRowData` so types match
+ *  what the response actually contains. */
+type TxRow = TransactionRowData;
 
 function SortableTh<C extends string>({
   column,
@@ -555,6 +552,11 @@ export function ScheduledListView({
   // member here, opens the New Scheduled dialog pre-filled, and on save the
   // original row is deleted so the entry "moves" out of the lineage.
   const [migrating, setMigrating] = useState<ScheduledRow | null>(null);
+  /** Click a matched row in the schedule detail to expand it inline
+   *  with the same edit / notes / category / reconcile / neighbours
+   *  chrome the /transactions list uses. Only one row can be open
+   *  at a time. */
+  const [expandedMatchedTxnId, setExpandedMatchedTxnId] = useState<string | null>(null);
 
   async function performDelete(ids: string[]) {
     setDeleting(true);
@@ -652,6 +654,12 @@ export function ScheduledListView({
     ? `/api/transactions?${accountIds.length > 0 ? `accountIds=${accountIds.join(",")}&` : ""}from=${fromISO}&to=${toISOStr}&limit=10000`
     : null;
   const { data: txns = [], isLoading: txLoading } = useSwrJson<TxRow[]>(txKey);
+  /** Passed as the `refresh` callback to ExpandedPanelContent so
+   *  edits on a matched row (notes, category, reconcile, save)
+   *  re-fetch this pane's transactions. */
+  const refreshMatchedTxns = () => {
+    if (txKey) swrMutate(txKey);
+  };
 
   // When the schedule has a category, also fetch every txn in that category
   // (and its descendants) over the same window. The right-panel list is built
@@ -1881,72 +1889,95 @@ export function ScheduledListView({
                             ? budgetPeriodsList[row.periodIndex]?.from ?? t.date
                             : t.date;
                           const items: React.ReactNode[] = [];
+                          const isExpanded = expandedMatchedTxnId === t.id;
                           items.push(
                             <li
                               key={t.id}
                               data-bar-date={barDate}
                               className={`py-2 px-2 -mx-2 rounded ${groupBreakCls}`}
                             >
-                              <div className="flex justify-between items-center gap-3">
-                                <div className="min-w-0 flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground tabular-nums shrink-0 whitespace-nowrap w-[88px]">
-                                    {formatDate(t.date)}
-                                  </span>
-                                  {acct && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedMatchedTxnId((prev) =>
+                                    prev === t.id ? null : t.id,
+                                  )
+                                }
+                                aria-expanded={isExpanded}
+                                className="w-full text-left cursor-pointer"
+                              >
+                                <div className="flex justify-between items-center gap-3">
+                                  <div className="min-w-0 flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground tabular-nums shrink-0 whitespace-nowrap w-[88px]">
+                                      {formatDate(t.date)}
+                                    </span>
+                                    {acct && (
+                                      <span
+                                        className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap shrink-0"
+                                        style={{ backgroundColor: dimColour(acct.color) }}
+                                      >
+                                        {acct.name}
+                                      </span>
+                                    )}
+                                    {/* Desktop only — on mobile the full payee
+                                        sits in the lg:hidden block below this
+                                        flex row. */}
+                                    <span className={`hidden lg:inline truncate ${segment ? "" : "text-muted-foreground"}`}>
+                                      {t.payee || t.description || "—"}
+                                    </span>
+                                    {drift !== 0 && (
+                                      <span className="text-[10px] text-muted-foreground shrink-0">
+                                        ({drift > 0 ? "+" : ""}{drift}d)
+                                      </span>
+                                    )}
+                                    {!segment && (
+                                      <span className="text-[10px] text-muted-foreground shrink-0">unmatched</span>
+                                    )}
+                                  </div>
+                                  <span className="shrink-0 flex items-baseline gap-3">
                                     <span
-                                      className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap shrink-0"
-                                      style={{ backgroundColor: dimColour(acct.color) }}
+                                      className="text-[10px] tabular-nums text-muted-foreground w-16 text-right"
+                                      title={
+                                        gap
+                                          ? `Under max by ${formatAUDShort(gap)}`
+                                          : undefined
+                                      }
                                     >
-                                      {acct.name}
+                                      {gap ? `−${formatAUDShort(gap)}` : ""}
                                     </span>
-                                  )}
-                                  {/* Desktop only — on mobile the full payee
-                                      sits in the lg:hidden block below this
-                                      flex row. */}
-                                  <span className={`hidden lg:inline truncate ${segment ? "" : "text-muted-foreground"}`}>
-                                    {t.payee || t.description || "—"}
+                                    <span className={`font-medium tabular-nums ${amountClass(amt)}`}>
+                                      {formatAUD(amt)}
+                                    </span>
                                   </span>
-                                  {drift !== 0 && (
-                                    <span className="text-[10px] text-muted-foreground shrink-0">
-                                      ({drift > 0 ? "+" : ""}{drift}d)
-                                    </span>
-                                  )}
-                                  {!segment && (
-                                    <span className="text-[10px] text-muted-foreground shrink-0">unmatched</span>
-                                  )}
                                 </div>
-                                <span className="shrink-0 flex items-baseline gap-3">
-                                  <span
-                                    className="text-[10px] tabular-nums text-muted-foreground w-16 text-right"
-                                    title={
-                                      gap
-                                        ? `Under max by ${formatAUDShort(gap)}`
-                                        : undefined
-                                    }
-                                  >
-                                    {gap ? `−${formatAUDShort(gap)}` : ""}
-                                  </span>
-                                  <span className={`font-medium tabular-nums ${amountClass(amt)}`}>
-                                    {formatAUD(amt)}
-                                  </span>
-                                </span>
-                              </div>
-                              {/* Mobile-only second line: full payee, full
-                                  width below the meta row above. As a sibling
-                                  block of the flex container (not a flex
-                                  child) the desktop layout above stays
-                                  exactly as it was. */}
-                              <div className={`lg:hidden mt-0.5 break-words font-medium ${segment ? "" : "text-muted-foreground"}`}>
-                                {t.payee || t.description || "—"}
-                              </div>
-                              {/* Optional transaction note. Opt-in via
-                                  displayPrefs.scheduledShowMatchedNotes
-                                  (Settings → General). Indented past the
-                                  date column so it reads as a sub-line of
-                                  the row. */}
-                              {showMatchedNotes && t.notes && (
-                                <div className="mt-0.5 pl-[88px] text-xs text-muted-foreground italic break-words">
-                                  {t.notes}
+                                {/* Mobile-only second line: full payee, full
+                                    width below the meta row above. As a sibling
+                                    block of the flex container (not a flex
+                                    child) the desktop layout above stays
+                                    exactly as it was. */}
+                                <div className={`lg:hidden mt-0.5 break-words font-medium ${segment ? "" : "text-muted-foreground"}`}>
+                                  {t.payee || t.description || "—"}
+                                </div>
+                                {/* Optional transaction note. Opt-in via
+                                    displayPrefs.scheduledShowMatchedNotes
+                                    (Settings → General). Indented past the
+                                    date column so it reads as a sub-line of
+                                    the row. */}
+                                {showMatchedNotes && t.notes && (
+                                  <div className="mt-0.5 pl-[88px] text-xs text-muted-foreground italic break-words text-left">
+                                    {t.notes}
+                                  </div>
+                                )}
+                              </button>
+                              {isExpanded && (
+                                <div
+                                  className="mt-2 -mx-2 px-4 py-3 bg-muted/40 rounded"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <ExpandedPanelContent
+                                    t={t}
+                                    refresh={refreshMatchedTxns}
+                                  />
                                 </div>
                               )}
                             </li>,
@@ -2030,6 +2061,7 @@ export function ScheduledListView({
                           const amt = parseFloat(t.amount);
                           const segment = chartSegments.find((s) => s.id === occ.segmentId);
                           const gap = segment ? rangeGap(amt, segment) : null;
+                          const isExpanded = expandedMatchedTxnId === t.id;
                           return (
                             <li
                               key={t.id}
@@ -2043,49 +2075,76 @@ export function ScheduledListView({
                                   : undefined
                               }
                             >
-                              <div className="flex justify-between items-center gap-3">
-                                <div className="min-w-0 flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground tabular-nums shrink-0 whitespace-nowrap w-[88px]">
-                                    {formatDate(t.date)}
-                                  </span>
-                                  {acct && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedMatchedTxnId((prev) =>
+                                    prev === t.id ? null : t.id,
+                                  )
+                                }
+                                aria-expanded={isExpanded}
+                                className="w-full text-left cursor-pointer"
+                              >
+                                <div className="flex justify-between items-center gap-3">
+                                  <div className="min-w-0 flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground tabular-nums shrink-0 whitespace-nowrap w-[88px]">
+                                      {formatDate(t.date)}
+                                    </span>
+                                    {acct && (
+                                      <span
+                                        className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap shrink-0"
+                                        style={{ backgroundColor: dimColour(acct.color) }}
+                                      >
+                                        {acct.name}
+                                      </span>
+                                    )}
+                                    {/* Desktop only — full payee in the
+                                        lg:hidden block below the flex row. */}
+                                    <span className="hidden lg:inline truncate">
+                                      {t.payee || t.description || "—"}
+                                    </span>
+                                    {drift !== 0 && (
+                                      <span className="text-[10px] text-muted-foreground shrink-0">
+                                        ({drift > 0 ? "+" : ""}{drift}d)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="shrink-0 flex items-baseline gap-3">
                                     <span
-                                      className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] whitespace-nowrap shrink-0"
-                                      style={{ backgroundColor: dimColour(acct.color) }}
+                                      className="text-[10px] tabular-nums text-muted-foreground w-16 text-right"
+                                      title={
+                                        gap
+                                          ? `Under max by ${formatAUDShort(gap)}`
+                                          : undefined
+                                      }
                                     >
-                                      {acct.name}
+                                      {gap ? `−${formatAUDShort(gap)}` : ""}
                                     </span>
-                                  )}
-                                  {/* Desktop only — full payee in the
-                                      lg:hidden block below the flex row. */}
-                                  <span className="hidden lg:inline truncate">
-                                    {t.payee || t.description || "—"}
+                                    <span className={`font-medium tabular-nums ${amountClass(amt)}`}>
+                                      {formatAUD(amt)}
+                                    </span>
                                   </span>
-                                  {drift !== 0 && (
-                                    <span className="text-[10px] text-muted-foreground shrink-0">
-                                      ({drift > 0 ? "+" : ""}{drift}d)
-                                    </span>
-                                  )}
                                 </div>
-                                <span className="shrink-0 flex items-baseline gap-3">
-                                  <span
-                                    className="text-[10px] tabular-nums text-muted-foreground w-16 text-right"
-                                    title={
-                                      gap
-                                        ? `Under max by ${formatAUDShort(gap)}`
-                                        : undefined
-                                    }
-                                  >
-                                    {gap ? `−${formatAUDShort(gap)}` : ""}
-                                  </span>
-                                  <span className={`font-medium tabular-nums ${amountClass(amt)}`}>
-                                    {formatAUD(amt)}
-                                  </span>
-                                </span>
-                              </div>
-                              <div className="lg:hidden mt-0.5 break-words font-medium">
-                                {t.payee || t.description || "—"}
-                              </div>
+                                <div className="lg:hidden mt-0.5 break-words font-medium">
+                                  {t.payee || t.description || "—"}
+                                </div>
+                                {showMatchedNotes && t.notes && (
+                                  <div className="mt-0.5 pl-[88px] text-xs text-muted-foreground italic break-words text-left">
+                                    {t.notes}
+                                  </div>
+                                )}
+                              </button>
+                              {isExpanded && (
+                                <div
+                                  className="mt-2 -mx-2 px-4 py-3 bg-muted/40 rounded"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <ExpandedPanelContent
+                                    t={t}
+                                    refresh={refreshMatchedTxns}
+                                  />
+                                </div>
+                              )}
                             </li>
                           );
                         });

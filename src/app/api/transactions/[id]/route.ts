@@ -17,7 +17,7 @@ const updateSchema = z.object({
   payee: z.string().optional(),
   description: z.string().optional(),
   categoryId: z.string().uuid().optional().nullable(),
-  notes: z.string().optional(),
+  notes: z.string().nullable().optional(),
   isReconciled: z.boolean().optional(),
 });
 

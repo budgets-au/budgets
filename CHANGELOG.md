@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.305.0 — 2026-05-30
+
+### Added
+- **Infrastructure for unifying the /scheduled matched-pane rows
+  with /transactions rows.** Two small additions in preparation
+  for replacing the matched-pane's bespoke `<ul><li>` block with
+  the same `TransactionRow` + ExpandedPanel chrome the main
+  transactions list uses (so notes/category/reconcile editing
+  works identically on both surfaces).
+  - **`TransactionRow` decoration props.** New optional
+    `payeeSuffix?: ReactNode` (appended after the payee text;
+    covers the scheduled context's `(+2d)` drift indicator and
+    `unmatched` badge) and `amountTooltip?: string` (rendered as
+    a `title` on the amount cell; covers the "Under max by $X"
+    range-schedule gap hint). Main /transactions list omits
+    both — no visible change.
+  - **`PATCH /api/transactions/[id]` accepts `notes: null`** as
+    well as a string (parity with `/api/scheduled/[id]`). Allows
+    a future inline notes editor on the matched pane to clear a
+    note rather than save an empty string.
+
+### Held back
+- The actual matched-pane swap (replace `<ul>` with `<table>` +
+  `<TransactionRow>` + ExpandedPanel) ships next. It touches a
+  2200-line file across multiple coordinated cells and needs
+  manual QA on /scheduled across schedule / budget / range
+  modes — saving it for a focused turn instead of rushing it
+  into this one.
+
 ## 0.304.0 — 2026-05-30
 
 ### Added

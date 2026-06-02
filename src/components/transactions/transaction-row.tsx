@@ -539,6 +539,17 @@ export interface TransactionRowProps {
   /** Refresh callback fired after inline edits (CategoryPicker,
    * NotesCell). */
   onChange?: () => void;
+
+  /** Optional content appended after the payee text — used by the
+   *  /scheduled matched-pane to inject context like a drift
+   *  indicator (`(+2d)`) or an "unmatched" badge without owning
+   *  the row's chrome. Main /transactions list omits this. */
+  payeeSuffix?: React.ReactNode;
+  /** Optional `title` attribute on the amount cell — used by the
+   *  /scheduled matched-pane to surface the "Under max by $X"
+   *  range-schedule gap on hover. Main /transactions list omits
+   *  this. */
+  amountTooltip?: string;
 }
 
 export function TransactionRow({
@@ -559,6 +570,8 @@ export function TransactionRow({
   onUnpair,
   onRequestLink,
   onChange,
+  payeeSuffix,
+  amountTooltip,
 }: TransactionRowProps) {
   const linked = !!t.transferPairId;
   const isOutgoing = parseFloat(t.amount) < 0;
@@ -701,6 +714,9 @@ export function TransactionRow({
               <span className="hidden lg:inline truncate min-w-0">
                 {t.payee || t.description || "—"}
               </span>
+              {payeeSuffix && (
+                <span className="shrink-0">{payeeSuffix}</span>
+              )}
               {!showNotes && t.notes?.trim() && (
                 <span
                   className="inline-flex shrink-0 cursor-help"
@@ -843,7 +859,10 @@ export function TransactionRow({
             </span>
           )}
         </td>
-        <td className="px-2 py-1.5 text-right whitespace-nowrap">
+        <td
+          className="px-2 py-1.5 text-right whitespace-nowrap"
+          title={amountTooltip}
+        >
           <span className={cn("font-semibold", amountClass(t.amount))}>
             {formatAUD(t.amount)}
           </span>

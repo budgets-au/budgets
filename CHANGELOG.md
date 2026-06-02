@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.303.0 — 2026-05-30
+
+### Changed
+- **Dependency refresh — in-range patch + minor bumps.** `pnpm audit`
+  reports no known vulnerabilities; `pnpm up` moved every dep that
+  fits its current semver range.
+
+  - **Patches:** `@types/node` 20.19.39 → 20.19.41, `@types/react`
+    19.2.14 → 19.2.16, `@vitejs/plugin-react` 6.0.1 → 6.0.2,
+    `@vitest/coverage-v8` 4.1.5 → 4.1.8, `tsx` 4.21.0 → 4.22.4,
+    `vitest` 4.1.5 → 4.1.8.
+  - **Minors:** `date-fns` 4.1.0 → 4.4.0, `lucide-react` 1.12.0 →
+    1.17.0, `tailwindcss` + `@tailwindcss/postcss` 4.2.4 → 4.3.0,
+    `tailwind-merge` 3.5.0 → 3.6.0, `shadcn` (CLI) 4.6.0 → 4.10.0.
+
+  Held back (intentionally exact-pinned to keep the Next.js stack
+  in lockstep with `eslint-config-next`): `next` / `react` /
+  `react-dom` / `eslint-config-next` 16.2.6 — 16.2.7 patches are
+  out but require explicit coordinated bump.
+
+  Held back (each tracked as its own GitHub issue, breaking-major
+  bumps): `typescript` 5 → 6 (#5), `eslint` 9 → 10 (#4),
+  `@signalapp/better-sqlite3` deprecation (#6), `@types/node` 20 →
+  25 (#7), plus `dotenv` 16 → 17, `@types/uuid` 10 → 11,
+  `@types/bcryptjs` 2 → 3, `@types/react-grid-layout` 1 → 2.
+
+  Verified: `pnpm tsc --noEmit` clean, all 719 vitest tests pass,
+  `pnpm build` produces a clean production bundle.
+
 ## 0.302.0 — 2026-05-30
 
 ### Security

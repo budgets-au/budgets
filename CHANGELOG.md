@@ -9,6 +9,12 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.307.0 — 2026-06-26
+
+### Changed
+- **Housekeeping — `.gitignore` covers aider scratch files; refreshed
+  smart-monkey snapshot in `TEST-RESULTS.md`.** No behavioural change.
+
 ## 0.306.0 — 2026-06-02
 
 ### Changed

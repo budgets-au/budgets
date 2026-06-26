@@ -93,7 +93,15 @@ test.describe("1000 monkeys exploratory crawl", () => {
 
   for (const p of CRAWL_PAGES) {
     test(`monkey: ${p.label}`, async ({ page }) => {
-      test.setTimeout(60_000);
+      // 90s matches the drill-down phase below. /scheduled in
+      // particular pushes the budget on this rig — every matched
+      // row is now a click-to-expand button (0.306.0), so the
+      // 25-button click cap triggers ~25 React re-renders + SWR
+      // revalidations through the chart-segment + lineage
+      // recompute path. On slow / fresh machines that ran over
+      // the previous 60s tight budget. 90s keeps the monkey doing
+      // useful discovery without making the suite painful.
+      test.setTimeout(90_000);
       const errors: MonkeyFinding[] = [];
       ensureRoute(appMap, p.path);
       runCounters.routesVisited += 1;

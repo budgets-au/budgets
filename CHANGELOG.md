@@ -9,6 +9,29 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.309.0 — 2026-06-26
+
+### Changed
+- **E2E coverage hardening — proxy auth dispatch + monkey budget.**
+  Two test-only follow-ups to 0.308 / 0.306:
+  - **`tests/e2e/proxy-auth-dispatch.spec.ts`** pins the #79
+    fix at the browser level on the real built server:
+    authenticated `GET /api/accounts` → 200 + JSON array;
+    unauthenticated GET (with `maxRedirects: 0`) → 401 +
+    `{ error: string }` (not a 302 to `/login`); unauthenticated
+    nav to `/transactions` still lands on `/login`; and the
+    authenticated API response carries no `authjs.session-token`
+    Set-Cookie, pinning the absence of the middleware-auth
+    side-effects the bypass eliminates.
+  - **Monkey per-page timeout 60s → 90s.** /scheduled exceeded
+    the 60s budget on a fresh build because every matched row is
+    now a click-to-expand button (0.306) — the 25-button click
+    cap drives ~25 React re-renders + SWR revalidations through
+    the chart-segment + lineage recompute path. The drill-down
+    phase already used 90s; bringing the per-page exploratory
+    crawl in line. Subsequent warm-build runs complete /scheduled
+    in ~10s; the bump is headroom, not a baseline change.
+
 ## 0.308.0 — 2026-06-26
 
 ### Changed

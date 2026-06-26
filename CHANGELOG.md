@@ -9,6 +9,32 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.308.0 — 2026-06-26
+
+### Changed
+- **Proxy no longer double-decodes the JWT on /api/\* hits.**
+  Previously every API request went through two `auth()` calls —
+  one in `src/proxy.ts` (NextAuth middleware mode) and a second
+  inside the route's `withAuth*` guard in
+  `src/lib/api/route-guards.ts`. Both ran the same JWT verify.
+  - **Fix.** The proxy now skips `auth()` for `/api/*` paths and
+    lets the route guard be the single source of truth for API
+    auth (401 JSON). Page routes (`/dashboard`, `/transactions`,
+    etc.) keep going through middleware `auth()` so
+    unauthenticated visitors still get the `/login` redirect.
+  - **Safety.** All 90 API routes either use a `withAuth*` guard
+    or are in the three-route intentionally-public list
+    (`/api/unlock`, `/api/databases/*`, `/api/auth/[...nextauth]/*`)
+    — the first two were already in the unlock-bypass; NextAuth's
+    own handlers manage their own auth. A new API route that
+    forgets the guard would be public, which matches the existing
+    convention (route guards, not middleware, are the source of
+    truth for API auth).
+  - **Pinned.** New `src/proxy.test.ts` covers the dispatch
+    matrix: `/api/*` and unlock routes never invoke the auth
+    spy; page routes do; a locked DB still short-circuits to
+    `/unlock`. Closes #79.
+
 ## 0.307.0 — 2026-06-26
 
 ### Changed

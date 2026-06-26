@@ -47,7 +47,26 @@ export function proxy(req: NextRequest) {
     // the DB, which would be a chicken-and-egg deadlock.
     return NextResponse.next();
   }
-  // Otherwise, normal auth.
+  // Issue #79: skip the proxy's auth() call for /api/* paths. Every
+  // API route wraps its handler in `withAuth*` (route-guards.ts), so
+  // the proxy call was a second JWT decode on top of the one the
+  // route guard does — wasted work on the hot path. Page routes
+  // still go through auth() so unauthenticated visitors get the
+  // /login redirect; APIs return 401 from the route guard instead.
+  //
+  // Safety: every API route either uses a withAuth* guard or is one
+  // of the three intentionally-public endpoints (/api/unlock,
+  // /api/databases/*, /api/auth/[...nextauth]/*) — the first two are
+  // already in the unlock-bypass above; NextAuth's own handlers
+  // manage their own auth and shouldn't be middleware-gated either.
+  // A future API route that forgets the guard would be public — this
+  // matches the existing convention (route guards, not middleware,
+  // are the source of truth for API auth).
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+  // Otherwise (HTML page routes), normal auth — redirects
+  // unauthenticated visitors to /login.
   return (auth as unknown as (r: NextRequest) => Response | Promise<Response>)(
     req,
   );

@@ -1904,6 +1904,14 @@ export function ScheduledListView({
                                   )
                                 }
                                 aria-expanded={isExpanded}
+                                // Inert UI toggle — the exploratory monkey
+                                // (tests/e2e/monkey.spec.ts) already covers
+                                // the expand-panel body via TransactionRow
+                                // on /transactions. Clicking these here
+                                // just re-discovers the same panel while
+                                // filling the 25-button click cap and
+                                // dominating the /scheduled crawl budget.
+                                data-monkey-skip="1"
                                 className="w-full text-left cursor-pointer"
                               >
                                 <div className="flex justify-between items-center gap-3">
@@ -2083,6 +2091,14 @@ export function ScheduledListView({
                                   )
                                 }
                                 aria-expanded={isExpanded}
+                                // Inert UI toggle — the exploratory monkey
+                                // (tests/e2e/monkey.spec.ts) already covers
+                                // the expand-panel body via TransactionRow
+                                // on /transactions. Clicking these here
+                                // just re-discovers the same panel while
+                                // filling the 25-button click cap and
+                                // dominating the /scheduled crawl budget.
+                                data-monkey-skip="1"
                                 className="w-full text-left cursor-pointer"
                               >
                                 <div className="flex justify-between items-center gap-3">

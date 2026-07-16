@@ -93,15 +93,17 @@ test.describe("1000 monkeys exploratory crawl", () => {
 
   for (const p of CRAWL_PAGES) {
     test(`monkey: ${p.label}`, async ({ page }) => {
-      // 90s matches the drill-down phase below. /scheduled in
-      // particular pushes the budget on this rig — every matched
-      // row is now a click-to-expand button (0.306.0), so the
-      // 25-button click cap triggers ~25 React re-renders + SWR
-      // revalidations through the chart-segment + lineage
-      // recompute path. On slow / fresh machines that ran over
-      // the previous 60s tight budget. 90s keeps the monkey doing
-      // useful discovery without making the suite painful.
-      test.setTimeout(90_000);
+      // The crawl runs AFTER monkey-goals populates the DB, so
+      // heavier pages (/scheduled especially) face a fuller DOM:
+      // 25 button clicks × ~3-4s each (Playwright auto-wait +
+      // re-render + escape-to-dismiss) is ~90s just in the click
+      // phase before the select/form-fill phases start. 120s
+      // leaves room for the whole pass. The `data-monkey-skip`
+      // attribute filters inert row-toggle affordances so the
+      // click cap fills with genuine discovery targets, not the
+      // /scheduled matched-row expand buttons that duplicate
+      // coverage the /transactions crawl already provides.
+      test.setTimeout(120_000);
       const errors: MonkeyFinding[] = [];
       ensureRoute(appMap, p.path);
       runCounters.routesVisited += 1;
@@ -330,9 +332,18 @@ async function clickSafeButtons(
   // Snapshot the button list — clicking some buttons opens modals
   // that mount more buttons, but we don't want to chase those
   // forever. One pass per page.
-  const buttons = page.locator("button:visible").or(
-    page.locator('[role="button"]:visible'),
-  );
+  //
+  // `data-monkey-skip` filters out inert row-toggle affordances
+  // whose expand-panel body is already covered elsewhere in the
+  // suite (see the matched-row toggles on /scheduled — the panel
+  // they open is TransactionRow's ExpandedPanelContent, which the
+  // /transactions crawl already exercises). Without this filter,
+  // schedules populated by monkey-goals.spec fill the 25-button
+  // cap with row toggles and starve the crawl of genuine
+  // discovery targets.
+  const buttons = page
+    .locator("button:visible:not([data-monkey-skip])")
+    .or(page.locator('[role="button"]:visible:not([data-monkey-skip])'));
   const count = await buttons.count();
   for (let i = 0; i < Math.min(count, 25); i++) {
     const btn = buttons.nth(i);

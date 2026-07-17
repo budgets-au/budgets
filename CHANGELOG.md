@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.310.0 — 2026-07-17
+
+### Changed
+- **Dep refresh — in-range patches + minor bumps.** 20 packages
+  advanced without touching APIs the codebase uses. No majors
+  crossed (those are tracked as #4 eslint, #5 typescript,
+  #6 better-sqlite3, #7 @types/node).
+  - **Runtime**: `next` 16.2.6→16.2.10, `react` / `react-dom`
+    19.2.6→19.2.7, `swr` 2.4.1→2.4.2, `recharts` 3.8.1→3.9.2,
+    `@base-ui/react` 1.5.0→1.6.0 (shadcn primitives),
+    `lucide-react` 1.17.0→1.24.0, `papaparse` 5.5.3→5.5.4,
+    `uuid` 14.0.0→14.0.1.
+  - **Dev / tests**: `vitest` + `@vitest/coverage-v8`
+    4.1.8→4.1.10, `@playwright/test` 1.60.0→1.61.1 (chromium
+    bundle refreshed), `tsx` 4.22.4→4.23.1, `tailwindcss` +
+    `@tailwindcss/postcss` 4.3.0→4.3.3, `shadcn` CLI
+    4.10.0→4.13.0, `eslint-config-next` 16.2.6→16.2.10,
+    `@vitejs/plugin-react` 6.0.2→6.0.3, `@types/react`
+    19.2.16→19.2.17, `@types/node` 20.19.41→20.19.43,
+    `eslint` 9.39.4→9.39.5.
+  - **Verify**: `pnpm tsc --noEmit` clean, 717/727 unit tests
+    pass (10 pre-existing skips), `pnpm build` succeeds,
+    `pnpm exec playwright test pages-smoke proxy-auth-dispatch`
+    → 16/16 green.
+
 ## 0.309.0 — 2026-06-26
 
 ### Changed

@@ -9,6 +9,53 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.311.0 — 2026-07-17
+
+### Added
+- **Category tags → virtual rows on the Cashflow report.** A
+  category can now carry one or more free-form tags (a property,
+  a person, a project — any cross-cutting concern that doesn't
+  fit neatly into the parent/child category tree). Each unique
+  tag renders as a **virtual row below the main Cashflow table**
+  under a new "Tagged views (excluded from totals)" section.
+  - **Signed sum per row.** A tag can span income and expense
+    categories at once (e.g. Property A's rent-income and
+    maintenance-expense) — the virtual row is a single signed
+    sum per month, reading as the tag's net effect. Only tags
+    with at least one member category active in the window
+    materialise.
+  - **Opt-in per row.** Each virtual row has its own eye toggle,
+    persisted in a new `cashflowEnabledTagIds` display pref.
+    Off state renders muted so the tag is discoverable — click
+    the eye to activate. Empty by default; adding a tag to a
+    category doesn't force it onto the report.
+  - **Never in totals.** Virtual rows are built from the same
+    category list but deliberately never fed into
+    `visibleIncome`, `visibleExpenses`, or `totals`. Total
+    Income / Total Expenses / Surplus figures are identical
+    before and after toggling any tag on.
+  - **Where to tag.** Settings → Categories → Edit any category
+    → new **Tags** field between Colour and Transfer-kind.
+    Chips input (Enter or comma to commit, Backspace to delete),
+    datalist autocomplete off the union of tags already in use
+    on other categories, case-insensitive dedupe.
+
+### Schema
+- **Migration `0017_categories_tags`.** Adds `categories.tags`
+  (TEXT, nullable, JSON-encoded string array). Empty arrays are
+  normalised to NULL on write. Applied automatically at first
+  unlock via the existing `runPendingMigrations()` path — no
+  ops step required.
+
+### Testing
+- New pure helper `src/lib/reports/virtual-rows.ts` with 9
+  colocated vitest cases pinning the aggregation contract
+  (single-tag sum, mixed income + expense produce one signed
+  net row, out-of-window skip, alphabetical sort, whitespace
+  trim, duplicate-tag dedupe).
+- Existing 717-test baseline unchanged; total unit count 726
+  passing.
+
 ## 0.310.0 — 2026-07-17
 
 ### Changed

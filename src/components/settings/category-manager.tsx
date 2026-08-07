@@ -311,7 +311,14 @@ export function CategoryManager({
    * closes promptly. Returns true on success so the dialog can dismiss. */
   async function handleEditSave(
     id: string,
-    catPatch: Partial<{ name: string; color: string; parentId: string | null; transferKind: "none" | "internal" | "external" }>,
+    catPatch: Partial<{
+      name: string;
+      color: string;
+      parentId: string | null;
+      transferKind: "none" | "internal" | "external";
+      // undefined = don't touch. null OR [] clears all tags.
+      tags: string[] | null;
+    }>,
     taxPatch: { workUsePct: number; bundledInWfh: boolean } | null,
   ): Promise<boolean> {
     const requests: Promise<Response>[] = [];
@@ -781,6 +788,7 @@ function CategoryEditDialog({
       color: string;
       parentId: string | null;
       transferKind: "none" | "internal" | "external";
+      tags: string[] | null;
     }>,
     taxPatch: { workUsePct: number; bundledInWfh: boolean } | null,
   ) => Promise<boolean>;
@@ -798,7 +806,40 @@ function CategoryEditDialog({
   const [transferKind, setTransferKind] = useState<"none" | "internal" | "external">(cat.transferKind);
   const [workUsePct, setWorkUsePct] = useState<number>(initialWorkUsePct);
   const [bundledInWfh, setBundledInWfh] = useState<boolean>(initialBundledInWfh);
+  const [tags, setTags] = useState<string[]>(cat.tags ?? []);
+  const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
+  // Autocomplete: every non-empty tag on any other cat (case-preserving,
+  // deduped). Used for the Enter / comma-commit path so operators can
+  // hit an existing tag without re-typing case.
+  const allTagsSuggestion = (() => {
+    const set = new Set<string>();
+    for (const c of cats) for (const t of c.tags ?? []) if (t.trim()) set.add(t);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  })();
+
+  function addTag(raw: string) {
+    const t = raw.trim();
+    if (!t) return;
+    // Case-insensitive collision check against the current set; keeps
+    // the case the user typed if new, else silent no-op.
+    if (tags.some((x) => x.toLowerCase() === t.toLowerCase())) return;
+    setTags((prev) => [...prev, t]);
+    setTagInput("");
+  }
+  function removeTag(t: string) {
+    setTags((prev) => prev.filter((x) => x !== t));
+  }
+  function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Enter or comma commit; Backspace on empty input removes the last chip.
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(tagInput);
+    } else if (e.key === "Backspace" && tagInput === "" && tags.length > 0) {
+      e.preventDefault();
+      setTags((prev) => prev.slice(0, -1));
+    }
+  }
 
   const isExpense = cat.type === "expense";
 
@@ -819,6 +860,14 @@ function CategoryEditDialog({
 
   async function handleSave() {
     setSaving(true);
+    // Any lingering input in the tag field gets committed on save so
+    // the operator doesn't have to press Enter first.
+    const finalTags = tagInput.trim()
+      ? tags.some((x) => x.toLowerCase() === tagInput.trim().toLowerCase())
+        ? tags
+        : [...tags, tagInput.trim()]
+      : tags;
+
     const catPatch: Parameters<typeof onSave>[0] = {};
     if (name.trim() && name.trim() !== cat.name) catPatch.name = name.trim();
     if (color !== cat.color) catPatch.color = color;
@@ -826,6 +875,18 @@ function CategoryEditDialog({
       catPatch.parentId = parentId || null;
     }
     if (transferKind !== cat.transferKind) catPatch.transferKind = transferKind;
+    // Send tags when the set changed (deep-compare on the string
+    // arrays — order matters at the wire level, so we sort before
+    // comparing). Empty final set + previously empty = no-op; empty
+    // final + previous non-empty sends `null` to clear.
+    const prevSorted = [...(cat.tags ?? [])].sort();
+    const nextSorted = [...finalTags].sort();
+    const changed =
+      prevSorted.length !== nextSorted.length ||
+      prevSorted.some((v, i) => v !== nextSorted[i]);
+    if (changed) {
+      catPatch.tags = finalTags.length > 0 ? finalTags : null;
+    }
 
     let taxPatch: Parameters<typeof onSave>[1] = null;
     if (
@@ -906,6 +967,48 @@ function CategoryEditDialog({
                 />
               ))}
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="cat-tags">Tags</Label>
+            <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0">
+              {tags.map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
+                >
+                  #{t}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(t)}
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={`Remove tag ${t}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                id="cat-tags"
+                list="cat-tags-suggestions"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+                onBlur={() => addTag(tagInput)}
+                placeholder={tags.length === 0 ? "Add a tag…" : ""}
+                className="flex-1 min-w-24 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
+              />
+              <datalist id="cat-tags-suggestions">
+                {allTagsSuggestion
+                  .filter((t) => !tags.some((x) => x.toLowerCase() === t.toLowerCase()))
+                  .map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+              </datalist>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Attaches this category to a cross-cutting group (e.g. a property or person). Each tag appears as a virtual row below the main Cashflow report. Enter or comma to add.
+            </p>
           </div>
 
           <div className="space-y-1.5">

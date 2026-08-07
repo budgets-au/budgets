@@ -1,0 +1,12 @@
+-- Free-form tag labels attached to a category. Rendered as "virtual"
+-- rows below the main Cashflow report table, each summing the byMonth
+-- values of its member categories so cross-cutting concerns (a
+-- property, a person, a project) can be inspected without
+-- restructuring the category tree. See src/lib/reports/virtual-rows.ts
+-- for the sum logic and src/components/reports/cashflow-report.tsx
+-- for the "Tagged views" section.
+--
+-- Nullable so pre-tag rows stay untouched. SQLite stores the JSON as
+-- TEXT; the JSON is a plain string[] managed by drizzle's
+-- `mode: "json"` on the schema side.
+ALTER TABLE categories ADD COLUMN tags TEXT;

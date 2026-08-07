@@ -178,6 +178,14 @@ export const categories = sqliteTable(
     // earlier. Backfilled from alphabetical order in the historical
     // Postgres migration 0029.
     sortOrder: integer("sort_order").notNull().default(9999),
+    // Free-form tag labels attached to this category. Rendered as
+    // "virtual" rows below the main table on the Cashflow report —
+    // each tag sums the byMonth values of its member categories so
+    // cross-cutting concerns (a specific property, person, project)
+    // can be inspected without restructuring the category tree. See
+    // src/lib/reports/virtual-rows.ts. Nullable so pre-tag categories
+    // stay untouched.
+    tags: text("tags", { mode: "json" }).$type<string[]>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .$defaultFn(() => new Date()),

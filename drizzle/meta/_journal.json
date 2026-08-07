@@ -120,6 +120,13 @@
       "when": 1779800000000,
       "tag": "0016_scheduled_transactions_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1779900000000,
+      "tag": "0017_categories_tags",
+      "breakpoints": true
     }
   ]
 }

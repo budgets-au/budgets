@@ -11,6 +11,7 @@ import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { numFmt } from "@/lib/utils";
 import type { CashflowReport as CashflowData, CashflowCategory } from "@/app/api/reports/cashflow/route";
 import { CashflowCellDialog, type CashflowCellQuery } from "./cashflow-cell-dialog";
+import { buildVirtualRowsByTag } from "@/lib/reports/virtual-rows";
 
 const CellOpenerContext = createContext<((q: CashflowCellQuery) => void) | null>(null);
 const useCellOpener = () => useContext(CellOpenerContext);
@@ -934,6 +935,87 @@ function LeafRow({
   );
 }
 
+/** Row for a virtual tag view rendered below the main Cashflow
+ *  table. Similar cell shape to `LeafRow` but signed (values are
+ *  already signed — no `negate`), no plan/budget/scheduled cells
+ *  (virtual rows aggregate real cats' actuals only), no drill-
+ *  through (v1). When `isEnabled` is false the row is greyed out
+ *  and its values are visually muted, matching the Hidden section
+ *  convention. See src/lib/reports/virtual-rows.ts. */
+function VirtualTagRow({
+  row,
+  months,
+  thisMonth,
+  isEnabled,
+  onToggle,
+}: {
+  row: {
+    tag: string;
+    memberCategoryIds: string[];
+    byMonth: Record<string, number>;
+    total: number;
+  };
+  months: string[];
+  thisMonth: string;
+  isEnabled: boolean;
+  onToggle: () => void;
+}) {
+  const opts = useColOpts();
+  return (
+    <tr
+      className={`group hover:bg-muted/30 border-b border-border/50 ${isEnabled ? "" : "opacity-50"}`}
+    >
+      <td className="px-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap">
+        <span className="flex items-center gap-1 min-w-0">
+          <span className="truncate" title={`Sums ${row.memberCategoryIds.length} categor${row.memberCategoryIds.length === 1 ? "y" : "ies"}`}>
+            #{row.tag}
+          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
+            className={`ml-auto p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
+              isEnabled
+                ? "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
+                : "opacity-70 hover:opacity-100"
+            }`}
+            title={isEnabled ? "Hide this tag row" : "Show this tag row"}
+            aria-label={isEnabled ? "Hide tag row" : "Show tag row"}
+            aria-pressed={isEnabled}
+          >
+            {isEnabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          </button>
+        </span>
+      </td>
+      {opts.monthAxis && (
+        <MonthCells
+          months={months}
+          thisMonth={thisMonth}
+          byMonth={row.byMonth}
+          budgetByMonth={{}}
+          scheduledByMonth={{}}
+          countByMonth={{}}
+        />
+      )}
+      <AmountCell value={row.total} mode="net" computed />
+      {opts.showCounts && (
+        <td className="pl-3 pr-1.5 py-1.5 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>
+      )}
+      {opts.showAvg && (
+        <AmountCell value={months.length > 0 ? row.total / months.length : undefined} mode="net" muted computed />
+      )}
+      {opts.showPlan && (
+        <td className="pl-3 pr-1.5 py-1.5 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>
+      )}
+      {opts.showDiff && (
+        <td className="pl-3 pr-1.5 py-1.5 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>
+      )}
+    </tr>
+  );
+}
+
 function TotalsRow({
   label, months, values, thisMonth, mode, negate,
 }: {
@@ -1222,6 +1304,22 @@ export function CashflowReport({
   const { data, isLoading } = useSwrJson<CashflowData>(
     `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
   );
+  // Feeds the "Tagged views" virtual-rows section below the main
+  // table. Category rows carry their tags[] column; we build a
+  // categoryId → tags[] map once here and let buildVirtualRowsByTag
+  // do the actual grouping. This endpoint is already cached by SWR
+  // (Categories admin page uses the same key) so the fetch is
+  // near-instant on repeat views.
+  const { data: categoryRows = [] } = useSwrJson<
+    Array<{ id: string; tags: string[] | null }>
+  >("/api/categories");
+  const enabledTagIds = displayPrefs.cashflowEnabledTagIds;
+  function toggleTag(tag: string) {
+    const next = enabledTagIds.includes(tag)
+      ? enabledTagIds.filter((t) => t !== tag)
+      : [...enabledTagIds, tag];
+    setPref("cashflowEnabledTagIds", next);
+  }
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground py-8 text-center">Loading cashflow data…</p>;
@@ -1266,6 +1364,19 @@ export function CashflowReport({
   const visibleExpenses = expenses.filter((c) => !catIsHidden(c));
   const hiddenIncome = income.filter((c) => catIsHidden(c));
   const hiddenExpenses = expenses.filter((c) => catIsHidden(c));
+
+  // Virtual "tagged views" rows. Built from ALL cats in-window (not
+  // just visible) — a hidden category's contribution to a tag is
+  // still relevant to the tag's total. Deliberately never fed into
+  // `visibleIncome`/`visibleExpenses` or `totals` below, so these
+  // rows can't affect Total Income / Total Expenses / Surplus.
+  const tagsByCategoryId: Record<string, string[] | null> = {};
+  for (const row of categoryRows) tagsByCategoryId[row.id] = row.tags ?? null;
+  const virtualRows = buildVirtualRowsByTag(
+    [...income, ...expenses],
+    tagsByCategoryId,
+    months,
+  );
 
   // Visible groups feed the primary income/expense sections. Hidden
   // groups (built from the hidden cats only) feed a separate section
@@ -1514,6 +1625,31 @@ export function CashflowReport({
           )}
           {renderGroups(expenseGroups, months, thisMonth, true, from, to, totalsLevel, collapse, () => false)}
           <TotalsRow label="Total Expenses" months={months} values={totals.expenses} thisMonth={thisMonth} negate />
+
+          {/* ── TAGGED VIEWS ── virtual rows built from category tags
+              (see src/lib/reports/virtual-rows.ts). One row per unique
+              tag with at least one member category active in the
+              window. Deliberately below Total Expenses and NEVER
+              added to the totals math above — this is a parallel
+              view, not additional data. Each row has an eye toggle
+              persisted in `cashflowEnabledTagIds`; off state renders
+              greyed so operators can see the tag exists and activate
+              it. */}
+          {virtualRows.length > 0 && (
+            <>
+              <SectionHeader label="Tagged views (excluded from totals)" cols={totalCols} />
+              {virtualRows.map((row) => (
+                <VirtualTagRow
+                  key={row.tag}
+                  row={row}
+                  months={months}
+                  thisMonth={thisMonth}
+                  isEnabled={enabledTagIds.includes(row.tag)}
+                  onToggle={() => toggleTag(row.tag)}
+                />
+              ))}
+            </>
+          )}
 
           {/* ── HIDDEN CATEGORIES ── only when the operator has flipped
               showHidden on AND there's at least one hidden cat with

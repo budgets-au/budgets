@@ -92,6 +92,12 @@ export interface DisplayPrefs {
    * (greyed out) so the operator can un-hide them. They remain
    * excluded from totals regardless. */
   cashflowShowHidden: boolean;
+  /** Category tags whose virtual row is currently enabled on the
+   * Cashflow report's "Tagged views" section. Opt-in: adding a tag
+   * to a category doesn't show its virtual row until the operator
+   * toggles the eye on. Values are the raw tag strings (see
+   * src/lib/reports/virtual-rows.ts). */
+  cashflowEnabledTagIds: string[];
   /** Sankey diagram scope on Reports → Sankey. */
   reportsSankeyScope: "all" | "income" | "expenses";
   /** Per-report toggle: when true, drops transfer-typed categories
@@ -240,6 +246,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   cashflowPlanMode: "off",
   cashflowExcludedCatIds: [],
   cashflowShowHidden: false,
+  cashflowEnabledTagIds: [],
   reportsSankeyScope: "all",
   cashflowHideTransfers: true,
   sankeyHideTransfers: true,
@@ -526,6 +533,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     })(),
     cashflowExcludedCatIds: stringArray("cashflowExcludedCatIds"),
     cashflowShowHidden: bool("cashflowShowHidden"),
+    cashflowEnabledTagIds: stringArray("cashflowEnabledTagIds"),
     reportsSankeyScope: pickEnum(
       "reportsSankeyScope",
       ["all", "income", "expenses"] as const,

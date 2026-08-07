@@ -14,6 +14,9 @@ const updateSchema = z.object({
   parentId: z.string().uuid().optional().nullable(),
   transferKind: transferKindEnum.optional(),
   sortOrder: z.number().int().min(0).optional(),
+  // undefined = don't touch. null OR [] = clear all tags. Otherwise
+  // replaces the tag set outright (no per-tag deltas).
+  tags: z.array(z.string().trim().min(1)).nullable().optional(),
 });
 
 export const PATCH = withAuthAndId(async (id, request) => {
@@ -40,9 +43,16 @@ export const PATCH = withAuthAndId(async (id, request) => {
     }
   }
 
+  // Store empty array as NULL — parity with POST + keeps the JSON
+  // blob out of the DB for untagged categories.
+  const patch =
+    data.tags !== undefined && (data.tags === null || data.tags.length === 0)
+      ? { ...data, tags: null }
+      : data;
+
   const [row] = await db
     .update(categories)
-    .set(data)
+    .set(patch)
     .where(eq(categories.id, id))
     .returning();
 

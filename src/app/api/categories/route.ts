@@ -13,6 +13,9 @@ const createSchema = z.object({
   color: z.string().default("#94a3b8"),
   parentId: z.string().uuid().optional().nullable(),
   transferKind: transferKindEnum.optional(),
+  // Free-form labels — see src/lib/reports/virtual-rows.ts. Trim +
+  // require non-empty per element; the whole field is optional.
+  tags: z.array(z.string().trim().min(1)).optional(),
 });
 
 export const GET = withAuth(async (request) => {
@@ -37,6 +40,14 @@ export const POST = withAuth(async (request) => {
   if (!parsed.ok) return parsed.response;
   const data = parsed.data;
 
-  const [row] = await db.insert(categories).values(data).returning();
+  // Store an empty array as NULL — the two are equivalent for the
+  // Cashflow virtual-rows read path, and NULL keeps the JSON blob
+  // out of the DB entirely for the common untagged case.
+  const insertValues = {
+    ...data,
+    tags: data.tags && data.tags.length > 0 ? data.tags : null,
+  };
+
+  const [row] = await db.insert(categories).values(insertValues).returning();
   return NextResponse.json(row, { status: 201 });
 });

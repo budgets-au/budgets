@@ -5,7 +5,7 @@ import { useSwrJson } from "@/hooks/use-swr-json";
 import { useToggleSet } from "@/hooks/use-toggle-set";
 import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Plus, Tag } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { numFmt } from "@/lib/utils";
@@ -205,6 +205,29 @@ function CategoryTagsPopover({
         </div>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Small always-visible indicator rendered inside a category row's
+ *  label cell when the cat carries ≥1 tag. Hovering the icon
+ *  reveals the tag list via the native `title` tooltip so the
+ *  operator can see at a glance which cats are tagged and how,
+ *  without opening the popover to check. Renders nothing for
+ *  untagged cats. */
+function TagIndicator({ catId }: { catId: string }) {
+  const ctx = useTagCtx();
+  if (!ctx) return null;
+  const tags = ctx.tagsFor(catId);
+  if (tags.length === 0) return null;
+  const title = tags.map((t) => `#${t}`).join(", ");
+  return (
+    <span
+      className="inline-flex items-center text-muted-foreground/60 shrink-0 print:hidden"
+      title={title}
+      aria-label={`Tags: ${title}`}
+    >
+      <Tag className="h-3 w-3" />
+    </span>
   );
 }
 
@@ -1069,6 +1092,7 @@ function LeafRow({
       <td className={tdClass}>
         <span className="flex items-center gap-1 min-w-0">
           <span className="truncate">{nameEl}</span>
+          {!isUncategorised && <TagIndicator catId={cat.id} />}
           {!isUncategorised && (
             <span className="ml-auto flex items-center gap-0.5 shrink-0">
               <CategoryTagsPopover catId={cat.id} catName={cat.name} />

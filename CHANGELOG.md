@@ -9,6 +9,17 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.314.0 — 2026-07-17
+
+### Added
+- **Tag indicator on Cashflow category rows.** Every leaf
+  category that carries ≥1 tag now shows a small `Tag` icon
+  next to its name on the Cashflow report. Hover the icon and
+  the native tooltip lists the tags (e.g. `#PropertyA,
+  #Shared`). At-a-glance signal for which cats are tagged
+  without opening the `+` popover; complements the hover-
+  revealed edit affordance without duplicating it.
+
 ## 0.313.0 — 2026-07-17
 
 ### Changed

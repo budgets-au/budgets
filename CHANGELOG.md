@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.313.0 — 2026-07-17
+
+### Changed
+- **Virtual-row member list now shows full category path.**
+  Each bulleted entry under a `#tag` header on the Cashflow
+  report's "Tagged views" section renders as
+  `Grandparent › Parent › Leaf` (via the existing
+  `buildCategoryPathStringMap` used elsewhere for the same
+  purpose). Disambiguates common leaf names — a "PropertyA"
+  tag touching both `Caravan / Insurance` and `Health /
+  Insurance` no longer reads as two identical "Insurance"
+  bullets.
+
 ## 0.312.0 — 2026-07-17
 
 ### Added

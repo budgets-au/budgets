@@ -12,6 +12,7 @@ import { numFmt } from "@/lib/utils";
 import type { CashflowReport as CashflowData, CashflowCategory } from "@/app/api/reports/cashflow/route";
 import { CashflowCellDialog, type CashflowCellQuery } from "./cashflow-cell-dialog";
 import { buildVirtualRowsByTag } from "@/lib/reports/virtual-rows";
+import { buildCategoryPathStringMap } from "@/lib/category-path";
 import {
   Popover,
   PopoverContent,
@@ -1118,7 +1119,7 @@ function VirtualTagRow({
   thisMonth,
   isEnabled,
   onToggle,
-  categoryNameById,
+  categoryPathById,
 }: {
   row: {
     tag: string;
@@ -1130,7 +1131,11 @@ function VirtualTagRow({
   thisMonth: string;
   isEnabled: boolean;
   onToggle: () => void;
-  categoryNameById: Record<string, string>;
+  /** Map of category id → full ancestry path ("Grandparent › Parent
+   * › Leaf") — same format as buildCategoryPathStringMap so a tag
+   * touching two categories both named "Insurance" is disambiguated
+   * by its parent chain. */
+  categoryPathById: Record<string, string>;
 }) {
   const opts = useColOpts();
   return (
@@ -1168,12 +1173,12 @@ function VirtualTagRow({
                 categoryNameById map). */}
             <ul className="mt-0.5 space-y-0.5 text-[11px] font-normal text-muted-foreground">
               {[...row.memberCategoryIds]
-                .map((id) => ({ id, name: categoryNameById[id] ?? id }))
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map(({ id, name }) => (
+                .map((id) => ({ id, path: categoryPathById[id] ?? id }))
+                .sort((a, b) => a.path.localeCompare(b.path))
+                .map(({ id, path }) => (
                   <li key={id} className="flex items-baseline gap-1.5">
                     <span aria-hidden="true">•</span>
-                    <span className="truncate">{name}</span>
+                    <span className="truncate">{path}</span>
                   </li>
                 ))}
             </ul>
@@ -1502,7 +1507,7 @@ export function CashflowReport({
   // (Categories admin page uses the same key) so the fetch is
   // near-instant on repeat views.
   const { data: categoryRows = [], mutate: mutateCategoryRows } = useSwrJson<
-    Array<{ id: string; name: string; tags: string[] | null }>
+    Array<{ id: string; name: string; parentId: string | null; tags: string[] | null }>
   >("/api/categories");
   const enabledTagIds = displayPrefs.cashflowEnabledTagIds;
   function toggleTag(tag: string) {
@@ -1617,10 +1622,16 @@ export function CashflowReport({
     for (const c of categoryRows) for (const t of c.tags ?? []) if (t.trim()) set.add(t);
     return [...set].sort((a, b) => a.localeCompare(b));
   })();
-  // Category name lookup — used by VirtualTagRow to render its
-  // bulleted member list under the #tag title.
-  const categoryNameById: Record<string, string> = {};
-  for (const c of categoryRows) categoryNameById[c.id] = c.name;
+  // Category path lookup — "Grandparent › Parent › Child" (same
+  // format used by the import panel + transactions neighbours).
+  // Used by VirtualTagRow to render its bulleted member list under
+  // the #tag title so operators can see WHICH "Insurance" (Caravan
+  // vs Health etc.) contributes to a tag, not just the leaf name.
+  const categoryPathMap = buildCategoryPathStringMap(
+    categoryRows.map((c) => ({ id: c.id, name: c.name, parentId: c.parentId })),
+  );
+  const categoryPathById: Record<string, string> = {};
+  categoryPathMap.forEach((path, id) => { categoryPathById[id] = path; });
   const tagCtxValue = {
     tagsFor: (catId: string) =>
       categoryRows.find((c) => c.id === catId)?.tags ?? [],
@@ -1870,7 +1881,7 @@ export function CashflowReport({
                   thisMonth={thisMonth}
                   isEnabled={enabledTagIds.includes(row.tag)}
                   onToggle={() => toggleTag(row.tag)}
-                  categoryNameById={categoryNameById}
+                  categoryPathById={categoryPathById}
                 />
               ))}
             </>

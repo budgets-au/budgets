@@ -9,6 +9,26 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.312.0 — 2026-07-17
+
+### Added
+- **Inline tag editor on the Cashflow report.** Every leaf
+  category row now has a hover-revealed `+` button next to the
+  hide-eye. Click it to open a popover with the same chips
+  input the /categories admin dialog uses — Enter or comma to
+  commit, Backspace to remove, datalist autocomplete against
+  the union of tags already in use, Save persists via
+  `PATCH /api/categories/[id]`. The report's `/api/categories`
+  SWR cache mutates on save so the virtual-rows section below
+  reflects the change on the same tick — no navigation to
+  Settings → Categories needed.
+- **Virtual rows list their contributing categories.** Each
+  `#tag` header in the "Tagged views" section now shows a
+  bulleted list of member category names below it, sorted
+  alphabetically. Reads as "this tag sums exactly these cats"
+  so the operator can eyeball what's contributing without
+  opening the admin.
+
 ## 0.311.0 — 2026-07-17
 
 ### Added

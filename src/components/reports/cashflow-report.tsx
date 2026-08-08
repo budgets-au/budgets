@@ -5,13 +5,19 @@ import { useSwrJson } from "@/hooks/use-swr-json";
 import { useToggleSet } from "@/hooks/use-toggle-set";
 import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
-import { ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Plus } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { numFmt } from "@/lib/utils";
 import type { CashflowReport as CashflowData, CashflowCategory } from "@/app/api/reports/cashflow/route";
 import { CashflowCellDialog, type CashflowCellQuery } from "./cashflow-cell-dialog";
 import { buildVirtualRowsByTag } from "@/lib/reports/virtual-rows";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { toast } from "sonner";
 
 const CellOpenerContext = createContext<((q: CashflowCellQuery) => void) | null>(null);
 const useCellOpener = () => useContext(CellOpenerContext);
@@ -41,6 +47,165 @@ const HideToggleContext = createContext<{
   toggle: (id: string) => void;
 } | null>(null);
 const useHideToggle = () => useContext(HideToggleContext);
+
+/** Context for editing a category's tags from within any row of
+ *  the Cashflow report — the `+` button next to HideEye opens
+ *  CategoryTagsPopover which reads and writes through this. Kept
+ *  narrow (three fields) so the report component stays the single
+ *  writer to `/api/categories` from within this surface. */
+const TagContext = createContext<{
+  tagsFor: (catId: string) => string[];
+  allTags: string[];
+  saveTags: (catId: string, next: string[]) => Promise<void>;
+} | null>(null);
+const useTagCtx = () => useContext(TagContext);
+
+/** Popover-backed chips editor for a category's tags. Rendered as
+ *  the small `+` button next to HideEye on every LeafRow. Mirrors
+ *  the chip pattern in the /categories admin dialog so the two
+ *  surfaces behave identically. */
+function CategoryTagsPopover({
+  catId,
+  catName,
+}: {
+  catId: string;
+  catName: string;
+}) {
+  const ctx = useTagCtx();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState<string[]>([]);
+  const [input, setInput] = useState("");
+  // Snapshot the cat's current tags every time the popover opens so
+  // the draft mirrors the latest server state even after other
+  // popovers wrote to it.
+  useEffect(() => {
+    if (open && ctx) {
+      setDraft(ctx.tagsFor(catId));
+      setInput("");
+    }
+  }, [open, catId, ctx]);
+  if (!ctx) return null;
+
+  function addTag(raw: string) {
+    const t = raw.trim();
+    if (!t) return;
+    if (draft.some((x) => x.toLowerCase() === t.toLowerCase())) return;
+    setDraft((prev) => [...prev, t]);
+    setInput("");
+  }
+  function removeTag(t: string) {
+    setDraft((prev) => prev.filter((x) => x !== t));
+  }
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(input);
+    } else if (e.key === "Backspace" && input === "" && draft.length > 0) {
+      e.preventDefault();
+      setDraft((prev) => prev.slice(0, -1));
+    }
+  }
+  async function save() {
+    if (!ctx) return;
+    const finalTags = input.trim()
+      ? draft.some((x) => x.toLowerCase() === input.trim().toLowerCase())
+        ? draft
+        : [...draft, input.trim()]
+      : draft;
+    setSaving(true);
+    try {
+      await ctx.saveTags(catId, finalTags);
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="p-0.5 rounded hover:bg-muted transition-opacity print:hidden opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
+            title="Edit tags"
+            aria-label={`Edit tags for ${catName}`}
+            onClick={(e) => e.stopPropagation()}
+          />
+        }
+      >
+        <Plus className="h-3 w-3" />
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-72"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Tags — {catName}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-0">
+          {draft.map((t) => (
+            <span
+              key={t}
+              className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs"
+            >
+              #{t}
+              <button
+                type="button"
+                onClick={() => removeTag(t)}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label={`Remove tag ${t}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <input
+            list={`cat-tags-suggestions-${catId}`}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={draft.length === 0 ? "Add a tag…" : ""}
+            className="flex-1 min-w-24 border-0 bg-transparent p-0 text-sm outline-none placeholder:text-muted-foreground"
+            autoFocus
+          />
+          <datalist id={`cat-tags-suggestions-${catId}`}>
+            {ctx.allTags
+              .filter(
+                (t) => !draft.some((x) => x.toLowerCase() === t.toLowerCase()),
+              )
+              .map((t) => (
+                <option key={t} value={t} />
+              ))}
+          </datalist>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Enter or comma to add. Each tag becomes a virtual row below the main table.
+        </p>
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            disabled={saving}
+            className="text-xs px-3 py-1 rounded border hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="text-xs px-3 py-1 rounded bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 function HideEye({ catId, isHidden }: { catId: string; isHidden: boolean }) {
   const ctx = useHideToggle();
@@ -903,7 +1068,12 @@ function LeafRow({
       <td className={tdClass}>
         <span className="flex items-center gap-1 min-w-0">
           <span className="truncate">{nameEl}</span>
-          {!isUncategorised && <HideEye catId={cat.id} isHidden={!!isHidden} />}
+          {!isUncategorised && (
+            <span className="ml-auto flex items-center gap-0.5 shrink-0">
+              <CategoryTagsPopover catId={cat.id} catName={cat.name} />
+              <HideEye catId={cat.id} isHidden={!!isHidden} />
+            </span>
+          )}
         </span>
       </td>
       {opts.monthAxis && (
@@ -948,6 +1118,7 @@ function VirtualTagRow({
   thisMonth,
   isEnabled,
   onToggle,
+  categoryNameById,
 }: {
   row: {
     tag: string;
@@ -959,34 +1130,54 @@ function VirtualTagRow({
   thisMonth: string;
   isEnabled: boolean;
   onToggle: () => void;
+  categoryNameById: Record<string, string>;
 }) {
   const opts = useColOpts();
   return (
     <tr
       className={`group hover:bg-muted/30 border-b border-border/50 ${isEnabled ? "" : "opacity-50"}`}
     >
-      <td className="px-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap">
-        <span className="flex items-center gap-1 min-w-0">
-          <span className="truncate" title={`Sums ${row.memberCategoryIds.length} categor${row.memberCategoryIds.length === 1 ? "y" : "ies"}`}>
-            #{row.tag}
-          </span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle();
-            }}
-            className={`ml-auto p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
-              isEnabled
-                ? "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
-                : "opacity-70 hover:opacity-100"
-            }`}
-            title={isEnabled ? "Hide this tag row" : "Show this tag row"}
-            aria-label={isEnabled ? "Hide tag row" : "Show tag row"}
-            aria-pressed={isEnabled}
-          >
-            {isEnabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-          </button>
+      <td className="px-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap align-top">
+        <span className="flex items-start gap-1 min-w-0">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1">
+              <span className="truncate">#{row.tag}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle();
+                }}
+                className={`p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
+                  isEnabled
+                    ? "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
+                    : "opacity-70 hover:opacity-100"
+                }`}
+                title={isEnabled ? "Hide this tag row" : "Show this tag row"}
+                aria-label={isEnabled ? "Hide tag row" : "Show tag row"}
+                aria-pressed={isEnabled}
+              >
+                {isEnabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+              </button>
+            </div>
+            {/* Member categories bulleted under the #title — reads
+                as "this tag sums exactly these cats" so the operator
+                can eyeball what's contributing without opening the
+                Categories admin. Names alphabetised by their looked-
+                up display name (falls back to id if not in the
+                categoryNameById map). */}
+            <ul className="mt-0.5 space-y-0.5 text-[11px] font-normal text-muted-foreground">
+              {[...row.memberCategoryIds]
+                .map((id) => ({ id, name: categoryNameById[id] ?? id }))
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(({ id, name }) => (
+                  <li key={id} className="flex items-baseline gap-1.5">
+                    <span aria-hidden="true">•</span>
+                    <span className="truncate">{name}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
         </span>
       </td>
       {opts.monthAxis && (
@@ -1310,8 +1501,8 @@ export function CashflowReport({
   // do the actual grouping. This endpoint is already cached by SWR
   // (Categories admin page uses the same key) so the fetch is
   // near-instant on repeat views.
-  const { data: categoryRows = [] } = useSwrJson<
-    Array<{ id: string; tags: string[] | null }>
+  const { data: categoryRows = [], mutate: mutateCategoryRows } = useSwrJson<
+    Array<{ id: string; name: string; tags: string[] | null }>
   >("/api/categories");
   const enabledTagIds = displayPrefs.cashflowEnabledTagIds;
   function toggleTag(tag: string) {
@@ -1419,9 +1610,42 @@ export function CashflowReport({
 
   const collapse: CollapseState = { collapsedGps, collapsedSubs, onToggleGp: toggleGp, onToggleSub: toggleSub };
 
+  // Union of every tag in use across all cats, for the popover's
+  // autocomplete list. Case-preserving, deduped, alphabetical.
+  const allTagsSuggestion = (() => {
+    const set = new Set<string>();
+    for (const c of categoryRows) for (const t of c.tags ?? []) if (t.trim()) set.add(t);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  })();
+  // Category name lookup — used by VirtualTagRow to render its
+  // bulleted member list under the #tag title.
+  const categoryNameById: Record<string, string> = {};
+  for (const c of categoryRows) categoryNameById[c.id] = c.name;
+  const tagCtxValue = {
+    tagsFor: (catId: string) =>
+      categoryRows.find((c) => c.id === catId)?.tags ?? [],
+    allTags: allTagsSuggestion,
+    saveTags: async (catId: string, next: string[]) => {
+      const res = await fetch(`/api/categories/${catId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: next.length > 0 ? next : null }),
+      });
+      if (!res.ok) {
+        toast.error("Failed to save tags");
+        return;
+      }
+      toast.success("Tags updated");
+      // Refresh /api/categories so the popover, virtual-rows section
+      // and future openings all see the new tag set.
+      await mutateCategoryRows();
+    },
+  };
+
   return (
     <CellOpenerContext.Provider value={setCellQuery}>
     <HideToggleContext.Provider value={{ isHidden: (id) => excludedSet.has(id), toggle: toggleHideCat }}>
+    <TagContext.Provider value={tagCtxValue}>
     <ColOptsContext.Provider value={opts}>
     <div className="space-y-3 print-landscape">
       <div className="flex items-center justify-between gap-4 print:hidden">
@@ -1646,6 +1870,7 @@ export function CashflowReport({
                   thisMonth={thisMonth}
                   isEnabled={enabledTagIds.includes(row.tag)}
                   onToggle={() => toggleTag(row.tag)}
+                  categoryNameById={categoryNameById}
                 />
               ))}
             </>
@@ -1676,6 +1901,7 @@ export function CashflowReport({
     />
     </div>
     </ColOptsContext.Provider>
+    </TagContext.Provider>
     </HideToggleContext.Provider>
     </CellOpenerContext.Provider>
   );

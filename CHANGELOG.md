@@ -9,6 +9,33 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.318.0 — 2026-08-10
+
+### Changed
+- **Virtual-row member list now shows the full column suite per
+  member.** The "Tagged views" section on the Cashflow report
+  used to render each member category as a plain bulleted path
+  string under the `#tag` header. It now renders each member as
+  its own small-font sub-row with per-month cells, total, and
+  avg columns — matching the parent columns of the main table
+  so the operator can compare a member's contribution against
+  the tag aggregate line-by-line without cross-referencing the
+  main tree.
+  - **Format**: bulleted, indented, `text-[11px]`, muted-
+    foreground. Per-month cells reuse the same drill-through
+    click as `LeafRow` — opening the cell dialog for that cat's
+    month. Total/Avg cells are `compact` variants of `AmountCell`
+    so their font matches the row.
+  - **Excluded from totals**: unchanged — the member sub-rows
+    render the same values that already contribute to their
+    "real" categories in the Income / Expense sections above.
+    They're a display-only mirror; nothing new is added to
+    Total Income / Total Expenses / Surplus.
+  - **Missing member fallback**: a tag whose member cat has no
+    activity in the window (or was deleted after tagging)
+    still renders as a name-only row with `—` in each numeric
+    cell so the operator can see the tag membership.
+
 ## 0.317.0 — 2026-08-10
 
 Hotfix for a hooks-order regression introduced in 0.315.0.

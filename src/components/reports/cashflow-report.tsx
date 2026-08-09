@@ -1160,6 +1160,9 @@ function VirtualTagRow({
   isEnabled,
   onToggle,
   categoryPathById,
+  catById,
+  from,
+  to,
 }: {
   row: {
     tag: string;
@@ -1176,77 +1179,206 @@ function VirtualTagRow({
    * touching two categories both named "Insurance" is disambiguated
    * by its parent chain. */
   categoryPathById: Record<string, string>;
+  /** Full CashflowCategory lookup — needed so each member sub-row
+   * can render its own per-month cells with real data. */
+  catById: Map<string, CashflowCategory>;
+  from: string;
+  to: string;
 }) {
   const opts = useColOpts();
+  const opacity = isEnabled ? "" : "opacity-50";
+  // Members sorted by path so the sub-list is stable + readable.
+  // Missing cats (deleted between report fetch and tag save) get a
+  // fallback path.
+  const members = [...row.memberCategoryIds]
+    .map((id) => ({
+      id,
+      path: categoryPathById[id] ?? id,
+      cat: catById.get(id),
+    }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+
   return (
-    <tr
-      className={`group hover:bg-muted/30 border-b border-border/50 [&>td]:align-top ${isEnabled ? "" : "opacity-50"}`}
-    >
-      <td className="px-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap align-top">
-        <span className="flex items-start gap-1 min-w-0">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1">
-              <span className="truncate">#{row.tag}</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggle();
-                }}
-                className={`p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
-                  isEnabled
-                    ? "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
-                    : "opacity-70 hover:opacity-100"
-                }`}
-                title={isEnabled ? "Hide this tag row" : "Show this tag row"}
-                aria-label={isEnabled ? "Hide tag row" : "Show tag row"}
-                aria-pressed={isEnabled}
-              >
-                {isEnabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-              </button>
-            </div>
-            {/* Member categories bulleted under the #title — reads
-                as "this tag sums exactly these cats" so the operator
-                can eyeball what's contributing without opening the
-                Categories admin. Names alphabetised by their looked-
-                up display name (falls back to id if not in the
-                categoryNameById map). */}
-            <ul className="mt-0.5 space-y-0.5 text-[11px] font-normal text-muted-foreground">
-              {[...row.memberCategoryIds]
-                .map((id) => ({ id, path: categoryPathById[id] ?? id }))
-                .sort((a, b) => a.path.localeCompare(b.path))
-                .map(({ id, path }) => (
-                  <li key={id} className="flex items-baseline gap-1.5">
-                    <span aria-hidden="true">•</span>
-                    <span className="truncate">{path}</span>
-                  </li>
-                ))}
-            </ul>
-          </div>
-        </span>
-      </td>
-      {opts.monthAxis && (
-        <MonthCells
+    <>
+      {/* Aggregate row: the tag's summed values across all
+          members. Excluded from Total Income / Total Expenses /
+          Surplus math regardless of toggle state. */}
+      <tr
+        className={`group hover:bg-muted/30 border-b border-border/50 ${opacity}`}
+      >
+        <td className="px-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap">
+          <span className="flex items-center gap-1 min-w-0">
+            <span className="truncate font-medium">#{row.tag}</span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle();
+              }}
+              className={`ml-1 p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
+                isEnabled
+                  ? "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
+                  : "opacity-70 hover:opacity-100"
+              }`}
+              title={isEnabled ? "Hide this tag row" : "Show this tag row"}
+              aria-label={isEnabled ? "Hide tag row" : "Show tag row"}
+              aria-pressed={isEnabled}
+            >
+              {isEnabled ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+            </button>
+          </span>
+        </td>
+        {opts.monthAxis && (
+          <MonthCells
+            months={months}
+            thisMonth={thisMonth}
+            byMonth={row.byMonth}
+            budgetByMonth={{}}
+            scheduledByMonth={{}}
+            countByMonth={{}}
+          />
+        )}
+        <AmountCell value={row.total} mode="net" computed />
+        {opts.showCounts && (
+          <td className="pl-3 pr-1.5 py-1.5 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>
+        )}
+        {opts.showAvg && (
+          <AmountCell value={months.length > 0 ? row.total / months.length : undefined} mode="net" muted computed />
+        )}
+        {opts.showPlan && (
+          <td className="pl-3 pr-1.5 py-1.5 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>
+        )}
+        {opts.showDiff && (
+          <td className="pl-3 pr-1.5 py-1.5 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>
+        )}
+      </tr>
+      {/* Member sub-rows: one per contributing category, small font,
+          indented, showing the same column suite as the aggregate.
+          Signed values (income positive, expense negative) so the
+          member's contribution reads with the correct sign; no
+          `negate` here — mirrors the aggregate's convention. */}
+      {members.map(({ id, path, cat }) => (
+        <VirtualTagMemberRow
+          key={id}
+          catId={id}
+          path={path}
+          cat={cat}
           months={months}
           thisMonth={thisMonth}
-          byMonth={row.byMonth}
-          budgetByMonth={{}}
-          scheduledByMonth={{}}
-          countByMonth={{}}
+          opacity={opacity}
+          from={from}
+          to={to}
         />
-      )}
-      <AmountCell value={row.total} mode="net" computed />
+      ))}
+    </>
+  );
+}
+
+/** Sub-row rendered under each virtual tag aggregate. Small font,
+ *  indented bullet, full per-month + total + avg columns matching
+ *  the parent columns of the Cashflow table. A missing `cat`
+ *  (member id no longer in the current cashflow response — e.g. the
+ *  member was tagged but has no activity in the window) still
+ *  renders as a name-only row with dashes in the numeric cells so
+ *  the operator can see the tag membership. */
+function VirtualTagMemberRow({
+  catId,
+  path,
+  cat,
+  months,
+  thisMonth,
+  opacity,
+  from,
+  to,
+}: {
+  catId: string;
+  path: string;
+  cat: CashflowCategory | undefined;
+  months: string[];
+  thisMonth: string;
+  opacity: string;
+  from: string;
+  to: string;
+}) {
+  const opts = useColOpts();
+  const open = useCellOpener();
+  const openMonth =
+    open && cat
+      ? (m: string) => {
+          const r = monthRange(m);
+          open({
+            categoryId: catId,
+            from: r.from,
+            to: r.to,
+            rangeLabel: r.label,
+            displayName: path,
+          });
+        }
+      : undefined;
+  const openTotal =
+    open && cat
+      ? () =>
+          open({
+            categoryId: catId,
+            from,
+            to,
+            rangeLabel: totalRangeLabel(from, to),
+            displayName: path,
+          })
+      : undefined;
+  return (
+    <tr className={`hover:bg-muted/20 border-b border-border/30 text-[11px] ${opacity}`}>
+      <td className="pl-9 pr-3 py-1 sticky left-0 bg-background whitespace-nowrap text-muted-foreground">
+        <span className="flex items-baseline gap-1.5 min-w-0">
+          <span aria-hidden="true">•</span>
+          <span className="truncate">{path}</span>
+        </span>
+      </td>
+      {opts.monthAxis &&
+        (cat ? (
+          <MonthCells
+            months={months}
+            thisMonth={thisMonth}
+            byMonth={cat.byMonth}
+            budgetByMonth={{}}
+            scheduledByMonth={{}}
+            countByMonth={{}}
+            onOpenMonth={openMonth}
+          />
+        ) : (
+          months.map((m) => (
+            <td
+              key={m}
+              className={`px-2 py-1 text-right text-muted-foreground/50 tabular-nums ${m === thisMonth ? "bg-indigo-500/10" : ""}`}
+            >
+              —
+            </td>
+          ))
+        ))}
+      <AmountCell
+        value={cat?.total}
+        mode="net"
+        computed
+        compact
+        onClick={openTotal}
+      />
       {opts.showCounts && (
-        <td className="pl-3 pr-1.5 py-1.5 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>
+        <td className="pl-3 pr-1.5 py-1 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border text-[11px]">—</td>
       )}
       {opts.showAvg && (
-        <AmountCell value={months.length > 0 ? row.total / months.length : undefined} mode="net" muted computed />
+        <AmountCell
+          value={cat && months.length > 0 ? cat.total / months.length : undefined}
+          mode="net"
+          muted
+          computed
+          compact
+        />
       )}
       {opts.showPlan && (
-        <td className="pl-3 pr-1.5 py-1.5 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>
+        <td className="pl-3 pr-1.5 py-1 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border text-[11px]">—</td>
       )}
       {opts.showDiff && (
-        <td className="pl-3 pr-1.5 py-1.5 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border">—</td>
+        <td className="pl-3 pr-1.5 py-1 text-right text-muted-foreground/50 tabular-nums bg-muted/40 border-l border-border text-[11px]">—</td>
       )}
     </tr>
   );
@@ -1668,8 +1800,14 @@ export function CashflowReport({
   // rows can't affect Total Income / Total Expenses / Surplus.
   const tagsByCategoryId: Record<string, string[] | null> = {};
   for (const row of categoryRows) tagsByCategoryId[row.id] = row.tags ?? null;
+  const allCatsInWindow = [...income, ...expenses];
+  // Lookup so each virtual member sub-row can find its full
+  // CashflowCategory (byMonth, total, etc.) — the member list in
+  // `virtualRows` only carries ids.
+  const catById = new Map<string, CashflowCategory>();
+  for (const c of allCatsInWindow) catById.set(c.id, c);
   const virtualRows = buildVirtualRowsByTag(
-    [...income, ...expenses],
+    allCatsInWindow,
     tagsByCategoryId,
     months,
   );
@@ -1944,6 +2082,9 @@ export function CashflowReport({
                   isEnabled={enabledTagIds.includes(row.tag)}
                   onToggle={() => toggleTag(row.tag)}
                   categoryPathById={categoryPathById}
+                  catById={catById}
+                  from={from}
+                  to={to}
                 />
               ))}
             </>

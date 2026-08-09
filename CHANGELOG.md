@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.316.0 — 2026-08-09
+
+### Changed
+- **Non-security dep refresh — patches + minors.** Batch C2 of
+  the audit response. All within-major, low-risk bumps that
+  don't touch runtime API surface.
+  - Runtime: `react` + `react-dom` 19.2.6→19.2.8, `swr`
+    2.4.2→2.5.0, `recharts` 3.9.2→3.10.1, `@base-ui/react`
+    1.6→1.7, `lucide-react` 1.24→1.30, `react-grid-layout`
+    2.2.3→2.2.4, `sonner` 2.0.7→2.0.8.
+  - Dev: `@playwright/test` 1.61.1→1.62.1 (chromium bundle
+    refreshed), `shadcn` CLI 4.13→4.16.2, `tsx` 4.23.1→4.23.11,
+    `@types/react` + `@types/react-dom` patch, `@vitejs/plugin-
+    react` 6.0.3→6.0.5.
+  - **Verify**: tsc clean, 728/738 unit pass, `pnpm build`
+    clean, pages-smoke + proxy-auth-dispatch e2e 16/16 green.
+
 ## 0.315.0 — 2026-08-09
 
 Audit response: blocking bugs in the category-tags feature +

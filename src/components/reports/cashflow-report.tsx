@@ -1557,6 +1557,66 @@ export function CashflowReport({
     setPref("cashflowEnabledTagIds", next);
   }
 
+  // Tag-related derived state — memoised. These MUST live above the
+  // early returns below so the hook count is stable across render
+  // passes (React error #310 fires if a first-pass `isLoading=true`
+  // return skips the hooks and the second pass runs them). Cheap
+  // even when categoryRows is `[]` on the loading tick.
+  //
+  // Union of every tag in use across all cats, for the popover's
+  // autocomplete list. Case-preserving, deduped, alphabetical.
+  const allTagsSuggestion = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of categoryRows) for (const t of c.tags ?? []) if (t.trim()) set.add(t);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [categoryRows]);
+  // Category path lookup — "Grandparent › Parent › Child" (same
+  // format used by the import panel + transactions neighbours).
+  // Used by VirtualTagRow to render its bulleted member list.
+  const categoryPathById = useMemo(() => {
+    const map = buildCategoryPathStringMap(
+      categoryRows.map((c) => ({ id: c.id, name: c.name, parentId: c.parentId })),
+    );
+    const out: Record<string, string> = {};
+    map.forEach((path, id) => { out[id] = path; });
+    return out;
+  }, [categoryRows]);
+  // Pre-index tags by id so `tagsFor` is O(1) rather than an
+  // Array.find per subscriber per render.
+  const tagsByIdMap = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const c of categoryRows) m.set(c.id, c.tags ?? []);
+    return m;
+  }, [categoryRows]);
+  // The context value itself is memoised. Without this, every
+  // parent re-render (SWR revalidation, pref mutation) minted a
+  // fresh object and every context subscriber re-rendered — the
+  // popover's reset effect in particular treated that as "context
+  // changed", clobbering the in-progress draft mid-typing.
+  const tagCtxValue = useMemo(
+    () => ({
+      tagsFor: (catId: string) => tagsByIdMap.get(catId) ?? [],
+      allTags: allTagsSuggestion,
+      saveTags: async (catId: string, next: string[]): Promise<boolean> => {
+        const res = await fetch(`/api/categories/${catId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tags: next.length > 0 ? next : null }),
+        });
+        if (!res.ok) {
+          toast.error("Failed to save tags");
+          return false;
+        }
+        toast.success("Tags updated");
+        // Refresh /api/categories so the popover, virtual-rows section
+        // and future openings all see the new tag set.
+        await mutateCategoryRows();
+        return true;
+      },
+    }),
+    [tagsByIdMap, allTagsSuggestion, mutateCategoryRows],
+  );
+
   if (isLoading) {
     return <p className="text-sm text-muted-foreground py-8 text-center">Loading cashflow data…</p>;
   }
@@ -1654,66 +1714,6 @@ export function CashflowReport({
   }
 
   const collapse: CollapseState = { collapsedGps, collapsedSubs, onToggleGp: toggleGp, onToggleSub: toggleSub };
-
-  // Union of every tag in use across all cats, for the popover's
-  // autocomplete list. Case-preserving, deduped, alphabetical.
-  // Memoised so subscribers of TagContext / TagIndicator don't re-
-  // render on every parent re-render.
-  const allTagsSuggestion = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of categoryRows) for (const t of c.tags ?? []) if (t.trim()) set.add(t);
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [categoryRows]);
-  // Category path lookup — "Grandparent › Parent › Child" (same
-  // format used by the import panel + transactions neighbours).
-  // Used by VirtualTagRow to render its bulleted member list under
-  // the #tag title so operators can see WHICH "Insurance" (Caravan
-  // vs Health etc.) contributes to a tag, not just the leaf name.
-  const categoryPathById = useMemo(() => {
-    const map = buildCategoryPathStringMap(
-      categoryRows.map((c) => ({ id: c.id, name: c.name, parentId: c.parentId })),
-    );
-    const out: Record<string, string> = {};
-    map.forEach((path, id) => { out[id] = path; });
-    return out;
-  }, [categoryRows]);
-  // Pre-index tags by id so `tagsFor` is O(1) rather than an
-  // Array.find per subscriber per render. Feeds both the popover
-  // draft snapshot and the always-visible TagIndicator on every
-  // leaf row.
-  const tagsByIdMap = useMemo(() => {
-    const m = new Map<string, string[]>();
-    for (const c of categoryRows) m.set(c.id, c.tags ?? []);
-    return m;
-  }, [categoryRows]);
-  // The context value itself is memoised. Without this, every
-  // parent re-render (SWR revalidation, pref mutation) minted a
-  // fresh object and every context subscriber re-rendered — the
-  // popover's reset effect in particular treated that as "context
-  // changed", clobbering the in-progress draft mid-typing.
-  const tagCtxValue = useMemo(
-    () => ({
-      tagsFor: (catId: string) => tagsByIdMap.get(catId) ?? [],
-      allTags: allTagsSuggestion,
-      saveTags: async (catId: string, next: string[]): Promise<boolean> => {
-        const res = await fetch(`/api/categories/${catId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tags: next.length > 0 ? next : null }),
-        });
-        if (!res.ok) {
-          toast.error("Failed to save tags");
-          return false;
-        }
-        toast.success("Tags updated");
-        // Refresh /api/categories so the popover, virtual-rows section
-        // and future openings all see the new tag set.
-        await mutateCategoryRows();
-        return true;
-      },
-    }),
-    [tagsByIdMap, allTagsSuggestion, mutateCategoryRows],
-  );
 
   return (
     <CellOpenerContext.Provider value={setCellQuery}>

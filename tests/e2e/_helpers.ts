@@ -281,5 +281,17 @@ export function assertNoReactErrors(
     ...pageErrors.map((e) => `${e.name}: ${e.message}\n${e.stack ?? ""}`),
   ].join("\n---\n");
   expect(joined).not.toMatch(/Maximum update depth/i);
+  // Known-bad minified React errors we've been bitten by. The
+  // production error page shows the numeric code; the dev message
+  // is prose. Both are caught here. Add more codes as they burn us.
+  //   #185 — infinite render loop (Recharts subscriber, 0.48 fix)
+  //   #310 — "Rendered more hooks than during the previous render"
+  //          (early return before a useMemo / useState / useEffect)
+  //   #300 — "Rendered fewer hooks than expected" — the mirror
+  //          case; both signal an unstable hooks order
   expect(joined).not.toMatch(/Minified React error #185/i);
+  expect(joined).not.toMatch(/Minified React error #310/i);
+  expect(joined).not.toMatch(/Minified React error #300/i);
+  expect(joined).not.toMatch(/Rendered more hooks than during the previous render/i);
+  expect(joined).not.toMatch(/Rendered fewer hooks than expected/i);
 }

@@ -9,6 +9,30 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.317.0 — 2026-08-10
+
+Hotfix for a hooks-order regression introduced in 0.315.0.
+
+### Fixed
+- **/reports Cashflow tab: React error #310 on first load.**
+  The Batch A memoisation added four `useMemo` calls in
+  `CashflowReport` AFTER two conditional early returns
+  (`if (isLoading) return …` / `if (!data) return …`).
+  React counts hooks per render — a first pass with
+  `isLoading=true` skipped the useMemo hooks; the second
+  pass after SWR resolved ran them, and the render bailed
+  with *"Rendered more hooks than during the previous
+  render"*. The four useMemos have been moved above both
+  early returns so the hook count is stable across passes.
+
+### Tests
+- `assertNoReactErrors` (used by every pages-smoke test) now
+  also catches React errors **#310** (rendered more hooks) and
+  **#300** (rendered fewer hooks) — the class of production
+  minified-error that this regression fell into. The prior
+  filter only caught #185 (Recharts infinite-render). Prose
+  messages are matched too for dev-mode error surfacing.
+
 ## 0.316.0 — 2026-08-09
 
 ### Changed

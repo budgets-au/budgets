@@ -33,10 +33,16 @@ export function NotesCell({ transactionId, notes, onSaved }: Props) {
       return;
     }
     setSaving(true);
+    // Send NULL for a cleared note, not "". Two reasons: (1) parity
+    // with `scheduled-notes-popover.tsx` which already does this,
+    // avoiding the mixed NULL / "" state that would break any
+    // future `WHERE notes IS NULL` query; (2) the `notes` column
+    // is nullable in the DB — an empty string is a distinct-but-
+    // meaningless value.
     const res = await fetch(`/api/transactions/${transactionId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes: next }),
+      body: JSON.stringify({ notes: next === "" ? null : next }),
     });
     setSaving(false);
     if (res.ok) {

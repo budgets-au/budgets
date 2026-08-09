@@ -55,13 +55,16 @@ export function proxy(req: NextRequest) {
   // /login redirect; APIs return 401 from the route guard instead.
   //
   // Safety: every API route either uses a withAuth* guard or is one
-  // of the three intentionally-public endpoints (/api/unlock,
-  // /api/databases/*, /api/auth/[...nextauth]/*) — the first two are
-  // already in the unlock-bypass above; NextAuth's own handlers
-  // manage their own auth and shouldn't be middleware-gated either.
-  // A future API route that forgets the guard would be public — this
-  // matches the existing convention (route guards, not middleware,
-  // are the source of truth for API auth).
+  // of these three intentionally-public endpoints:
+  //   • /api/unlock — pre-unlock, DB not readable yet
+  //   • /api/databases/switch — pre-unlock profile switch, Origin-
+  //     checked at the route level (see #89); the other
+  //     /api/databases/* routes are `withAdminAuth*`-gated
+  //   • /api/auth/[...nextauth]/* — NextAuth manages its own auth
+  // The first two are also in the unlock-bypass above. A future API
+  // route that forgets the guard would be public — this matches the
+  // existing convention (route guards, not middleware, are the
+  // source of truth for API auth).
   if (pathname.startsWith("/api/")) {
     return NextResponse.next();
   }

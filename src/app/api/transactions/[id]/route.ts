@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { transactions, accounts } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { deriveMatchPayee, loadTokenFreq, normalizePayee } from "@/lib/categorize";
+import { deriveMatchPayee, invalidateTokenFreqCache, loadTokenFreq, normalizePayee } from "@/lib/categorize";
 import { isoDateString, numericString } from "@/lib/zod-helpers";
 import { withAuthAndId } from "@/lib/api/route-guards";
 import { parseJsonBody } from "@/lib/api/parse-body";
@@ -69,6 +69,11 @@ export const PATCH = withAuthAndId(async (id, request) => {
 
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   await refreshBalance(row.accountId);
+  // Parity with POST / bulk / import paths — when the payee text
+  // changes the token corpus shifts and subsequent PATCH/POST
+  // matchPayee derivations should see the new frequencies rather
+  // than the cached snapshot (60s TTL).
+  if (data.payee !== undefined) invalidateTokenFreqCache();
 
   return NextResponse.json(row);
 });

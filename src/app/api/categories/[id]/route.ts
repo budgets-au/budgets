@@ -8,6 +8,14 @@ import { wouldCreateCycle } from "@/lib/category-descendants";
 import { withAuthAndId } from "@/lib/api/route-guards";
 import { parseJsonBody } from "@/lib/api/parse-body";
 
+/** Per-tag string schema. Strips zero-width unicode BEFORE trimming
+ *  then requires non-empty and caps at 64 chars — see the same
+ *  schema in `src/app/api/categories/route.ts` for the rationale. */
+const tagStringSchema = z
+  .string()
+  .transform((s) => s.replace(/[​-‏‪-‮⁠-⁤﻿]/g, "").trim())
+  .pipe(z.string().min(1).max(64));
+
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   color: z.string().optional(),
@@ -16,7 +24,7 @@ const updateSchema = z.object({
   sortOrder: z.number().int().min(0).optional(),
   // undefined = don't touch. null OR [] = clear all tags. Otherwise
   // replaces the tag set outright (no per-tag deltas).
-  tags: z.array(z.string().trim().min(1)).nullable().optional(),
+  tags: z.array(tagStringSchema).nullable().optional(),
 });
 
 export const PATCH = withAuthAndId(async (id, request) => {

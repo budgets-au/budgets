@@ -48,7 +48,13 @@ test.describe("top-level pages smoke", () => {
           throw new Error(`${p.path} → HTTP ${res.status()}`);
         }
       }
-      await page.waitForLoadState("networkidle");
+      // "load" fires when the page's initial resources have loaded;
+      // "networkidle" waits for 500ms of no requests, which under
+      // Next 16.3+ never fires because the RSC / route-prefetch
+      // background loop keeps the network non-idle indefinitely.
+      // The 500ms settle-timer below still catches any post-load
+      // React re-render crash before we assert.
+      await page.waitForLoadState("load");
       await page.waitForTimeout(500);
       assertNoReactErrors(consoleErrors, pageErrors);
     });

@@ -185,7 +185,7 @@ export const categories = sqliteTable(
     // can be inspected without restructuring the category tree. See
     // src/lib/reports/virtual-rows.ts. Nullable so pre-tag categories
     // stay untouched.
-    tags: text("tags", { mode: "json" }).$type<string[]>(),
+    tags: text("tags", { mode: "json" }).$type<string[] | null>(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .$defaultFn(() => new Date()),

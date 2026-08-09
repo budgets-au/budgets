@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, createContext, useContext, useEffect, useState } from "react";
+import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { useToggleSet } from "@/hooks/use-toggle-set";
 import Link from "next/link";
@@ -57,7 +57,11 @@ const useHideToggle = () => useContext(HideToggleContext);
 const TagContext = createContext<{
   tagsFor: (catId: string) => string[];
   allTags: string[];
-  saveTags: (catId: string, next: string[]) => Promise<void>;
+  /** Persists the tags. Returns `true` on success, `false` on any
+   *  failure (network / 4xx / 5xx). Callers use the boolean to
+   *  decide whether to close their editor — a `false` here means a
+   *  toast has already fired and the draft should stay visible. */
+  saveTags: (catId: string, next: string[]) => Promise<boolean>;
 } | null>(null);
 const useTagCtx = () => useContext(TagContext);
 
@@ -77,15 +81,23 @@ function CategoryTagsPopover({
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<string[]>([]);
   const [input, setInput] = useState("");
-  // Snapshot the cat's current tags every time the popover opens so
-  // the draft mirrors the latest server state even after other
-  // popovers wrote to it.
+  // Snapshot the cat's current tags on the open false→true
+  // transition only. Firing this effect on every `ctx` change
+  // (as the previous version did) meant any SWR revalidation
+  // mid-typing — window focus, another popover saving, a display-
+  // pref mutation — would blow away the user's draft and input.
+  // The ref-based transition guard keeps the popover's local state
+  // stable while it's open. Explicitly OMIT `ctx` from the dep list
+  // for that reason (see the ESLint disable below).
+  const prevOpen = useRef(false);
   useEffect(() => {
-    if (open && ctx) {
+    if (open && !prevOpen.current && ctx) {
       setDraft(ctx.tagsFor(catId));
       setInput("");
     }
-  }, [open, catId, ctx]);
+    prevOpen.current = open;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, catId]);
   if (!ctx) return null;
 
   function addTag(raw: string) {
@@ -116,8 +128,12 @@ function CategoryTagsPopover({
       : draft;
     setSaving(true);
     try {
-      await ctx.saveTags(catId, finalTags);
-      setOpen(false);
+      // Close the popover ONLY if saveTags reports success. On any
+      // 4xx / 5xx / network failure we keep the popover open so the
+      // user can see the toast and their draft — closing would
+      // silently discard the edit.
+      const ok = await ctx.saveTags(catId, finalTags);
+      if (ok) setOpen(false);
     } finally {
       setSaving(false);
     }
@@ -1164,7 +1180,7 @@ function VirtualTagRow({
   const opts = useColOpts();
   return (
     <tr
-      className={`group hover:bg-muted/30 border-b border-border/50 ${isEnabled ? "" : "opacity-50"}`}
+      className={`group hover:bg-muted/30 border-b border-border/50 [&>td]:align-top ${isEnabled ? "" : "opacity-50"}`}
     >
       <td className="px-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap align-top">
         <span className="flex items-start gap-1 min-w-0">
@@ -1641,41 +1657,63 @@ export function CashflowReport({
 
   // Union of every tag in use across all cats, for the popover's
   // autocomplete list. Case-preserving, deduped, alphabetical.
-  const allTagsSuggestion = (() => {
+  // Memoised so subscribers of TagContext / TagIndicator don't re-
+  // render on every parent re-render.
+  const allTagsSuggestion = useMemo(() => {
     const set = new Set<string>();
     for (const c of categoryRows) for (const t of c.tags ?? []) if (t.trim()) set.add(t);
     return [...set].sort((a, b) => a.localeCompare(b));
-  })();
+  }, [categoryRows]);
   // Category path lookup — "Grandparent › Parent › Child" (same
   // format used by the import panel + transactions neighbours).
   // Used by VirtualTagRow to render its bulleted member list under
   // the #tag title so operators can see WHICH "Insurance" (Caravan
   // vs Health etc.) contributes to a tag, not just the leaf name.
-  const categoryPathMap = buildCategoryPathStringMap(
-    categoryRows.map((c) => ({ id: c.id, name: c.name, parentId: c.parentId })),
+  const categoryPathById = useMemo(() => {
+    const map = buildCategoryPathStringMap(
+      categoryRows.map((c) => ({ id: c.id, name: c.name, parentId: c.parentId })),
+    );
+    const out: Record<string, string> = {};
+    map.forEach((path, id) => { out[id] = path; });
+    return out;
+  }, [categoryRows]);
+  // Pre-index tags by id so `tagsFor` is O(1) rather than an
+  // Array.find per subscriber per render. Feeds both the popover
+  // draft snapshot and the always-visible TagIndicator on every
+  // leaf row.
+  const tagsByIdMap = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const c of categoryRows) m.set(c.id, c.tags ?? []);
+    return m;
+  }, [categoryRows]);
+  // The context value itself is memoised. Without this, every
+  // parent re-render (SWR revalidation, pref mutation) minted a
+  // fresh object and every context subscriber re-rendered — the
+  // popover's reset effect in particular treated that as "context
+  // changed", clobbering the in-progress draft mid-typing.
+  const tagCtxValue = useMemo(
+    () => ({
+      tagsFor: (catId: string) => tagsByIdMap.get(catId) ?? [],
+      allTags: allTagsSuggestion,
+      saveTags: async (catId: string, next: string[]): Promise<boolean> => {
+        const res = await fetch(`/api/categories/${catId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tags: next.length > 0 ? next : null }),
+        });
+        if (!res.ok) {
+          toast.error("Failed to save tags");
+          return false;
+        }
+        toast.success("Tags updated");
+        // Refresh /api/categories so the popover, virtual-rows section
+        // and future openings all see the new tag set.
+        await mutateCategoryRows();
+        return true;
+      },
+    }),
+    [tagsByIdMap, allTagsSuggestion, mutateCategoryRows],
   );
-  const categoryPathById: Record<string, string> = {};
-  categoryPathMap.forEach((path, id) => { categoryPathById[id] = path; });
-  const tagCtxValue = {
-    tagsFor: (catId: string) =>
-      categoryRows.find((c) => c.id === catId)?.tags ?? [],
-    allTags: allTagsSuggestion,
-    saveTags: async (catId: string, next: string[]) => {
-      const res = await fetch(`/api/categories/${catId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tags: next.length > 0 ? next : null }),
-      });
-      if (!res.ok) {
-        toast.error("Failed to save tags");
-        return;
-      }
-      toast.success("Tags updated");
-      // Refresh /api/categories so the popover, virtual-rows section
-      // and future openings all see the new tag set.
-      await mutateCategoryRows();
-    },
-  };
 
   return (
     <CellOpenerContext.Provider value={setCellQuery}>

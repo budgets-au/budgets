@@ -29,6 +29,13 @@ export interface VirtualTagRow {
  *  on a category but the category has no activity in the window
  *  wouldn't produce a useful row, so we drop it.
  *
+ *  Tags are bucketed case-INSENSITIVELY — `PropertyA` and
+ *  `propertya` are the same virtual row (the display label picks
+ *  the first casing seen, so operators get consistent capitalisation
+ *  without their earlier typing being overwritten). This mirrors
+ *  the dedupe rule the popover and edit dialog already apply on
+ *  input.
+ *
  *  Deterministic in output order: alphabetical by tag. */
 export function buildVirtualRowsByTag(
   cats: CashflowCategory[],
@@ -37,19 +44,24 @@ export function buildVirtualRowsByTag(
 ): VirtualTagRow[] {
   const byTag = new Map<
     string,
-    { members: Set<string>; byMonth: Record<string, number> }
+    {
+      display: string;
+      members: Set<string>;
+      byMonth: Record<string, number>;
+    }
   >();
 
   for (const cat of cats) {
     const tags = tagsByCategoryId[cat.id];
     if (!tags || tags.length === 0) continue;
     for (const rawTag of tags) {
-      const tag = rawTag.trim();
-      if (!tag) continue;
-      let bucket = byTag.get(tag);
+      const trimmed = rawTag.trim();
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      let bucket = byTag.get(key);
       if (!bucket) {
-        bucket = { members: new Set(), byMonth: {} };
-        byTag.set(tag, bucket);
+        bucket = { display: trimmed, members: new Set(), byMonth: {} };
+        byTag.set(key, bucket);
       }
       bucket.members.add(cat.id);
       for (const m of months) {
@@ -61,12 +73,15 @@ export function buildVirtualRowsByTag(
   }
 
   const rows: VirtualTagRow[] = [];
-  for (const [tag, bucket] of byTag) {
-    // Skip tags that ended up with zero activity across the window.
+  for (const bucket of byTag.values()) {
+    // Skip tags with no activity in the window. A tag whose members
+    // net exactly to 0 (income + expense cancelling) still had
+    // activity — those rows are informative and stay. Only drop
+    // the case where NO month had any contribution.
+    if (Object.keys(bucket.byMonth).length === 0) continue;
     const total = Object.values(bucket.byMonth).reduce((s, n) => s + n, 0);
-    if (total === 0 && Object.keys(bucket.byMonth).length === 0) continue;
     rows.push({
-      tag,
+      tag: bucket.display,
       memberCategoryIds: [...bucket.members].sort(),
       byMonth: bucket.byMonth,
       total,

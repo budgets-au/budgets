@@ -9,6 +9,103 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.315.0 — 2026-08-09
+
+Audit response: blocking bugs in the category-tags feature +
+hardening + security-driven dep bumps. No user-facing feature
+change other than the correctness fixes; runtime image gets Next
++ NextAuth security patches.
+
+### Fixed
+- **Cashflow tag popover no longer discards your draft on error.**
+  `saveTags` now returns `boolean`; the popover only closes on
+  success. A failed PATCH (4xx, 5xx, offline) keeps the popover
+  open with the draft intact so the operator can retry or fix.
+- **Cashflow tag popover no longer nukes your in-progress input
+  on every SWR revalidation.** The `TagContext` value is memoised
+  and the popover's reset effect fires only on the open false→true
+  transition. Typing mid-word while a background focus /
+  mutate / display-pref update runs no longer clears the input.
+- **Two virtual rows collapsed into one when tag casing differs.**
+  `buildVirtualRowsByTag` now buckets tags case-insensitively —
+  `PropertyA` on one cat and `propertya` on another produce a
+  single row (first-seen casing wins the display label). Matches
+  the case-insensitive dedupe rule the popover and edit dialog
+  already apply on input. Two new colocated unit tests pin the
+  behaviour.
+- **Zero-activity guard for virtual rows was too eager.** A tag
+  whose members net to exactly zero within the window still had
+  activity and now renders (as an informative $0 row). Only tags
+  with no member contribution at all are skipped.
+- **`ExpandedPanelContent` no longer silently overwrites concurrent
+  server-side edits.** When an in-panel child (NotesCell save,
+  ReconcileToggle, category picker) triggers a `refresh()`, the
+  incoming `t` prop's fields now re-sync into the local `draft`
+  state, so a subsequent Save doesn't diff against a stale
+  snapshot and re-write fields the user never touched. Only
+  applies outside edit mode — active edits are still protected.
+- **`NotesCell` clears to `null`, not `""`.** Parity with the
+  scheduled-notes-popover path; no more mixed `NULL` / `""`
+  drift in `transactions.notes`.
+- **Token-freq cache invalidated after `PATCH
+  /api/transactions/[id]`** when the payee text changes. Parity
+  with the POST / bulk / import paths — the next matchPayee
+  derivation sees the fresh corpus rather than the 60s-TTL
+  snapshot.
+
+### Changed
+- **Tag Zod schema at the API boundary rejects invisible-only
+  strings and caps length at 64 chars.** The old
+  `.trim().min(1)` passed zero-width unicode strings (ZWSP,
+  ZWJ, BOM, LRM, RLM) — chip renders empty, impossible to
+  remove via the "empty" filter. Now stripped before trim.
+- **POST `/api/categories` accepts `tags: null`** for parity
+  with PATCH's clear-semantics.
+- **`categories.tags` schema type is `string[] | null`** for
+  clarity — matches the SQL nullability.
+- **Cashflow `TagIndicator` / popover autocomplete / member-list
+  path lookups memoised** — O(1) per row instead of O(N) with a
+  `.find` per lookup per render.
+- **`VirtualTagRow` amount cells align-top** so a tag with many
+  members no longer visually mis-centres its per-month values.
+- **Proxy `/api/*` bypass safety comment tightened.** Now
+  explicitly lists the three intentionally-public endpoints
+  (`/api/unlock`, `/api/databases/switch`, `/api/auth/…`) —
+  previously the comment implied all of `/api/databases/*` was
+  unauth, which was inaccurate; the other `/api/databases`
+  routes are `withAdminAuth*`-gated.
+- **Scheduled matched-row expand button comment.** Was
+  "Inert UI toggle" — it's actually functional; the intent is
+  "skipped by the exploratory monkey crawler". Reworded.
+
+### Security
+- **`next` 16.2.6 → 16.3.0** closes multiple runtime advisories
+  (middleware bypass on Turbopack, SSRF via rewrites + Server
+  Actions, App Router DoS). `eslint-config-next` bumped to
+  match.
+- **`next-auth` 5.0.0-beta.31 → 5.0.0-beta.32** closes the
+  critical fail-open when the auth configuration errors
+  (Dependabot #67). Non-OK session responses now yield no
+  session instead of an error object, so `!!auth` fails closed.
+- **pnpm 9 config drift fixed.** The `pnpm` field in
+  `package.json` (`onlyBuiltDependencies`, `overrides`) has been
+  silently ignored by pnpm 9 for weeks — every override we
+  thought was pinning transitive security fixes was a no-op.
+  Moved to `pnpm-workspace.yaml` (canonical pnpm 9 location)
+  with `packages: ["."]` for this single-package repo. Overrides
+  now apply again (verified via `pnpm why`).
+- `pnpm audit` count dropped from 40 → 33 advisories after the
+  bumps + config move.
+
+### Tests
+- `tests/e2e/pages-smoke.spec.ts` now waits on `load` instead of
+  `networkidle` — under Next 16.3 the RSC / route-prefetch loop
+  keeps the network non-idle indefinitely, so `networkidle`
+  would time out. The 500ms settle timer still catches post-load
+  React re-render crashes before the assertion.
+- Unit test count 728 → 730 (2 new virtual-rows cases: net-zero
+  activity, case-insensitive bucketing).
+
 ## 0.314.0 — 2026-07-17
 
 ### Added

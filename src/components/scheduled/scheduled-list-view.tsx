@@ -1904,13 +1904,15 @@ export function ScheduledListView({
                                   )
                                 }
                                 aria-expanded={isExpanded}
-                                // Inert UI toggle — the exploratory monkey
-                                // (tests/e2e/monkey.spec.ts) already covers
-                                // the expand-panel body via TransactionRow
-                                // on /transactions. Clicking these here
-                                // just re-discovers the same panel while
-                                // filling the 25-button click cap and
-                                // dominating the /scheduled crawl budget.
+                                // Skip target for the exploratory monkey
+                                // (tests/e2e/monkey.spec.ts). The button
+                                // itself is functional (toggles the inline
+                                // expand panel); the crawler skips it
+                                // because ExpandedPanelContent is already
+                                // covered by the /transactions crawl and
+                                // clicking these here just fills the
+                                // 25-button click cap without adding new
+                                // discovery.
                                 data-monkey-skip="1"
                                 className="w-full text-left cursor-pointer"
                               >
@@ -2091,13 +2093,15 @@ export function ScheduledListView({
                                   )
                                 }
                                 aria-expanded={isExpanded}
-                                // Inert UI toggle — the exploratory monkey
-                                // (tests/e2e/monkey.spec.ts) already covers
-                                // the expand-panel body via TransactionRow
-                                // on /transactions. Clicking these here
-                                // just re-discovers the same panel while
-                                // filling the 25-button click cap and
-                                // dominating the /scheduled crawl budget.
+                                // Skip target for the exploratory monkey
+                                // (tests/e2e/monkey.spec.ts). The button
+                                // itself is functional (toggles the inline
+                                // expand panel); the crawler skips it
+                                // because ExpandedPanelContent is already
+                                // covered by the /transactions crawl and
+                                // clicking these here just fills the
+                                // 25-button click cap without adding new
+                                // discovery.
                                 data-monkey-skip="1"
                                 className="w-full text-left cursor-pointer"
                               >

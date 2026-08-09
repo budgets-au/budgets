@@ -1,0 +1,36 @@
+# pnpm 9+ settings — moved out of the deprecated `pnpm` field in
+# package.json (silently ignored by pnpm 9). This file replaces the
+# lookup path even for single-package repos.
+#
+# See https://pnpm.io/settings for the canonical list.
+#
+# `packages: ["."]` is a formal requirement in pnpm 9 — the file is
+# treated as a workspace descriptor, so it must declare at least
+# one package. The single-dot entry means "the current directory
+# is the (only) package", which matches this single-package repo.
+packages:
+  - "."
+
+# `onlyBuiltDependencies` — packages whose install scripts we
+# explicitly trust to run (pnpm 9 blocks build scripts by default).
+# Every entry here has been vetted as a legitimate native-binding
+# rebuild target.
+onlyBuiltDependencies:
+  - "@signalapp/better-sqlite3"
+  - bcryptjs
+  - esbuild
+  - sharp
+
+# `overrides` — dep-tree pins for transitive packages carrying
+# known-vulnerable versions. Each entry corresponds to a specific
+# GHSA / CVE; bump the floor when a newer fix ships.
+overrides:
+  tar: ">=7.5.11"
+  postcss: ">=8.5.10"
+  esbuild: ">=0.25.0"
+  fast-uri: ">=3.1.2"
+  ip-address: ">=10.1.1"
+  hono: ">=4.12.18"
+  picomatch: ">=4.0.0"
+  brace-expansion: ">=5.0.6"
+  qs: ">=6.15.2"

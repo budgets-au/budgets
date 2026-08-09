@@ -75,6 +75,45 @@ describe("buildVirtualRowsByTag", () => {
     expect(rows[0].memberCategoryIds).toEqual(["maint", "rent-in"]);
   });
 
+  it("still renders one row when the member sum nets to zero (has activity)", () => {
+    // A tag whose income + expense cancel exactly should still show
+    // up — it had activity, and "$0 net" is informative. Only tags
+    // with no member activity at all should drop.
+    const cats = [
+      cat("in", "income", { "2026-01": 500 }),
+      cat("out", "expense", { "2026-01": -500 }),
+    ];
+    const rows = buildVirtualRowsByTag(
+      cats,
+      { in: ["Wash"], out: ["Wash"] },
+      ["2026-01"],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].total).toBe(0);
+    expect(rows[0].byMonth["2026-01"]).toBe(0);
+  });
+
+  it("buckets tags case-insensitively — PropertyA and propertya are one row", () => {
+    // The popover + edit dialog dedupe on lowercase before writing;
+    // the aggregator must match or two cats independently save
+    // different-case variants of the same tag and produce two rows.
+    const cats = [
+      cat("a", "expense", { "2026-01": -100 }),
+      cat("b", "expense", { "2026-01": -50 }),
+    ];
+    const rows = buildVirtualRowsByTag(
+      cats,
+      { a: ["PropertyA"], b: ["propertya"] },
+      ["2026-01"],
+    );
+    expect(rows).toHaveLength(1);
+    // Display label picks the FIRST casing seen (stable through
+    // cat-ordering — the caller controls that via `cats` order).
+    expect(rows[0].tag).toBe("PropertyA");
+    expect(rows[0].byMonth["2026-01"]).toBe(-150);
+    expect(rows[0].memberCategoryIds).toEqual(["a", "b"]);
+  });
+
   it("skips months a category isn't active in and skips tags with zero window activity", () => {
     // "in-window" cat contributes; "out" has activity outside the
     // window so its byMonth for asked months is 0 → tag drops.

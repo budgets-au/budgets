@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { useSwrJson } from "@/hooks/use-swr-json";
@@ -225,6 +225,25 @@ export function ExpandedPanelContent({
     amount: t.amount,
     description: t.description ?? "",
   });
+  // Re-sync draft with the incoming `t` prop whenever it changes AND
+  // we're not currently editing. Fixes a stale-write bug where an
+  // in-panel child action (NotesCell save, ReconcileToggle, category
+  // picker) fires refresh() → SWR refetch → new `t` with fresh field
+  // values, but `draft` kept the values snapshotted at the last Edit
+  // click. A subsequent Save then diffs against the fresh `t` and
+  // "helpfully" re-sends fields the user never touched, silently
+  // overwriting the concurrent server-side changes. Only re-sync
+  // outside of edit mode so an active edit isn't clobbered by the
+  // same refresh.
+  useEffect(() => {
+    if (editing) return;
+    setDraft({
+      date: t.date,
+      payee: t.payee ?? "",
+      amount: t.amount,
+      description: t.description ?? "",
+    });
+  }, [t.date, t.payee, t.amount, t.description, editing]);
   function enterEdit() {
     setDraft({
       date: t.date,

@@ -9,6 +9,52 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.319.0 — 2026-08-11
+
+### Changed
+- **Cashflow report layout rebuild — three long-standing UX
+  bugs fixed together.** The report's outer chrome had been
+  quietly rotting: an inner `overflow-auto` div with no bounded
+  height meant nothing sticky actually stuck, and a `w-full`
+  table dumped its slack into the Category column whenever the
+  optional endcap columns were off. Three related fixes, all
+  scoped to `src/components/reports/cashflow-report.tsx`:
+  - **Filter bar sticks below the app Topbar.** Toggling
+    Subtotals / Avg / Plan / Counts / Hide transfers no longer
+    requires scrolling back to the top of a long report.
+    Padded strip with a bottom border reads as a proper
+    sticky header.
+  - **Table wrapper bounded by viewport height** via
+    `max-h: calc(100dvh - var(--cashflow-chrome, 180px))`.
+    Two consequences: the horizontal scrollbar at the bottom
+    of the wrapper stays in the viewport (was previously
+    below the fold on a long report), and the `sticky top-0`
+    on the `<thead>` cells actually pins the month-header row
+    while the operator scrolls rows (was pinning to the
+    already-scrolled-off wrapper top).
+  - **Table sizes to natural width instead of stretching.**
+    `w-max` replaces `w-full`. When Plan + Counts are OFF,
+    the surplus space no longer inflates the Category column
+    ("everything jams to the right"). The table left-aligns
+    in the scroller at its natural width; any leftover space
+    sits on the right of the wrapper — not between the
+    category text and the first month value.
+  - **Double-sticky corner z-index raised to 30** so the
+    Category header cell stays above both the other
+    `sticky top-0` `<th>`s and the new sticky filter bar
+    when scrolling both axes.
+  - **Print media unchanged.** Filter bar `print:hidden`,
+    scroll-wrapper `print:overflow-visible print:max-h-none`
+    so long reports paginate naturally.
+- **Not this pass** — no AppLayout revamp, no shadow horizontal
+  scrollbar, no changes to sibling reports (`accounts-cashflow-
+  report.tsx`, `daily-heatmap-report.tsx`). Cashflow proves the
+  bounded-wrapper pattern; siblings can adopt it in follow-ups.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- pages-smoke 12/12 green.
+
 ## 0.318.0 — 2026-08-10
 
 ### Changed

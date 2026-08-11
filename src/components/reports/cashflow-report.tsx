@@ -1859,7 +1859,12 @@ export function CashflowReport({
     <TagContext.Provider value={tagCtxValue}>
     <ColOptsContext.Provider value={opts}>
     <div className="space-y-3 print-landscape">
-      <div className="flex items-center justify-between gap-4 print:hidden">
+      {/* Filter bar. Sticky against the app Topbar (h-14 = 56px) so
+          the operator can toggle Plan / Counts / Avg without
+          scrolling back up through a long category list. z-10 keeps
+          it below the Topbar's own z-20; padding tightened + a
+          bottom border give it the "sticky header strip" look. */}
+      <div className="sticky top-14 z-10 -mx-4 lg:-mx-6 px-4 lg:px-6 py-2 bg-background border-b flex items-center justify-between gap-4 print:hidden print:static">
         {/* Collapse all / Expand all */}
         <button
           onClick={toggleCollapseAll}
@@ -1969,15 +1974,42 @@ export function CashflowReport({
         the header row is the inset shadow under each <th> — putting
         the split visually at the BOTTOM of the header cells instead
         of doubling up with a wrapper-border line at the top. */}
+    {/* Scroll wrapper. Bounded max-height by viewport so:
+          (a) the horizontal scrollbar at the bottom of this wrapper
+              stays IN the viewport instead of sitting far below the
+              fold on a long report;
+          (b) the `sticky top-0` on the <thead> below anchors to
+              this wrapper's top — which now sits right underneath
+              the sticky filter bar — so column headers stay
+              visible while the operator scrolls rows.
+          `--cashflow-chrome` defaults to 180px (Topbar 56 + filter
+          bar ~48 + ReportsView date-range ~40 + tabs ~36); exposed
+          as a CSS variable so the value can be tuned without
+          touching JS. Print media ignores the max-h bound so long
+          reports paginate naturally. */}
     <div
-      className={`overflow-auto rounded-lg border-x border-b mx-auto ${
-        monthAxis ? "" : "max-w-3xl"
+      className={`relative rounded-lg border overflow-auto overscroll-contain print:overflow-visible print:max-h-none max-h-[calc(100dvh-var(--cashflow-chrome,180px))] ${
+        monthAxis ? "" : "max-w-3xl mx-auto"
       }`}
+      style={{ scrollbarGutter: "stable" }}
     >
-      <table className="w-full text-sm border-collapse">
+      {/* `w-max` (not `w-full`) so the table takes its natural
+          content-driven width. When Plan + Counts are OFF the total
+          fixed-column width drops below the viewport and `w-full`
+          used to dump the slack into the auto-width Category
+          column — reading as "everything jams right" because the
+          gap between the category text and the first month value
+          widened. With `w-max` the table left-aligns in the scroller
+          at its natural size; any leftover space is on the right
+          of the wrapper, not between the label and the numbers. */}
+      <table className="w-max text-sm border-collapse">
         <thead>
           <tr className="bg-muted">
-            <th className="text-left px-3 py-2 font-semibold sticky top-0 left-0 bg-muted min-w-44 z-20 shadow-[inset_0_-1px_0_0_var(--border)]">
+            {/* Double-sticky corner — z-30 so it stacks above the
+                other `sticky top-0` <th>s (z-10) AND above the
+                filter bar (z-10) when the operator scrolls both
+                axes at once. */}
+            <th className="text-left px-3 py-2 font-semibold sticky top-0 left-0 bg-muted min-w-44 z-30 shadow-[inset_0_-1px_0_0_var(--border)]">
               Category
             </th>
             {monthAxis &&

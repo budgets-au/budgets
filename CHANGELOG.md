@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.320.0 — 2026-08-13
+
+### Changed
+- **Category tab: standalone report.** Previously a one-line
+  wrapper (`<CashflowReport monthAxis={false} />`) that inherited
+  Cashflow's full-width, per-month table chrome only to hide the
+  columns. Now a genuine standalone component with its own layout:
+  page-width `max-w-3xl` capped, `mx-auto`, responsive shrink on
+  narrower viewports; sticky filter bar + thead; scoped toolbar
+  (Avg / Counts / Plan mode / Hide transfers / Show hidden only);
+  a flat sorted table per section (Income → Total Income →
+  Expenses → Total Expenses → Surplus/Deficit → optional Hidden).
+  - **Sortable columns.** Click any header to sort — Total (magni-
+    tude, default desc), Counts, Avg, Plan, Diff, or Name.
+  - **Full category path per row** ("Grandparent › Parent ›
+    Leaf") — same disambiguation the import panel + tags virtual
+    rows use, so "Insurance" under Caravan vs Health reads
+    distinctly.
+  - **Hide-eye + drill-through** on the Total cell — opens the
+    same `CashflowCellDialog` for the full-window range.
+  - **Hierarchy tradeoff.** The old hierarchy view (grandparent
+    rollups → parent → leaves) is dropped in favour of a flat
+    sorted list — for a summary at-a-glance view, "biggest lines
+    first" reads better than a rigid tree. The Cashflow tab still
+    carries the hierarchy for those who want it.
+
+### Verified
+- tsc clean, `pnpm build` clean, pages-smoke 12/12 green.
+
 ## 0.319.0 — 2026-08-11
 
 ### Changed

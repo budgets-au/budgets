@@ -12,6 +12,7 @@ import { UpcomingSchedulesCard } from "@/components/dashboard/upcoming-schedules
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions-card";
 import { AccountSummaryCard } from "@/components/dashboard/account-summary-card";
 import { CategorySpendCard } from "@/components/dashboard/category-spend-card";
+import { ForwardBalanceCard } from "@/components/dashboard/forward-balance-card";
 import { TrackedStockCard } from "@/components/dashboard/tracked-stock-card";
 import { WatchedStockCard } from "@/components/dashboard/watched-stock-card";
 import { GithubStatsCard } from "@/components/dashboard/github-stats-card";
@@ -187,6 +188,17 @@ export const WIDGETS: WidgetSpec[] = [
     minSize: { w: 2, h: 2 },
     multiInstance: true,
     render: (props) => <CategorySpendCard {...props} />,
+  },
+  {
+    id: "forward-balance",
+    title: "Forward balance",
+    /** Wide enough for the date axis to breathe + tall enough for
+     *  the balance lines to read as a band. 6×3 matches the
+     *  net-worth-trend / budget-progress row cadence. */
+    defaultLayout: { w: 6, h: 3 },
+    minSize: { w: 4, h: 3 },
+    multiInstance: true,
+    render: (props) => <ForwardBalanceCard {...props} />,
   },
 ];
 

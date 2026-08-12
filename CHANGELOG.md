@@ -9,6 +9,36 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.325.0 — 2026-08-13
+
+### Added
+- **Dashboard widget: Forward balance.** Ports the main
+  forward-balance chart from `/calendar` to a resizable
+  dashboard widget. Renders the per-account running-balance
+  band (crisp for realised days, muted fill for the projected
+  tail beyond today) with the same "Projected" divider the
+  calendar page uses. Deliberately drops the pan/zoom overview
+  + day-selection bindings — those are calendar-page-specific
+  and don't fit a drag-resize tile; jump to /calendar for
+  finer control.
+  - **Per-instance config.** Multi-instance widget (drop it in
+    twice with different setups):
+    - **Accounts** — checkbox list of every account (including
+      hidden). "All accounts" is the default; toggle individual
+      accounts to filter.
+    - **Period** — segmented preset (30 days / 3 months / 6
+      months / 12 months / 24 months). Window straddles today
+      so the projection band is always visible.
+  - **Default size**: 6×3 cells (full-half-row, matches the
+    Net Worth Trend / Budget Progress row cadence). Min 4×3.
+  - **Chart hidden while editing** — same guard as
+    `net-worth-trend-card` and `account-summary-card` to
+    avoid React #185 during RGL drags (recharts 3.x's internal
+    store can cascade under ResizeObserver).
+
+### Verified
+- tsc clean, `pnpm build` clean, pages-smoke 12/12 green.
+
 ## 0.324.0 — 2026-08-13
 
 ### Fixed

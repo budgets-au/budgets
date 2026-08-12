@@ -16,9 +16,14 @@ packages:
 # Every entry here has been vetted as a legitimate native-binding
 # rebuild target.
 onlyBuiltDependencies:
-  # Aliased to `better-sqlite3` in package.json; the underlying
-  # published name is what pnpm checks against this allowlist.
-  - better-sqlite3-multiple-ciphers
+  # `better-sqlite3-multiple-ciphers` is deliberately NOT listed —
+  # it ships prebuilt `.node` binaries for every arch we run on
+  # (darwin/linux/linuxmusl × arm64/x64) and its lib/binding.js
+  # picks the right one at require-time. Listing it here would
+  # cause pnpm to `node-gyp rebuild` off the vendored `binding.gyp`,
+  # which needs python3+make+g++ — install fails without them and
+  # is wasted work when they're present (the prebuild would still
+  # win at runtime).
   - bcryptjs
   - esbuild
   - sharp

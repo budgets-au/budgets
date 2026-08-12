@@ -1,10 +1,17 @@
 # Stage 1: Dependencies
 FROM node:22-alpine AS deps
 WORKDIR /app
-# better-sqlite3-multiple-ciphers (aliased to `better-sqlite3` in
-# package.json) ships prebuilt `.node` binaries for `linuxmusl-x64`
-# and `linuxmusl-arm64` — the alpine base loads them directly. No
-# native compile step, so no python3/make/g++ needed here.
+# python3 + a C++ toolchain to survive pnpm's implicit `node-gyp
+# rebuild` on packages that ship a `binding.gyp` (even when they
+# also ship prebuilds — `better-sqlite3-multiple-ciphers` is one:
+# its lib/binding.js smart-loads the prebuilt `.node` at runtime,
+# but pnpm 9 still runs an implicit gyp rebuild during install
+# regardless of the `onlyBuiltDependencies` allowlist. Rather than
+# fight pnpm, we let the rebuild succeed here in the deps stage
+# — the resulting `build/Release/` artefacts are pruned by the
+# builder stage before the runner copy, so nothing extra ships).
+# These packages are deps-stage-only; the runner image stays small.
+RUN apk add --no-cache python3 make g++
 # pnpm via Corepack — the `packageManager` field in package.json pins
 # the exact version. `corepack prepare` pre-fetches that version so the
 # subsequent `pnpm install` doesn't pause the build to download.
@@ -48,17 +55,35 @@ RUN corepack enable && pnpm build
 # Trimming BEFORE the runner's COPY actually shrinks the layer
 # transferred across.
 #
-# better-sqlite3-multiple-ciphers ships prebuild-only (no `src/`,
-# `deps/`, `binding.gyp`, or object-file build tree — that's the
-# whole point of the migration off @signalapp/better-sqlite3 which
-# vendored a 62 MB source tree we had to prune). So no
-# better-sqlite3 prune block is needed here.
+# better-sqlite3-multiple-ciphers ships prebuilds AND its full C++
+# source tree + object-file build tree (deps stage's implicit
+# node-gyp rebuild also produces build/Release/*.o artefacts).
+# Only `build/Release/better_sqlite3.node` is loaded via
+# lib/binding.js at runtime — everything else is dead weight
+# (~40 MB). The `find -not -name` filters keep just that one
+# file per directory.
+#
+# pnpm's strict node-linker makes ./node_modules/better-sqlite3
+# a symlink into .pnpm/<pkg>@<ver>/node_modules/...; `find` and
+# `rm` walk through the symlink in the path argument so the
+# deletions hit the real files under .pnpm/.
 #
 # Sharp ships per-libc prebuilt libvips bundles. The container's
 # Alpine base is musl, so the glibc variants are pure dead weight.
 # Only the standalone bundle ships sharp at runtime, so that's the
 # only path we need to slim.
 RUN set -e \
+ && find ./node_modules/better-sqlite3/build \
+      -mindepth 1 -maxdepth 1 \
+      -not -name 'Release' \
+      -exec rm -rf {} + \
+ && find ./node_modules/better-sqlite3/build/Release \
+      -mindepth 1 -maxdepth 1 \
+      -not -name 'better_sqlite3.node' \
+      -exec rm -rf {} + \
+ && rm -rf ./node_modules/better-sqlite3/src \
+           ./node_modules/better-sqlite3/deps \
+           ./node_modules/better-sqlite3/binding.gyp \
  && if [ -d ./.next/standalone/node_modules/@img ]; then \
       # Strip the OTHER arch's sharp prebuild bundles so the image
       # only ships the one that matches TARGETARCH. The mapping is
@@ -79,13 +104,10 @@ RUN set -e \
       esac; \
     fi
 
-# Stage the SQLCipher driver + its native-resolver deps into a flat
-# layout the runner can COPY without knowing pnpm's version-hashed
-# sub-dir names. Under the isolated linker each package's
-# transitives live alongside it in .pnpm/<pkg>@<ver>/node_modules/,
-# NOT hoisted to the top-level node_modules. bindings is a peer of
-# better-sqlite3, and file-uri-to-path is a peer of bindings
-# (different sub-dir again) — hand-walking that chain with
+# Stage the SQLCipher driver into a flat layout the runner can COPY
+# without knowing pnpm's version-hashed sub-dir names. Under the
+# isolated linker `./node_modules/better-sqlite3` is a symlink into
+# .pnpm/<pkg>@<ver>/node_modules/... — hand-walking that chain with
 # realpath/dirname is fragile, so use Node's own resolver
 # (`require.resolve`) which already understands pnpm's layout.
 # `fs.cpSync` with `dereference:true` flattens the symlinks the
@@ -96,21 +118,18 @@ RUN set -e \
 # real package directory under .pnpm/<hash>/, and we stage it
 # under `better-sqlite3/` so the runtime `import Database from
 # "better-sqlite3"` resolves.
+#
+# The fork does NOT depend on the classic `bindings` +
+# `file-uri-to-path` chain that @signalapp/better-sqlite3 used;
+# its own lib/binding.js resolves the compiled `.node` directly
+# from build/Release without a runtime binding-resolver hop.
 RUN node -e ' \
   const fs = require("fs"); \
   const path = require("path"); \
   const out = "/app/runtime-deps"; \
   fs.mkdirSync(out, { recursive: true }); \
-  function stage(pkg, dest, fromPaths) { \
-    const opts = fromPaths ? { paths: fromPaths } : undefined; \
-    const pkgJson = require.resolve(pkg + "/package.json", opts); \
-    const srcDir = path.dirname(pkgJson); \
-    fs.cpSync(srcDir, path.join(out, dest), { recursive: true, dereference: true }); \
-    return srcDir; \
-  } \
-  const bs3      = stage("better-sqlite3",   "better-sqlite3"); \
-  const bindings = stage("bindings",         "bindings",         [bs3]); \
-  /**/             stage("file-uri-to-path", "file-uri-to-path", [bindings]); \
+  const pkgJson = require.resolve("better-sqlite3/package.json"); \
+  fs.cpSync(path.dirname(pkgJson), path.join(out, "better-sqlite3"), { recursive: true, dereference: true }); \
 '
 
 # Stage 3: Runner
@@ -149,9 +168,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 # serverExternalPackage (Turbopack can't bundle the .node binary)
 # but its standalone trace STILL ships a partial stub at
 # ./node_modules/better-sqlite3 (a pnpm-style symlink into the
-# deps store), plus bindings + file-uri-to-path. Those stubs are
-# useless without the real native module and they break the
-# subsequent `COPY` because:
+# deps store). The stub is useless without the real native module
+# and it breaks the subsequent `COPY` because:
 #   - On classic docker / podman, COPY into an existing symlink
 #     silently overwrites it with the directory contents (we
 #     relied on this).
@@ -159,12 +177,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 #     multi-arch) the same COPY errors with "cannot copy to
 #     non-directory" because the cache-mount overlay refuses to
 #     replace the symlink with a directory.
-# Solving by deleting the stubs first, then COPY'ing the staged
+# Solving by deleting the stub first, then COPY'ing the staged
 # runtime-deps. Works under both driver families.
-RUN rm -rf ./node_modules/better-sqlite3 ./node_modules/bindings ./node_modules/file-uri-to-path
+RUN rm -rf ./node_modules/better-sqlite3
 COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/better-sqlite3 ./node_modules/better-sqlite3
-COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/bindings ./node_modules/bindings
-COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/file-uri-to-path ./node_modules/file-uri-to-path
 
 # Slim the image to just what `node server.js` actually reads. The
 # Next.js `output: "standalone"` bundle copies a chunk of the source

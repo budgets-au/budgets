@@ -9,6 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.322.0 — 2026-08-13
+
+### Fixed
+- **Docker build after the SQLCipher migration (0.321.0).**
+  The 0.321.0 release notes over-promised on the Dockerfile
+  trim — `better-sqlite3-multiple-ciphers` ships prebuilt
+  `.node` binaries AND its full C++ source tree, and pnpm's
+  install step runs an implicit `node-gyp rebuild` on any
+  package with a `binding.gyp` file regardless of the
+  `onlyBuiltDependencies` allowlist. The 0.321 Dockerfile
+  removed the toolchain that rebuild needed, so `pnpm install
+  --frozen-lockfile` failed in the deps stage.
+  - Restored `apk add python3 make g++` in the deps stage —
+    pnpm's implicit gyp rebuild now succeeds against the
+    vendored sources. Runner image unaffected.
+  - Restored the ~40 MB post-build prune under
+    `node_modules/better-sqlite3/` (`src/`, `deps/`,
+    `binding.gyp`, object files in `build/Release/`) so only
+    `better_sqlite3.node` ships to the runner. Same shape as
+    the pre-migration prune, just retargeted from
+    `@signalapp/…` → `better-sqlite3/`.
+  - Removed the `bindings` + `file-uri-to-path` staging (and
+    the `rm -rf` + `COPY` for them in the runner) — the fork
+    doesn't depend on that chain. Its `lib/binding.js`
+    resolves `build/Release/better_sqlite3.node` directly.
+
+### Verified
+- Full `docker build .` succeeds end-to-end.
+- Live run: container starts, DB unlocks via `SQLITE_KEY`,
+  seeds default admin + 31 categories + sample data,
+  `GET /api/unlock` returns `{"unlocked":true,"dbExists":true}`.
+- Unit + tsc + build baselines from 0.321.0 unchanged.
+
 ## 0.321.0 — 2026-08-13
 
 Closes **issue #6** and vacates all 6 open `npm/tar` Dependabot

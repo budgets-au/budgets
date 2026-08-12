@@ -9,6 +9,34 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.323.0 — 2026-08-13
+
+### Fixed
+- **Unlocking pre-migration SQLCipher databases** — 0.321/0.322
+  couldn't open an existing SQLCipher-format `.db` created by
+  `@signalapp/better-sqlite3`. **`better-sqlite3-multiple-ciphers`
+  requires the cipher scheme + compatibility level to be
+  selected BEFORE the key**, not after, otherwise the fork
+  attempts decryption under its own default scheme and the
+  probe SELECT fails with "file is not a database" even when
+  the passphrase is correct. The pre-migration `@signalapp`
+  binding hard-baked SQLCipher so only `key` + `cipher_compat`
+  were needed there — this order dependency is new.
+  - Fixed the PRAGMA sequence in every SQLCipher-open path
+    (`src/db/index.ts` unlockAndVerify + createFreshFile,
+    `scripts/migrate.ts`, `src/lib/backup/sqlite-backup.ts`
+    verifyBackup) to:
+    1. `PRAGMA cipher = 'sqlcipher'`
+    2. `PRAGMA cipher_compatibility = 4`
+    3. `PRAGMA key = '…'`
+  - No change to on-disk format; existing files unlock without
+    a rekey or backup restore.
+
+### Verified
+- tsc clean, 728/738 unit pass, `pnpm build` clean.
+- Live-run against a fresh container:
+  `GET /api/unlock` → `{"unlocked":true,"dbExists":true}`.
+
 ## 0.322.0 — 2026-08-13
 
 ### Fixed

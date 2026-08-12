@@ -142,10 +142,19 @@ function openWithKey(passphrase: string): OpenResult {
   try {
     mkdirSync(dirname(path), { recursive: true });
     client = new Database(path) as unknown as BetterSqlite3.Database;
-    // PRAGMA key MUST be the very first statement on the connection,
-    // before any read or write.
-    client.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
+    // With better-sqlite3-multiple-ciphers, the cipher scheme + compat
+    // level MUST be selected BEFORE the key. Reading an existing
+    // SQLCipher-format file without first setting `cipher='sqlcipher'`
+    // makes the fork attempt decryption under its own default cipher
+    // scheme and the SELECT below fails with "file is not a database"
+    // even when the passphrase is correct. This is the compat-mode
+    // sequence documented by SQLite3MultipleCiphers and is a no-op on
+    // freshly-created files (they'll be written under the chosen
+    // scheme). The previous @signalapp binding hard-baked SQLCipher
+    // so only `key` + `cipher_compatibility` were needed there.
+    client.pragma("cipher = 'sqlcipher'");
     client.pragma("cipher_compatibility = 4");
+    client.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
     // Issue #81: set busy_timeout BEFORE the probe. The probe SELECT
     // can race a concurrent opener; without a busy timeout the loser
     // gets SQLITE_BUSY instantly rather than waiting out the contended
@@ -647,8 +656,12 @@ export function initProfileFile(
   try {
     mkdirSync(dirname(path), { recursive: true });
     client = new Database(path) as unknown as BetterSqlite3.Database;
-    client.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
+    // Same cipher-scheme-before-key sequence as unlockAndVerify — see
+    // the long comment there for why order matters under
+    // better-sqlite3-multiple-ciphers.
+    client.pragma("cipher = 'sqlcipher'");
     client.pragma("cipher_compatibility = 4");
+    client.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
     client.pragma("journal_mode = WAL");
     client.pragma("foreign_keys = ON");
     client.pragma("busy_timeout = 5000");

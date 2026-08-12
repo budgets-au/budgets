@@ -416,16 +416,17 @@ export const POST = withAuth(async (request) => {
     } = data;
     void _ignore1;
     void _ignore2;
-    const result = await db.transaction(async (tx) => {
-      const [source] = await tx
+    const result = await db.transaction((tx) => {
+      const [source] = tx
         .insert(transactions)
         .values({
           ...shared,
           normalizedPayee: normalized,
           matchPayee,
         })
-        .returning();
-      const [dest] = await tx
+        .returning()
+        .all();
+      const [dest] = tx
         .insert(transactions)
         .values({
           ...shared,
@@ -435,24 +436,28 @@ export const POST = withAuth(async (request) => {
           normalizedPayee: normalized,
           matchPayee,
         })
-        .returning();
-      await tx
+        .returning()
+        .all();
+      tx
         .update(transactions)
         .set({ transferPairId: dest.id, updatedAt: new Date() })
-        .where(eq(transactions.id, source.id));
-      await tx
+        .where(eq(transactions.id, source.id))
+        .run();
+      tx
         .update(transactions)
         .set({ transferPairId: source.id, updatedAt: new Date() })
-        .where(eq(transactions.id, dest.id));
+        .where(eq(transactions.id, dest.id))
+        .run();
       // Recompute both account balances.
       for (const acctId of [data.accountId, resolvedTransferTo!]) {
-        await tx
+        tx
           .update(accounts)
           .set({
             currentBalance: sql`(SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE account_id = ${acctId}) + ${accounts.startingBalance}`,
             updatedAt: new Date(),
           })
-          .where(eq(accounts.id, acctId));
+          .where(eq(accounts.id, acctId))
+          .run();
       }
       return { source, dest };
     });

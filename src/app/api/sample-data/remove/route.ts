@@ -135,11 +135,12 @@ export const POST = withAdminAuth(async () => {
   // sample without sitting on a sample account, plus any non-sample
   // rows the user attached to a sample account (caught by the
   // accountId filter).
-  await db.transaction(async (tx) => {
-    const sampleAccountRows = await tx
+  await db.transaction((tx) => {
+    const sampleAccountRows = tx
       .select({ id: accounts.id })
       .from(accounts)
-      .where(eq(accounts.isSample, true));
+      .where(eq(accounts.isSample, true))
+      .all();
     const sampleAccountIds = sampleAccountRows.map((a) => a.id);
 
     // Issue #56: surviving non-sample partners of a sample transfer
@@ -149,14 +150,14 @@ export const POST = withAdminAuth(async () => {
     // those partners now so they don't surface as orphan flagged-
     // but-unpaired rows downstream. The orphan-backfill flag is
     // already true at this point, so the next unlock won't repair.
-    const sampleTxnIds = (
-      await tx
-        .select({ id: transactions.id })
-        .from(transactions)
-        .where(eq(transactions.isSample, true))
-    ).map((r) => r.id);
+    const sampleTxnIds = tx
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(eq(transactions.isSample, true))
+      .all()
+      .map((r) => r.id);
     if (sampleTxnIds.length > 0) {
-      await tx
+      tx
         .update(transactions)
         .set({ isTransfer: false, updatedAt: new Date() })
         .where(
@@ -164,26 +165,30 @@ export const POST = withAdminAuth(async () => {
             eq(transactions.isSample, false),
             inArray(transactions.transferPairId, sampleTxnIds),
           ),
-        );
+        )
+        .run();
     }
 
-    await tx.delete(transactions).where(eq(transactions.isSample, true));
-    await tx
+    tx.delete(transactions).where(eq(transactions.isSample, true)).run();
+    tx
       .delete(scheduledTransactions)
-      .where(eq(scheduledTransactions.isSample, true));
-    await tx.delete(payeeRules).where(eq(payeeRules.isSample, true));
+      .where(eq(scheduledTransactions.isSample, true))
+      .run();
+    tx.delete(payeeRules).where(eq(payeeRules.isSample, true)).run();
 
     if (sampleAccountIds.length > 0) {
       // Sweep any user rows still pointing at sample accounts so the
       // account delete doesn't get blocked by ON DELETE RESTRICT —
       // and matches what the GET counts surfaced as dependents.
-      await tx
+      tx
         .delete(transactions)
-        .where(inArray(transactions.accountId, sampleAccountIds));
-      await tx
+        .where(inArray(transactions.accountId, sampleAccountIds))
+        .run();
+      tx
         .delete(scheduledTransactions)
-        .where(inArray(scheduledTransactions.accountId, sampleAccountIds));
-      await tx.delete(accounts).where(eq(accounts.isSample, true));
+        .where(inArray(scheduledTransactions.accountId, sampleAccountIds))
+        .run();
+      tx.delete(accounts).where(eq(accounts.isSample, true)).run();
     }
   });
 

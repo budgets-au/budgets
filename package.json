@@ -23,11 +23,10 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
-    "@signalapp/better-sqlite3": "^9.0.13",
     "@types/better-sqlite3": "^7.6.13",
     "@types/react-grid-layout": "^1.3.6",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "npm:@signalapp/better-sqlite3@^9.0.13",
+    "better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^13.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",

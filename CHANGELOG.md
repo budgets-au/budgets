@@ -9,6 +9,87 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.321.0 — 2026-08-13
+
+Closes **issue #6** and vacates all 6 open `npm/tar` Dependabot
+alerts by migrating the SQLCipher binding off the deprecated
+`@signalapp/better-sqlite3` fork.
+
+### Security
+- **Migrated SQLCipher binding to
+  `better-sqlite3-multiple-ciphers` 13.0.3.** `@signalapp/better-
+  sqlite3` was frozen at 9.0.13 (deprecated Feb 2025) and its
+  peer-dep on `tar 6.2.x` kept the `pnpm-workspace.yaml`
+  `tar >=7.5.11` override from applying — blocking all 6 Dependabot
+  alerts (critical + high + 4 medium DoS/smuggling). The
+  replacement fork of upstream `better-sqlite3` bundles
+  [SQLite3MultipleCiphers](https://github.com/utelle/SQLite3MultipleCiphers),
+  supports the same `PRAGMA key` / `cipher_compatibility = 4` /
+  `PRAGMA rekey` API, and has no `tar` dep anywhere in the tree.
+- **Aliased in `package.json`** as
+  `"better-sqlite3": "npm:better-sqlite3-multiple-ciphers@^13.0.3"`
+  so every consumer + drizzle-orm's adapter resolves through the
+  canonical name; no import changes beyond swapping
+  `from "@signalapp/better-sqlite3"` → `from "better-sqlite3"` in
+  the five call sites (`src/db/index.ts`,
+  `scripts/migrate.ts`, `src/lib/backup/sqlite-backup.ts`, two
+  test fixtures).
+
+### Fixed
+- **`db.transaction()` callbacks are now synchronous, not
+  `async`.** The old `db.transaction(async (tx) => { … await
+  tx.foo() … })` pattern relied on an undefined-behaviour
+  tolerance in the Signal fork — upstream `better-sqlite3`
+  (correctly) throws `TypeError: Transaction function cannot
+  return a promise` because sql statements between BEGIN and
+  COMMIT must run without intervening await points. Drizzle's
+  better-sqlite3 driver is fully synchronous under the hood
+  anyway, so this was decorative-async. Refactored 9
+  transaction blocks across 6 files to sync callbacks with
+  explicit `.all()` / `.get()` / `.run()` terminators:
+  - `src/lib/transfer-match.ts` (4 blocks: pair, manualPair,
+    manualPairExternal, manualUnpair)
+  - `src/app/api/transactions/route.ts` (dual-leg transfer POST)
+  - `src/app/api/transactions/bulk/route.ts` (bulk DELETE)
+  - `src/app/api/transactions/[id]/route.ts` (single DELETE)
+  - `src/app/api/scheduled/[id]/replace/route.ts` (replace-with-
+    successor)
+  - `src/app/api/sample-data/remove/route.ts` (sample wipe)
+  Nothing observable changes at the DB level — the operations
+  were already running sync — but the code no longer hides the
+  fact and future contributors don't get tempted to add a real
+  await inside a transaction.
+
+### Changed
+- **Dockerfile**:
+  - Removed `apk add python3 make g++` from the deps stage —
+    `better-sqlite3-multiple-ciphers` ships prebuilt binaries
+    for `linuxmusl-x64` and `linuxmusl-arm64`, so no native
+    compile step runs on Alpine.
+  - Dropped the 62 MB `src/`/`deps/`/`binding.gyp` prune block
+    from the builder — the fork's tarball is prebuild-only, no
+    source tree to remove.
+  - Removed the `tar / minipass / minizlib` strip from the
+    runner slim — the fork has no `tar` in its dependency tree.
+  - `require.resolve` staging retargets `@signalapp/better-
+    sqlite3` → `better-sqlite3` (unchanged pattern — pnpm's
+    isolated linker layout still needs the resolver walk).
+- **`pnpm-workspace.yaml` `onlyBuiltDependencies`** replaces
+  `@signalapp/better-sqlite3` with `better-sqlite3-multiple-
+  ciphers` (the fork does have a `node-gyp` build step; only
+  needed when the prebuild fetch misses, which on Alpine musl
+  it doesn't).
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 728/738 unit tests pass — matches the pre-migration baseline;
+  the 12 `TypeError: Transaction function cannot return a
+  promise` failures the fork surfaced are fixed by the
+  transaction refactor.
+- pages-smoke 12/12 + proxy-auth-dispatch 4/4 green in
+  isolation (a mixed-run test-ordering flake was noise, not a
+  regression).
+
 ## 0.320.0 — 2026-08-13
 
 ### Changed

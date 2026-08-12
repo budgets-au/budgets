@@ -21,7 +21,7 @@ import {
 } from "node:fs";
 import { statfs } from "node:fs/promises";
 import { dirname, join, resolve, basename, sep } from "node:path";
-import Database from "@signalapp/better-sqlite3";
+import Database from "better-sqlite3";
 import { getClient, livePath, lock } from "@/db";
 import { type BackupSchedule } from "@/db/schema";
 import {

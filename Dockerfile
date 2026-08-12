@@ -1,11 +1,10 @@
 # Stage 1: Dependencies
 FROM node:22-alpine AS deps
 WORKDIR /app
-# @signalapp/better-sqlite3 ships native modules — needs python3 + a C++
-# toolchain to compile against the alpine image's libc when the prebuilt
-# binary doesn't match. These are deps-stage-only; the runner image
-# stays small.
-RUN apk add --no-cache python3 make g++
+# better-sqlite3-multiple-ciphers (aliased to `better-sqlite3` in
+# package.json) ships prebuilt `.node` binaries for `linuxmusl-x64`
+# and `linuxmusl-arm64` — the alpine base loads them directly. No
+# native compile step, so no python3/make/g++ needed here.
 # pnpm via Corepack — the `packageManager` field in package.json pins
 # the exact version. `corepack prepare` pre-fetches that version so the
 # subsequent `pnpm install` doesn't pause the build to download.
@@ -49,33 +48,17 @@ RUN corepack enable && pnpm build
 # Trimming BEFORE the runner's COPY actually shrinks the layer
 # transferred across.
 #
-# @signalapp/better-sqlite3 ships ~62 MB of native-build artefacts
-# (object files, gyp targets, the SQLite C source tree) that
-# node-gyp uses to compile and the runtime never re-reads. Only
-# `build/Release/better_sqlite3.node` is loaded via the require-
-# hook in lib/database.js.
-#
-# pnpm's strict node-linker makes ./node_modules/@signalapp/
-# better-sqlite3 a symlink into .pnpm/<pkg>@<ver>/node_modules/...;
-# `find` and `rm` walk through the symlink in the path argument so
-# the deletions still hit the real files under .pnpm/.
+# better-sqlite3-multiple-ciphers ships prebuild-only (no `src/`,
+# `deps/`, `binding.gyp`, or object-file build tree — that's the
+# whole point of the migration off @signalapp/better-sqlite3 which
+# vendored a 62 MB source tree we had to prune). So no
+# better-sqlite3 prune block is needed here.
 #
 # Sharp ships per-libc prebuilt libvips bundles. The container's
 # Alpine base is musl, so the glibc variants are pure dead weight.
 # Only the standalone bundle ships sharp at runtime, so that's the
 # only path we need to slim.
 RUN set -e \
- && find ./node_modules/@signalapp/better-sqlite3/build \
-      -mindepth 1 -maxdepth 1 \
-      -not -name 'Release' \
-      -exec rm -rf {} + \
- && find ./node_modules/@signalapp/better-sqlite3/build/Release \
-      -mindepth 1 -maxdepth 1 \
-      -not -name 'better_sqlite3.node' \
-      -exec rm -rf {} + \
- && rm -rf ./node_modules/@signalapp/better-sqlite3/src \
-           ./node_modules/@signalapp/better-sqlite3/deps \
-           ./node_modules/@signalapp/better-sqlite3/binding.gyp \
  && if [ -d ./.next/standalone/node_modules/@img ]; then \
       # Strip the OTHER arch's sharp prebuild bundles so the image
       # only ships the one that matches TARGETARCH. The mapping is
@@ -101,17 +84,23 @@ RUN set -e \
 # sub-dir names. Under the isolated linker each package's
 # transitives live alongside it in .pnpm/<pkg>@<ver>/node_modules/,
 # NOT hoisted to the top-level node_modules. bindings is a peer of
-# @signalapp/better-sqlite3, and file-uri-to-path is a peer of
-# bindings (different sub-dir again) — hand-walking that chain
-# with realpath/dirname is fragile, so use Node's own resolver
+# better-sqlite3, and file-uri-to-path is a peer of bindings
+# (different sub-dir again) — hand-walking that chain with
+# realpath/dirname is fragile, so use Node's own resolver
 # (`require.resolve`) which already understands pnpm's layout.
 # `fs.cpSync` with `dereference:true` flattens the symlinks the
 # same way `cp -RL` would.
+#
+# `better-sqlite3` is a package.json alias to
+# `better-sqlite3-multiple-ciphers`; require.resolve returns the
+# real package directory under .pnpm/<hash>/, and we stage it
+# under `better-sqlite3/` so the runtime `import Database from
+# "better-sqlite3"` resolves.
 RUN node -e ' \
   const fs = require("fs"); \
   const path = require("path"); \
   const out = "/app/runtime-deps"; \
-  fs.mkdirSync(path.join(out, "@signalapp"), { recursive: true }); \
+  fs.mkdirSync(out, { recursive: true }); \
   function stage(pkg, dest, fromPaths) { \
     const opts = fromPaths ? { paths: fromPaths } : undefined; \
     const pkgJson = require.resolve(pkg + "/package.json", opts); \
@@ -119,7 +108,7 @@ RUN node -e ' \
     fs.cpSync(srcDir, path.join(out, dest), { recursive: true, dereference: true }); \
     return srcDir; \
   } \
-  const bs3      = stage("@signalapp/better-sqlite3", "@signalapp/better-sqlite3"); \
+  const bs3      = stage("better-sqlite3",   "better-sqlite3"); \
   const bindings = stage("bindings",         "bindings",         [bs3]); \
   /**/             stage("file-uri-to-path", "file-uri-to-path", [bindings]); \
 '
@@ -156,13 +145,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 # (drizzle-orm/better-sqlite3) is in the standalone NFT trace.
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 
-# SQLCipher driver — Next's NFT marks @signalapp/better-sqlite3 as
-# a serverExternalPackage (Turbopack can't bundle the .node binary)
+# SQLCipher driver — Next's NFT marks better-sqlite3 as a
+# serverExternalPackage (Turbopack can't bundle the .node binary)
 # but its standalone trace STILL ships a partial stub at
-# ./node_modules/@signalapp/better-sqlite3 (a pnpm-style symlink
-# into the deps store), plus bindings + file-uri-to-path. Those
-# stubs are useless without the real native module and they break
-# the subsequent `COPY` because:
+# ./node_modules/better-sqlite3 (a pnpm-style symlink into the
+# deps store), plus bindings + file-uri-to-path. Those stubs are
+# useless without the real native module and they break the
+# subsequent `COPY` because:
 #   - On classic docker / podman, COPY into an existing symlink
 #     silently overwrites it with the directory contents (we
 #     relied on this).
@@ -172,8 +161,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 #     replace the symlink with a directory.
 # Solving by deleting the stubs first, then COPY'ing the staged
 # runtime-deps. Works under both driver families.
-RUN rm -rf ./node_modules/@signalapp ./node_modules/bindings ./node_modules/file-uri-to-path
-COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/@signalapp ./node_modules/@signalapp
+RUN rm -rf ./node_modules/better-sqlite3 ./node_modules/bindings ./node_modules/file-uri-to-path
+COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/better-sqlite3 ./node_modules/better-sqlite3
 COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/bindings ./node_modules/bindings
 COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/file-uri-to-path ./node_modules/file-uri-to-path
 
@@ -186,10 +175,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/runtime-deps/file-uri-to-path ./n
 # so removing these silences ~all of the noise without behaviour
 # change.
 #
-# We also strip vendored bundles inside @signalapp/better-sqlite3 that
-# only the postinstall prebuild fetcher uses (tar / minipass /
-# minizlib). next/dist/compiled/tar is similarly safe to drop —
-# verified by smoke-test that `node server.js` boots without it.
+# The tar/minipass/minizlib strip that used to sit here (vendored
+# by @signalapp/better-sqlite3's postinstall prebuild fetcher) is
+# gone with the migration to better-sqlite3-multiple-ciphers — that
+# fork ships prebuild-only, no tar dep anywhere in the tree. Still
+# strip next/dist/compiled/tar (Next's internal helper) — safe to
+# drop, verified by smoke-test that `node server.js` boots.
 # next/dist/compiled/cross-spawn is NOT safe to drop: Next 16's CLI
 # config-schema chain (server.js → start-server → config-schema →
 # next-test → install-dependencies) loads it at boot.
@@ -199,9 +190,6 @@ RUN set -e \
           ./next.config.ts ./postcss.config.mjs ./tsconfig.json \
  && rm -rf ./src ./scripts \
  && rm -rf ./node_modules/next/dist/compiled/tar \
-           ./node_modules/@signalapp/better-sqlite3/node_modules/tar \
-           ./node_modules/@signalapp/better-sqlite3/node_modules/minipass \
-           ./node_modules/@signalapp/better-sqlite3/node_modules/minizlib \
  && printf '%s\n' '{' \
       '  "name": "budgets",' \
       '  "version": "0.1.0",' \

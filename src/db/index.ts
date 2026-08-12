@@ -1,6 +1,6 @@
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import Database from "@signalapp/better-sqlite3";
+import Database from "better-sqlite3";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type BetterSqlite3 from "better-sqlite3";

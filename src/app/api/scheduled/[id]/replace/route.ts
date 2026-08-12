@@ -76,17 +76,18 @@ export const POST = withAuthAndId(async (id, request) => {
 
   // Wrap the four writes in a single transaction so a mid-flow failure can't
   // leave the lineage with a deactivated predecessor and no successor.
-  const successor = await db.transaction(async (tx) => {
-    await tx
+  const successor = await db.transaction((tx) => {
+    tx
       .update(scheduledTransactions)
       .set({
         endDate: oldEndDate,
         isActive: false,
         updatedAt: new Date(),
       })
-      .where(eq(scheduledTransactions.id, id));
+      .where(eq(scheduledTransactions.id, id))
+      .run();
 
-    const [inserted] = await tx
+    const [inserted] = tx
       .insert(scheduledTransactions)
       .values({
         accountId: predecessor.accountId,
@@ -104,7 +105,8 @@ export const POST = withAuthAndId(async (id, request) => {
         isActive: true,
         lineageId: predecessor.lineageId,
       })
-      .returning();
+      .returning()
+      .all();
 
     // Move any user-entered forecasts for dates at-or-after the new effective
     // date from the predecessor to the successor, so seasonal overrides survive
@@ -112,13 +114,14 @@ export const POST = withAuthAndId(async (id, request) => {
     // somehow already had a forecast for the same date:
     //   1. Drop any successor rows that would collide.
     //   2. UPDATE predecessor's forecasts to point at the successor.
-    await tx
+    tx
       .delete(scheduledForecasts)
       .where(and(
         eq(scheduledForecasts.scheduledId, inserted.id),
         gte(scheduledForecasts.occurrenceDate, effectiveDate),
-      ));
-    await tx
+      ))
+      .run();
+    tx
       .update(scheduledForecasts)
       .set({ scheduledId: inserted.id, updatedAt: new Date() })
       .where(and(
@@ -126,7 +129,8 @@ export const POST = withAuthAndId(async (id, request) => {
         gte(scheduledForecasts.occurrenceDate, effectiveDate),
         // Defensive: never re-point onto the predecessor itself if id == successor.id.
         ne(scheduledForecasts.scheduledId, inserted.id),
-      ));
+      ))
+      .run();
 
     return inserted;
   });

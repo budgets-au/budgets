@@ -16,7 +16,9 @@ packages:
 # Every entry here has been vetted as a legitimate native-binding
 # rebuild target.
 onlyBuiltDependencies:
-  - "@signalapp/better-sqlite3"
+  # Aliased to `better-sqlite3` in package.json; the underlying
+  # published name is what pnpm checks against this allowlist.
+  - better-sqlite3-multiple-ciphers
   - bcryptjs
   - esbuild
   - sharp

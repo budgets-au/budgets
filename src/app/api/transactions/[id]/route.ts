@@ -82,8 +82,8 @@ export const DELETE = withAuthAndId(async (id) => {
   // Inside a transaction so the partner-cleanup and the delete commit
   // together — half-applied state can leave a partner with a stale
   // is_transfer=true flag.
-  const result = await db.transaction(async (tx) => {
-    const [target] = await tx
+  const result = await db.transaction((tx) => {
+    const [target] = tx
       .select({
         id: transactions.id,
         accountId: transactions.accountId,
@@ -91,14 +91,15 @@ export const DELETE = withAuthAndId(async (id) => {
       })
       .from(transactions)
       .where(eq(transactions.id, id))
-      .limit(1);
+      .limit(1)
+      .all();
     if (!target) return null;
     // The FK's `ON DELETE SET NULL` clears the partner's
     // transfer_pair_id automatically. No is_transfer fix-up needed
     // — that column was retired in PR 2 (transfer_pair_id alone is
     // the truth) and the auto-matcher no longer writes it. Per-row
     // touch on the partner is unnecessary.
-    await tx.delete(transactions).where(eq(transactions.id, id));
+    tx.delete(transactions).where(eq(transactions.id, id)).run();
     return target;
   });
   if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });

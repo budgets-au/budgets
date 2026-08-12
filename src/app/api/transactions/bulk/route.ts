@@ -47,11 +47,12 @@ export const DELETE = withAuth(async (request) => {
   // The FK's `ON DELETE SET NULL` on `transfer_pair_id` cleans
   // each surviving partner's pointer automatically when the deletes
   // fire below — no per-partner pre-step needed.
-  const deleted = await db.transaction(async (tx) => {
+  const deleted = await db.transaction((tx) => {
     return tx
       .delete(transactions)
       .where(inArray(transactions.id, ids))
-      .returning({ id: transactions.id, accountId: transactions.accountId });
+      .returning({ id: transactions.id, accountId: transactions.accountId })
+      .all();
   });
 
   const accountIds = Array.from(

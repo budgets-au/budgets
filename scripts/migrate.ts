@@ -17,12 +17,12 @@ if (!sqliteKey) {
 mkdirSync(dirname(sqlitePath), { recursive: true });
 
 const sqlite = new Database(sqlitePath);
-// Cipher scheme + compat level BEFORE key — the
-// better-sqlite3-multiple-ciphers fork requires this order to
-// open existing SQLCipher-format files (see the long comment at
-// src/db/index.ts unlockAndVerify for why).
-sqlite.pragma("cipher = 'sqlcipher'");
-sqlite.pragma("cipher_compatibility = 4");
+// Legacy-SQLCipher open sequence — mirror src/db/index.ts
+// unlockAndVerify. Pragma NAME matters: `legacy=4` (not
+// cipher_compatibility=4) is what triggers the fork's SQLCipher-v4
+// compat mode.
+sqlite.pragma("cipher='sqlcipher'");
+sqlite.pragma("legacy=4");
 sqlite.pragma(`key = '${sqliteKey.replace(/'/g, "''")}'`);
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");

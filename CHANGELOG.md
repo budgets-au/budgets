@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.324.0 — 2026-08-13
+
+### Fixed
+- **Second hotfix for pre-migration SQLCipher unlock.** 0.323
+  swapped the pragma ORDER (cipher-before-key) but used the
+  wrong pragma NAME — `cipher_compatibility=4` is a different
+  SQLite3MultipleCiphers-native pragma that does NOT open
+  legacy SQLCipher files. The correct legacy-SQLCipher open
+  sequence per the fork's own README is:
+  ```
+  PRAGMA cipher='sqlcipher';
+  PRAGMA legacy=4;
+  PRAGMA key='…';
+  ```
+  Verified by round-tripping a fresh encrypted DB (create →
+  write → close → reopen → read) against the local Node build.
+  Applied to every SQLCipher-open path — same four sites as
+  0.323 (`src/db/index.ts` × 2, `scripts/migrate.ts`,
+  `src/lib/backup/sqlite-backup.ts`).
+
+### Verified
+- tsc clean, `pnpm build` clean, 728/738 unit pass.
+- Local round-trip: `Database` create → write → close →
+  reopen → read all succeed with the new sequence.
+
 ## 0.323.0 — 2026-08-13
 
 ### Fixed

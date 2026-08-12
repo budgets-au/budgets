@@ -142,18 +142,19 @@ function openWithKey(passphrase: string): OpenResult {
   try {
     mkdirSync(dirname(path), { recursive: true });
     client = new Database(path) as unknown as BetterSqlite3.Database;
-    // With better-sqlite3-multiple-ciphers, the cipher scheme + compat
-    // level MUST be selected BEFORE the key. Reading an existing
-    // SQLCipher-format file without first setting `cipher='sqlcipher'`
-    // makes the fork attempt decryption under its own default cipher
-    // scheme and the SELECT below fails with "file is not a database"
-    // even when the passphrase is correct. This is the compat-mode
-    // sequence documented by SQLite3MultipleCiphers and is a no-op on
-    // freshly-created files (they'll be written under the chosen
-    // scheme). The previous @signalapp binding hard-baked SQLCipher
-    // so only `key` + `cipher_compatibility` were needed there.
-    client.pragma("cipher = 'sqlcipher'");
-    client.pragma("cipher_compatibility = 4");
+    // Legacy-SQLCipher open sequence for better-sqlite3-multiple-
+    // ciphers: cipher scheme first, `legacy=4` for SQLCipher v4
+    // compat, then key. Order matters and pragma NAME matters —
+    // `cipher_compatibility` is a different (SQLite3MultipleCiphers-
+    // native) pragma that does not open legacy SQLCipher files.
+    // Documented under the "legacy SQLCipher" section of the fork's
+    // README. Without this the fork attempts decryption under its
+    // own default cipher (sqleet) and the SELECT below fails with
+    // "file is not a database" even when the passphrase is correct.
+    // The pre-migration @signalapp binding hard-baked SQLCipher so
+    // only `key` + `cipher_compatibility` were needed there.
+    client.pragma("cipher='sqlcipher'");
+    client.pragma("legacy=4");
     client.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
     // Issue #81: set busy_timeout BEFORE the probe. The probe SELECT
     // can race a concurrent opener; without a busy timeout the loser
@@ -656,11 +657,10 @@ export function initProfileFile(
   try {
     mkdirSync(dirname(path), { recursive: true });
     client = new Database(path) as unknown as BetterSqlite3.Database;
-    // Same cipher-scheme-before-key sequence as unlockAndVerify — see
-    // the long comment there for why order matters under
-    // better-sqlite3-multiple-ciphers.
-    client.pragma("cipher = 'sqlcipher'");
-    client.pragma("cipher_compatibility = 4");
+    // Same legacy-SQLCipher open sequence as unlockAndVerify — see
+    // the long comment there for the pragma-name distinction.
+    client.pragma("cipher='sqlcipher'");
+    client.pragma("legacy=4");
     client.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
     client.pragma("journal_mode = WAL");
     client.pragma("foreign_keys = ON");

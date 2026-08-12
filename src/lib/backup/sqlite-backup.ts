@@ -492,12 +492,11 @@ export function verifyBackup(
   let probe: ReturnType<typeof Database> | undefined;
   try {
     probe = new Database(safe);
-    // Cipher scheme + compat level BEFORE key — mirror the unlock
-    // sequence at src/db/index.ts unlockAndVerify. Required for
-    // better-sqlite3-multiple-ciphers to read a SQLCipher-format
-    // backup created by the pre-migration binding.
-    probe.pragma("cipher = 'sqlcipher'");
-    probe.pragma("cipher_compatibility = 4");
+    // Legacy-SQLCipher open sequence — mirror src/db/index.ts
+    // unlockAndVerify. Pragma NAME matters: `legacy=4` (not
+    // cipher_compatibility=4).
+    probe.pragma("cipher='sqlcipher'");
+    probe.pragma("legacy=4");
     probe.pragma(`key = '${passphrase.replace(/'/g, "''")}'`);
     probe.prepare("SELECT count(*) FROM sqlite_master").get();
     return { ok: true, size: statSync(safe).size };

@@ -9,6 +9,110 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.326.0 — 2026-08-14
+
+First of four releases from a full UI-consistency review (three
+parallel audits over layout/navigation, design tokens/primitives,
+and page interaction patterns). This one is the "clear the decks"
+pass: real defects plus dead-token deletion, chosen because none of
+it has a visual consequence worth reviewing. The colour/control
+consolidation, chrome/table normalisation, and shared loading/empty
+states follow in 0.327–0.329.
+
+### Fixed
+- **Transactions bulk-action bar was invisible while scrolling.**
+  It was `sticky top-0 z-10` while the Topbar is `sticky top-0
+  z-20 h-14` — same offset, lower z-index, so the bar slid
+  underneath the Topbar the moment the page scrolled. Now
+  `top-14`, anchored below the Topbar.
+- **`amountClass` is now genuinely the single source of money
+  colour.** Two changes to the shared helper in `lib/utils.ts`:
+  - **Zero is muted, not green.** It used to fall into the
+    positive branch (`0 >= 0`) so a `$0.00` row rendered as a
+    gain. The Category report had already forked a local copy to
+    get the correct behaviour; folding it in here let that fork
+    be deleted — it was also returning `text-rose-600` where
+    every other table used `text-red-500`, so the Category report
+    had been rendering negatives in a different hue since 0.320.
+  - **`dark:` variants are baked in.** The helper had none while
+    ~7 hand-rolled call sites added their own, so the two
+    families diverged in dark mode only. Now
+    `text-emerald-600 dark:text-emerald-400` /
+    `text-red-500 dark:text-red-400`.
+  - Nullish / non-finite input returns the muted tone instead of
+    a colour, so callers can pass a possibly-absent average
+    (`total / months` where months can be 0) without a guard.
+- **`font-mono` did nothing.** `globals.css` aliased
+  `--font-mono` to `--font-geist-mono`, which is defined nowhere —
+  so all 12 files using `font-mono` for code, import hashes, and
+  FITIDs resolved to an invalid value and silently inherited the
+  sans body font. Alias dropped; Tailwind's built-in monospace
+  stack now applies, which is what those call sites always wanted.
+- **`data-size="lg"` on a Card was a silent no-op.**
+  `ui/card.tsx` only implements `data-[size=sm]`. The Forward
+  balance widget (0.325) set `lg` and rendered at default scale
+  regardless. Attribute dropped rather than inventing a third
+  scale.
+- **`--cashflow-chrome` was a phantom token.** Consumed by the
+  bounded-height table wrappers on the Cashflow and Category
+  reports, defined nowhere, so the `180px` fallback was always
+  what applied. Now defined in `:root`, making the offset
+  genuinely tunable in one place.
+- **Print leaked dark-mode money colours onto paper.** The print
+  block overrides the `-500`/`-600` status tints with darker
+  `-700` shades, but had no rule for the `-400` shades — which
+  `amountClass` now emits under `.dark`. Printing while in dark
+  mode is covered.
+
+### Changed
+- **Mobile navigation drawer is now dismissible and modal.**
+  Escape closes it, the page behind no longer scrolls under it,
+  and it announces itself with `role="dialog"` / `aria-modal` /
+  `aria-label` while open (conditionally — at `lg` it's permanent
+  page furniture, where a dialog role would be a lie). The
+  hamburger gained `aria-expanded` / `aria-controls`. A proper
+  focus trap is a larger lift and is not included.
+
+### Removed
+- **13 dead design tokens.** `--chart-1` … `--chart-5` and all
+  eight `--sidebar-*` tokens, plus their 13 `@theme` aliases, in
+  both the light and dark blocks. Zero references anywhere in
+  `src/**`: charts read hex from `lib/colours.ts` /
+  `lib/chart-palettes.ts` (Recharts can't consume `var()`, so the
+  chart tokens could never have worked as written), and the
+  sidebar styles itself with `bg-background` / `bg-indigo-600`
+  directly. One of them, `.dark --sidebar-primary`, was the only
+  chromatic value in the entire neutral token set — a leftover
+  shadcn blue.
+
+### Audit notes
+Three findings from the audit were investigated and **rejected**
+rather than actioned:
+- The `sample-data` / `orphan-categories` panels were reported as
+  hanging on "Checking…" after a failed fetch. They already
+  branch on SWR `error` *before* the loading check, and returning
+  `null` there is deliberate — non-admins get a 401 and the panel
+  is meant to hide for them.
+- `edit-investment-dialog` was reported as deleting a vest
+  without confirmation. That delete is the consequence of an
+  explicit Save on a form the user already confirmed, not a
+  direct destructive action; interrupting an in-flight save with
+  a second modal would be worse. (It did surface a genuine
+  unrelated gap — three unchecked `fetch` calls in that sync path
+  fail silently — tracked separately.)
+- The print block's hard-coded hex was reported as duplicating
+  tokens. It deliberately does *not* match them: print needs more
+  contrast than the on-screen tokens provide, which is what those
+  rules exist to supply.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 731/741 unit tests pass. The `amountClass` suite was rewritten
+  against the new contract — the two failures it produced first
+  were the old behaviour being correctly pinned, and the zero and
+  nullish cases are now covered explicitly.
+- pages-smoke 12/12 green.
+
 ## 0.325.0 — 2026-08-13
 
 ### Added

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -80,6 +80,25 @@ export function Sidebar() {
   // of unfiltered data on the destination page.
   const navQuery = ids.length > 0 ? `?accountIds=${ids.join(",")}` : "";
 
+  // Mobile drawer dismissal + scroll lock. Previously the backdrop
+  // tap was the only way out — no Escape, and the page behind kept
+  // scrolling under the open drawer. Both handlers are no-ops on
+  // desktop because `open` only ever goes true from the mobile
+  // hamburger (the aside is permanently translated in at `lg`).
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
   return (
     <>
       {/* Mobile top bar */}
@@ -88,6 +107,8 @@ export function Sidebar() {
           onClick={() => setOpen(true)}
           className="p-1 -ml-1 text-muted-foreground hover:text-foreground"
           aria-label="Open menu"
+          aria-expanded={open}
+          aria-controls="app-sidebar"
         >
           <Menu className="h-6 w-6" />
         </button>
@@ -102,17 +123,26 @@ export function Sidebar() {
         <span className="font-semibold text-lg tracking-tight">Budgets</span>
       </div>
 
-      {/* Backdrop */}
+      {/* Backdrop. `aria-hidden` because the drawer itself carries the
+          dialog semantics — the backdrop is a click target only. */}
       {open && (
         <div
+          aria-hidden="true"
           className="lg:hidden fixed inset-0 z-40 bg-black/40"
           onClick={() => setOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar. On mobile this is a modal drawer, so it announces
+          itself as one while open; at `lg` it's permanent page
+          furniture and the dialog role would be a lie — hence the
+          conditional attributes. */}
       <aside
+        id="app-sidebar"
         data-print-hide
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? true : undefined}
+        aria-label={open ? "Main navigation" : undefined}
         className={cn(
           "flex flex-col w-60 border-r bg-background h-screen fixed top-0 left-0 z-50 transition-transform duration-200",
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"

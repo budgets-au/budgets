@@ -58,9 +58,30 @@ export function formatMonthYear(date: string | Date): string {
   return format(date, "MMMM yyyy");
 }
 
-export function amountClass(amount: number | string): string {
+/** The single source of truth for money colouring. Every surface that
+ * renders a signed amount routes through here — tables, cards, chart
+ * tooltips, KPI headlines.
+ *
+ * Three states, not two:
+ *   - positive → emerald
+ *   - negative → red (matches `TREND_DOWN` in lib/colours.ts, so the
+ *     charts and the tables agree)
+ *   - zero / nullish → muted. A $0.00 row has no activity; painting
+ *     it green misreads as a gain. Nullish is treated the same so
+ *     callers can pass a possibly-undefined average without a guard.
+ *
+ * Dark variants are baked in. They used to be missing here while
+ * ~7 hand-rolled call sites added their own, so the two families
+ * diverged in dark mode only. */
+export function amountClass(
+  amount: number | string | null | undefined,
+): string {
+  if (amount === null || amount === undefined) return "text-muted-foreground";
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  return num >= 0 ? "text-emerald-600" : "text-red-500";
+  if (!Number.isFinite(num) || num === 0) return "text-muted-foreground";
+  return num > 0
+    ? "text-emerald-600 dark:text-emerald-400"
+    : "text-red-500 dark:text-red-400";
 }
 
 export function diffDaysISO(a: string, b: string): number {

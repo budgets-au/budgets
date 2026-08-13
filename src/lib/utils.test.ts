@@ -76,14 +76,40 @@ describe("formatDate / formatDateShort / formatMonthYear", () => {
 });
 
 describe("amountClass", () => {
-  it("zero and positive amounts are emerald", () => {
-    expect(amountClass(0)).toBe("text-emerald-600");
-    expect(amountClass(100)).toBe("text-emerald-600");
-    expect(amountClass("50.00")).toBe("text-emerald-600");
+  const POSITIVE = "text-emerald-600 dark:text-emerald-400";
+  const NEGATIVE = "text-red-500 dark:text-red-400";
+  const NEUTRAL = "text-muted-foreground";
+
+  it("positive amounts are emerald, with a dark variant", () => {
+    expect(amountClass(100)).toBe(POSITIVE);
+    expect(amountClass("50.00")).toBe(POSITIVE);
+    expect(amountClass(0.01)).toBe(POSITIVE);
   });
-  it("negative amounts are red", () => {
-    expect(amountClass(-0.01)).toBe("text-red-500");
-    expect(amountClass("-9.99")).toBe("text-red-500");
+
+  it("negative amounts are red, with a dark variant", () => {
+    expect(amountClass(-0.01)).toBe(NEGATIVE);
+    expect(amountClass("-9.99")).toBe(NEGATIVE);
+  });
+
+  // Changed in the UI-consistency pass: zero used to fall into the
+  // positive branch (`0 >= 0`) and render green. A $0.00 row has no
+  // activity — painting it as a gain misreads. The Category report
+  // had already forked a local helper to get this behaviour; folding
+  // it in here let that fork be deleted.
+  it("zero is muted, not emerald", () => {
+    expect(amountClass(0)).toBe(NEUTRAL);
+    expect(amountClass("0.00")).toBe(NEUTRAL);
+    expect(amountClass(-0)).toBe(NEUTRAL);
+  });
+
+  // Callers pass possibly-absent averages (`total / months` where
+  // months can be 0) — returning the neutral tone beats throwing or
+  // emitting a colour for a value that isn't there.
+  it("nullish and non-finite input is muted", () => {
+    expect(amountClass(null)).toBe(NEUTRAL);
+    expect(amountClass(undefined)).toBe(NEUTRAL);
+    expect(amountClass(NaN)).toBe(NEUTRAL);
+    expect(amountClass("not a number")).toBe(NEUTRAL);
   });
 });
 

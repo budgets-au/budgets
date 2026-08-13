@@ -7,7 +7,7 @@ import { Eye, EyeOff, ChevronUp, ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
-import { formatAUDShort } from "@/lib/utils";
+import { amountClass, formatAUDShort } from "@/lib/utils";
 import type {
   CashflowReport as CashflowData,
   CashflowCategory,
@@ -602,11 +602,3 @@ function TotalsRow({
   );
 }
 
-/** Local color-class helper mirroring `@/lib/utils.amountClass` but
- *  with a muted-zero tone rather than the default red for a zero
- *  value (which would misread as "loss" on rows that have no
- *  activity in the window). */
-function amountClass(n: number | undefined): string {
-  if (n === undefined || n === 0) return "text-muted-foreground";
-  return n > 0 ? "text-emerald-600" : "text-rose-600";
-}

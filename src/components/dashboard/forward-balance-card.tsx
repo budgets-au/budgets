@@ -184,8 +184,11 @@ export function ForwardBalanceCard({
     return [Math.floor(min / step) * step, Math.ceil(max / step) * step];
   }, [chartData, perAccount]);
 
+  // No `data-size` on the Card: ui/card.tsx only implements
+  // `data-[size=sm]`, so the `lg` this used to carry was a silent
+  // no-op — the default scale is what it rendered at all along.
   return (
-    <Card data-size="lg" className="h-full flex flex-col">
+    <Card className="h-full flex flex-col">
       <CardHeader className="pb-1 shrink-0 flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
           <CalendarClock className="h-3.5 w-3.5" />

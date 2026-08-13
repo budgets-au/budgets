@@ -594,8 +594,13 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
 
       <MissedScheduledPanel accounts={accounts} />
 
+      {/* Bulk-selection action bar. `top-14`, not `top-0`: the Topbar
+          is `sticky top-0 z-20 h-14`, so a bar stuck at the same
+          offset with a lower z-index slid underneath it and vanished
+          while scrolling. Anchoring below the Topbar's 56px keeps it
+          visible. */}
       {selectedIds.size > 0 && (
-        <div className="sticky top-0 z-10 flex items-center gap-2 px-3 py-2 rounded-md border bg-background shadow-sm">
+        <div className="sticky top-14 z-10 flex items-center gap-2 px-3 py-2 rounded-md border bg-background shadow-sm">
           <span className="text-xs font-medium text-foreground">
             {selectedIds.size} selected
           </span>

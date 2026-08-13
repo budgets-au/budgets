@@ -26,18 +26,24 @@ export function hashApiKey(plaintext: string): string {
 }
 
 /** Verify a Bearer token from the `Authorization` header. Returns
- *  the row on match (touched with `lastUsedAt` best-effort), null
- *  otherwise. The plaintext must carry the `bk_` prefix — anything
- *  else is rejected without a DB round-trip so a leaked NextAuth
- *  JWT can't accidentally authenticate as an API key. */
+ *  the row (including `scope`) on match — `lastUsedAt` is bumped
+ *  best-effort. Null otherwise. The plaintext must carry the
+ *  `bk_` prefix — anything else is rejected without a DB round-
+ *  trip so a leaked NextAuth JWT can't accidentally authenticate
+ *  as an API key. */
 export async function verifyBearer(plaintext: string): Promise<{
   id: string;
   role: string;
+  scope: string;
 } | null> {
   if (!plaintext.startsWith(API_KEY_PREFIX)) return null;
   const hash = hashApiKey(plaintext);
   const [row] = await db
-    .select({ id: apiKeys.id, role: apiKeys.role })
+    .select({
+      id: apiKeys.id,
+      role: apiKeys.role,
+      scope: apiKeys.scope,
+    })
     .from(apiKeys)
     .where(eq(apiKeys.keyHash, hash))
     .limit(1);

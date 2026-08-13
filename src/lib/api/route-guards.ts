@@ -11,9 +11,29 @@ import { readBearerToken, verifyBearer } from "./api-key";
  *  match we DON'T fall back to session (mixing modes on a single
  *  request would let a browser with a stale cookie override a
  *  freshly-revoked key). */
+/** Routes an `ops`-scoped key is permitted to call. Kept as a plain
+ *  string Set so a route addition is one line. If the surface
+ *  grows past a handful, promote to a per-route metadata pattern. */
+const OPS_ALLOWLIST = new Set<string>([
+  "/api/health",
+  "/api/logs",
+  "/api/version-check",
+  "/api/github-stats",
+  "/api/openapi.json",
+]);
+
+/** Session auth returns `null` scope (no restriction); API-key auth
+ *  returns the row's stored scope. `checkScope` maps that against
+ *  the pathname of the incoming request. */
+function checkScope(scope: string | null, pathname: string): boolean {
+  if (scope === null || scope === "full") return true;
+  if (scope === "ops") return OPS_ALLOWLIST.has(pathname);
+  return false; // unknown value — refuse rather than fail-open
+}
+
 async function resolveIdentity(
   request: Request | undefined,
-): Promise<{ isAdmin: boolean } | null> {
+): Promise<{ isAdmin: boolean; scope: string | null } | null> {
   // Bearer-token path only runs when we actually have a request to
   // read headers from. Integration tests pull the route handler
   // out and call it with an undefined request — those still work
@@ -23,7 +43,7 @@ async function resolveIdentity(
     if (bearer) {
       const key = await verifyBearer(bearer);
       if (!key) return null;
-      return { isAdmin: key.role === "admin" };
+      return { isAdmin: key.role === "admin", scope: key.scope };
     }
   }
   const session = await auth();
@@ -32,7 +52,7 @@ async function resolveIdentity(
   // inlining sidesteps a wider test-mock surface (every test that
   // stubs `auth()` would otherwise need to stub isAdmin too).
   const role = (session as { user?: { role?: string } } | null)?.user?.role;
-  return { isAdmin: role === "admin" };
+  return { isAdmin: role === "admin", scope: null };
 }
 
 /** Wraps a Next.js route handler with the session check that every
@@ -66,6 +86,15 @@ export function withAuth<TCtx = unknown>(
     const id = await resolveIdentity(request);
     if (!id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (
+      request &&
+      !checkScope(id.scope, new URL(request.url).pathname)
+    ) {
+      return NextResponse.json(
+        { error: "Scope does not permit this endpoint" },
+        { status: 403 },
+      );
     }
     return handler(request, ctx);
   };
@@ -123,6 +152,15 @@ export function withAdminAuth<TCtx = unknown>(
     if (!id.isAdmin) {
       return NextResponse.json(
         { error: "Admin role required" },
+        { status: 403 },
+      );
+    }
+    if (
+      request &&
+      !checkScope(id.scope, new URL(request.url).pathname)
+    ) {
+      return NextResponse.json(
+        { error: "Scope does not permit this endpoint" },
         { status: 403 },
       );
     }

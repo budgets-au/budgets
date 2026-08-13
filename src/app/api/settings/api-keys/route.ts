@@ -9,7 +9,7 @@ import { generateApiKey, hashApiKey } from "@/lib/api/api-key";
 
 /** GET — list API keys as METADATA ONLY. The plaintext key is
  *  never stored, so the operator can only see it at creation
- *  time; this list surfaces `id / name / role / createdAt /
+ *  time; this list surfaces `id / name / role / scope / createdAt /
  *  lastUsedAt` so keys are recognisable and revoke-able. */
 export const GET = withAdminAuth(async () => {
   const rows = await db
@@ -17,6 +17,7 @@ export const GET = withAdminAuth(async () => {
       id: apiKeys.id,
       name: apiKeys.name,
       role: apiKeys.role,
+      scope: apiKeys.scope,
       createdAt: apiKeys.createdAt,
       lastUsedAt: apiKeys.lastUsedAt,
     })
@@ -28,6 +29,7 @@ export const GET = withAdminAuth(async () => {
 const createSchema = z.object({
   name: z.string().trim().min(1).max(64),
   role: z.enum(["admin", "member"]).default("admin"),
+  scope: z.enum(["full", "ops"]).default("full"),
 });
 
 /** POST — mint a fresh key. The RESPONSE INCLUDES the plaintext
@@ -37,7 +39,7 @@ const createSchema = z.object({
 export const POST = withAdminAuth(async (request) => {
   const parsed = await parseJsonBody(request, createSchema);
   if (!parsed.ok) return parsed.response;
-  const { name, role } = parsed.data;
+  const { name, role, scope } = parsed.data;
 
   const plaintext = generateApiKey();
   const [row] = await db
@@ -45,12 +47,14 @@ export const POST = withAdminAuth(async (request) => {
     .values({
       name,
       role,
+      scope,
       keyHash: hashApiKey(plaintext),
     })
     .returning({
       id: apiKeys.id,
       name: apiKeys.name,
       role: apiKeys.role,
+      scope: apiKeys.scope,
       createdAt: apiKeys.createdAt,
     });
   return NextResponse.json({ ...row, key: plaintext }, { status: 201 });

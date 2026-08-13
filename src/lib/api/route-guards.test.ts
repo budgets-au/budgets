@@ -14,10 +14,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   session: null as { user?: { role?: string } } | null,
   isAdminResult: false,
+  // Bearer path: set to `null` for no bearer, or `{ role, scope }`
+  // for a valid one. Ignored when no `authorization: bearer` header
+  // is present on the request.
+  bearerResult: null as
+    | { id: string; role: string; scope: string }
+    | null,
 }));
 
 vi.mock("@/lib/auth", () => ({
   auth: () => Promise.resolve(mocks.session),
+}));
+
+vi.mock("./api-key", () => ({
+  readBearerToken: (r: Request) => {
+    const h = r.headers.get("authorization");
+    if (!h) return null;
+    const [scheme, ...rest] = h.split(" ");
+    if (scheme.toLowerCase() !== "bearer" || rest.length === 0) return null;
+    return rest.join(" ").trim() || null;
+  },
+  verifyBearer: async () => mocks.bearerResult,
 }));
 
 // Imports AFTER the mock so they pick up the stubbed module.
@@ -34,7 +51,16 @@ const validUuid = "123e4567-e89b-12d3-a456-426614174000";
 beforeEach(() => {
   mocks.session = null;
   mocks.isAdminResult = false;
+  mocks.bearerResult = null;
 });
+
+/** Build a request that carries a Bearer token so the guard's
+ *  bearer-path fires. Body of the token is opaque — the mock
+ *  `verifyBearer` returns whatever `mocks.bearerResult` is. */
+const opsReq = (path: string) =>
+  new Request(`http://test.local${path}`, {
+    headers: { authorization: "Bearer bk_test" },
+  });
 
 describe("withAuth", () => {
   it("returns 401 when no session", async () => {
@@ -57,6 +83,54 @@ describe("withAuth", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("ops-scoped bearer → 200 on allowlisted path", async () => {
+    mocks.bearerResult = { id: "k1", role: "admin", scope: "ops" };
+    const { NextResponse } = await import("next/server");
+    const handler = vi
+      .fn()
+      .mockImplementation(async () => NextResponse.json({ ok: true }));
+    const wrapped = withAuth(handler);
+    const res = await wrapped(opsReq("/api/health"), {});
+    expect(res.status).toBe(200);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("ops-scoped bearer → 403 on non-allowlisted path", async () => {
+    mocks.bearerResult = { id: "k1", role: "admin", scope: "ops" };
+    const handler = vi.fn();
+    const wrapped = withAuth(handler);
+    const res = await wrapped(opsReq("/api/accounts"), {});
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: "Scope does not permit this endpoint",
+    });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("full-scoped bearer → 200 on any path", async () => {
+    mocks.bearerResult = { id: "k1", role: "admin", scope: "full" };
+    const { NextResponse } = await import("next/server");
+    const handler = vi
+      .fn()
+      .mockImplementation(async () => NextResponse.json({ ok: true }));
+    const wrapped = withAuth(handler);
+    const res = await wrapped(opsReq("/api/accounts"), {});
+    expect(res.status).toBe(200);
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("invalid bearer → 401, does NOT fall back to session", async () => {
+    // Even a valid session is ignored when a bearer is presented:
+    // the request has committed to the API-key flow.
+    mocks.bearerResult = null;
+    mocks.session = { user: { role: "admin" } };
+    const handler = vi.fn();
+    const wrapped = withAuth(handler);
+    const res = await wrapped(opsReq("/api/health"), {});
+    expect(res.status).toBe(401);
+    expect(handler).not.toHaveBeenCalled();
   });
 });
 

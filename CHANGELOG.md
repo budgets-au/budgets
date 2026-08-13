@@ -393,6 +393,51 @@ rather than actioned:
   nullish cases are now covered explicitly.
 - pages-smoke 12/12 green.
 
+## 0.334.0 — 2026-08-14
+
+### Added
+- **Per-key API scopes.** API keys minted from Settings →
+  Security → API keys now carry a `scope`:
+  - **Full access (`full`)** — default. Access to every route the
+    key's role permits (matches every pre-0.334 key implicitly).
+  - **Ops (`ops`)** — restricted to a small allowlist of
+    non-sensitive operational endpoints: `/api/health`,
+    `/api/logs`, `/api/version-check`, `/api/github-stats`, and
+    `/api/openapi.json`. Perfect for handing to an assistant / a
+    Home Assistant integration / any consumer that only needs
+    infrastructure telemetry.
+  - A hard 403 with `{"error":"Scope does not permit this
+    endpoint"}` on any other path. Session-authed humans are
+    unaffected (unrestricted).
+  - The panel row shows an amber `ops` badge next to scoped keys.
+- **`GET /api/health`** — service version, uptime, `dbUnlocked`,
+  active profile, memory, node version. No financial data.
+- **`GET /api/logs`** — reads from a new in-process ring buffer
+  (max 1000 lines, memory-only) that captures every
+  `console.log|info|warn|error|debug` call. Query with
+  `?limit=N&level=warn,error`. Documented privacy caveat: don't
+  `console.log` sensitive strings (transactions / payees) — the
+  buffer is exposed to any authorised bearer.
+- **API documentation** at `/docs/api`. Scalar-rendered interactive
+  reference generated from Zod schemas via
+  `@asteasolutions/zod-to-openapi`. Under the hood, spec served at
+  `GET /api/openapi.json` (also in the ops allowlist so a scoped
+  consumer can programmatically discover). v1 documents the ~15
+  most useful endpoints (auth, ops, core reads); the rest still
+  work, get added over time.
+
+### Schema
+- **Migration `0019_api_keys_scope`.** Adds `api_keys.scope TEXT
+  NOT NULL DEFAULT 'full'`. Existing rows inherit `full` — no
+  behavioural change for old keys.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- Unit + integration: 751/761 pass (+10 vs 0.333 — 5 log-buffer,
+  4 guard-scope, 1 other).
+- E2E smoke: 16/16 green (`pages-smoke` × 12 +
+  `proxy-auth-dispatch` × 4).
+
 ## 0.333.0 — 2026-08-14
 
 ### Added

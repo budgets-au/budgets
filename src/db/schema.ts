@@ -62,6 +62,13 @@ export const apiKeys = sqliteTable(
      * the withAuth guards can gate off admin scope the same way
      * they do for session-authenticated requests. */
     role: text("role").notNull().default("member"), // admin | member
+    /** Capability scope. `full` = the key can hit every route its
+     * `role` allows (default, and every pre-0.334 key implicitly).
+     * `ops` = restricted to the OPS_ALLOWLIST in route-guards.ts
+     * (health, logs, version-check, github-stats, openapi.json).
+     * More scopes get added by widening that allowlist — one TEXT
+     * column is enough. */
+    scope: text("scope").notNull().default("full"), // full | ops
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .$defaultFn(() => new Date()),

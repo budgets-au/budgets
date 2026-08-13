@@ -13,9 +13,16 @@ interface KeyRow {
   id: string;
   name: string;
   role: "admin" | "member";
+  scope: "full" | "ops";
   createdAt: string;
   lastUsedAt: string | null;
 }
+
+type Scope = KeyRow["scope"];
+const SCOPE_LABEL: Record<Scope, string> = {
+  full: "Full access",
+  ops: "Ops (health + logs + version)",
+};
 
 /** Settings → Security → API keys. Admin-only surface for minting
  *  and revoking long-lived Bearer tokens for programmatic access.
@@ -35,6 +42,7 @@ export function ApiKeysPanel() {
     "/api/settings/api-keys",
   );
   const [name, setName] = useState("");
+  const [scope, setScope] = useState<Scope>("full");
   const [creating, setCreating] = useState(false);
   const [justCreated, setJustCreated] = useState<{
     name: string;
@@ -53,7 +61,7 @@ export function ApiKeysPanel() {
       const res = await fetch("/api/settings/api-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed, role: "admin" }),
+        body: JSON.stringify({ name: trimmed, role: "admin", scope }),
       });
       if (!res.ok) {
         toast.error("Failed to mint key");
@@ -119,7 +127,7 @@ export function ApiKeysPanel() {
             — keep them treated as passphrases. Revoked keys stop working
             immediately.
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="text"
               value={name}
@@ -128,10 +136,23 @@ export function ApiKeysPanel() {
                 if (e.key === "Enter") void create();
               }}
               placeholder="Label (e.g. home assistant)"
-              className="flex-1 rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="flex-1 min-w-40 rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               disabled={creating}
               maxLength={64}
             />
+            <select
+              value={scope}
+              onChange={(e) => setScope(e.target.value as Scope)}
+              disabled={creating}
+              className="rounded-md border bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              aria-label="Scope"
+            >
+              {(Object.keys(SCOPE_LABEL) as Scope[]).map((s) => (
+                <option key={s} value={s}>
+                  {SCOPE_LABEL[s]}
+                </option>
+              ))}
+            </select>
             <Button
               type="button"
               size="sm"
@@ -193,7 +214,14 @@ export function ApiKeysPanel() {
               className="flex items-start justify-between gap-3 px-4 py-3"
             >
               <div className="flex-1 min-w-0 space-y-0.5">
-                <p className="text-sm font-medium truncate">{row.name}</p>
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="text-sm font-medium truncate">{row.name}</p>
+                  {row.scope === "ops" && (
+                    <span className="shrink-0 inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                      ops
+                    </span>
+                  )}
+                </div>
                 <p className="text-[11px] text-muted-foreground">
                   Created {formatDate(row.createdAt)} · last used{" "}
                   {row.lastUsedAt ? formatDate(row.lastUsedAt) : "never"}

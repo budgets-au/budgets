@@ -6,6 +6,13 @@ import { dirname, join, resolve } from "node:path";
 import type BetterSqlite3 from "better-sqlite3";
 import { hashSync } from "bcryptjs";
 import { eq } from "drizzle-orm";
+// Side-effect import: patches console.* so every log line is
+// captured in the in-process ring buffer served by /api/logs.
+// Landing this in the db module — reached by every unlock /
+// migrate path — guarantees the hook runs before the first
+// request handler mints a message worth capturing.
+import { installConsoleHooks } from "@/lib/log-buffer";
+installConsoleHooks();
 import * as schema from "./schema";
 import {
   accounts,

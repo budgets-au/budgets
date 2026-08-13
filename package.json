@@ -22,7 +22,9 @@
     "docker:release": "node scripts/docker-release.mjs"
   },
   "dependencies": {
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
     "@base-ui/react": "^1.7.0",
+    "@scalar/api-reference-react": "^0.9.62",
     "@types/better-sqlite3": "^7.6.13",
     "@types/react-grid-layout": "^1.3.6",
     "bcryptjs": "^3.0.3",

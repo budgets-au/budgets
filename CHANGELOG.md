@@ -9,6 +9,100 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.328.0 — 2026-08-14
+
+Third of four UI-consistency releases — page chrome and tables —
+plus three Cashflow-report fixes reported during review.
+
+### Fixed
+- **Cashflow's frozen category column was painted over by the
+  data cells.** All nine sticky first-column cells had no
+  `z-index` while the `thead` cells had `z-10`/`z-30`, so during
+  horizontal scroll the unpositioned numeric cells rendered on
+  top of the frozen column. Two of those cells were also
+  semi-transparent (`bg-muted/30`, `bg-muted/40`), so content
+  bled through even where paint order was right. All nine now
+  carry `z-10` and an opaque background.
+- **The 15-tab report strip is now a grouped dropdown at the
+  right of the filter bar.** Fifteen triggers in a row overflowed
+  the content width, putting a horizontal scrollbar on the whole
+  page that fought the report tables' own horizontal scroll — two
+  scrollbars competing for the same gesture. Removing the strip
+  also reclaims ~40px of vertical chrome, which brings the page
+  height back under the viewport so the tables' bounded scroll is
+  the only vertical scroller. Options are grouped (Overview /
+  By category / Accounts & flow / Detail) so fifteen entries stay
+  scannable. `REPORT_TABS` is now derived from the group
+  definition, so the URL-validation list can't drift from what
+  the picker offers. Deep links (`/reports?tab=sankey`) are
+  unchanged.
+
+### Added
+- **`ui/filter-bar.tsx`** — the app's one sticky filter strip,
+  extracted from the identical class string in the Cashflow and
+  Category reports and rolled out to Transactions and Reports.
+  Replaces three unrelated families (this one, a non-sticky
+  inline flex row, and a `CardHeader` variant on Scheduled).
+  - `sticky` is opt-out, because two strips at `top-14` overlap.
+    On /transactions the bulk-selection bar owns that slot (it
+    appears contextually and you need it while selecting), and on
+    /reports the active tab's own filter bar owns it. Those pages
+    still take the shared chrome — edge-to-edge background,
+    bottom border, padding rhythm — without the pinning.
+- **`ui/table-scroller.tsx`** — the viewport-bounded scroll
+  container from 0.319, extracted and rolled out. Solves three
+  things together: the horizontal scrollbar stays reachable
+  instead of sitting below the fold; `sticky top-0` on a `thead`
+  actually works (sticky resolves against the nearest scroll
+  container, and an unbounded one scrolls away with the page);
+  and every bounded table shares one offset.
+  - Applied to **six** tables, in priority order:
+    `accounts-cashflow-report` (had a sticky first column but no
+    sticky header and no bound — the half-migration that reads as
+    broken on a long window), `transactions-view` (longest list
+    in the app, previously no sticky header at all),
+    `cashflow-report`, `category-report`, `yoy-report`,
+    `envelope-report`.
+  - `--cashflow-chrome` renamed to **`--table-chrome`** now that
+    it's shared rather than cashflow-specific.
+- **`ui/back-link.tsx`** — up-navigation for detail routes.
+  `/scheduled/[id]` and `/accounts/[id]` had no way out except
+  the sidebar, since the Topbar shows the record's own name.
+  Deliberately a small muted link rather than a breadcrumb trail:
+  the hierarchy is only ever list → record.
+
+### Changed
+- **Topbar titles are consistently Title Case.** "Import
+  transactions" → "Import Transactions", "Change passphrase" →
+  "Change Passphrase". Everything else already matched.
+- **Removed six inert `space-y-0` overrides** from dashboard
+  `CardHeader`s. Left over from when the primitive was a flex
+  container; it's been a grid since, so the class did nothing.
+
+### Audit notes
+One planned item was investigated and **dropped**: normalising
+the settings panels' raw `<h2 className="font-medium">` onto
+`CardTitle`. Those panels don't use the `Card` primitive at all —
+they hand-roll `rounded-xl border bg-card` — and all 19 use an
+identical heading class, so that surface is internally
+consistent. Converting it is a refactor of a distinct surface
+class (dense admin list vs data card), not a consistency fix, and
+it carries real regression risk in the `divide-y` layouts.
+
+### Known issue
+`monkey: Scheduled` in the exploratory crawl times out at 120s.
+Verified pre-existing by stashing this release and reproducing on
+0.327.0 — it's state-dependent (the crawl runs after
+monkey-goals populates the DB, and the persisted app-map accrues
+across runs, so that page's control surface grows). Not a
+regression from this release. The other 24 crawl tests pass.
+
+### Verified
+- tsc clean, `pnpm build` clean, 733/743 unit.
+- pages-smoke 12/12, reports-tabs 15/15 (all report tabs still
+  render after the tab-strip removal — that spec navigates by
+  URL, not by clicking triggers).
+
 ## 0.327.0 — 2026-08-14
 
 Second of four UI-consistency releases. This is the "one source of

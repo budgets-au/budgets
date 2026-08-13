@@ -19,9 +19,19 @@ import {
   Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FilterBar } from "@/components/ui/filter-bar";
 import { ChevronDown } from "lucide-react";
 import { MONEY_NEGATIVE_CLASS, MONEY_POSITIVE_CLASS, amountClass, formatAUD } from "@/lib/utils";
 import {
@@ -182,24 +192,58 @@ interface MonthRow {
   net: string;
 }
 
-const REPORT_TABS = [
-  "cashflow",
-  "category",
-  "monthly",
-  "yoy",
-  "expenses",
-  "income",
-  "envelope",
-  "accounts",
-  "flow",
-  "sankey",
-  "treemap",
-  "heatmap",
-  "scatter",
-  "payees",
-  "tax",
+/** The report picker's options, grouped so a 15-item dropdown stays
+ *  scannable. Order and labels match what the old tab strip showed;
+ *  the grouping is new and purely presentational. `REPORT_TABS` is
+ *  derived from this so the URL-validation list can't drift out of
+ *  sync with what the picker offers. */
+const REPORT_GROUPS = [
+  {
+    label: "Overview",
+    items: [
+      { value: "cashflow", label: "Cash Flow" },
+      { value: "category", label: "Category" },
+      { value: "monthly", label: "Monthly" },
+      { value: "yoy", label: "Year over Year" },
+    ],
+  },
+  {
+    label: "By category",
+    items: [
+      { value: "expenses", label: "Expenses by Category" },
+      { value: "income", label: "Income by Category" },
+      { value: "envelope", label: "Envelope" },
+      { value: "treemap", label: "Treemap" },
+      { value: "heatmap", label: "Heatmap" },
+    ],
+  },
+  {
+    label: "Accounts & flow",
+    items: [
+      { value: "accounts", label: "Accounts" },
+      { value: "flow", label: "Flow" },
+      { value: "sankey", label: "Sankey" },
+    ],
+  },
+  {
+    label: "Detail",
+    items: [
+      { value: "scatter", label: "Scatter" },
+      { value: "payees", label: "Payees" },
+      { value: "tax", label: "Tax Deductions" },
+    ],
+  },
 ] as const;
-type ReportTab = (typeof REPORT_TABS)[number];
+
+const REPORT_TABS = REPORT_GROUPS.flatMap((g) =>
+  g.items.map((i) => i.value),
+);
+type ReportTab = (typeof REPORT_GROUPS)[number]["items"][number]["value"];
+
+/** Flat value → label lookup for the trigger's display text. */
+const REPORT_LABELS = new Map<string, string>(
+  REPORT_GROUPS.flatMap((g) => g.items.map((i) => [i.value, i.label])),
+);
 
 function isReportTab(value: string | null): value is ReportTab {
   return value !== null && (REPORT_TABS as readonly string[]).includes(value);
@@ -307,8 +351,11 @@ export function ReportsView({
 
   return (
     <div className="space-y-6">
-      {/* Date range filter */}
-      <div data-print-hide className="flex flex-wrap gap-3 items-center">
+      {/* Date range filter. Not sticky: the active tab's own filter
+          bar (Cashflow, Category) owns the `top-14` slot, and its
+          toggles are what you adjust mid-scroll. This row is set
+          once per visit. */}
+      <FilterBar sticky={false} align="start">
         <div>
           <label className="text-xs text-muted-foreground block mb-1">From</label>
           <input
@@ -351,26 +398,44 @@ export function ReportsView({
             0.170 — it's the same place every page exposes its
             top-level actions, and lets the per-report bodies stop
             sprouting their own duplicate Print buttons. */}
-      </div>
+
+        {/* Report picker, right-aligned via `ml-auto`. Replaces the
+            15-trigger tab strip that used to sit below this bar and
+            overflow the page width. Grouped so 15 options stay
+            scannable. */}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Report</span>
+          <Select
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v ?? "cashflow")}
+          >
+            <SelectTrigger className="h-8 min-w-52 text-xs">
+              <SelectValue>{REPORT_LABELS.get(activeTab)}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {REPORT_GROUPS.map((g) => (
+                <SelectGroup key={g.label}>
+                  <SelectLabel>{g.label}</SelectLabel>
+                  {g.items.map((i) => (
+                    <SelectItem key={i.value} value={i.value}>
+                      {i.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </FilterBar>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList data-print-hide>
-          <TabsTrigger value="cashflow">Cash Flow</TabsTrigger>
-          <TabsTrigger value="category">Category</TabsTrigger>
-          <TabsTrigger value="monthly">Monthly</TabsTrigger>
-          <TabsTrigger value="yoy">Year over Year</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses by Category</TabsTrigger>
-          <TabsTrigger value="income">Income by Category</TabsTrigger>
-          <TabsTrigger value="envelope">Envelope</TabsTrigger>
-          <TabsTrigger value="accounts">Accounts</TabsTrigger>
-          <TabsTrigger value="flow">Flow</TabsTrigger>
-          <TabsTrigger value="sankey">Sankey</TabsTrigger>
-          <TabsTrigger value="treemap">Treemap</TabsTrigger>
-          <TabsTrigger value="heatmap">Heatmap</TabsTrigger>
-          <TabsTrigger value="scatter">Scatter</TabsTrigger>
-          <TabsTrigger value="payees">Payees</TabsTrigger>
-          <TabsTrigger value="tax">Tax Deductions</TabsTrigger>
-        </TabsList>
+        {/* No TabsList. Fifteen triggers in a row overflowed the
+            content width, which put a horizontal scrollbar on the
+            whole page and fought the report tables' own horizontal
+            scroll. The picker now lives at the right of the filter
+            bar above (see REPORT_GROUPS). `Tabs` still owns the
+            switching — TabsContent reads the active value from
+            context, so dropping the list costs nothing. */}
 
         {/* Cash Flow Report */}
         <TabsContent value="cashflow">

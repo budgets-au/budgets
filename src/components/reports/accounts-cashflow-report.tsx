@@ -5,6 +5,7 @@ import { useSwrJson } from "@/hooks/use-swr-json";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { TableScroller } from "@/components/ui/table-scroller";
 import { Button } from "@/components/ui/button";
 import type { AccountsCashflowReport } from "@/app/api/reports/accounts-cashflow/route";
 import {
@@ -201,22 +202,29 @@ export function AccountsCashflowReport({
                 to the global profile chip) — no second one here. */}
           </div>
         </div>
-        <div className="overflow-x-auto">
+        {/* This table had a sticky left column but no sticky header
+            and no height bound — the half-migration that reads as
+            broken once the window is more than a screen tall. Now
+            uses the shared bounded scroller so both axes stick.
+            `z-30` on the corner cell so it stays above the other
+            `sticky top-0` headers (z-20) and the sticky body cells
+            (z-10) during a two-axis scroll. */}
+        <TableScroller>
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
-                <th className="px-3 py-2 text-left font-medium sticky left-0 bg-muted/40 z-10">
+                <th className="px-3 py-2 text-left font-medium sticky top-0 left-0 bg-muted/40 z-30">
                   Account / Metric
                 </th>
                 {months.map((m) => (
                   <th
                     key={m}
-                    className="px-3 py-2 text-right font-medium tabular-nums"
+                    className="px-3 py-2 text-right font-medium tabular-nums sticky top-0 bg-muted/40 z-20"
                   >
                     {monthLabel(m)}
                   </th>
                 ))}
-                <th className="px-3 py-2 text-right font-medium border-l">
+                <th className="px-3 py-2 text-right font-medium border-l sticky top-0 bg-muted/40 z-20">
                   Total
                 </th>
               </tr>
@@ -432,7 +440,7 @@ export function AccountsCashflowReport({
               />
             </tfoot>
           </table>
-        </div>
+        </TableScroller>
       </CardContent>
       <AccountsCellDialog
         query={cellQuery}

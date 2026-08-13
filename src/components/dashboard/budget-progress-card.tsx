@@ -113,7 +113,7 @@ export function BudgetProgressCard() {
 
   return (
     <Card data-size="sm" className="h-full flex flex-col">
-      <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0 shrink-0">
+      <CardHeader className="pb-1 flex flex-row items-center justify-between shrink-0">
         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
           <Target className="h-3.5 w-3.5" />
           Budget progress

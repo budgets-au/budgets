@@ -6,6 +6,8 @@ import { format, parseISO, endOfMonth } from "date-fns";
 import { Eye, EyeOff, ChevronUp, ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { TableScroller } from "@/components/ui/table-scroller";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { amountClass, formatAUDShort } from "@/lib/utils";
@@ -179,10 +181,9 @@ export function CategoryReport({
 
   return (
     <div className="space-y-3 print-landscape">
-      {/* Sticky filter bar — page-width matched to the table below
-          so both share the same responsive spine. */}
-      <div className="sticky top-14 z-10 -mx-4 lg:-mx-6 px-4 lg:px-6 py-2 bg-background border-b print:hidden print:static">
-        <div className="max-w-3xl mx-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+      {/* `innerClassName` matches the table's `max-w-3xl mx-auto`
+          below so the bar and the table share one responsive spine. */}
+      <FilterBar align="end" innerClassName="max-w-3xl mx-auto">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Avg</span>
             <Switch
@@ -223,8 +224,7 @@ export function CategoryReport({
               />
             </label>
           )}
-        </div>
-      </div>
+      </FilterBar>
 
       {/* Page-width table. max-w-3xl (~768px) is enough for the
           Category name column + the numeric endcaps; on narrow
@@ -232,10 +232,7 @@ export function CategoryReport({
           shrink cleanly. Bounded max-height means the sticky
           thead has something to anchor against while rows
           scroll. */}
-      <div
-        className="max-w-3xl mx-auto rounded-lg border overflow-auto overscroll-contain print:overflow-visible print:max-h-none max-h-[calc(100dvh-var(--cashflow-chrome,180px))]"
-        style={{ scrollbarGutter: "stable" }}
-      >
+      <TableScroller maxWidth="max-w-3xl" className="mx-auto">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="bg-muted">
@@ -397,7 +394,7 @@ export function CategoryReport({
             )}
           </tbody>
         </table>
-      </div>
+      </TableScroller>
 
       <CashflowCellDialog
         query={cellQuery}

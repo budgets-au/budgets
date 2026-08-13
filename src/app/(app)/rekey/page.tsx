@@ -56,7 +56,7 @@ export default function RekeyPage() {
 
   return (
     <div>
-      <Topbar title="Change passphrase" />
+      <Topbar title="Change Passphrase" />
       <div className="mx-auto max-w-md p-4 lg:p-6">
         <Card>
           <CardContent className="space-y-4 p-6">

@@ -190,7 +190,7 @@ export function ForwardBalanceCard({
   // no-op — the default scale is what it rendered at all along.
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader className="pb-1 shrink-0 flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="pb-1 shrink-0 flex flex-row items-center justify-between">
         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
           <CalendarClock className="h-3.5 w-3.5" />
           Forward balance · {PERIOD_LABELS[period]}

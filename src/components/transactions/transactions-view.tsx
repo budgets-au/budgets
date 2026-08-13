@@ -14,6 +14,8 @@ import type { ScheduledTransaction } from "@/db/schema";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { TableScroller } from "@/components/ui/table-scroller";
 import { formatAUD, amountClass, diffDaysISO, cn } from "@/lib/utils";
 import { buildCategoryMeta } from "@/lib/category-path";
 import type { Category } from "@/db/schema";
@@ -571,7 +573,12 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
 
   return (
     <>
-      <div className="flex items-start gap-3 flex-wrap">
+      {/* Not sticky: the bulk-selection bar below owns the `top-14`
+          slot on this page (it appears contextually and you need it
+          reachable while scrolling and selecting). The filters still
+          adopt the shared bar chrome so the page reads like its
+          siblings. */}
+      <FilterBar sticky={false} align="start">
         <TransactionFilters
           accounts={accounts}
           categories={categories}
@@ -588,7 +595,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
             direction,
           }}
         />
-      </div>
+      </FilterBar>
 
       <TransferSuggestionsPanel onChanged={() => mutateTxns()} />
 
@@ -713,10 +720,17 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
               </p>
             ) : (
               <>
-            <div className="overflow-x-auto">
+            {/* Longest list in the app — bounded so the header stays
+                put while you scroll. `rounded-none border-0` because
+                this sits inside a Card that already owns the border;
+                without it you get a double frame. The `[&>th]:sticky`
+                group applies to every header cell at once: sticky on
+                the `<tr>` alone doesn't work under
+                `border-collapse`. */}
+            <TableScroller className="rounded-none border-0">
               <table className="w-full text-sm border-collapse">
                 <thead>
-                  <tr className="border-b bg-muted/50 text-xs text-muted-foreground font-medium">
+                  <tr className="border-b bg-muted/50 text-xs text-muted-foreground font-medium [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-muted/50">
                     <th className="px-2 py-2 w-[32px]">
                       <input
                         ref={headerCheckboxRef}
@@ -864,7 +878,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
                   })}
                 </tbody>
               </table>
-            </div>
+            </TableScroller>
             {(() => {
               const total = countData?.total ?? null;
               const totalPages = total != null ? Math.max(1, Math.ceil(total / pageSize)) : null;

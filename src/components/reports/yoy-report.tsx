@@ -12,6 +12,7 @@ import {
   Minus,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TableScroller } from "@/components/ui/table-scroller";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -396,10 +397,10 @@ export function YoYReport({
             No category activity in either year for the current selection.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <TableScroller className="rounded-none border-0">
             <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-muted/40">
                   <th className="text-left px-3 py-2 font-medium">Category</th>
                   <th className="text-right px-3 py-2 font-medium">
                     {lastFY.label}
@@ -477,7 +478,7 @@ export function YoYReport({
                 })}
               </tbody>
             </table>
-          </div>
+          </TableScroller>
         )}
       </CardContent>
     </Card>

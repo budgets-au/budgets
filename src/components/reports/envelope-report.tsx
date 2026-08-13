@@ -5,6 +5,7 @@ import { useSwrJson } from "@/hooks/use-swr-json";
 import { differenceInDays, parseISO } from "date-fns";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { TableScroller } from "@/components/ui/table-scroller";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -520,10 +521,10 @@ export function EnvelopeReport({
                 : "No income or expenses in this period."}
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <TableScroller className="rounded-none border-0">
             <table className="w-full text-sm border-collapse">
               <thead>
-                <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-muted/40">
                   <SortableTh
                     align="left"
                     label="Category"
@@ -664,7 +665,7 @@ export function EnvelopeReport({
                 </tfoot>
               )}
             </table>
-          </div>
+          </TableScroller>
         )}
       </CardContent>
     </Card>

@@ -8,6 +8,8 @@ import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight, Eye, EyeOff, Plus, Tag } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { TableScroller } from "@/components/ui/table-scroller";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { numFmt } from "@/lib/utils";
 import type { CashflowReport as CashflowData, CashflowCategory } from "@/app/api/reports/cashflow/route";
@@ -443,7 +445,7 @@ function SectionHeader({ label, cols }: { label: string; cols: number }) {
     <tr>
       <td
         colSpan={cols}
-        className="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/40 sticky left-0"
+        className="px-3 pt-4 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted sticky left-0 z-10"
       >
         {label}
       </td>
@@ -891,7 +893,7 @@ function ParentHeaderRow({
       className={`group border-b ${grandparent ? "border-border bg-muted/30" : "border-border/50"} ${onToggle ? "cursor-pointer" : ""} ${isHidden ? "opacity-50" : ""}`}
       onClick={onToggle}
     >
-      <td className={`px-3 py-1.5 text-sm sticky left-0 whitespace-nowrap ${grandparent ? `font-semibold bg-muted/30 ${nameColor}` : `font-medium bg-background ${nameColor}`}`}>
+      <td className={`px-3 py-1.5 text-sm sticky left-0 z-10 whitespace-nowrap ${grandparent ? `font-semibold bg-muted ${nameColor}` : `font-medium bg-background ${nameColor}`}`}>
         <span className="flex items-center gap-1 min-w-0">
           {onToggle && <Chevron className="h-3 w-3 shrink-0 text-muted-foreground" />}
           {href ? (
@@ -995,7 +997,7 @@ function SubParentHeaderRow({
     : undefined;
   return (
     <tr className={`group border-b border-border/50 ${onToggle ? "cursor-pointer" : ""} ${isHidden ? "opacity-50" : ""}`} onClick={onToggle}>
-      <td className={`pl-9 pr-3 py-1.5 text-sm font-medium sticky left-0 bg-background whitespace-nowrap ${nameColor}`}>
+      <td className={`pl-9 pr-3 py-1.5 text-sm font-medium sticky left-0 z-10 bg-background whitespace-nowrap ${nameColor}`}>
         <span className="flex items-center gap-1 min-w-0">
           {onToggle && <Chevron className="h-3 w-3 shrink-0 text-muted-foreground" />}
           {href ? (
@@ -1076,9 +1078,9 @@ function LeafRow({
     ? <Link href={href} className="text-muted-foreground hover:underline hover:text-foreground transition-colors">{cat.name}</Link>
     : <Link href={href} className="hover:underline hover:text-indigo-600 transition-colors">{cat.name}</Link>;
   const tdClass =
-    indent === "grandchild" ? "pl-16 pr-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap"
-    : indent === "child"    ? "pl-9 pr-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap"
-    :                         "px-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap";
+    indent === "grandchild" ? "pl-16 pr-3 py-1.5 text-sm sticky left-0 z-10 bg-background whitespace-nowrap"
+    : indent === "child"    ? "pl-9 pr-3 py-1.5 text-sm sticky left-0 z-10 bg-background whitespace-nowrap"
+    :                         "px-3 py-1.5 text-sm sticky left-0 z-10 bg-background whitespace-nowrap";
   const open = useCellOpener();
   const openMonth = open
     ? (m: string) => {
@@ -1207,7 +1209,7 @@ function VirtualTagRow({
       <tr
         className={`group hover:bg-muted/30 border-b border-border/50 ${opacity}`}
       >
-        <td className="px-3 py-1.5 text-sm sticky left-0 bg-background whitespace-nowrap">
+        <td className="px-3 py-1.5 text-sm sticky left-0 z-10 bg-background whitespace-nowrap">
           <span className="flex items-center gap-1 min-w-0">
             <span className="truncate font-medium">#{row.tag}</span>
             <button
@@ -1329,7 +1331,7 @@ function VirtualTagMemberRow({
       : undefined;
   return (
     <tr className={`hover:bg-muted/20 border-b border-border/30 text-[11px] ${opacity}`}>
-      <td className="pl-9 pr-3 py-1 sticky left-0 bg-background whitespace-nowrap text-muted-foreground">
+      <td className="pl-9 pr-3 py-1 sticky left-0 z-10 bg-background whitespace-nowrap text-muted-foreground">
         <span className="flex items-baseline gap-1.5 min-w-0">
           <span aria-hidden="true">•</span>
           <span className="truncate">{path}</span>
@@ -1400,7 +1402,7 @@ function TotalsRow({
   const avg = months.length > 0 ? total / months.length : undefined;
   return (
     <tr className="border-t-2 border-border font-semibold">
-      <td className="px-3 py-2 text-sm sticky left-0 bg-muted/40 whitespace-nowrap">{label}</td>
+      <td className="px-3 py-2 text-sm sticky left-0 z-10 bg-muted whitespace-nowrap">{label}</td>
       {opts.monthAxis &&
         months.map((m) => (
           <Fragment key={m}>
@@ -1860,12 +1862,7 @@ export function CashflowReport({
     <TagContext.Provider value={tagCtxValue}>
     <ColOptsContext.Provider value={opts}>
     <div className="space-y-3 print-landscape">
-      {/* Filter bar. Sticky against the app Topbar (h-14 = 56px) so
-          the operator can toggle Plan / Counts / Avg without
-          scrolling back up through a long category list. z-10 keeps
-          it below the Topbar's own z-20; padding tightened + a
-          bottom border give it the "sticky header strip" look. */}
-      <div className="sticky top-14 z-10 -mx-4 lg:-mx-6 px-4 lg:px-6 py-2 bg-background border-b flex items-center justify-between gap-4 print:hidden print:static">
+      <FilterBar>
         {/* Collapse all / Expand all */}
         <button
           onClick={toggleCollapseAll}
@@ -1948,7 +1945,7 @@ export function CashflowReport({
         )}
 
         </div>
-      </div>
+      </FilterBar>
     {/* Inner scroll container so the table's `thead` can sticky to
         the wrapper's top instead of the (already-scrolled-off) page.
         Filters + controls above this stay visible because the page
@@ -1957,24 +1954,9 @@ export function CashflowReport({
         the header row is the inset shadow under each <th> — putting
         the split visually at the BOTTOM of the header cells instead
         of doubling up with a wrapper-border line at the top. */}
-    {/* Scroll wrapper. Bounded max-height by viewport so:
-          (a) the horizontal scrollbar at the bottom of this wrapper
-              stays IN the viewport instead of sitting far below the
-              fold on a long report;
-          (b) the `sticky top-0` on the <thead> below anchors to
-              this wrapper's top — which now sits right underneath
-              the sticky filter bar — so column headers stay
-              visible while the operator scrolls rows.
-          `--cashflow-chrome` defaults to 180px (Topbar 56 + filter
-          bar ~48 + ReportsView date-range ~40 + tabs ~36); exposed
-          as a CSS variable so the value can be tuned without
-          touching JS. Print media ignores the max-h bound so long
-          reports paginate naturally. */}
-    <div
-      className={`relative rounded-lg border overflow-auto overscroll-contain print:overflow-visible print:max-h-none max-h-[calc(100dvh-var(--cashflow-chrome,180px))] ${
-        monthAxis ? "" : "max-w-3xl mx-auto"
-      }`}
-      style={{ scrollbarGutter: "stable" }}
+    <TableScroller
+      maxWidth={monthAxis ? undefined : "max-w-3xl"}
+      className={monthAxis ? undefined : "mx-auto"}
     >
       {/* `w-max` (not `w-full`) so the table takes its natural
           content-driven width. When Plan + Counts are OFF the total
@@ -2121,7 +2103,7 @@ export function CashflowReport({
           )}
         </tbody>
       </table>
-    </div>
+    </TableScroller>
     <CashflowCellDialog
       query={cellQuery}
       accountIds={accountIds}

@@ -3,6 +3,7 @@ import { accounts, transactions, categories } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { Topbar } from "@/components/layout/topbar";
+import { BackLink } from "@/components/ui/back-link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatAUD, formatDate, amountClass } from "@/lib/utils";
 import Link from "next/link";
@@ -45,6 +46,7 @@ export default async function AccountDetailPage({
     <div>
       <Topbar title={account.name} />
       <div className="p-4 lg:p-6 space-y-4">
+        <BackLink href="/accounts">Accounts</BackLink>
         <AccountHeader account={account} />
 
         {/* Transactions */}

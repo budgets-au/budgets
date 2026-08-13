@@ -66,11 +66,10 @@
   --radius: 0.625rem;
   /* Vertical chrome above a viewport-bounded scroll container:
      Topbar (56) + sticky filter bar (~48) + the Reports date-range
-     row (~40) + tab strip (~36). Consumed by the bounded-height
-     table wrappers on the Cashflow / Category reports. Exposed as a
-     token so the offset is tunable in one place instead of being
-     hard-coded per report. */
-  --cashflow-chrome: 180px;
+     row (~40) + tab strip (~36). Consumed by `ui/table-scroller.tsx`
+     so every bounded table shares one offset. Override per page if
+     the real chrome above the table differs. */
+  --table-chrome: 180px;
   /* Cashflow signal colours — used by the calendar day-cell dots and any
      other "money in / money out / money still to come" affordance.
      Single source of truth so light and dark themes stay coordinated

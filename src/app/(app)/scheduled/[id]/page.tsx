@@ -4,6 +4,7 @@ import { eq, asc } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { notFound } from "next/navigation";
 import { Topbar } from "@/components/layout/topbar";
+import { BackLink } from "@/components/ui/back-link";
 import { ScheduledDetail } from "@/components/scheduled/scheduled-detail";
 
 const destAcct = alias(accounts, "dest_acct");
@@ -53,7 +54,8 @@ export default async function ScheduledDetailPage({
   return (
     <div>
       <Topbar title="Scheduled Transaction" />
-      <div className="p-4 lg:p-6 max-w-lg">
+      <div className="p-4 lg:p-6 max-w-lg space-y-3">
+        <BackLink href="/scheduled">Scheduled transactions</BackLink>
         <ScheduledDetail row={row} allAccounts={allAccounts} allCategories={allCategories} />
       </div>
     </div>

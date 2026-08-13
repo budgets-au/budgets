@@ -40,6 +40,40 @@ export const users = sqliteTable("users", {
     .$defaultFn(() => new Date()),
 });
 
+// ─── API keys ─────────────────────────────────────────────────────────────────
+//
+// Long-lived bearer tokens for programmatic access. Presented via the
+// `Authorization: Bearer bk_<...>` header. Storage keeps the SHA-256
+// digest of the plaintext key (the plaintext is shown ONCE at
+// creation and never round-tripped through the DB again). Deleting
+// the row is the revoke operation; there's no soft-delete because a
+// leaked key needs to stop working immediately.
+export const apiKeys = sqliteTable(
+  "api_keys",
+  {
+    id: text("id").primaryKey().$defaultFn(newUuid),
+    /** Human label — the operator picks it at creation ("home
+     * assistant", "budgets-cli"). Not required to be unique. */
+    name: text("name").notNull(),
+    /** Hex SHA-256 of the plaintext key. Lookups compare on this
+     * column; the raw key never touches the DB after creation. */
+    keyHash: text("key_hash").notNull().unique(),
+    /** Role the key authenticates AS. Mirrors the users table so
+     * the withAuth guards can gate off admin scope the same way
+     * they do for session-authenticated requests. */
+    role: text("role").notNull().default("member"), // admin | member
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    /** Wall-clock of the last request that successfully authenticated
+     * with this key — a soft signal for "is this key actually in
+     * use". Updated best-effort by the guard; a couple missed
+     * writes are fine. */
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+  },
+  (t) => [uniqueIndex("api_keys_key_hash_idx").on(t.keyHash)],
+);
+
 // ─── Accounts ─────────────────────────────────────────────────────────────────
 
 export const accounts = sqliteTable(

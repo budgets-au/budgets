@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ApiKeysPanel } from "@/components/settings/api-keys-panel";
 import { KeyRound, Lock, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -220,6 +221,7 @@ export function SettingsTabs() {
 
       <TabsContent value="security" className="space-y-6 max-w-2xl">
         <UserManager />
+        <ApiKeysPanel />
         <SampleDataPanel />
         <OrphanCategoriesPanel />
         <ResetBrowserData />

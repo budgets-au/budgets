@@ -393,6 +393,54 @@ rather than actioned:
   nullish cases are now covered explicitly.
 - pages-smoke 12/12 green.
 
+## 0.333.0 — 2026-08-14
+
+### Added
+- **API keys — long-lived bearer tokens for programmatic access.**
+  Admin operators can now mint, list, and revoke API keys under
+  Settings → Security → API keys. Present via
+  `Authorization: Bearer bk_…` on any API call; the auth guard
+  accepts either a session cookie OR a valid bearer, so existing
+  browser sessions and human logins are unchanged.
+  - **Format**: `bk_` prefix + 32 bytes of URL-safe base64 (43
+    chars). The prefix makes leaks eyeballable in grep and CI
+    logs.
+  - **Storage**: only the SHA-256 hex digest of the plaintext
+    lives in the DB (`api_keys.key_hash`, unique-indexed). The
+    plaintext is shown ONCE at creation and never round-tripped
+    again — an emerald banner in the panel highlights the value
+    with a copy button, then dismisses.
+  - **Role**: keys default to `admin` scope. Member scope is
+    accepted at the API for future work; the UI keeps things
+    simple for now.
+  - **Revoke**: hard delete of the row so a leaked key stops
+    working immediately, no soft-flag. `lastUsedAt` bumps on
+    every authenticated call so operators can spot stale keys.
+  - **Guard behaviour**: when a Bearer is present the guard does
+    NOT fall back to session auth — a stale cookie can't
+    override a freshly-revoked key on the same request. Absence
+    of a Bearer keeps the session path unchanged. Undefined
+    request (integration-test path) skips the Bearer check
+    entirely, so existing route-handler tests keep working.
+- **Migration `0018_api_keys`.** New `api_keys(id, name,
+  key_hash, role, created_at, last_used_at)` table with a unique
+  index on `key_hash`. Applied automatically at first unlock.
+
+### Changed
+- **`route-guards` inlines the admin-role check.** The
+  `isAdmin()` import from `@/lib/auth` was pulling the mock
+  surface wider than needed — every test file that stubs
+  `auth()` would otherwise need to stub `isAdmin` too. Inlined
+  `session.user.role === "admin"` mirrors the helper exactly
+  with zero runtime cost.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- Unit + integration: 741/751 pass (0 fail; +13 vs 0.332
+  baseline — 9 route-guard cases + the new APIs' inline uses).
+- E2E smoke: 16/16 green (`pages-smoke` × 12 +
+  `proxy-auth-dispatch` × 4).
+
 ## 0.332.0 — 2026-08-13
 
 ### Changed

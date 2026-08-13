@@ -3,7 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /** Mock the auth module so each test can flip the "logged in" /
  *  "admin" stubs without spinning up NextAuth. `vi.hoisted` puts the
  *  shared state object above the `vi.mock` factory so the factory's
- *  closure can read it. */
+ *  closure can read it.
+ *
+ *  Note: the admin check inside route-guards is inlined
+ *  (`session.user.role === "admin"`) since the split-out helper
+ *  from @/lib/auth added a mock-surface gotcha for every test file
+ *  that stubs `auth()`. So the `isAdminResult` flag is derived from
+ *  the session's role here — bump the session's `user.role` between
+ *  "member" and "admin" to move through the guard tiers. */
 const mocks = vi.hoisted(() => ({
   session: null as { user?: { role?: string } } | null,
   isAdminResult: false,
@@ -11,7 +18,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/auth", () => ({
   auth: () => Promise.resolve(mocks.session),
-  isAdmin: () => mocks.isAdminResult,
 }));
 
 // Imports AFTER the mock so they pick up the stubbed module.
@@ -116,7 +122,7 @@ describe("withAdminAuth", () => {
 
   it("calls the inner handler when session + admin", async () => {
     mocks.session = { user: { role: "admin" } };
-    mocks.isAdminResult = true;
+    mocks.session = { user: { role: "admin" } };
     const { NextResponse } = await import("next/server");
     const handler = vi
       .fn()
@@ -152,7 +158,7 @@ describe("withAdminAuthAndId", () => {
     expect(res.status).toBe(403);
 
     // Admin but bad id → 400
-    mocks.isAdminResult = true;
+    mocks.session = { user: { role: "admin" } };
     res = await wrapped(fakeReq(), {
       params: Promise.resolve({ id: "not-a-uuid" }),
     });

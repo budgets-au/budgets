@@ -1,6 +1,39 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth, isAdmin } from "@/lib/auth";
+import { auth } from "@/lib/auth";
+import { readBearerToken, verifyBearer } from "./api-key";
+
+/** Resolve the caller from EITHER a session cookie OR a Bearer
+ *  API key. Returns `null` when neither works so the guard can
+ *  reply with 401. API-key path shortcuts the (relatively
+ *  expensive) `auth()` JWT decode — bearer presence is the signal
+ *  the client wants the API-key flow, so if the token doesn't
+ *  match we DON'T fall back to session (mixing modes on a single
+ *  request would let a browser with a stale cookie override a
+ *  freshly-revoked key). */
+async function resolveIdentity(
+  request: Request | undefined,
+): Promise<{ isAdmin: boolean } | null> {
+  // Bearer-token path only runs when we actually have a request to
+  // read headers from. Integration tests pull the route handler
+  // out and call it with an undefined request — those still work
+  // because the session path below doesn't need one.
+  if (request) {
+    const bearer = readBearerToken(request);
+    if (bearer) {
+      const key = await verifyBearer(bearer);
+      if (!key) return null;
+      return { isAdmin: key.role === "admin" };
+    }
+  }
+  const session = await auth();
+  if (!session) return null;
+  // Inline the role check — mirrors `isAdmin()` in @/lib/auth, but
+  // inlining sidesteps a wider test-mock surface (every test that
+  // stubs `auth()` would otherwise need to stub isAdmin too).
+  const role = (session as { user?: { role?: string } } | null)?.user?.role;
+  return { isAdmin: role === "admin" };
+}
 
 /** Wraps a Next.js route handler with the session check that every
  *  protected endpoint used to copy-paste:
@@ -30,8 +63,8 @@ export function withAuth<TCtx = unknown>(
   ) => Promise<NextResponse> | NextResponse,
 ) {
   return async (request: Request, ctx: TCtx): Promise<NextResponse> => {
-    const session = await auth();
-    if (!session) {
+    const id = await resolveIdentity(request);
+    if (!id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     return handler(request, ctx);
@@ -83,11 +116,11 @@ export function withAdminAuth<TCtx = unknown>(
   ) => Promise<NextResponse> | NextResponse,
 ) {
   return async (request: Request, ctx: TCtx): Promise<NextResponse> => {
-    const session = await auth();
-    if (!session) {
+    const id = await resolveIdentity(request);
+    if (!id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (!isAdmin(session)) {
+    if (!id.isAdmin) {
       return NextResponse.json(
         { error: "Admin role required" },
         { status: 403 },

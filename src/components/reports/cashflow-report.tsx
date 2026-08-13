@@ -308,6 +308,7 @@ function AmountCell({
   borderLeft,
   computed,
   compact,
+  signTint,
   onClick,
   trailing,
 }: {
@@ -327,6 +328,15 @@ function AmountCell({
    *  the derived sub-columns read as quieter than the primary
    *  actual amount. */
   compact?: boolean;
+  /** Muted green fill for positive values, muted red for negative.
+   *  Wired on Diff cells so under-plan (positive) reads green and
+   *  over-plan (negative) reads red at a glance without needing to
+   *  parse the sign of the number. The `colHighlight` this-month
+   *  indigo still takes precedence when both apply — signalling
+   *  "this month" beats signalling "under/over" for the current
+   *  column. Zero / undefined get no tint (falls back to the
+   *  `computed` muted background). */
+  signTint?: boolean;
   /** When set and the value is non-zero, the rendered amount becomes a
    * button that opens the cell-drilldown dialog. */
   onClick?: () => void;
@@ -352,14 +362,22 @@ function AmountCell({
   ) : (
     text
   );
+  const signBg =
+    signTint && display !== undefined && display !== 0
+      ? display > 0
+        ? "bg-emerald-500/10 print:bg-transparent"
+        : "bg-rose-500/10 print:bg-transparent"
+      : null;
   return (
     <td
       className={`pl-3 pr-1.5 py-1.5 text-right tabular-nums ${compact ? "text-[11px]" : ""} ${
         colHighlight
           ? "bg-indigo-500/10 print:bg-transparent"
-          : computed
-            ? "bg-muted/40"
-            : ""
+          : signBg
+            ? signBg
+            : computed
+              ? "bg-muted/40"
+              : ""
       } ${borderLeft || computed ? "border-l border-border" : ""} ${colour}`}
     >
       {trailing ? (
@@ -800,6 +818,7 @@ function MonthCells({
                 mode="plain"
                 compact
                 computed
+                signTint
                 colHighlight={m === thisMonth}
               />
             )}
@@ -939,6 +958,7 @@ function ParentHeaderRow({
           mode="plain"
           compact
           computed
+          signTint
         />
       )}
     </tr>
@@ -1041,6 +1061,7 @@ function SubParentHeaderRow({
           mode="plain"
           compact
           computed
+          signTint
         />
       )}
     </tr>
@@ -1144,6 +1165,7 @@ function LeafRow({
           mode="plain"
           compact
           computed
+          signTint
         />
       )}
     </tr>

@@ -393,6 +393,31 @@ rather than actioned:
   nullish cases are now covered explicitly.
 - pages-smoke 12/12 green.
 
+## 0.332.0 — 2026-08-13
+
+### Changed
+- **Cashflow report: Diff column now background-tinted by sign.**
+  Under-plan values (positive Diff — surplus on income, under-
+  spend on expenses) fill their cell with a muted emerald
+  (`bg-emerald-500/10`); over-plan values (negative Diff —
+  shortfall / overspend) fill with a muted rose
+  (`bg-rose-500/10`). Zero / no-plan cells stay on the existing
+  computed-column muted background. Applied to every Diff cell
+  in the table:
+  - Per-month Diff sub-cells (LeafRow / ParentHeaderRow / etc.
+    via `MonthCells`).
+  - Row-end aggregate Diff cells (leaves, sub-parents, and
+    grandparent aggregate rows).
+  - The "this month" indigo cell-highlight still wins when both
+    apply — signalling current-month beats sign for the current
+    column.
+- **Implementation**: new `signTint?: boolean` prop on the
+  shared `AmountCell`. Cheap to add elsewhere (any signed
+  net/delta column can opt in).
+
+### Verified
+- tsc clean, `pnpm build` clean, pages-smoke 12/12 green.
+
 ## 0.331.0 — 2026-08-13
 
 ### Added

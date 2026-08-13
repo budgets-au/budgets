@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { mutate as globalMutate } from "swr";
-import { ArrowLeftRight, BarChart3, Eraser, Loader2, Wrench } from "lucide-react";
+import { ArrowLeftRight, BarChart3, Eraser, Loader2, Power, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { toast } from "sonner";
@@ -31,7 +31,7 @@ import { toast } from "sonner";
 export function MaintenancePanel() {
   const confirm = useConfirm();
   const [running, setRunning] = useState<
-    "backfill" | "reset" | "analyze" | null
+    "backfill" | "reset" | "analyze" | "restart" | null
   >(null);
 
   async function runBackfill() {
@@ -131,6 +131,39 @@ export function MaintenancePanel() {
       const { elapsedMs } = (await res.json()) as { elapsedMs: number };
       toast.success(`Statistics refreshed (${elapsedMs}ms).`);
     } finally {
+      setRunning(null);
+    }
+  }
+
+  async function runRestart() {
+    const ok = await confirm({
+      title: "Restart the server?",
+      description:
+        "Exits the Node process cleanly. The container orchestrator " +
+        "(Docker / podman / k8s) restarts it if a restart policy is set — " +
+        "if not, the container stays stopped. Every live session drops, " +
+        "the SQLCipher key is flushed from memory, and the app is briefly " +
+        "unreachable while the runtime comes back up.",
+      confirmLabel: "Restart",
+      tone: "default",
+    });
+    if (!ok) return;
+    setRunning("restart");
+    try {
+      const res = await fetch("/api/restart", { method: "POST" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.error ?? "Restart failed");
+        return;
+      }
+      toast.success(
+        "Restart signalled. The server will exit in a moment — reconnect once it's back.",
+      );
+      // No spinner clear on success: the process is about to exit
+      // and the tab will lose the API mid-fetch anyway. Leave the
+      // button in its "Restarting…" state until the reload happens.
+    } catch {
+      toast.error("Restart failed — network error before the signal landed.");
       setRunning(null);
     }
   }
@@ -240,6 +273,43 @@ export function MaintenancePanel() {
               <BarChart3 className="mr-1 h-3.5 w-3.5" />
             )}
             {running === "analyze" ? "Analysing…" : "Run ANALYZE"}
+          </Button>
+        </div>
+      </div>
+    </div>
+
+    <div className="rounded-xl border bg-card">
+      <div className="flex items-center gap-2 border-b px-4 py-3">
+        <Power className="h-4 w-4 text-muted-foreground" />
+        <h2 className="font-medium">Server</h2>
+      </div>
+      <div className="divide-y">
+        <div className="flex items-start justify-between gap-3 px-4 py-4">
+          <div className="flex-1 min-w-0 space-y-1">
+            <p className="text-sm font-medium">Restart the server</p>
+            <p className="text-xs text-muted-foreground">
+              Exits the Node process cleanly (`process.exit(0)`) and lets
+              the container orchestrator relaunch it. Requires the
+              container to have a restart policy (Docker: `restart:
+              unless-stopped`) — without one it just stops. Flushes the
+              SQLCipher key from memory; every device is bounced to
+              /unlock until someone re-enters it.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={runRestart}
+            disabled={running !== null}
+            className="shrink-0 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400"
+          >
+            {running === "restart" ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Power className="mr-1 h-3.5 w-3.5" />
+            )}
+            {running === "restart" ? "Restarting…" : "Restart"}
           </Button>
         </div>
       </div>

@@ -393,6 +393,28 @@ rather than actioned:
   nullish cases are now covered explicitly.
 - pages-smoke 12/12 green.
 
+## 0.331.0 — 2026-08-13
+
+### Added
+- **`POST /api/restart` — admin-only server restart endpoint.**
+  Exits the Node process cleanly (`process.exit(0)`) with a 250 ms
+  fudge factor so the JSON response flushes first. The container
+  orchestrator (Docker / podman / k8s) relaunches the container
+  when a restart policy is set — `restart: unless-stopped` on
+  the Docker side is the typical choice. Without a restart policy
+  the container stays stopped; response body documents the
+  expectation. Gated by `withAdminAuth`: a restart drops every
+  live LAN session and flushes the SQLCipher key from memory, so
+  it's not a member-role action.
+- **Settings → Maintenance → Server → Restart button.** New
+  card next to the Transfer / Database sections; confirm-dialog
+  before the POST, spinner stays lit through the exit so the
+  operator sees "Restarting…" until the browser tab loses
+  connection and needs a manual reload.
+
+### Verified
+- tsc clean, `pnpm build` clean, pages-smoke 12/12 green.
+
 ## 0.325.0 — 2026-08-13
 
 ### Added

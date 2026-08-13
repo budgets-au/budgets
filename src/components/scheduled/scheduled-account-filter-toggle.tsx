@@ -1,6 +1,7 @@
 "use client";
 
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 /** Two-way toggle in the Scheduled Transactions topbar that controls
  * whether the page respects the sidebar's account filter.
@@ -17,35 +18,14 @@ export function ScheduledAccountFilterToggle() {
   const { prefs, setPref } = useDisplayPrefs();
   const mode = prefs.scheduledAccountFilterMode;
   return (
-    <div
-      role="radiogroup"
-      aria-label="Scheduled account filter"
-      className="flex rounded-md border overflow-hidden text-xs"
-    >
-      {(
-        [
-          { value: "all", label: "All accounts" },
-          { value: "selected", label: "Selected accounts" },
-        ] as const
-      ).map((opt) => {
-        const active = mode === opt.value;
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            onClick={() => setPref("scheduledAccountFilterMode", opt.value)}
-            className={`px-2.5 py-1 transition-colors ${
-              active
-                ? "bg-indigo-600 text-white font-medium"
-                : "bg-background text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
+    <SegmentedControl
+      ariaLabel="Scheduled account filter"
+      value={mode}
+      onChange={(v) => setPref("scheduledAccountFilterMode", v)}
+      options={[
+        { value: "all", label: "All accounts" },
+        { value: "selected", label: "Selected accounts" },
+      ]}
+    />
   );
 }

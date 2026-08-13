@@ -14,6 +14,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD } from "@/lib/utils";
 import {
@@ -367,22 +368,17 @@ export function YoYReport({
               )}
             </Button>
           )}
-          <div className="flex rounded-md border overflow-hidden text-xs print:hidden">
-            {(["expense", "income", "all"] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setScope(s)}
-                className={`px-2.5 py-1 capitalize transition-colors ${
-                  scope === s
-                    ? "bg-indigo-600 text-white font-medium"
-                    : "bg-background text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {s === "all" ? "Both" : s + "s"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            ariaLabel="Category scope"
+            className="print:hidden"
+            value={scope}
+            onChange={setScope}
+            options={[
+              { value: "expense", label: "Expenses" },
+              { value: "income", label: "Income" },
+              { value: "all", label: "Both" },
+            ]}
+          />
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
             <Switch
               size="sm"

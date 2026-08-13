@@ -83,7 +83,7 @@ test.describe("reports tabs walk (#39)", () => {
         throw new Error(`/reports?tab=${tab} → HTTP ${res.status()}`);
       }
 
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       // Recharts can paint a frame or two after networkidle;
       // 500ms is the same beat pages-smoke uses.
       await page.waitForTimeout(500);

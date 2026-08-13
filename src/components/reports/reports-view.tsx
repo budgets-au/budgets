@@ -23,7 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChevronDown } from "lucide-react";
-import { formatAUD } from "@/lib/utils";
+import { MONEY_NEGATIVE_CLASS, MONEY_POSITIVE_CLASS, amountClass, formatAUD } from "@/lib/utils";
 import {
   ChartTooltipCard,
   ChartTooltipHeader,
@@ -505,9 +505,13 @@ export function ReportsView({
                   {monthData.map((m) => (
                     <tr key={m.month}>
                       <td className="py-2">{m.month}</td>
-                      <td className="py-2 text-right text-emerald-600">{formatAUD(m.income)}</td>
-                      <td className="py-2 text-right text-red-500">{formatAUD(m.expenses)}</td>
-                      <td className={`py-2 text-right font-medium ${parseFloat(m.net) >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                      {/* Income / expenses columns are tinted by what
+                          the column IS, not by the sign of the value
+                          in it — hence the constants rather than
+                          amountClass. The net column is signed. */}
+                      <td className={`py-2 text-right ${MONEY_POSITIVE_CLASS}`}>{formatAUD(m.income)}</td>
+                      <td className={`py-2 text-right ${MONEY_NEGATIVE_CLASS}`}>{formatAUD(m.expenses)}</td>
+                      <td className={`py-2 text-right font-medium ${amountClass(m.net)}`}>
                         {formatAUD(m.net)}
                       </td>
                     </tr>

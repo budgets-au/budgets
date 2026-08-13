@@ -63,7 +63,7 @@ test.describe("dashboard edit-drawer drag-and-drop", () => {
   }) => {
     const { consoleErrors, pageErrors } = captureErrors(page);
     await page.goto("/dashboard");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // Open the edit drawer.
     await page.getByRole("button", { name: /Edit dashboard/i }).click();
@@ -133,7 +133,7 @@ test.describe("dashboard edit-drawer drag-and-drop", () => {
 
     const { consoleErrors, pageErrors } = captureErrors(page);
     await page.goto("/dashboard");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // The configured 2-widget layout should render — not the
     // 9-widget DEFAULT_DASHBOARD_LAYOUT fallback that fires when
@@ -194,7 +194,7 @@ test.describe("dashboard edit-drawer drag-and-drop", () => {
       // and noted.
       const { consoleErrors, pageErrors } = captureErrors(page);
       await page.goto("/dashboard");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       await page.getByRole("button", { name: /Edit dashboard/i }).click();
       const pill = page.locator(".droppable-element", {
         hasText: "Tracked stock",
@@ -222,7 +222,7 @@ test.describe("dashboard edit-drawer drag-and-drop", () => {
     // drag-over path, this is the test that surfaces it.
     const { consoleErrors, pageErrors } = captureErrors(page);
     await page.goto("/dashboard");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     await page.getByRole("button", { name: /Edit dashboard/i }).click();
     const pill = page.locator(".droppable-element", {
       hasText: "Tracked stock",

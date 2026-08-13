@@ -15,6 +15,7 @@ import {
   ReferenceLine,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   ChartTooltipCard,
   ChartTooltipHeader,
@@ -95,26 +96,18 @@ export function PayeeParetoReport({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 gap-2">
         <CardTitle className="text-base">Payee Pareto</CardTitle>
-        <div
-          role="tablist"
-          className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 print:hidden"
-        >
-          {(["expense", "income", "all"] as const).map((k) => (
-            <button
-              key={k}
-              role="tab"
-              aria-selected={kind === k}
-              onClick={() => setKind(k)}
-              className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-                kind === k
-                  ? "bg-background text-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {k}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          size="compact"
+          ariaLabel="Payee scope"
+          className="print:hidden"
+          value={kind}
+          onChange={setKind}
+          options={[
+            { value: "expense", label: "Expenses" },
+            { value: "income", label: "Income" },
+            { value: "all", label: "All" },
+          ]}
+        />
       </CardHeader>
       <CardContent>
         {isLoading ? (

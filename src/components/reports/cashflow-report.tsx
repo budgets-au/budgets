@@ -7,6 +7,7 @@ import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight, Eye, EyeOff, Plus, Tag } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { numFmt } from "@/lib/utils";
 import type { CashflowReport as CashflowData, CashflowCategory } from "@/app/api/reports/cashflow/route";
@@ -1877,25 +1878,16 @@ export function CashflowReport({
         </button>
 
         <div className="flex items-center gap-4">
-        {/* Totals level segmented control */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Subtotals</span>
-          <div className="flex rounded-md border overflow-hidden text-xs">
-            {(["none", "parent", "grandparent"] as TotalsLevel[]).map((level) => (
-              <button
-                key={level}
-                onClick={() => changeTotalsLevel(level)}
-                className={`px-2.5 py-1 transition-colors ${
-                  totalsLevel === level
-                    ? "bg-indigo-600 text-white font-medium"
-                    : "bg-background text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {level === "grandparent" ? "Full" : level === "parent" ? "Parent" : "Off"}
-              </button>
-            ))}
-          </div>
-        </div>
+        <SegmentedControl<TotalsLevel>
+          label="Subtotals"
+          value={totalsLevel}
+          onChange={changeTotalsLevel}
+          options={[
+            { value: "none", label: "Off" },
+            { value: "parent", label: "Parent" },
+            { value: "grandparent", label: "Full", title: "Grandparent subtotals" },
+          ]}
+        />
 
         {/* Show avg toggle */}
         <div className="flex items-center gap-2">
@@ -1909,25 +1901,16 @@ export function CashflowReport({
             type) and a Diff total cell after the row-end plan total.
             The Diff cells carry the computed-cell background so they
             read as derived columns, same convention as the Total. */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Plan</span>
-          <div className="flex rounded-md border overflow-hidden text-xs">
-            {(["off", "plan", "diff"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setPlanMode(mode)}
-                className={`px-2.5 py-1 transition-colors ${
-                  planMode === mode
-                    ? "bg-indigo-600 text-white font-medium"
-                    : "bg-background text-muted-foreground hover:bg-muted"
-                }`}
-                aria-label={`Plan mode: ${mode}`}
-              >
-                {mode === "off" ? "Off" : mode === "plan" ? "Plan" : "Diff"}
-              </button>
-            ))}
-          </div>
-        </div>
+        <SegmentedControl
+          label="Plan"
+          value={planMode}
+          onChange={setPlanMode}
+          options={[
+            { value: "off", label: "Off" },
+            { value: "plan", label: "Plan" },
+            { value: "diff", label: "Diff" },
+          ]}
+        />
 
         {/* Show counts toggle */}
         <div className="flex items-center gap-2">

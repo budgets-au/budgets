@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { formatAUD, cn } from "@/lib/utils";
 import type {
@@ -132,26 +133,17 @@ export function DailyHeatmapReport({
             {scope === "expenses" ? "Expenses" : "Income"} ·
             category × month heatmap
           </CardTitle>
-          <div
-            role="tablist"
-            className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 print:hidden"
-          >
-            {(["expenses", "income"] as const).map((s) => (
-              <button
-                key={s}
-                role="tab"
-                aria-selected={scope === s}
-                onClick={() => setScope(s)}
-                className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-                  scope === s
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            size="compact"
+            ariaLabel="Heatmap scope"
+            className="print:hidden"
+            value={scope}
+            onChange={setScope}
+            options={[
+              { value: "expenses", label: "Expenses" },
+              { value: "income", label: "Income" },
+            ]}
+          />
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground print:hidden">
           <span>Filter to:</span>

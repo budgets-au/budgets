@@ -73,15 +73,23 @@ export function formatMonthYear(date: string | Date): string {
  * Dark variants are baked in. They used to be missing here while
  * ~7 hand-rolled call sites added their own, so the two families
  * diverged in dark mode only. */
+/** The three money tones, exported so callers that colour by
+ *  *semantic* rather than by sign can share the same source. The
+ *  accounts-cashflow report is the main one: a "debit" column is
+ *  always a positive number but reads as an outflow, so it wants the
+ *  negative tone regardless of sign. Prefer `amountClass(value)`
+ *  whenever the sign IS the signal. */
+export const MONEY_POSITIVE_CLASS = "text-emerald-600 dark:text-emerald-400";
+export const MONEY_NEGATIVE_CLASS = "text-red-500 dark:text-red-400";
+export const MONEY_NEUTRAL_CLASS = "text-muted-foreground";
+
 export function amountClass(
   amount: number | string | null | undefined,
 ): string {
-  if (amount === null || amount === undefined) return "text-muted-foreground";
+  if (amount === null || amount === undefined) return MONEY_NEUTRAL_CLASS;
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (!Number.isFinite(num) || num === 0) return "text-muted-foreground";
-  return num > 0
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-red-500 dark:text-red-400";
+  if (!Number.isFinite(num) || num === 0) return MONEY_NEUTRAL_CLASS;
+  return num > 0 ? MONEY_POSITIVE_CLASS : MONEY_NEGATIVE_CLASS;
 }
 
 export function diffDaysISO(a: string, b: string): number {

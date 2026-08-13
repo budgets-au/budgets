@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { parseISO, format } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   ChartTooltipCard,
   ChartTooltipHeader,
@@ -259,26 +260,13 @@ function Pillbar<T extends string>({
   onChange: (next: T) => void;
 }) {
   return (
-    <div
-      role="tablist"
-      className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 print:hidden"
-    >
-      {options.map(([k, label]) => (
-        <button
-          key={k}
-          role="tab"
-          aria-selected={value === k}
-          onClick={() => onChange(k)}
-          className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-            value === k
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl<T>
+      size="compact"
+      className="print:hidden"
+      value={value}
+      onChange={onChange}
+      options={options.map(([k, label]) => ({ value: k, label }))}
+    />
   );
 }
 

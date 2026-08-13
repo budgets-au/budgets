@@ -133,7 +133,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
       });
 
       await page.goto(p.path);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       await page.waitForTimeout(400);
 
       // Dry sweep: record everything visible into the app-map
@@ -193,7 +193,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
           }
           // Reload and verify persistence.
           await page.reload();
-          await page.waitForLoadState("networkidle");
+          await page.waitForLoadState("load");
           await page.waitForTimeout(300);
           const reloaded = page.locator('[data-slot="switch"]').nth(i);
           if (!(await reloaded.isVisible().catch(() => false))) continue;
@@ -299,7 +299,7 @@ test.describe("1000 monkeys exploratory crawl", () => {
       drilled += 1;
       try {
         await page.goto(path, { timeout: 10_000 });
-        await page.waitForLoadState("networkidle", { timeout: 10_000 });
+        await page.waitForLoadState("load", { timeout: 10_000 });
         await page.waitForTimeout(300);
         // Light pass: inventory only. No destructive clicks at
         // sub-route depth — those are 0.197.0+ territory.
@@ -540,7 +540,7 @@ async function fillAndSubmitForms(
     // (or be replaced entirely by a thank-you screen).
     await dismissOpenOverlay(page);
     await page.goto(pagePath).catch(() => {});
-    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForLoadState("load").catch(() => {});
     await page.waitForTimeout(200);
   }
 }

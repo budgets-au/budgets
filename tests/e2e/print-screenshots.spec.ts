@@ -64,7 +64,7 @@ test.describe("print-media report shots", () => {
       await page.setViewportSize(size);
       await signInAsAdmin(page);
       await page.goto(cfg.path);
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       if (cfg.settleMs) {
         await page.waitForTimeout(cfg.settleMs);
       }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { mutate } from "swr";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent } from "@/components/ui/card";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Trash2, Pencil, TrendingUp, Gift, Zap, Eye, Dices } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
@@ -198,27 +199,13 @@ function GainRangePicker({
   onRange: (r: GainRange) => void;
 }) {
   return (
-    <div
-      role="tablist"
-      aria-label="Gain range"
-      className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
-    >
-      {GAIN_RANGES.map((g) => (
-        <button
-          key={g.id}
-          role="tab"
-          aria-selected={range === g.id}
-          onClick={() => onRange(g.id)}
-          className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-            range === g.id
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {g.label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl<GainRange>
+      size="compact"
+      ariaLabel="Gain range"
+      value={range}
+      onChange={onRange}
+      options={GAIN_RANGES.map((g) => ({ value: g.id, label: g.label }))}
+    />
   );
 }
 

@@ -6,6 +6,7 @@ import { useToggleSet } from "@/hooks/use-toggle-set";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { formatAUD, formatAUDShort } from "@/lib/utils";
@@ -685,22 +686,17 @@ export function SankeyReport({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Money flow
             </p>
-            <div className="flex rounded-md border overflow-hidden text-xs print:hidden">
-              {(["all", "income", "expenses"] as SankeyScope[]).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => changeScope(s)}
-                  className={`px-2.5 py-1 transition-colors capitalize ${
-                    scope === s
-                      ? "bg-indigo-600 text-white font-medium"
-                      : "bg-background text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl<SankeyScope>
+              ariaLabel="Money-flow scope"
+              className="print:hidden"
+              value={scope}
+              onChange={changeScope}
+              options={[
+                { value: "all", label: "All" },
+                { value: "income", label: "Income" },
+                { value: "expenses", label: "Expenses" },
+              ]}
+            />
             {allExpandableCatIds.length > 0 && (
               <button
                 type="button"

@@ -9,6 +9,84 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.327.0 — 2026-08-14
+
+Second of four UI-consistency releases. This is the "one source of
+truth" pass: one segmented control replacing four, and one money
+colour helper replacing every hand-rolled variant.
+
+### Added
+- **`ui/segmented-control.tsx`** — the app's single segmented
+  control, replacing **four** hand-rolled variants across **17**
+  call sites in 15 files. The variants had drifted into: two that
+  shared markup but disagreed on the active fill (indigo vs
+  near-black), one "inset tray" look, and the real `ui/tabs.tsx`
+  primitive used in two places. Padding came in three sizes and
+  exactly one site had any ARIA at all.
+  - **Look**: the majority treatment — joined hairline border with
+    an `bg-indigo-600` active fill, matching the sidebar's active
+    nav item and the project's indigo accent.
+  - **Two scales, one language.** `size="compact"` for controls
+    that sit inside a `CardHeader` beside a `CardTitle`, where the
+    default scale crowds the heading. Only type size and padding
+    differ, so the two read as one control rather than as two
+    components. (This is a deliberate deviation from the plan's
+    "single padding scale" — the compact contexts genuinely need
+    the smaller footprint.)
+  - **Accessibility**: `role="radiogroup"` + `role="radio"` +
+    `aria-checked`, with a roving tabindex and full arrow-key /
+    Home / End navigation. That's the correct ARIA for "pick
+    exactly one of N" — the calendar's range chips already had it
+    and the other 16 sites are brought up to match. Deliberately
+    *not* `role="tablist"` (promises a `tabpanel`, and these
+    reshape data in place) and not bare `aria-pressed` (describes
+    independent toggles). `ui/tabs.tsx` remains for genuine
+    page-level tab bars.
+  - Carries `widget-cancel-drag` so it works inside a dashboard
+    widget in edit mode without react-grid-layout swallowing the
+    click.
+
+### Changed
+- **`amountClass` is the only money colour in the app now.** The
+  helper gained exported companions — `MONEY_POSITIVE_CLASS`,
+  `MONEY_NEGATIVE_CLASS`, `MONEY_NEUTRAL_CLASS` — for the callers
+  that colour by *semantic* rather than by sign. The
+  accounts-cashflow report is the motivating case: its "debit"
+  column is always a positive number but reads as an outflow, so
+  it wants the negative tone regardless of sign.
+  - Migrated every hand-rolled equivalent: negatives had been
+    appearing as `text-rose-600`, `text-rose-400`, `text-rose-700`
+    and `text-red-500` depending on the file, and several sites
+    had `dark:` variants the shared helper lacked before 0.326.
+  - Files: `accounts-cashflow-report` (6 sites),
+    `envelope-report`, `accounts-list`, `cashflow-calendar`,
+    `transaction-row`, `reports-view`, and
+    `stocks-summary-card` — the last of which had a wrapper
+    colour duplicating the `amountClass` call on its own child.
+  - Left alone deliberately: the transfer-in / transfer-out
+    columns (sky / amber) are a different semantic to income and
+    expense, and the envelope report's Income / Expenses *section
+    headings* tint by section type rather than by amount.
+
+### Fixed
+- **The e2e suite had been hanging on `networkidle` since the Next
+  16.3 bump in 0.315.0.** Next's RSC route-prefetch loop keeps the
+  network permanently non-idle, so `waitForLoadState("networkidle")`
+  never resolves. 0.315.0 fixed this in `pages-smoke.spec.ts` only;
+  the other 12 specs kept the old wait and were quietly failing or
+  burning their full timeout. All 24 call sites now wait on `load`.
+  - The monkey crawl went from **9 of 9 route tests failing** at
+    19.1 minutes to **25/25 passing in 2.0 minutes**.
+  - Charts-drawn / RGL-settled detection in `screenshots.spec.ts`
+    and `dashboard-visual.spec.ts` is unaffected — those key off
+    real completion signals, which is why they were already the
+    right pattern.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 732/742 unit tests pass.
+- pages-smoke 12/12, monkey-goals 15/15, monkey crawl 25/25.
+
 ## 0.326.0 — 2026-08-14
 
 First of four releases from a full UI-consistency review (three

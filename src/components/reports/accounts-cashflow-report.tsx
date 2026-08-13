@@ -7,7 +7,12 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import type { AccountsCashflowReport } from "@/app/api/reports/accounts-cashflow/route";
-import { numFmt } from "@/lib/utils";
+import {
+  MONEY_NEGATIVE_CLASS,
+  MONEY_NEUTRAL_CLASS,
+  MONEY_POSITIVE_CLASS,
+  numFmt,
+} from "@/lib/utils";
 import {
   AccountsCellDialog,
   type AccountsCellQuery,
@@ -31,13 +36,13 @@ function formatCell(value: number | undefined, mode: CellMode): {
   className: string;
 } {
   if (value === undefined || value === 0) {
-    return { text: "—", className: "text-muted-foreground" };
+    return { text: "—", className: MONEY_NEUTRAL_CLASS };
   }
   if (mode === "balance") {
     if (value < 0) {
       return {
         text: `(${numFmt.format(Math.abs(value))})`,
-        className: "text-rose-600 dark:text-rose-400",
+        className: MONEY_NEGATIVE_CLASS,
       };
     }
     return {
@@ -51,18 +56,18 @@ function formatCell(value: number | undefined, mode: CellMode): {
     if (value < 0) {
       return {
         text: `(${numFmt.format(Math.abs(value))})`,
-        className: "text-rose-600 dark:text-rose-400",
+        className: MONEY_NEGATIVE_CLASS,
       };
     }
     return {
       text: numFmt.format(value),
-      className: "text-emerald-600 dark:text-emerald-400",
+      className: MONEY_POSITIVE_CLASS,
     };
   }
   if (mode === "credit") {
     return {
       text: numFmt.format(value),
-      className: "text-emerald-600 dark:text-emerald-400",
+      className: MONEY_POSITIVE_CLASS,
     };
   }
   if (mode === "transferIn") {
@@ -80,7 +85,7 @@ function formatCell(value: number | undefined, mode: CellMode): {
   // debit — always positive here (server sends abs)
   return {
     text: numFmt.format(value),
-    className: "text-rose-600 dark:text-rose-400",
+    className: MONEY_NEGATIVE_CLASS,
   };
 }
 

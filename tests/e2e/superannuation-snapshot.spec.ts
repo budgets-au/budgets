@@ -72,7 +72,7 @@ test.describe("/superannuation snapshot form validation", () => {
     });
 
     await page.goto("/superannuation");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     const addBtn = page
       .getByRole("button", { name: /add fund\/year/i })
       .first();

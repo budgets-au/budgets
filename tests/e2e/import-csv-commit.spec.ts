@@ -77,7 +77,7 @@ test.describe("CSV import → commit end-to-end (#8)", () => {
 
     // ── Drop the CSV ──────────────────────────────────────────────
     await page.goto("/import");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
 
     // react-dropzone renders a (visually-hidden) `<input type="file">`
     // — Playwright drives it via setInputFiles.
@@ -146,7 +146,7 @@ test.describe("CSV import → commit end-to-end (#8)", () => {
 
     // ── Re-import the same file → dedup ──────────────────────────
     await page.goto("/import");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     const fileInput2 = page.locator('input[type="file"]').first();
     await fileInput2.setInputFiles(FIXTURE);
 

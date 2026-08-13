@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { ResponsiveContainer, Treemap } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ChevronLeft } from "lucide-react";
@@ -113,30 +114,20 @@ export function TreemapReport({
                 Up
               </Button>
             )}
-            <div
-              role="tablist"
-              aria-label="Treemap scope"
-              className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5 print:hidden"
-            >
-              {(["expenses", "income"] as const).map((s) => (
-                <button
-                  key={s}
-                  role="tab"
-                  aria-selected={scope === s}
-                  onClick={() => {
-                    setScope(s);
-                    setDrillId(null);
-                  }}
-                  className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-                    scope === s
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              size="compact"
+              ariaLabel="Treemap scope"
+              className="print:hidden"
+              value={scope}
+              onChange={(s) => {
+                setScope(s);
+                setDrillId(null);
+              }}
+              options={[
+                { value: "expenses", label: "Expenses" },
+                { value: "income", label: "Income" },
+              ]}
+            />
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
               <Switch
                 size="sm"

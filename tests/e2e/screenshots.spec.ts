@@ -83,7 +83,7 @@ test.describe("screenshot regeneration", () => {
         await setTheme(context, theme);
         await signInAsAdmin(page);
         await page.goto(cfg.path);
-        await page.waitForLoadState("networkidle");
+        await page.waitForLoadState("load");
         await waitForChartsDrawn(page);
         await waitForGridSettled(page);
         if (cfg.settleMs) {

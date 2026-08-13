@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { Button } from "@/components/ui/button";
@@ -228,27 +229,13 @@ function RangePicker({
   onRange: (r: Range) => void;
 }) {
   return (
-    <div
-      role="tablist"
-      aria-label="Chart range"
-      className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
-    >
-      {RANGES.map((r) => (
-        <button
-          key={r}
-          role="tab"
-          aria-selected={range === r}
-          onClick={() => onRange(r)}
-          className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-            range === r
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {r}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl<Range>
+      size="compact"
+      ariaLabel="Chart range"
+      value={range}
+      onChange={onRange}
+      options={RANGES.map((r) => ({ value: r, label: r.toUpperCase() }))}
+    />
   );
 }
 

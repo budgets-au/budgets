@@ -43,12 +43,12 @@ test.describe("feature toggle downstream effects (#26)", () => {
       //    server redirects natively; the resulting URL is what
       //    the user lands on.
       await page.goto("/investments");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       expect(page.url()).toMatch(/\/dashboard$/);
 
       // Same for /superannuation.
       await page.goto("/superannuation");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       expect(page.url()).toMatch(/\/dashboard$/);
 
       // ── Sidebar link visibility: scope the search to the
@@ -72,12 +72,12 @@ test.describe("feature toggle downstream effects (#26)", () => {
       // Reload so the layout picks up the new prefs (display-prefs
       // is fetched server-side at request time for the layout).
       await page.goto("/dashboard");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       await expect(sidebar.locator('a[href^="/investments"]')).toHaveCount(1);
       await expect(sidebar.locator('a[href^="/superannuation"]')).toHaveCount(1);
 
       await page.goto("/investments");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       // Now the URL stays on /investments — no redirect.
       expect(page.url()).toMatch(/\/investments(\?|$)/);
     } finally {

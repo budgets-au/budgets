@@ -87,11 +87,10 @@ export function StocksSummaryCard({ editMode }: { editMode?: boolean } = {}) {
             return (
               <>
                 <p className="text-2xl font-bold">{formatAUD(t.value)}</p>
-                <p
-                  className={`text-xs mt-1 ${
-                    t.ret >= 0 ? "text-emerald-600" : "text-red-500"
-                  }`}
-                >
+                {/* No colour on the wrapper — the inner span already
+                    carries `amountClass(t.ret)`, and the outer copy
+                    was a hand-rolled duplicate of it. */}
+                <p className="text-xs mt-1">
                   <span className={amountClass(t.ret)}>
                     {t.ret >= 0 ? "+" : ""}
                     {formatAUDShort(t.ret)}

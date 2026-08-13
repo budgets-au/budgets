@@ -71,7 +71,7 @@ test.describe("dashboard visual regression (#42)", () => {
       await setTheme(context, theme);
       await signInAsAdmin(page);
       await page.goto("/dashboard");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       await waitForChartsDrawn(page);
       await waitForGridSettled(page);
       await page.waitForTimeout(500);

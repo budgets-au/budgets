@@ -7,8 +7,9 @@ import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Eye, EyeOff
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
-import { formatAUD } from "@/lib/utils";
+import { amountClass, formatAUD } from "@/lib/utils";
 
 import type {
   CashflowReport as CashflowData,
@@ -449,35 +450,16 @@ export function EnvelopeReport({
             className="flex items-center gap-2 print:hidden"
             data-print-hide
           >
-            <div
-              role="radiogroup"
-              aria-label="Envelope scope"
-              className="flex rounded-md border overflow-hidden text-xs"
-            >
-              {([
+            <SegmentedControl
+              ariaLabel="Envelope scope"
+              value={scope}
+              onChange={(v) => setPref("envelopeScope", v)}
+              options={[
                 { value: "all", label: "All" },
                 { value: "income", label: "Income" },
                 { value: "expenses", label: "Expenses" },
-              ] as const).map((opt) => {
-                const active = scope === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => setPref("envelopeScope", opt.value)}
-                    className={`px-2.5 py-1 transition-colors ${
-                      active
-                        ? "bg-indigo-600 text-white font-medium"
-                        : "bg-background text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+              ]}
+            />
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
               <Switch
                 size="sm"
@@ -659,11 +641,7 @@ export function EnvelopeReport({
                       drops the row since the subtraction has no
                       meaning then. */}
                   <tr
-                    className={`border-t-2 bg-muted/40 font-semibold ${
-                      netTotal >= 0
-                        ? "text-emerald-700 dark:text-emerald-400"
-                        : "text-rose-700 dark:text-rose-400"
-                    }`}
+                    className={`border-t-2 bg-muted/40 font-semibold ${amountClass(netTotal)}`}
                   >
                     <td className="px-3 py-2">
                       {netTotal >= 0

@@ -31,7 +31,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { amountClass, cn, formatAUD, formatDate } from "@/lib/utils";
+import { MONEY_NEGATIVE_CLASS, MONEY_POSITIVE_CLASS, amountClass, cn, formatAUD, formatDate } from "@/lib/utils";
 import { colourForFrequency } from "@/lib/schedule-colours";
 import { CategoryPicker } from "./category-picker";
 import { NotesCell } from "./notes-cell";
@@ -945,7 +945,9 @@ export function TransactionRow({
                 <span
                   className={cn(
                     "inline-block text-xl leading-none font-bold",
-                    isOutgoing ? "text-red-500" : "text-emerald-600",
+                    // Direction, not a signed value — the arrow glyph
+                    // carries the sign, so take the tone directly.
+                    isOutgoing ? MONEY_NEGATIVE_CLASS : MONEY_POSITIVE_CLASS,
                   )}
                   title={isOutgoing ? "Outgoing" : "Incoming"}
                   aria-label={isOutgoing ? "Outgoing" : "Incoming"}

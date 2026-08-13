@@ -5,6 +5,7 @@ import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { Eye, EyeOff, ChevronUp, ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { amountClass, formatAUDShort } from "@/lib/utils";
@@ -196,24 +197,16 @@ export function CategoryReport({
               onCheckedChange={(v) => setPref("cashflowShowCounts", v)}
             />
           </label>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Plan</span>
-            <div className="flex rounded-md border overflow-hidden text-xs">
-              {(["off", "plan", "diff"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setPref("cashflowPlanMode", m)}
-                  className={`px-2 py-1 transition-colors ${
-                    planMode === m
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {m === "off" ? "Off" : m === "plan" ? "Plan" : "Diff"}
-                </button>
-              ))}
-            </div>
-          </div>
+          <SegmentedControl
+            label="Plan"
+            value={planMode}
+            onChange={(m) => setPref("cashflowPlanMode", m)}
+            options={[
+              { value: "off", label: "Off" },
+              { value: "plan", label: "Plan" },
+              { value: "diff", label: "Diff" },
+            ]}
+          />
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <span>Hide transfers</span>
             <Switch

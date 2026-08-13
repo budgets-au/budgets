@@ -42,7 +42,7 @@ test.describe("dashboard widgets render without crashing", () => {
   test("default layout renders cleanly", async ({ page }) => {
     const { consoleErrors, pageErrors } = captureErrors(page);
     await page.goto("/dashboard");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     // A small extra wait so SWR + Recharts ResizeObservers settle.
     await page.waitForTimeout(500);
     assertNoReactErrors(consoleErrors, pageErrors);
@@ -55,7 +55,7 @@ test.describe("dashboard widgets render without crashing", () => {
       ]);
       const { consoleErrors, pageErrors } = captureErrors(page);
       await page.goto("/dashboard");
-      await page.waitForLoadState("networkidle");
+      await page.waitForLoadState("load");
       await page.waitForTimeout(500);
       assertNoReactErrors(consoleErrors, pageErrors);
     });
@@ -85,7 +85,7 @@ test.describe("dashboard widgets render without crashing", () => {
     ]);
     const { consoleErrors, pageErrors } = captureErrors(page);
     await page.goto("/dashboard");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     // Yahoo fetch can take a beat; give the chart time to land.
     await page.waitForTimeout(1500);
     assertNoReactErrors(consoleErrors, pageErrors);
@@ -105,7 +105,7 @@ test.describe("dashboard widgets render without crashing", () => {
     );
     const { consoleErrors, pageErrors } = captureErrors(page);
     await page.goto("/dashboard");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
     await page.waitForTimeout(800);
     assertNoReactErrors(consoleErrors, pageErrors);
   });

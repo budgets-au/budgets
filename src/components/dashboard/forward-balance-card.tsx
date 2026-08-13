@@ -19,7 +19,8 @@ import {
   ChartTooltipRow,
 } from "@/components/ui/chart-tooltip";
 import { useSwrJson } from "@/hooks/use-swr-json";
-import { cn, formatAUD } from "@/lib/utils";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { formatAUD } from "@/lib/utils";
 import type { Account } from "@/db/schema";
 import { CalendarClock } from "lucide-react";
 
@@ -198,26 +199,15 @@ export function ForwardBalanceCard({
       <CardContent className="flex-1 min-h-0 flex flex-col gap-2">
         {editMode && (
           <div className="widget-cancel-drag flex flex-wrap gap-2 items-center">
-            <div className="flex items-center gap-1 rounded-md border overflow-hidden text-xs">
-              {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() =>
-                    onConfigChange?.({ accountIds, period: p })
-                  }
-                  className={cn(
-                    "px-2 py-1 transition-colors",
-                    period === p
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:bg-muted",
-                  )}
-                  aria-pressed={period === p}
-                >
-                  {PERIOD_LABELS[p]}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl<Period>
+              ariaLabel="Chart period"
+              value={period}
+              onChange={(p) => onConfigChange?.({ accountIds, period: p })}
+              options={(Object.keys(PERIOD_LABELS) as Period[]).map((p) => ({
+                value: p,
+                label: PERIOD_LABELS[p],
+              }))}
+            />
             <details className="text-xs">
               <summary className="cursor-pointer rounded-md border px-2 py-1 text-muted-foreground hover:bg-muted select-none">
                 Accounts · {accountIds.length === 0 ? "All" : accountIds.length}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { mutate } from "swr";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent } from "@/components/ui/card";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -155,27 +156,13 @@ function ModePicker({
     { v: "price", label: "Price" },
   ];
   return (
-    <div
-      role="tablist"
-      aria-label="Chart mode"
-      className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
-    >
-      {options.map(({ v, label }) => (
-        <button
-          key={v}
-          role="tab"
-          aria-selected={mode === v}
-          onClick={() => onMode(v)}
-          className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-            mode === v
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl<ChartMode>
+      size="compact"
+      ariaLabel="Chart mode"
+      value={mode}
+      onChange={onMode}
+      options={options.map(({ v, label }) => ({ value: v, label }))}
+    />
   );
 }
 
@@ -187,27 +174,13 @@ function RangePicker({
   onRange: (r: Range) => void;
 }) {
   return (
-    <div
-      role="tablist"
-      aria-label="Chart range"
-      className="inline-flex items-center gap-0.5 rounded-md border bg-muted/30 p-0.5"
-    >
-      {RANGES.map((r) => (
-        <button
-          key={r}
-          role="tab"
-          aria-selected={range === r}
-          onClick={() => onRange(r)}
-          className={`text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${
-            range === r
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {r}
-        </button>
-      ))}
-    </div>
+    <SegmentedControl<Range>
+      size="compact"
+      ariaLabel="Chart range"
+      value={range}
+      onChange={onRange}
+      options={RANGES.map((r) => ({ value: r, label: r.toUpperCase() }))}
+    />
   );
 }
 

@@ -9,7 +9,7 @@ test.describe("transactions: saved filters", () => {
   test.beforeEach(async ({ page }) => {
     await signInAsAdmin(page);
     await page.goto("/transactions?direction=in");
-    await page.waitForLoadState("networkidle");
+    await page.waitForLoadState("load");
   });
 
   test("type a name and click Save persists the preset", async ({ page }) => {

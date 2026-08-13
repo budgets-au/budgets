@@ -33,6 +33,7 @@ import {
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { formatAUD, formatAUDShort, formatDateShort, amountClass, cn } from "@/lib/utils";
 import {
   ChartTooltipCard,
@@ -98,6 +99,17 @@ interface CashflowApi {
 }
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** Quick-range presets for the main chart. `halfDays` is the span
+ *  each side of today, so the visible window centres on today with
+ *  the stated total. The brush to the right can fine-tune or pan
+ *  away from any of these. */
+const CHART_WINDOW_PRESETS = [
+  { value: "1m", label: "1 month", halfDays: 15 },
+  { value: "3m", label: "3 months", halfDays: 45 },
+  { value: "6m", label: "6 months", halfDays: 90 },
+  { value: "12m", label: "12 months", halfDays: 180 },
+] as const;
 
 function toISO(d: Date) {
   return format(d, "yyyy-MM-dd");
@@ -712,37 +724,22 @@ export function CashflowCalendar({
       {/* Quick-range presets centre the visible window on today with
           the stated total span. The brush to the right can fine-tune
           or pan from here. */}
-      <div
-        role="radiogroup"
-        aria-label="Chart window size"
-        className="inline-flex rounded-md border overflow-hidden text-xs shrink-0"
-      >
-        {[
-          { label: "1 month", halfDays: 15 },
-          { label: "3 months", halfDays: 45 },
-          { label: "6 months", halfDays: 90 },
-          { label: "12 months", halfDays: 180 },
-        ].map((opt) => {
-          const active = isPresetActive(opt.halfDays);
-          return (
-            <button
-              key={opt.label}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => setWindowHalfDays(opt.halfDays)}
-              className={cn(
-                "px-2.5 py-1 transition-colors",
-                active
-                  ? "bg-indigo-600 text-white font-medium"
-                  : "bg-background text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* `value` is derived: the brush can leave the window on a span
+          that matches no preset, in which case nothing is selected
+          and `""` falls through to no match. */}
+      <SegmentedControl
+        ariaLabel="Chart window size"
+        className="shrink-0"
+        value={
+          CHART_WINDOW_PRESETS.find((p) => isPresetActive(p.halfDays))?.value ??
+          ""
+        }
+        onChange={(v) => {
+          const preset = CHART_WINDOW_PRESETS.find((p) => p.value === v);
+          if (preset) setWindowHalfDays(preset.halfDays);
+        }}
+        options={CHART_WINDOW_PRESETS}
+      />
     </div>
   );
 
@@ -1342,7 +1339,7 @@ export function CashflowCalendar({
                           <div
                             className={cn(
                               "text-[10px] tabular-nums font-semibold leading-tight",
-                              actualNet > 0 ? "text-emerald-600" : "text-red-500",
+                              amountClass(actualNet),
                             )}
                           >
                             {actualNet > 0 ? "+" : ""}

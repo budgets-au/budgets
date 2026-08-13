@@ -8,7 +8,7 @@ import { CheckSquare, Eye, EyeOff, Pencil } from "lucide-react";
 import { EditAccountDialog } from "@/components/accounts/edit-account-dialog";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
 import { groupAccounts, TYPE_LABEL } from "@/components/accounts/group-accounts";
-import { formatAUD } from "@/lib/utils";
+import { formatAUD, MONEY_NEGATIVE_CLASS } from "@/lib/utils";
 import type { Account } from "@/db/schema";
 
 export function AccountsList({ initialAccounts }: { initialAccounts: Account[] }) {
@@ -177,7 +177,7 @@ function Row({
               account.isArchived
                 ? "text-muted-foreground"
                 : balance < 0
-                  ? "text-rose-600 dark:text-rose-400"
+                  ? MONEY_NEGATIVE_CLASS
                   : ""
             }`}
           >

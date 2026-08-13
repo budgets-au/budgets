@@ -9,6 +9,43 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.330.0 — 2026-08-14
+
+### Added
+- **Depth selector on the Expenses / Income treemap.** A
+  `Levels 1 · 2 · 3` control in the card header caps how many
+  category levels the treemap subdivides below its current root.
+  - **Why it was needed.** The tree was always built three deep,
+    but Recharts paints child tiles *over* their parents — so an
+    unpruned hierarchy effectively rendered only the leaves, and
+    there was no way to see the grandparent or parent split
+    without drilling in and losing the whole-picture view.
+    "3" reproduces the previous rendering exactly, so it's the
+    default and nothing changes until you reach for the control.
+  - **Values are preserved when pruning.** Each node's `value` is
+    already `own + rolled-up children`, so a capped parent still
+    shows its full total — it just stops being subdivided. A
+    pruned treemap covers the same area as an unpruned one.
+  - **Pruned tiles stay drillable.** The click-to-drill affordance
+    now keys off a `hasKids` flag captured from the source tree
+    rather than `children.length`, which the prune empties.
+    Without that, choosing "1" would have stranded the operator
+    with no way into level 2 — the one thing the selector must
+    not break.
+  - Depth is relative to whatever node the drilldown is currently
+    rooted at, so it composes with the existing drill-in / Up /
+    category-filter navigation.
+  - Persisted as `displayPrefs.treemapDepth` rather than local
+    component state, per the project's rule that user-visible
+    toggles follow the operator across devices.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 740/750 unit — seven new cases covering `pruneToDepth`: each
+  level, over-asking, value preservation, `hasKids` survival, and
+  input immutability.
+- pages-smoke 12/12, reports-tabs 15/15.
+
 ## 0.329.0 — 2026-08-14
 
 Last of four UI-consistency releases — shared async states — plus

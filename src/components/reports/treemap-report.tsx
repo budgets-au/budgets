@@ -50,6 +50,7 @@ export function TreemapReport({
   const [scope, setScope] = useState<"expenses" | "income">("expenses");
   const { prefs, setPref } = useDisplayPrefs();
   const hideTransfers = prefs.treemapHideTransfers;
+  const depth = prefs.treemapDepth;
   // `drillId` is the current root of the treemap view: null = top
   // of the hierarchy (every grandparent), otherwise the id of the
   // node we drilled into. Two paths set it: clicking a rectangle
@@ -85,8 +86,9 @@ export function TreemapReport({
   // arrays. We build it from the drilldown's current root.
   const treemapData = useMemo(() => {
     const root = drillId == null ? tree.roots : [tree.byId.get(drillId)!];
-    return root.map((n) => toTreemapNode(n));
-  }, [tree, drillId]);
+    const levels = Number(depth);
+    return root.map((n) => toTreemapNode(pruneToDepth(n, levels)));
+  }, [tree, drillId, depth]);
 
   const drillNode = drillId != null ? tree.byId.get(drillId) : null;
 
@@ -127,6 +129,19 @@ export function TreemapReport({
               options={[
                 { value: "expenses", label: "Expenses" },
                 { value: "income", label: "Income" },
+              ]}
+            />
+            <SegmentedControl
+              size="compact"
+              label="Levels"
+              ariaLabel="Category levels to show"
+              className="print:hidden"
+              value={depth}
+              onChange={(v) => setPref("treemapDepth", v)}
+              options={[
+                { value: "1", label: "1", title: "Top level only" },
+                { value: "2", label: "2", title: "Two levels" },
+                { value: "3", label: "3", title: "All three levels" },
               ]}
             />
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
@@ -202,7 +217,7 @@ export function TreemapReport({
 // renderers. We satisfy that by extending it on the runtime
 // shape — TmNode stays a clean concrete type, the index signature
 // is just for Recharts' generics.
-interface TmNode extends Record<string, unknown> {
+export interface TmNode extends Record<string, unknown> {
   id: string;
   name: string;
   value: number;
@@ -213,7 +228,26 @@ interface TmNode extends Record<string, unknown> {
    * Used by the "↑ Up" button so the operator can step one level
    * up rather than jumping all the way home. */
   parentId: string | null;
+  /** Whether this node has children in the SOURCE tree, independent
+   * of whether they survived the depth prune. The tile's
+   * click-to-drill affordance keys off this rather than
+   * `children.length`, so limiting the rendered depth doesn't also
+   * make the tiles un-drillable — the whole point of showing one
+   * level is still being able to click into the next. */
+  hasKids: boolean;
   children: TmNode[];
+}
+
+/** Trim the rendered nesting to `levels` deep, counting the passed
+ * node as level 1. Values are untouched: every node's `value` is
+ * already `own + rolled children`, so a pruned parent still shows
+ * its full total — it just stops being subdivided. */
+export function pruneToDepth(n: TmNode, levels: number): TmNode {
+  if (levels <= 1) return { ...n, children: [] };
+  return {
+    ...n,
+    children: n.children.map((c) => pruneToDepth(c, levels - 1)),
+  };
 }
 
 function sumRoots(roots: TmNode[]): number {
@@ -283,6 +317,7 @@ function buildTreemapTree(cats: CashflowCategory[]): {
       value,
       paletteIndex,
       parentId: n.parentId,
+      hasKids: children.length > 0,
       children,
     };
     byId.set(id, tm);
@@ -339,6 +374,7 @@ interface TileProps {
   /** Spread from TmNode by Recharts. */
   id?: string;
   paletteIndex?: number;
+  hasKids?: boolean;
   onDrill: (id: string, hasChildren: boolean) => void;
   totalValue: number;
 }
@@ -354,7 +390,7 @@ function TreemapTile(props: TileProps) {
     value = 0,
     id,
     paletteIndex = 0,
-    children,
+    hasKids = false,
   } = props;
   // Recharts emits a synthetic depth-0 container node that wraps
   // every chart; skip rendering it so we don't paint the whole
@@ -365,13 +401,16 @@ function TreemapTile(props: TileProps) {
   // deeper levels fade slightly so the hierarchy is legible.
   const opacity = depth <= 1 ? 1 : depth === 2 ? 0.85 : 0.7;
   const showLabel = width > 56 && height > 24;
-  const hasChildren = (children?.length ?? 0) > 0;
+  // `hasKids` from the source tree, NOT `children.length` — the
+  // depth selector prunes `children` for rendering, and a tile at
+  // the cut line must stay clickable so the operator can drill into
+  // the level they chose not to display.
   return (
     <g
       onClick={() => {
-        if (id) props.onDrill(id, hasChildren);
+        if (id) props.onDrill(id, hasKids);
       }}
-      style={{ cursor: hasChildren ? "pointer" : "default" }}
+      style={{ cursor: hasKids ? "pointer" : "default" }}
     >
       <rect
         x={x}

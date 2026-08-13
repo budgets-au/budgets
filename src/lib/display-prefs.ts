@@ -108,6 +108,15 @@ export interface DisplayPrefs {
   cashflowHideTransfers: boolean;
   sankeyHideTransfers: boolean;
   treemapHideTransfers: boolean;
+  /** How many category levels the Expenses/Income treemap renders
+   * below its current root. Recharts paints child tiles over their
+   * parents, so an unpruned 3-level tree effectively shows only the
+   * leaves — this caps the nesting so the operator can read the
+   * grandparent split ("1"), the parent split ("2"), or the full
+   * leaf detail ("3"). Depth is relative to whatever node the
+   * drilldown is currently rooted at. Stored as a string so it goes
+   * through `pickEnum` with the other enum prefs. */
+  treemapDepth: "1" | "2" | "3";
   scatterHideTransfers: boolean;
   yoyHideTransfers: boolean;
   envelopeHideTransfers: boolean;
@@ -251,6 +260,9 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   cashflowHideTransfers: true,
   sankeyHideTransfers: true,
   treemapHideTransfers: true,
+  // Default 3 = show everything, which is what the treemap rendered
+  // before the selector existed. Reducing is opt-in.
+  treemapDepth: "3",
   scatterHideTransfers: true,
   yoyHideTransfers: true,
   envelopeHideTransfers: true,
@@ -541,6 +553,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     cashflowHideTransfers: bool("cashflowHideTransfers"),
     sankeyHideTransfers: bool("sankeyHideTransfers"),
     treemapHideTransfers: bool("treemapHideTransfers"),
+    treemapDepth: pickEnum("treemapDepth", ["1", "2", "3"] as const),
     scatterHideTransfers: bool("scatterHideTransfers"),
     yoyHideTransfers: bool("yoyHideTransfers"),
     envelopeHideTransfers: bool("envelopeHideTransfers"),

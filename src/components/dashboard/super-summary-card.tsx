@@ -7,6 +7,7 @@ import { PiggyBank } from "lucide-react";
 import Link from "next/link";
 import { formatAUD, formatAUDShort, amountClass } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface SuperRow {
@@ -90,7 +91,7 @@ export function SuperSummaryCard({ editMode }: { editMode?: boolean } = {}) {
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col">
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingState tone="inline" />
         ) : !latest ? (
           <>
             <p className="text-2xl font-bold">—</p>

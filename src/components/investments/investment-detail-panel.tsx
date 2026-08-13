@@ -14,6 +14,7 @@ import { formatAUD, formatDate, amountClass } from "@/lib/utils";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { InvestmentHistoryChart } from "./investment-history-chart";
 import { AnnouncementsPanel } from "./announcements-panel";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface DetailRow {
@@ -61,7 +62,7 @@ export function InvestmentDetailPanel({ id }: { id: string }) {
   const { data: history } = useSwrJson<HistoryResponse>(historyUrl);
 
   if (!detail) {
-    return <p className="text-sm text-muted-foreground p-4">Loading…</p>;
+    return <LoadingState tone="inline" className="p-4" />;
   }
 
   // Yahoo can return an error body (e.g. 502 on flaky upstream); SWR resolves

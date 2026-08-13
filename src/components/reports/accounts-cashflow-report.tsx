@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import { LoadingState } from "@/components/ui/state-message";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -135,7 +136,7 @@ export function AccountsCashflowReport({
 
   if (isLoading) {
     return (
-      <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+      <LoadingState />
     );
   }
   if (!data || data.accounts.length === 0) {
@@ -213,18 +214,18 @@ export function AccountsCashflowReport({
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="border-b bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground">
-                <th className="px-3 py-2 text-left font-medium sticky top-0 left-0 bg-muted/40 z-30">
+                <th className="px-3 py-2 text-left font-medium sticky top-0 left-0 bg-muted z-40">
                   Account / Metric
                 </th>
                 {months.map((m) => (
                   <th
                     key={m}
-                    className="px-3 py-2 text-right font-medium tabular-nums sticky top-0 bg-muted/40 z-20"
+                    className="px-3 py-2 text-right font-medium tabular-nums sticky top-0 bg-muted z-20"
                   >
                     {monthLabel(m)}
                   </th>
                 ))}
-                <th className="px-3 py-2 text-right font-medium border-l sticky top-0 bg-muted/40 z-20">
+                <th className="px-3 py-2 text-right font-medium border-l sticky top-0 bg-muted z-20">
                   Total
                 </th>
               </tr>

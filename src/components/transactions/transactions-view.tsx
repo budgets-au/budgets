@@ -27,6 +27,7 @@ import { LinkTransferDialog } from "@/components/transactions/link-transfer-dial
 import { UnlinkConfirmDialog } from "@/components/transactions/unlink-confirm-dialog";
 import { useAddTransaction } from "@/hooks/use-add-transaction-dialog";
 import { toast } from "sonner";
+import { LoadingState } from "@/components/ui/state-message";
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
 const DEFAULT_PAGE_SIZE = 200;
@@ -682,7 +683,7 @@ export function TransactionsView({ accounts, initialCategories }: Props) {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground py-12 text-center">Loading…</p>
+            <LoadingState className="py-12" />
           ) : (
             <>
             <div className="px-3 py-2 border-b flex items-center gap-3">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { LoadingState } from "@/components/ui/state-message";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { useToggleSet } from "@/hooks/use-toggle-set";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
@@ -376,7 +377,7 @@ export function SankeyReport({
 
   if (isLoading) {
     return (
-      <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+      <LoadingState />
     );
   }
   if (!data) {

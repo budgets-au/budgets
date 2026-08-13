@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Beaker } from "lucide-react";
 import Link from "next/link";
 import { formatAUD, formatAUDShort, amountClass } from "@/lib/utils";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface InvestmentRow {
@@ -52,7 +53,7 @@ export function PaperTradeSummaryCard() {
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <LoadingState tone="inline" />
         ) : entries.length === 0 ? (
           <>
             <p className="text-2xl font-bold">—</p>

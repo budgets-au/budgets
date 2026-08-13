@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { LoadingState } from "@/components/ui/state-message";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { differenceInDays, parseISO } from "date-fns";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Eye, EyeOff } from "lucide-react";
@@ -278,7 +279,7 @@ export function EnvelopeReport({
 
   if (isLoading) {
     return (
-      <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+      <LoadingState />
     );
   }
   if (!data) {

@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { rollingMean } from "@/lib/reports/rolling-mean";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface PointRow {
@@ -167,9 +168,7 @@ export function ScatterReport({
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground py-12 text-center">
-            Loading…
-          </p>
+          <LoadingState className="py-12" />
         ) : scatterData.length === 0 ? (
           <p className="text-sm text-muted-foreground py-12 text-center">
             No transactions in the selected window.

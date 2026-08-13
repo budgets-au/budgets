@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state-message";
 import Link from "next/link";
 import { format, parseISO, endOfMonth } from "date-fns";
 import { Eye, EyeOff, ChevronUp, ChevronDown } from "lucide-react";
@@ -52,7 +53,7 @@ export function CategoryReport({
   const [cellQuery, setCellQuery] = useState<CashflowCellQuery | null>(null);
 
   const accountIdsParam = accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
-  const { data, isLoading } = useSwrJson<CashflowData>(
+  const { data, isLoading, error, mutate: retry } = useSwrJson<CashflowData>(
     `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
   );
 
@@ -78,18 +79,16 @@ export function CategoryReport({
   }
 
   if (isLoading) {
-    return (
-      <p className="text-sm text-muted-foreground py-8 text-center">
-        Loading category summary…
-      </p>
-    );
+    return <LoadingState label="Loading category summary…" />;
+  }
+  // See the matching comment in cashflow-report: error must be
+  // checked before the empty case or a failed fetch masquerades as
+  // an empty ledger.
+  if (error) {
+    return <ErrorState label="Couldn’t load the category summary." onRetry={() => retry()} />;
   }
   if (!data || data.months.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground py-8 text-center">
-        No data for this period.
-      </p>
-    );
+    return <EmptyState>No data for this period.</EmptyState>;
   }
 
   const { months, income, expenses } = data;
@@ -425,7 +424,7 @@ function SortHeader({
 }) {
   return (
     <th
-      className={`sticky top-0 z-10 bg-muted px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground shadow-[inset_0_-1px_0_0_var(--border)] whitespace-nowrap ${
+      className={`sticky top-0 z-20 bg-muted px-3 py-2 font-semibold text-xs uppercase tracking-wider text-muted-foreground shadow-[inset_0_-1px_0_0_var(--border)] whitespace-nowrap ${
         align === "right" ? "text-right" : "text-left"
       }`}
     >

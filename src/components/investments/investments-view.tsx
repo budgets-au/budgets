@@ -13,6 +13,7 @@ import { formatAUD, formatAUDShort, formatDate, amountClass } from "@/lib/utils"
 import { InvestmentDetailPanel } from "./investment-detail-panel";
 import { EditInvestmentDialog } from "./edit-investment-dialog";
 import { WatchlistDetailPanel } from "./watchlist-detail-panel";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface ListRow {
@@ -96,7 +97,7 @@ export function InvestmentsView() {
     : null;
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-12 text-center">Loading…</p>;
+    return <LoadingState className="py-12" />;
   }
   if (rows.length === 0 && watchRows.length === 0) {
     return (

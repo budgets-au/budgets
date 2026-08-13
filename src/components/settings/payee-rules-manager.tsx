@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
+import { LoadingState } from "@/components/ui/state-message";
 
 interface PayeeRule {
   id: string;
@@ -54,7 +55,7 @@ export function PayeeRulesManager() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">Loading…</p>
+        <LoadingState className="py-4" />
       ) : rules.length === 0 ? (
         <p className="text-sm text-muted-foreground py-4 text-center">
           No rules yet. Categorise a transaction to create one.

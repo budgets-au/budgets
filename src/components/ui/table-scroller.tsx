@@ -22,6 +22,19 @@ import { cn } from "@/lib/utils";
  *  this only provides the container those classes need to work
  *  against. Print drops the bound entirely so long tables paginate.
  *
+ *  **Z-layer contract.** A sticky `FilterBar` above the table sits at
+ *  `z-10`, so anything sticky inside the table has to clear it or the
+ *  bar clips it when the page scrolls even slightly:
+ *
+ *      z-40  header corner cell (sticky top AND left)
+ *      z-20  the rest of the `thead`
+ *      z-10  sticky first-column body cells
+ *       —    ordinary body cells
+ *
+ *  Sticky cells also need an **opaque** background. A `bg-muted/40`
+ *  frozen column lets the data cells bleed through it during
+ *  horizontal scroll no matter how the z-order is set.
+ *
  *  `--table-chrome` (default 180px) is the vertical chrome above the
  *  table: Topbar 56 + sticky filter bar ~48 + any page-level rows.
  *  Override it per page if the real chrome differs. */

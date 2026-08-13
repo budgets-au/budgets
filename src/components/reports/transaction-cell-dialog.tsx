@@ -15,6 +15,7 @@ import { formatAUD } from "@/lib/utils";
 import { NotesCell } from "@/components/transactions/notes-cell";
 import { CategoryPicker } from "@/components/transactions/category-picker";
 import type { CategoryLike } from "@/components/categories/category-dropdown";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface Txn {
@@ -109,9 +110,7 @@ export function TransactionCellDialog({
         </DialogHeader>
         <div className="flex-1 overflow-y-auto">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              Loading…
-            </p>
+            <LoadingState />
           ) : txns.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
               No transactions.

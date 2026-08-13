@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { LoadingState } from "@/components/ui/state-message";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { ResponsiveContainer, Treemap } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -153,9 +154,7 @@ export function TreemapReport({
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground py-12 text-center">
-            Loading…
-          </p>
+          <LoadingState className="py-12" />
         ) : treemapData.length === 0 ? (
           <p className="text-sm text-muted-foreground py-12 text-center">
             No {scope} in the selected window.

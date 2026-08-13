@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
 import { cn, formatAUD, amountClass } from "@/lib/utils";
 import { TREND_UP, TREND_DOWN } from "@/lib/colours";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface CategoryOption {
@@ -107,7 +108,7 @@ export function CategorySpendCard({
               : "No category configured. Enter edit mode to pick one."}
           </p>
         ) : !spendData ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
+          <LoadingState tone="inline" size="xs" />
         ) : (
           <div className="flex flex-col flex-1 min-h-0">
             {/* Headline = magnitude of summed amounts in the window.

@@ -24,6 +24,7 @@ import {
 import { formatAUD } from "@/lib/utils";
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { chartGridStroke } from "@/lib/colours";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface PayeeRow {
@@ -111,9 +112,7 @@ export function PayeeParetoReport({
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground py-12 text-center">
-            Loading…
-          </p>
+          <LoadingState className="py-12" />
         ) : chartData.length === 0 ? (
           <p className="text-sm text-muted-foreground py-12 text-center">
             No {kind} transactions in the selected window.

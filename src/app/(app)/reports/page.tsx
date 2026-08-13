@@ -14,7 +14,17 @@ export default async function ReportsPage() {
   return (
     <div>
       <Topbar title="Reports" actions={<PrintReportButton />} />
-      <div className="p-4 lg:p-6">
+      {/* /reports stacks TWO filter bars — ReportsView's date-range +
+          report picker, then the active report's own toggle bar — so
+          the vertical chrome above a table is taller here than the
+          180px default `--table-chrome` assumes. Under-reserving made
+          the page scroll by the difference, which slid the tables'
+          sticky headers up underneath the sticky filter bar. Declared
+          per-page, which is what the token exists for. */}
+      <div
+        className="p-4 lg:p-6"
+        style={{ "--table-chrome": "15rem" } as React.CSSProperties}
+      >
         <ReportsView accounts={allAccounts} />
       </div>
     </div>

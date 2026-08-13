@@ -13,6 +13,7 @@ import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { formatAUD, amountClass } from "@/lib/utils";
 import { formatFy } from "@/lib/tax/fy";
 import { SuperHistoryChart } from "./super-history-chart";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface Snapshot {
@@ -203,7 +204,7 @@ export function SuperView({
             />
           )}
           {isLoading ? (
-            <p className="text-sm text-muted-foreground p-6 text-center">Loading…</p>
+            <LoadingState className="p-6" />
           ) : years.length === 0 ? (
             <p className="text-sm text-muted-foreground p-6 text-center">
               No snapshots yet — use the button above to add the first one.

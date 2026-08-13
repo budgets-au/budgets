@@ -20,6 +20,7 @@ import {
 import { useDarkMode } from "@/hooks/use-dark-mode";
 import { formatAUD, formatAUDShort } from "@/lib/utils";
 import type { AccountsCashflowReport } from "@/app/api/reports/accounts-cashflow/route";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 const EXTERNAL_ID = "__external__";
@@ -378,7 +379,7 @@ export function TransferFlowReport({
 
   if (isLoading) {
     return (
-      <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+      <LoadingState />
     );
   }
   if (!data) {

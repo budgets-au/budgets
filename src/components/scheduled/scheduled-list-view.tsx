@@ -39,6 +39,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccountFilter } from "@/hooks/use-account-filter";
 import type { ScheduledTransaction, Category } from "@/db/schema";
+import { LoadingState } from "@/components/ui/state-message";
 
 const MATCH_TOLERANCE_DAYS = 5;
 // Range-mode schedules (utilities, energy bills, etc.) bill on irregular
@@ -1665,7 +1666,7 @@ export function ScheduledListView({
                 Pick a scheduled transaction on the left to see its matching transactions.
               </p>
             ) : txLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-6 px-4">Loading…</p>
+              <LoadingState className="py-6 px-4" />
             ) : (
               <>
                 <div className="shrink-0 border-b px-4 pt-3 pb-2 space-y-2">
@@ -1793,7 +1794,7 @@ export function ScheduledListView({
                       {selected.categoryName ?? "Category"} transactions
                     </p>
                     {catLoading ? (
-                      <p className="text-xs text-muted-foreground py-2">Loading…</p>
+                      <LoadingState tone="inline" size="xs" />
                     ) : categoryListRows.length === 0 ? (
                       <p className="text-xs text-muted-foreground py-2">No transactions in this category.</p>
                     ) : (

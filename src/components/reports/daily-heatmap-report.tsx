@@ -1,6 +1,7 @@
 "use client";
 
 import { useSwrJson } from "@/hooks/use-swr-json";
+import { LoadingState } from "@/components/ui/state-message";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
@@ -159,9 +160,7 @@ export function DailyHeatmapReport({
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground py-12 text-center">
-            Loading…
-          </p>
+          <LoadingState className="py-12" />
         ) : rows.length === 0 || months.length === 0 ? (
           <p className="text-sm text-muted-foreground py-12 text-center">
             No {scope} in the selected window.

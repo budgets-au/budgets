@@ -4,6 +4,7 @@ import { useSwrJson } from "@/hooks/use-swr-json";
 import { Card, CardContent } from "@/components/ui/card";
 import { ExternalLink, AlertCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { LoadingState } from "@/components/ui/state-message";
 
 
 interface NewsItem {
@@ -63,7 +64,7 @@ export function AnnouncementsPanel({ investmentId }: { investmentId: string }) {
           )}
         </div>
         {isLoading ? (
-          <p className="text-xs text-muted-foreground py-2">Loading…</p>
+          <LoadingState tone="inline" size="xs" />
         ) : items.length === 0 ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
             <AlertCircle className="h-3.5 w-3.5" />

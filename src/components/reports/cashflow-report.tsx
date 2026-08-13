@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state-message";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { useToggleSet } from "@/hooks/use-toggle-set";
 import Link from "next/link";
@@ -1672,7 +1673,7 @@ export function CashflowReport({
   const opts: ColOpts = { showCounts, showAvg, showPlan, showDiff, monthAxis };
 
   const accountIdsParam = accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
-  const { data, isLoading } = useSwrJson<CashflowData>(
+  const { data, isLoading, error, mutate: retry } = useSwrJson<CashflowData>(
     `/api/reports/cashflow?from=${from}&to=${to}&hideTransfers=${hideTransfers}${accountIdsParam}`,
   );
   // Feeds the "Tagged views" virtual-rows section below the main
@@ -1753,10 +1754,17 @@ export function CashflowReport({
   );
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground py-8 text-center">Loading cashflow data…</p>;
+    return <LoadingState label="Loading cashflow data…" />;
+  }
+  // Error BEFORE the empty check: a failed fetch leaves `data`
+  // undefined, which would otherwise fall through to "No data for
+  // this period." — telling the operator their ledger is empty when
+  // the request actually failed.
+  if (error) {
+    return <ErrorState label="Couldn’t load the cashflow report." onRetry={() => retry()} />;
   }
   if (!data || data.months.length === 0) {
-    return <p className="text-sm text-muted-foreground py-8 text-center">No data for this period.</p>;
+    return <EmptyState>No data for this period.</EmptyState>;
   }
 
   const { months, income, expenses, closingBalance } = data;
@@ -1974,54 +1982,54 @@ export function CashflowReport({
                 other `sticky top-0` <th>s (z-10) AND above the
                 filter bar (z-10) when the operator scrolls both
                 axes at once. */}
-            <th className="text-left px-3 py-2 font-semibold sticky top-0 left-0 bg-muted min-w-44 z-30 shadow-[inset_0_-1px_0_0_var(--border)]">
+            <th className="text-left px-3 py-2 font-semibold sticky top-0 left-0 bg-muted min-w-44 z-40 shadow-[inset_0_-1px_0_0_var(--border)]">
               Category
             </th>
             {monthAxis &&
               months.map((m) => (
                 <Fragment key={m}>
                   {showPlan && (
-                    <th className={`text-right px-2 py-2 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wider whitespace-nowrap border-l border-border sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
+                    <th className={`text-right px-2 py-2 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wider whitespace-nowrap border-l border-border sticky top-0 z-20 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
                       Plan
                     </th>
                   )}
                   <th
-                    className={`text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${!showPlan ? "border-l border-border" : ""} ${
+                    className={`text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] sticky top-0 z-20 shadow-[inset_0_-1px_0_0_var(--border)] ${!showPlan ? "border-l border-border" : ""} ${
                       m === thisMonth ? "bg-indigo-500/15 print:bg-transparent text-indigo-600 dark:text-indigo-400" : "bg-muted"
                     }`}
                   >
                     {format(parseISO(`${m}-01`), "MMM ''yy")}
                   </th>
                   {showDiff && (
-                    <th className={`text-right px-2 py-2 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wider whitespace-nowrap border-l border-border sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
+                    <th className={`text-right px-2 py-2 font-medium text-[10px] text-muted-foreground/70 uppercase tracking-wider whitespace-nowrap border-l border-border sticky top-0 z-20 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
                       Diff
                     </th>
                   )}
                   {showCounts && (
-                    <th className={`text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap w-[40px] sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
+                    <th className={`text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap w-[40px] sticky top-0 z-20 shadow-[inset_0_-1px_0_0_var(--border)] ${m === thisMonth ? "bg-indigo-500/10 print:bg-transparent" : "bg-muted"}`}>
                       #
                     </th>
                   )}
                 </Fragment>
               ))}
-            <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
+            <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] bg-muted sticky top-0 z-20 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
               Total
             </th>
             {showCounts && (
-              <th className="text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap w-[40px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">#</th>
+              <th className="text-right px-2 py-2 font-medium text-[11px] text-muted-foreground whitespace-nowrap w-[40px] bg-muted sticky top-0 z-20 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">#</th>
             )}
             {showAvg && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] text-muted-foreground bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] text-muted-foreground bg-muted sticky top-0 z-20 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Avg/mo
               </th>
             )}
             {showPlan && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] text-muted-foreground/70 bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] text-muted-foreground/70 bg-muted sticky top-0 z-20 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Plan
               </th>
             )}
             {showDiff && (
-              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] bg-muted sticky top-0 z-10 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
+              <th className="text-right px-3 py-2 font-semibold whitespace-nowrap w-[80px] bg-muted sticky top-0 z-20 shadow-[inset_0_-1px_0_0_var(--border)] border-l border-border">
                 Diff
               </th>
             )}

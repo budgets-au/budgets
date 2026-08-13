@@ -9,6 +9,77 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.329.0 — 2026-08-14
+
+Last of four UI-consistency releases — shared async states — plus
+the fix for the clipped table header reported against 0.328.
+
+### Fixed
+- **Report table headers were clipped by the filter bar.** On
+  `/reports` two filter bars now stack (the date-range + report
+  picker row, then the active report's own toggle bar), so the real
+  vertical chrome above a table is ~200px where `--table-chrome`
+  reserved 180. The page scrolled by the difference, which slid
+  the table's `sticky top-0` header up underneath the sticky
+  filter bar — and because both sat at `z-10`, the bar won and cut
+  the month labels in half. The `z-30` corner cell escaped, which
+  is why "Category" stayed readable while "Jan '26" didn't. Two
+  changes:
+  - `/reports` declares its own `--table-chrome: 15rem`, which is
+    what the token was added for. The page no longer scrolls, so
+    the overlap doesn't arise.
+  - The z-ladder is re-cut so it degrades gracefully if a page
+    ever does scroll: header corner `z-40`, rest of the `thead`
+    `z-20` (clear of the filter bar's `z-10`), sticky first-column
+    body cells `z-10`, ordinary cells unpositioned. Documented as
+    an explicit contract in `ui/table-scroller.tsx` so the next
+    table to adopt it doesn't rediscover this.
+  - `accounts-cashflow-report`'s header cells were also
+    semi-transparent (`bg-muted/40`) — now opaque, same reason the
+    frozen column needed it in 0.328.
+- **Failed report fetches no longer masquerade as an empty
+  ledger.** Cashflow and Category checked `!data` but never
+  `error`, so a failed GET fell through to "No data for this
+  period." — telling the operator their ledger is empty when the
+  request had actually failed. Both now check `error` first and
+  offer a retry that re-runs the fetch.
+
+### Added
+- **`ui/state-message.tsx`** — `LoadingState`, `EmptyState`,
+  `ErrorState`.
+  - **`LoadingState`** replaces 24 hand-written
+    `<p className="text-sm text-muted-foreground …">Loading…</p>`
+    paragraphs across 23 files. They had drifted across nine
+    padding combinations and two type sizes; the copy defaults to
+    the string almost all of them already used. Carries
+    `aria-live="polite"` / `aria-busy` so a screen reader
+    announces the transition instead of sitting on a silently
+    stale region.
+  - **`EmptyState`** standardises the container and typography but
+    **not** the copy. The wording is genuinely per-context and
+    should stay that way: "No transactions in this category"
+    answers a different question to "No accounts yet" — one says
+    your filter matched nothing, the other says you haven't
+    created anything. An optional `action` slot covers the second
+    case, where the useful next step is a button rather than
+    adjusting a filter.
+  - **`ErrorState`** is new behaviour, not a consolidation: read
+    failures were silent almost everywhere. Toasts remain the
+    pattern for *write* failures (99 `toast.error` call sites) —
+    those are user-initiated so a transient notice is right. A
+    read failure needs a persistent marker in the region that
+    failed, with a retry.
+  - Deliberately **not** skeletons. Skeletons pay off when you can
+    predict the shape of the incoming content; most of these sit
+    above tables and charts whose row count and height aren't
+    known until the fetch lands, so a shimmer block of the wrong
+    size reads worse than a line of text.
+
+### Verified
+- tsc clean, `pnpm build` clean, 733/743 unit.
+- pages-smoke 12/12, reports-tabs 15/15, monkey-goals 15/15
+  (42 e2e tests total).
+
 ## 0.328.0 — 2026-08-14
 
 Third of four UI-consistency releases — page chrome and tables —

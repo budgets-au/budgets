@@ -5,6 +5,7 @@ import { useSwrJson } from "@/hooks/use-swr-json";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { LoadingState } from "@/components/ui/state-message";
 
 interface KeyStatus {
   /** True when env or DB has a token set. */
@@ -45,7 +46,7 @@ export function BraveSearchKeyPanel() {
   if (!data) {
     return (
       <div className="rounded-xl border bg-card p-4">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingState tone="inline" />
       </div>
     );
   }

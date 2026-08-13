@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import { Download, Package, Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingState } from "@/components/ui/state-message";
 
 const fetcher = async <T,>(url: string): Promise<T> => {
   const r = await fetch(url);
@@ -67,7 +68,7 @@ export function GithubStatsCard() {
       </CardHeader>
       <CardContent className="flex-1 min-h-0 flex flex-col justify-between">
         {isLoading ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
+          <LoadingState tone="inline" size="xs" />
         ) : data?.error ? (
           <p className="text-xs text-muted-foreground leading-snug">
             Unavailable ({data.error}).

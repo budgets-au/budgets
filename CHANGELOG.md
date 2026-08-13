@@ -393,6 +393,22 @@ rather than actioned:
   nullish cases are now covered explicitly.
 - pages-smoke 12/12 green.
 
+## 0.335.0 — 2026-08-14
+
+### Added
+- **Cashflow report: "Tagged views" show/hide toggle.** The
+  virtual-rows section below Total Expenses (one row per
+  category tag) can now be toggled off from the report's
+  filter bar. Only surfaces when at least one tag has activity
+  in the window — no dead switch when tags aren't in use.
+  Default on, so upgraders see no change; flip off to declutter
+  a report when tags aren't in daily rotation.
+  - Persisted per-operator via new
+    `cashflowShowTaggedViews: boolean` display-pref.
+
+### Verified
+- tsc clean, `pnpm build` clean, pages-smoke 12/12 green.
+
 ## 0.334.0 — 2026-08-14
 
 ### Added

@@ -98,6 +98,11 @@ export interface DisplayPrefs {
    * toggles the eye on. Values are the raw tag strings (see
    * src/lib/reports/virtual-rows.ts). */
   cashflowEnabledTagIds: string[];
+  /** When true, the Cashflow report renders its "Tagged views"
+   * section below Total Expenses (one virtual row per category
+   * tag). Default true so upgraders see no change; hide to
+   * declutter the report when tags aren't in daily use. */
+  cashflowShowTaggedViews: boolean;
   /** Sankey diagram scope on Reports → Sankey. */
   reportsSankeyScope: "all" | "income" | "expenses";
   /** Per-report toggle: when true, drops transfer-typed categories
@@ -256,6 +261,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   cashflowExcludedCatIds: [],
   cashflowShowHidden: false,
   cashflowEnabledTagIds: [],
+  cashflowShowTaggedViews: true,
   reportsSankeyScope: "all",
   cashflowHideTransfers: true,
   sankeyHideTransfers: true,
@@ -546,6 +552,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     cashflowExcludedCatIds: stringArray("cashflowExcludedCatIds"),
     cashflowShowHidden: bool("cashflowShowHidden"),
     cashflowEnabledTagIds: stringArray("cashflowEnabledTagIds"),
+    cashflowShowTaggedViews: bool("cashflowShowTaggedViews"),
     reportsSankeyScope: pickEnum(
       "reportsSankeyScope",
       ["all", "income", "expenses"] as const,

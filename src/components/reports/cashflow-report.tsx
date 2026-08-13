@@ -1655,6 +1655,7 @@ export function CashflowReport({
   const showPlan = planMode !== "off";
   const showDiff = planMode === "diff";
   const showHidden = displayPrefs.cashflowShowHidden;
+  const showTaggedViews = displayPrefs.cashflowShowTaggedViews;
   const excludedIds = displayPrefs.cashflowExcludedCatIds;
   const hideTransfers = displayPrefs.cashflowHideTransfers;
 
@@ -1974,6 +1975,23 @@ export function CashflowReport({
           </div>
         )}
 
+        {/* Tagged views (below Total Expenses) — surfaces the
+            virtual rows built from category tags. Only rendered
+            when at least one tag exists in the window; otherwise
+            the toggle would just sit there. */}
+        {virtualRows.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Tagged views
+            </span>
+            <Switch
+              checked={showTaggedViews}
+              onCheckedChange={(v) => setPref("cashflowShowTaggedViews", v)}
+              aria-label="Show the tagged-views section"
+            />
+          </div>
+        )}
+
         </div>
       </FilterBar>
     {/* Inner scroll container so the table's `thead` can sticky to
@@ -2097,7 +2115,7 @@ export function CashflowReport({
               persisted in `cashflowEnabledTagIds`; off state renders
               greyed so operators can see the tag exists and activate
               it. */}
-          {virtualRows.length > 0 && (
+          {showTaggedViews && virtualRows.length > 0 && (
             <>
               <SectionHeader label="Tagged views (excluded from totals)" cols={totalCols} />
               {virtualRows.map((row) => (

@@ -82,7 +82,12 @@ function computeAccountSeries({
     const dateStr = toISO(cursor);
     const real = realByDate.get(dateStr) ?? [];
     const projected = projectedByDate.get(dateStr) ?? [];
-    const isPast = dateStr <= today;
+    // Today counts as future for projection blending — a schedule
+    // due today that hasn't yet posted as a real transaction still
+    // needs to reduce the projected balance. The payee/amount
+    // dedup filter drops the projection if a matching real txn has
+    // already landed, so double-counting is impossible.
+    const isPast = dateStr < today;
     const dayEvents: CashflowEvent[] = isPast
       ? real
       : [...real, ...projected.filter(
@@ -255,7 +260,11 @@ export function computeCashflow({
   const daily: DailyBalance[] = dateOrder.map((dateStr) => {
     const real = eventsByDate.get(dateStr) ?? [];
     const projected = scheduledByDate.get(dateStr) ?? [];
-    const isPast = dateStr <= today;
+    // See the matching comment in computeAccountSeries: today
+    // counts as future so a same-day schedule that hasn't posted
+    // yet still lights up. Dedup by (payee, amount, accountId)
+    // catches the already-posted case.
+    const isPast = dateStr < today;
     const merged = isPast
       ? real
       : [...real, ...projected.filter(

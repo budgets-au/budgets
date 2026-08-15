@@ -9,6 +9,37 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.338.0 — 2026-08-16
+
+### Fixed
+- **Forecast chart ignored scheduled transactions due today.**
+  A schedule with today as the due date — but not yet posted as a
+  real bank transaction — didn't drop the projected balance on
+  today's cell. The projection walk in `src/lib/cashflow.ts`
+  gated past-vs-future with `dateStr <= today`, treating today as
+  past (real transactions only) and silently discarding any
+  same-day scheduled occurrence. A large bill due today could
+  make the widget look flat when it should have shown a step.
+  - **Fix.** Both projection sites in `computeCashflow` /
+    `computeAccountSeries` now use `dateStr < today`, so today
+    blends real + projected the same way tomorrow does. The
+    existing `(payee, amount)` dedup filter drops the projected
+    row when the schedule has already posted as a real
+    transaction on the same day — no double count.
+  - **Divider labels moved.** The "Projected" dashed line on both
+    the Cashflow Calendar chart and the Forward-balance dashboard
+    widget was anchored on **tomorrow**'s column, which made
+    today read as "actual" — now inconsistent with the balance
+    being projected. Both anchors move to **today** so the
+    visual gate matches the numeric gate.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 783/793 unit tests — two new cases in `cashflow.test.ts`:
+  today's projected balance drops for a pending schedule; a
+  matching real txn on today keeps the dedup filter honest so
+  the balance isn't double-decremented.
+
 ## 0.337.0 — 2026-08-15
 
 ### Added

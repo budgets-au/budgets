@@ -162,9 +162,10 @@ describe("computeCashflow — back-compute correctness", () => {
     expect(lastDay.balance).toBe(9400);
   });
 
-  it("today's balance equals currentBalance regardless of subsequent txns", () => {
-    // Today: 2026-05-06. currentBalance: 10,000. Any txn on today should
-    // already be reflected in currentBalance. The series's value for today
+  it("today's balance equals currentBalance when only real txns are on today", () => {
+    // Today: 2026-05-06. currentBalance: 10,000. A real txn on today
+    // is already reflected in currentBalance — no double count. With
+    // no scheduled txn pending on today, the series's value for today
     // must equal currentBalance.
     const acct = makeAccount({ currentBalance: "10000.00" });
     const txns = [makeTxn({ date: "2026-05-06", amount: "-100.00" })];
@@ -174,6 +175,93 @@ describe("computeCashflow — back-compute correctness", () => {
       scheduledTransactions: [],
       from: parseISO("2026-05-01"),
       to: parseISO("2026-05-06"),
+    });
+    const today = result.daily.find((d) => d.date === "2026-05-06");
+    expect(today?.balance).toBe(10000);
+  });
+
+  it("today's projected balance drops for a schedule due today that hasn't posted", () => {
+    // The scenario from the 0.338 bug: currentBalance reflects the
+    // pre-hit balance. If a schedule is due today but the bank has
+    // not yet cleared it, the projected line for today should show
+    // currentBalance − pending-schedule (not currentBalance).
+    const acct = makeAccount({ currentBalance: "10000.00" });
+    const sched: ScheduledTransaction = {
+      id: "00000000-0000-0000-0000-0000000000c1",
+      kind: "schedule",
+      isActive: true,
+      isSample: false,
+      accountId: "00000000-0000-0000-0000-0000000000a1",
+      transferToAccountId: null,
+      categoryId: null,
+      payee: "Rent",
+      description: null,
+      amount: "-500.00",
+      type: "expense",
+      frequency: "monthly",
+      interval: 1,
+      startDate: "2026-04-06",
+      endDate: null,
+      dayOfMonth: 6,
+      amountMin: null,
+      notes: null,
+      lineageId: null,
+      createdAt: new Date("2025-01-01T00:00:00Z"),
+      updatedAt: new Date("2025-01-01T00:00:00Z"),
+    } as unknown as ScheduledTransaction;
+
+    const result = computeCashflow({
+      accounts: [acct],
+      realTransactions: [],
+      scheduledTransactions: [sched],
+      from: parseISO("2026-05-06"),
+      to: parseISO("2026-05-10"),
+    });
+    const today = result.daily.find((d) => d.date === "2026-05-06");
+    expect(today?.balance).toBe(9500);
+    expect(today?.hasProjected).toBe(true);
+  });
+
+  it("today's schedule with a matching real txn is not double-counted", () => {
+    // If the same schedule has already posted as a real transaction
+    // today, the payee/amount dedup filter drops the projection so
+    // today's balance still equals currentBalance.
+    const acct = makeAccount({ currentBalance: "10000.00" });
+    const real = makeTxn({
+      date: "2026-05-06",
+      amount: "-500.00",
+      payee: "Rent",
+    });
+    const sched: ScheduledTransaction = {
+      id: "00000000-0000-0000-0000-0000000000c2",
+      kind: "schedule",
+      isActive: true,
+      isSample: false,
+      accountId: "00000000-0000-0000-0000-0000000000a1",
+      transferToAccountId: null,
+      categoryId: null,
+      payee: "Rent",
+      description: null,
+      amount: "-500.00",
+      type: "expense",
+      frequency: "monthly",
+      interval: 1,
+      startDate: "2026-04-06",
+      endDate: null,
+      dayOfMonth: 6,
+      amountMin: null,
+      notes: null,
+      lineageId: null,
+      createdAt: new Date("2025-01-01T00:00:00Z"),
+      updatedAt: new Date("2025-01-01T00:00:00Z"),
+    } as unknown as ScheduledTransaction;
+
+    const result = computeCashflow({
+      accounts: [acct],
+      realTransactions: [real],
+      scheduledTransactions: [sched],
+      from: parseISO("2026-05-06"),
+      to: parseISO("2026-05-10"),
     });
     const today = result.daily.find((d) => d.date === "2026-05-06");
     expect(today?.balance).toBe(10000);

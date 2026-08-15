@@ -578,13 +578,13 @@ export function CashflowCalendar({
   const selectedLabel = chartData.find((r) => r.rawDate === selectedDate)?.date as
     | string
     | undefined;
-  // Tomorrow marks the transition between computed (past + today) and
-  // projected (future, scheduled-derived) values. We anchor the divider line
-  // at tomorrow's column so it visually sits to the right of today's bar —
-  // i.e. "everything to the right of this line is projection".
-  const tomorrowISO = toISO(addDays(new Date(), 1));
+  // Today marks the transition between "real" (past, before today) and
+  // "projected" (today + future). A schedule due today that hasn't
+  // yet posted flows into today's projected balance — see cashflow.ts's
+  // `dateStr < today` gate — so today belongs on the projected side of
+  // the divider, not the actual side.
   const projectionStartLabel =
-    chartData.find((r) => r.rawDate === tomorrowISO)?.date as string | undefined;
+    chartData.find((r) => r.rawDate === todayISO)?.date as string | undefined;
   // Fraction of the chart's horizontal extent where today sits — used
   // by the per-account gradient fills so the projected portion of each
   // area renders at a different alpha than the realised portion. When

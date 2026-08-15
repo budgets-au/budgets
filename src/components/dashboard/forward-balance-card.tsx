@@ -107,7 +107,6 @@ export function ForwardBalanceCard({
   const from = format(addDays(today, -PERIOD_LOOKBACK[period]), "yyyy-MM-dd");
   const to = format(addDays(today, PERIOD_LOOKAHEAD[period]), "yyyy-MM-dd");
   const todayISO = format(today, "yyyy-MM-dd");
-  const tomorrowISO = format(addDays(today, 1), "yyyy-MM-dd");
 
   // Build the /api/cashflow URL. Empty accountIds → server-side
   // default is "all accounts". `select` normalises `perAccount` so
@@ -139,9 +138,12 @@ export function ForwardBalanceCard({
     });
   }, [perAccount]);
 
-  // Today divider — anchor at tomorrow's column so "projected" reads
-  // as everything to the right of today's actual bar.
-  const todayLabel = chartData.find((r) => r.rawDate === tomorrowISO)?.date as
+  // Today divider — anchor at today's column so today reads as
+  // "projected". A scheduled transaction due today that hasn't yet
+  // posted flows into today's projected balance (cashflow.ts uses
+  // `dateStr < today` for the past/future gate), so visually today
+  // belongs on the projected side of the line, not the actual side.
+  const todayLabel = chartData.find((r) => r.rawDate === todayISO)?.date as
     | string
     | undefined;
 

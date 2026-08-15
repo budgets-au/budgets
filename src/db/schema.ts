@@ -670,8 +670,15 @@ export const scheduledForecasts = sqliteTable(
     scheduledId: text("scheduled_id")
       .notNull()
       .references(() => scheduledTransactions.id, { onDelete: "cascade" }),
+    /** The rule-derived date this override anchors to (join key). */
     occurrenceDate: text("occurrence_date").notNull(),
-    amount: text("amount").notNull(),
+    /** Optional amount override — nullable since 0.339 so a
+     * date-only override (shift the occurrence without touching the
+     * amount) is expressible. */
+    amount: text("amount"),
+    /** Optional date shift — when present, the occurrence is
+     * projected at `new_date` instead of `occurrence_date`. */
+    newDate: text("new_date"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .$defaultFn(() => new Date()),

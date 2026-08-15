@@ -61,7 +61,8 @@ function nextBudgetPeriodStart(from: Date, frequency: string): Date {
 interface ForecastEntry {
   scheduledId: string;
   occurrenceDate: string;
-  amount: string;
+  amount: string | null;
+  newDate: string | null;
 }
 
 export function ScheduledForecastRows({
@@ -74,9 +75,11 @@ export function ScheduledForecastRows({
   onChanged?: () => void;
 }) {
   const fcMap = useMemo(() => {
-    const m = new Map<string, string>();
+    const m = new Map<string, { amount: string | null; newDate: string | null }>();
     for (const f of initialForecasts) {
-      if (f.scheduledId === schedule.id) m.set(f.occurrenceDate, f.amount);
+      if (f.scheduledId === schedule.id) {
+        m.set(f.occurrenceDate, { amount: f.amount, newDate: f.newDate });
+      }
     }
     return m;
   }, [initialForecasts, schedule.id]);
@@ -136,14 +139,23 @@ export function ScheduledForecastRows({
     schedule.isActive,
   ]);
 
-  // Local input state, keyed by occurrence date. Empty string = no override
-  // (the schedule's standard amount applies). Magnitude only — sign comes from
-  // the schedule's type when persisting.
-  const [drafts, setDrafts] = useState<Record<string, string>>(() => {
-    const out: Record<string, string> = {};
+  // Local input state, keyed by occurrence date. Two axes per row —
+  // amount (magnitude only; sign added from schedule.type on save)
+  // and date (an ISO YYYY-MM-DD to shift the occurrence to). Empty
+  // strings mean "no override on that axis" — the schedule's own
+  // amount / rule-derived date apply.
+  interface Draft {
+    amount: string;
+    date: string;
+  }
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(() => {
+    const out: Record<string, Draft> = {};
     for (const o of occurrences) {
       const v = fcMap.get(o.date);
-      out[o.date] = v ? Math.abs(parseFloat(v)).toFixed(2) : "";
+      out[o.date] = {
+        amount: v?.amount ? Math.abs(parseFloat(v.amount)).toFixed(2) : "",
+        date: v?.newDate ?? "",
+      };
     }
     return out;
   });
@@ -153,10 +165,13 @@ export function ScheduledForecastRows({
   // identity wobbled across parent renders and would otherwise wipe
   // in-progress draft typing.
   useEffect(() => {
-    const out: Record<string, string> = {};
+    const out: Record<string, Draft> = {};
     for (const o of occurrences) {
       const v = fcMap.get(o.date);
-      out[o.date] = v ? Math.abs(parseFloat(v)).toFixed(2) : "";
+      out[o.date] = {
+        amount: v?.amount ? Math.abs(parseFloat(v.amount)).toFixed(2) : "",
+        date: v?.newDate ?? "",
+      };
     }
     setDrafts(out);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,7 +179,11 @@ export function ScheduledForecastRows({
 
   const [savingDate, setSavingDate] = useState<string | null>(null);
 
-  const overrideCount = occurrences.filter((o) => fcMap.has(o.date)).length;
+  // A row counts as an override when either axis has a stored value.
+  const overrideCount = occurrences.filter((o) => {
+    const v = fcMap.get(o.date);
+    return !!v && (v.amount !== null || v.newDate !== null);
+  }).length;
   const [expanded, setExpanded] = useState(false);
   // Collapse when the user switches schedules. (Hook must run before the
   // early return below — otherwise newly-added schedules with no upcoming
@@ -174,16 +193,26 @@ export function ScheduledForecastRows({
   }, [schedule.id]);
 
   async function save(date: string) {
-    const value = drafts[date]?.trim() ?? "";
+    const draft = drafts[date];
+    const amountValue = (draft?.amount ?? "").trim();
+    const dateValue = (draft?.date ?? "").trim();
     setSavingDate(date);
     try {
+      // Both axes empty → delete the row entirely. At least one axis
+      // set → POST an upsert with only the axes that carry a value.
+      const method = !amountValue && !dateValue ? "DELETE" : "POST";
+      const body: Record<string, string> = { occurrenceDate: date };
+      if (method === "POST") {
+        if (amountValue) body.amount = amountValue;
+        if (dateValue) body.newDate = dateValue;
+      }
       const res = await fetch(`/api/scheduled/${schedule.id}/forecasts`, {
-        method: value ? "POST" : "DELETE",
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(value ? { occurrenceDate: date, amount: value } : { occurrenceDate: date }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error();
-      toast.success(value ? "Forecast saved" : "Forecast cleared");
+      toast.success(method === "POST" ? "Forecast saved" : "Forecast cleared");
       onChanged?.();
     } catch {
       toast.error("Failed to save forecast");
@@ -226,6 +255,11 @@ export function ScheduledForecastRows({
               <th className={`px-2 py-1 text-left font-medium ${schedule.kind === "budget" ? "w-56" : "w-32"}`}>
                 {schedule.kind === "budget" ? "Period" : "Date"}
               </th>
+              {schedule.kind !== "budget" && (
+                <th className="px-2 py-1 text-left font-medium w-36">
+                  Shift to
+                </th>
+              )}
               <th className="px-2 py-1 text-right font-medium">
                 {schedule.kind === "budget" ? "Forecast cap" : "Forecast amount"}
               </th>
@@ -235,24 +269,57 @@ export function ScheduledForecastRows({
           </thead>
           <tbody className="divide-y">
             {occurrences.map((occ) => {
-              const draftValue = drafts[occ.date] ?? "";
+              const draft = drafts[occ.date] ?? { amount: "", date: "" };
               const stored = fcMap.get(occ.date);
-              const storedFormatted = stored ? Math.abs(parseFloat(stored)).toFixed(2) : "";
-              const dirty = draftValue !== storedFormatted;
-              const hasOverride = !!stored;
+              const storedAmount = stored?.amount
+                ? Math.abs(parseFloat(stored.amount)).toFixed(2)
+                : "";
+              const storedDate = stored?.newDate ?? "";
+              const dirty =
+                draft.amount !== storedAmount || draft.date !== storedDate;
+              const hasOverride =
+                !!stored && (stored.amount !== null || stored.newDate !== null);
+              const willClear = !draft.amount.trim() && !draft.date.trim();
               return (
                 <tr key={occ.date}>
                   <td className="px-2 py-1 tabular-nums whitespace-nowrap">
                     {occ.label}
                   </td>
+                  {schedule.kind !== "budget" && (
+                    <td className="px-2 py-1">
+                      <Input
+                        type="date"
+                        min="1900-01-01"
+                        max="2099-12-31"
+                        value={draft.date}
+                        onChange={(e) =>
+                          setDrafts((p) => ({
+                            ...p,
+                            [occ.date]: {
+                              ...(p[occ.date] ?? { amount: "", date: "" }),
+                              date: e.target.value,
+                            },
+                          }))
+                        }
+                        placeholder={occ.date}
+                        className="h-7 text-xs max-w-[140px]"
+                      />
+                    </td>
+                  )}
                   <td className="px-2 py-1 text-right">
                     <Input
                       type="number"
                       step="0.01"
                       min="0"
-                      value={draftValue}
+                      value={draft.amount}
                       onChange={(e) =>
-                        setDrafts((p) => ({ ...p, [occ.date]: e.target.value }))
+                        setDrafts((p) => ({
+                          ...p,
+                          [occ.date]: {
+                            ...(p[occ.date] ?? { amount: "", date: "" }),
+                            amount: e.target.value,
+                          },
+                        }))
                       }
                       placeholder={standardMagnitude}
                       className="h-7 text-xs text-right ml-auto max-w-[140px] tabular-nums"
@@ -270,7 +337,7 @@ export function ScheduledForecastRows({
                         disabled={savingDate === occ.date}
                         className="h-7 px-2 text-[10px]"
                       >
-                        {savingDate === occ.date ? "…" : draftValue.trim() ? "Save" : "Clear"}
+                        {savingDate === occ.date ? "…" : willClear ? "Clear" : "Save"}
                       </Button>
                     ) : (
                       <span className="text-[10px] text-muted-foreground">—</span>

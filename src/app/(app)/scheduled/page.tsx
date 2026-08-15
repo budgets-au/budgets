@@ -54,6 +54,7 @@ export default async function ScheduledPage() {
       scheduledId: scheduledForecasts.scheduledId,
       occurrenceDate: scheduledForecasts.occurrenceDate,
       amount: scheduledForecasts.amount,
+      newDate: scheduledForecasts.newDate,
     }).from(scheduledForecasts).orderBy(asc(scheduledForecasts.occurrenceDate)),
   ]);
 

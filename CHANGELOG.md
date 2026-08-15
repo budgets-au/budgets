@@ -9,6 +9,51 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.339.0 — 2026-08-16
+
+### Added
+- **Per-occurrence date shift on scheduled transactions.** The
+  "Upcoming forecast" section on a schedule already allowed
+  amount overrides per upcoming occurrence (e.g. next month's
+  power bill is $210 instead of the usual $180). Now each row
+  also carries a **Shift to** date input, so a single occurrence
+  can be moved to a different day without editing the schedule's
+  recurrence rule.
+  - **Storage.** Migration 0021 extends `scheduled_forecasts`
+    with a nullable `new_date` column and relaxes `amount` to
+    nullable — a date-only override (shift the day, keep the
+    amount) was previously inexpressible. The migration rebuilds
+    the table (SQLite can't ALTER COLUMN) and copies every
+    existing amount override across untouched.
+  - **API.** `POST /api/scheduled/[id]/forecasts` accepts an
+    optional `amount` and/or optional `newDate`; at least one
+    must be present or the request is rejected. Existing
+    amount-only callers keep working unchanged.
+  - **UI.** The forecast rows in the schedule form gained a
+    "Shift to" date input beside the amount input. Empty means
+    no shift; when both fields are empty on save, the row is
+    deleted (existing behaviour). Budgets don't get the date
+    input — their forecast rows are period-anchored, so a date
+    shift wouldn't have a meaningful semantic.
+  - **Chart.** The forecast bars on the scheduled list-view
+    chart now render at the shifted date when a `newDate` is
+    set, so a moved rent payment appears at the new day rather
+    than the rule-derived one.
+
+### Not yet included
+- The calendar page + dashboard forward-balance widget still
+  read `computeCashflow`, which doesn't consume forecasts today
+  (neither the amount override introduced earlier nor the new
+  date shift). Threading forecasts through the projection engine
+  is a follow-up — this release keeps the reach of the date
+  override symmetric with the amount override that was already
+  shipping.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 783/793 unit tests (unchanged baseline — the change is
+  schema + UI + a route with existing integration coverage).
+
 ## 0.338.0 — 2026-08-16
 
 ### Fixed

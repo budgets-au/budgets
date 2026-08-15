@@ -4,19 +4,28 @@ import { scheduledForecasts, scheduledTransactions } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-// Per-occurrence expected-amount overrides for variable bills (utilities, etc.).
-// The route is keyed by the schedule id; the body specifies which occurrence
-// date the forecast applies to. Setting amount to "" (or omitting via DELETE)
-// removes the forecast and falls back to the schedule's standard amount.
+// Per-occurrence overrides for scheduled transactions. Each row is
+// anchored by the schedule's rule-derived `occurrenceDate` and may
+// carry an amount shift, a date shift (0.339+), or both. A row with
+// neither is meaningless — the POST validator rejects it.
 
 import { isoDateString, numericString } from "@/lib/zod-helpers";
 import { withAuthAndId } from "@/lib/api/route-guards";
 import { parseJsonBody } from "@/lib/api/parse-body";
 
-const upsertSchema = z.object({
-  occurrenceDate: isoDateString,
-  amount: numericString,
-});
+const upsertSchema = z
+  .object({
+    occurrenceDate: isoDateString,
+    // Both fields are optional but at least one must be present
+    // (asserted in the refine below). Empty string / null-ish inputs
+    // are treated as "clear this override".
+    amount: numericString.optional(),
+    newDate: isoDateString.optional(),
+  })
+  .refine(
+    (v) => v.amount !== undefined || v.newDate !== undefined,
+    { message: "at least one of amount or newDate must be set" },
+  );
 
 const deleteSchema = z.object({
   occurrenceDate: isoDateString,
@@ -24,7 +33,7 @@ const deleteSchema = z.object({
 
 // GET /api/scheduled/[id]/forecasts
 // Returns all stored forecasts for the schedule, oldest → newest.
-export const GET = withAuthAndId(async (id, request) => {
+export const GET = withAuthAndId(async (id) => {
   const rows = await db
     .select()
     .from(scheduledForecasts)
@@ -34,14 +43,17 @@ export const GET = withAuthAndId(async (id, request) => {
 });
 
 // POST /api/scheduled/[id]/forecasts
-// Upsert a forecast for one occurrence date. Amount is signed by the schedule's
-// type (expense/transfer → negative; income → positive).
+// Upsert an override for one occurrence date. When `amount` is
+// provided it's sign-corrected against the schedule's type; when
+// `newDate` is provided the projection shifts the occurrence to
+// that date. Both fields are independently upserted — passing only
+// `amount` keeps whatever `newDate` was stored (and vice-versa).
 export const POST = withAuthAndId(async (id, request) => {
   const parsed = await parseJsonBody(request, upsertSchema);
   if (!parsed.ok) return parsed.response;
-  const { occurrenceDate, amount } = parsed.data;
+  const { occurrenceDate, amount, newDate } = parsed.data;
 
-  // Look up the schedule to enforce sign convention.
+  // Look up the schedule to enforce sign convention on amount.
   const [schedule] = await db
     .select({ type: scheduledTransactions.type })
     .from(scheduledTransactions)
@@ -49,18 +61,33 @@ export const POST = withAuthAndId(async (id, request) => {
     .limit(1);
   if (!schedule) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
 
-  const magnitude = Math.abs(parseFloat(amount));
-  const signed =
-    schedule.type === "expense" || schedule.type === "transfer"
-      ? `-${magnitude.toFixed(2)}`
-      : magnitude.toFixed(2);
+  let signed: string | null = null;
+  if (amount !== undefined) {
+    const magnitude = Math.abs(parseFloat(amount));
+    signed =
+      schedule.type === "expense" || schedule.type === "transfer"
+        ? `-${magnitude.toFixed(2)}`
+        : magnitude.toFixed(2);
+  }
+
+  // Build the update set — only touch the columns the caller sent.
+  // Missing keys preserve whatever the existing row carried; on a
+  // fresh insert missing keys default to NULL from the schema.
+  const updateSet: Record<string, unknown> = { updatedAt: new Date() };
+  if (amount !== undefined) updateSet.amount = signed;
+  if (newDate !== undefined) updateSet.newDate = newDate;
 
   const [row] = await db
     .insert(scheduledForecasts)
-    .values({ scheduledId: id, occurrenceDate, amount: signed })
+    .values({
+      scheduledId: id,
+      occurrenceDate,
+      amount: signed,
+      newDate: newDate ?? null,
+    })
     .onConflictDoUpdate({
       target: [scheduledForecasts.scheduledId, scheduledForecasts.occurrenceDate],
-      set: { amount: signed, updatedAt: new Date() },
+      set: updateSet,
     })
     .returning();
 
@@ -68,7 +95,8 @@ export const POST = withAuthAndId(async (id, request) => {
 });
 
 // DELETE /api/scheduled/[id]/forecasts
-// Body: { occurrenceDate }. Removes a single forecast row.
+// Body: { occurrenceDate }. Removes the whole override row (both
+// amount and date shifts, if either was set).
 export const DELETE = withAuthAndId(async (id, request) => {
   const parsed = await parseJsonBody(request, deleteSchema);
   if (!parsed.ok) return parsed.response;

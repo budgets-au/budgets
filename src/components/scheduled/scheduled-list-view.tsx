@@ -239,7 +239,14 @@ function toFormRow(s: ScheduledRow): ScheduledFormRow {
 interface ForecastRow {
   scheduledId: string;
   occurrenceDate: string;
-  amount: string;
+  /** Optional amount override — nullable so a date-only override
+   *  (shift the occurrence without changing the amount) is
+   *  expressible. Legacy amount-only overrides carry this alone
+   *  and leave `newDate` null. */
+  amount: string | null;
+  /** Optional date shift; when present the occurrence renders at
+   *  `newDate` instead of `occurrenceDate`. */
+  newDate: string | null;
 }
 
 // How many future occurrences to project per active schedule. Each one shows
@@ -975,12 +982,24 @@ export function ScheduledListView({
     });
   }, [selected, scheduled, catTxns, matchedReals, unmatchedOccurrences, showAll]);
 
-  // Forecast lookup — per-schedule, keyed by occurrence date.
+  // Forecast lookup — per-schedule, keyed by the schedule's
+  // rule-derived occurrence date. Each entry may carry an amount
+  // override, a date shift, or both. Nulls mean "no override on that
+  // axis"; the projection walks the standard rule and applies
+  // overrides on top.
   const forecastByScheduleAndDate = useMemo(() => {
-    const map = new Map<string, Map<string, number>>();
+    const map = new Map<
+      string,
+      Map<string, { amount: number | null; newDate: string | null }>
+    >();
     for (const f of forecastList) {
-      const inner = map.get(f.scheduledId) ?? new Map<string, number>();
-      inner.set(f.occurrenceDate, parseFloat(f.amount));
+      const inner =
+        map.get(f.scheduledId) ??
+        new Map<string, { amount: number | null; newDate: string | null }>();
+      inner.set(f.occurrenceDate, {
+        amount: f.amount !== null ? parseFloat(f.amount) : null,
+        newDate: f.newDate,
+      });
       map.set(f.scheduledId, inner);
     }
     return map;
@@ -988,8 +1007,8 @@ export function ScheduledListView({
 
   // Compute the next FORECAST_HORIZON projected occurrences for a schedule
   // (only its active window, dates after today). Each projection picks up an
-  // explicit forecast amount if one exists; otherwise it falls back to the
-  // schedule's standard amount.
+  // explicit forecast amount and/or date shift if one exists; otherwise it
+  // falls back to the schedule's standard amount and rule-derived date.
   function projectForwardForecasts(s: ScheduledRow): { date: string; amount: number }[] {
     if (!s.isActive) return [];
     const today = new Date();
@@ -1010,10 +1029,13 @@ export function ScheduledListView({
       .slice(0, FORECAST_HORIZON);
 
     const fcMap = forecastByScheduleAndDate.get(s.id);
-    return futureOccurrences.map((o) => ({
-      date: o.date,
-      amount: fcMap?.get(o.date) ?? parseFloat(s.amount),
-    }));
+    return futureOccurrences.map((o) => {
+      const override = fcMap?.get(o.date);
+      return {
+        date: override?.newDate ?? o.date,
+        amount: override?.amount ?? parseFloat(s.amount),
+      };
+    });
   }
 
   // Build chart segments — one per sibling in the lineage. Latest segment uses
@@ -1108,7 +1130,11 @@ export function ScheduledListView({
           for (let i = 0; i < FORECAST_HORIZON; i++) {
             if (end && from > end) break;
             const iso = format(from, "yyyy-MM-dd");
-            out.push({ date: iso, amount: fcMap?.get(iso) ?? standard });
+            // Budgets are anchored to a period, so only the amount
+            // override matters here — a `newDate` on a budget forecast
+            // row is ignored intentionally (the schedule-detail UI
+            // hides the input for budgets too).
+            out.push({ date: iso, amount: fcMap?.get(iso)?.amount ?? standard });
             from = stepFrom(from);
           }
           return out;

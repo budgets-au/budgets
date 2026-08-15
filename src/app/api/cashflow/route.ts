@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { accounts, transactions, scheduledTransactions } from "@/db/schema";
+import {
+  accounts,
+  transactions,
+  scheduledTransactions,
+  scheduledForecasts,
+} from "@/db/schema";
 import { and, gte, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { parseISO } from "date-fns";
 import { computeCashflow } from "@/lib/cashflow";
+import { buildForecastLookup } from "@/lib/recurrence";
 import { withAuth } from "@/lib/api/route-guards";
 
 export const GET = withAuth(async (request) => {
@@ -107,10 +113,23 @@ export const GET = withAuth(async (request) => {
       ),
     );
 
+  // Per-occurrence overrides — a schedule's forecast row can shift
+  // an occurrence to a new date and/or replace its amount. Applied
+  // inside expandRecurrence via computeCashflow's forecasts param.
+  const forecastRows = await db
+    .select({
+      scheduledId: scheduledForecasts.scheduledId,
+      occurrenceDate: scheduledForecasts.occurrenceDate,
+      amount: scheduledForecasts.amount,
+      newDate: scheduledForecasts.newDate,
+    })
+    .from(scheduledForecasts);
+
   const result = computeCashflow({
     accounts: allAccounts,
     realTransactions: realTxns,
     scheduledTransactions: scheduledTxns,
+    forecasts: buildForecastLookup(forecastRows),
     from: parseISO(from),
     to: parseISO(to),
     accountIds,

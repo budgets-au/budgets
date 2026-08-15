@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { parseISO } from "date-fns";
 import { computeCashflow, summarizeDay, weekNet } from "./cashflow";
+import { buildForecastLookup } from "./recurrence";
 import type { Account, Transaction, ScheduledTransaction } from "@/db/schema";
 
 // Pin "now" so the past/future logic in computeCashflow is deterministic.
@@ -265,6 +266,120 @@ describe("computeCashflow — back-compute correctness", () => {
     });
     const today = result.daily.find((d) => d.date === "2026-05-06");
     expect(today?.balance).toBe(10000);
+  });
+
+  it("forecast newDate shifts the projected event to a different day", () => {
+    // Schedule is rule-monthly on the 6th (2026-05-06 in-window),
+    // amount -500. Forecast row shifts this occurrence to the 9th
+    // instead. The projection walk emits nothing on the 6th and
+    // drops the balance on the 9th.
+    const schedId = "00000000-0000-0000-0000-0000000000d1";
+    const acct = makeAccount({ currentBalance: "10000.00" });
+    const sched: ScheduledTransaction = {
+      id: schedId,
+      kind: "schedule",
+      isActive: true,
+      isSample: false,
+      accountId: "00000000-0000-0000-0000-0000000000a1",
+      transferToAccountId: null,
+      categoryId: null,
+      payee: "Rent",
+      description: null,
+      amount: "-500.00",
+      type: "expense",
+      frequency: "monthly",
+      interval: 1,
+      startDate: "2026-04-06",
+      endDate: null,
+      dayOfMonth: 6,
+      amountMin: null,
+      notes: null,
+      lineageId: null,
+      createdAt: new Date("2025-01-01T00:00:00Z"),
+      updatedAt: new Date("2025-01-01T00:00:00Z"),
+    } as unknown as ScheduledTransaction;
+
+    const forecasts = buildForecastLookup([
+      {
+        scheduledId: schedId,
+        occurrenceDate: "2026-05-06",
+        amount: null,
+        newDate: "2026-05-09",
+      },
+    ]);
+
+    const result = computeCashflow({
+      accounts: [acct],
+      realTransactions: [],
+      scheduledTransactions: [sched],
+      forecasts,
+      from: parseISO("2026-05-06"),
+      to: parseISO("2026-05-10"),
+    });
+    // Today (the rule date) has no projected event any more.
+    expect(result.daily.find((d) => d.date === "2026-05-06")?.balance).toBe(
+      10000,
+    );
+    // The projected drop lands on the shifted date.
+    expect(result.daily.find((d) => d.date === "2026-05-09")?.balance).toBe(
+      9500,
+    );
+    expect(
+      result.daily.find((d) => d.date === "2026-05-09")?.hasProjected,
+    ).toBe(true);
+  });
+
+  it("forecast amount override sizes the projected event", () => {
+    // Same schedule (Rent -$500). Forecast row keeps the date but
+    // says this occurrence will be $520 instead — the projection
+    // should show the balance drop by 520, not 500.
+    const schedId = "00000000-0000-0000-0000-0000000000d2";
+    const acct = makeAccount({ currentBalance: "10000.00" });
+    const sched: ScheduledTransaction = {
+      id: schedId,
+      kind: "schedule",
+      isActive: true,
+      isSample: false,
+      accountId: "00000000-0000-0000-0000-0000000000a1",
+      transferToAccountId: null,
+      categoryId: null,
+      payee: "Rent",
+      description: null,
+      amount: "-500.00",
+      type: "expense",
+      frequency: "monthly",
+      interval: 1,
+      startDate: "2026-04-06",
+      endDate: null,
+      dayOfMonth: 6,
+      amountMin: null,
+      notes: null,
+      lineageId: null,
+      createdAt: new Date("2025-01-01T00:00:00Z"),
+      updatedAt: new Date("2025-01-01T00:00:00Z"),
+    } as unknown as ScheduledTransaction;
+
+    const forecasts = buildForecastLookup([
+      {
+        scheduledId: schedId,
+        // API stores amount pre-signed on write.
+        occurrenceDate: "2026-05-06",
+        amount: "-520.00",
+        newDate: null,
+      },
+    ]);
+
+    const result = computeCashflow({
+      accounts: [acct],
+      realTransactions: [],
+      scheduledTransactions: [sched],
+      forecasts,
+      from: parseISO("2026-05-06"),
+      to: parseISO("2026-05-10"),
+    });
+    expect(result.daily.find((d) => d.date === "2026-05-06")?.balance).toBe(
+      9480,
+    );
   });
 
   it("multi-account: combined balance is the sum of per-account balances", () => {

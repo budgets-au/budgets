@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { scheduledTransactions, categories } from "@/db/schema";
+import { scheduledTransactions, scheduledForecasts, categories } from "@/db/schema";
 import { sql, and, eq, ne, isNotNull, gte, lte, inArray, or, isNull } from "drizzle-orm";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from "date-fns";
-import { expandRecurrence } from "@/lib/recurrence";
+import { expandRecurrence, buildForecastLookup } from "@/lib/recurrence";
 import { accountIdSql, parseAccountIds } from "@/lib/api/account-ids";
 import { withAuth } from "@/lib/api/route-guards";
 
@@ -261,6 +261,22 @@ export const GET = withAuth(async (request) => {
   const scheduledRowsFull = allActiveSchedules.filter((s) => s.kind !== "budget");
   const budgetSchedules = allActiveSchedules.filter((s) => s.kind === "budget");
 
+  // Per-occurrence overrides — the Plan column bakes in whatever
+  // amount + date shifts the operator set on the "Upcoming
+  // forecast" section of a schedule. Only needed for the
+  // scheduledRowsFull path (budgets are period-anchored and
+  // don't consume the newDate axis; their amount override could
+  // be plumbed here too but is out of scope for this pass).
+  const forecastRows = await db
+    .select({
+      scheduledId: scheduledForecasts.scheduledId,
+      occurrenceDate: scheduledForecasts.occurrenceDate,
+      amount: scheduledForecasts.amount,
+      newDate: scheduledForecasts.newDate,
+    })
+    .from(scheduledForecasts);
+  const forecastLookup = buildForecastLookup(forecastRows);
+
   // FREQ_MONTHLY (the old monthly-normalised "Plan/mo rate") used to live
   // here — a yearly $1200 became $100/mo and showed in the Plan column as
   // an average. That was confusing next to the lumpy per-month cells (which
@@ -280,7 +296,9 @@ export const GET = withAuth(async (request) => {
     if (s.categoryTransferKind === "internal") continue;
     // Expand the per-occurrence dates so a quarterly bill lands in the
     // months it actually fires, not 1/3 of the amount in every month.
-    const events = expandRecurrence(s, fromDate, toDate);
+    const events = expandRecurrence(s, fromDate, toDate, {
+      forecasts: forecastLookup,
+    });
     const monthMap = scheduledByCategoryByMonth.get(s.categoryId) ?? {};
     for (const e of events) {
       // Transfer schedules emit two events per occurrence (source +

@@ -1,6 +1,6 @@
 import { addDays, isAfter } from "date-fns";
 import type { Account, Transaction, ScheduledTransaction } from "@/db/schema";
-import { expandRecurrence } from "./recurrence";
+import { expandRecurrence, type ForecastLookup } from "./recurrence";
 import { toISO } from "./utils";
 
 export interface CashflowEvent {
@@ -121,6 +121,7 @@ export function computeCashflow({
   accounts,
   realTransactions,
   scheduledTransactions,
+  forecasts,
   from,
   to,
   accountIds,
@@ -128,6 +129,10 @@ export function computeCashflow({
   accounts: Account[];
   realTransactions: CashflowTransaction[];
   scheduledTransactions: ScheduledTransaction[];
+  /** Optional per-occurrence amount / date overrides. When absent
+   *  the projection is pure rule-driven (matches callers that
+   *  haven't been updated to fetch forecasts yet). */
+  forecasts?: ForecastLookup;
   from: Date;
   to: Date;
   accountIds?: string[];
@@ -181,7 +186,10 @@ export function computeCashflow({
     // be the only one in scope. Instead, filter at the per-event level below.
     // `includeBudgets: true` so weekly/monthly cap-style schedules project
     // forward.
-    const projected = expandRecurrence(s, from, to, { includeBudgets: true });
+    const projected = expandRecurrence(s, from, to, {
+      includeBudgets: true,
+      forecasts,
+    });
     // Budget schedules have no real-txn counterpart, so the past-period
     // occurrences are meaningless clutter on the calendar (they'd show as
     // "scheduled but missed"). Drop budget occurrences on/before today —

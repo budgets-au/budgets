@@ -9,6 +9,44 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.340.0 — 2026-08-16
+
+### Added
+- **Scheduled-forecast overrides now flow into the projection.**
+  0.339 added a per-occurrence "Shift to" date (alongside the
+  existing per-occurrence amount override) but its reach was
+  limited to the schedule-detail chart. This release threads the
+  same overrides through the projection engine so the calendar
+  page, forward-balance dashboard widget, and the Reports →
+  Cashflow "Plan" columns all render the shifted / resized
+  occurrences too.
+  - **New primitives** in `src/lib/recurrence.ts`:
+    `OccurrenceOverride`, `ForecastLookup`, and
+    `buildForecastLookup(rows)`. `expandRecurrence` gained an
+    optional `options.forecasts` — when a rule-derived
+    occurrence has a matching row, its emitted event's date
+    shifts to `newDate` (if set) and its amount is replaced by
+    the stored (already sign-corrected) value (if set). Both
+    transfer legs shift + resize together.
+  - **`computeCashflow`** accepts an optional `forecasts` param
+    and threads it into every `expandRecurrence` call. Existing
+    tests that don't pass `forecasts` continue to see pure
+    rule-driven projection — no behavioural change for callers
+    that haven't been updated.
+  - **`/api/cashflow`** and **`/api/reports/cashflow`** fetch
+    every `scheduled_forecasts` row and hand it to
+    `buildForecastLookup` before calling the compute step. The
+    fetch is cheap (indexed on `scheduled_id`, unbounded scans
+    would only ever be a few hundred rows in a typical ledger).
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 785/795 unit tests — two new cases in `cashflow.test.ts`:
+  a forecast `newDate` shifts the projected event to a different
+  day (no drop on the rule date, drop on the shifted date); a
+  forecast `amount` override sizes the projected event
+  (currentBalance − 520, not currentBalance − 500).
+
 ## 0.339.0 — 2026-08-16
 
 ### Added

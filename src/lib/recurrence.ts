@@ -44,6 +44,55 @@ export interface ProjectedEvent {
   scheduledId: string;
 }
 
+/** Per-occurrence override consumed by the projection engine.
+ *  `amount` is stored in sign-corrected form (expense/transfer
+ *  negative, income positive) so the projection can drop it in
+ *  without further inspection. `newDate` when set shifts the
+ *  occurrence to that ISO date. Either or both may be non-null;
+ *  a row with neither is skipped. */
+export interface OccurrenceOverride {
+  amount: string | null;
+  newDate: string | null;
+}
+
+/** scheduleId → (rule-derived occurrenceDate → override). Two-level
+ *  map so per-schedule lookup happens once per schedule regardless
+ *  of how many occurrences the walk emits. Build with
+ *  `buildForecastLookup`. */
+export type ForecastLookup = Map<string, Map<string, OccurrenceOverride>>;
+
+/** Convenience builder that groups a flat list of scheduled_forecasts
+ *  rows into the nested map `expandRecurrence` consumes. Both API
+ *  routes (/api/cashflow, /api/reports/cashflow) call this on the
+ *  rows they fetch so the compute step never has to reason about
+ *  DB row shape. */
+export function buildForecastLookup(
+  rows: Array<{
+    scheduledId: string;
+    occurrenceDate: string;
+    amount: string | null;
+    newDate: string | null;
+  }>,
+): ForecastLookup {
+  const out: ForecastLookup = new Map();
+  for (const r of rows) {
+    // A row with neither axis is meaningless (the API's upsert
+    // validator rejects them, but defence-in-depth here means a
+    // stale row can't shift a rule-date event to itself).
+    if (r.amount === null && r.newDate === null) continue;
+    let inner = out.get(r.scheduledId);
+    if (!inner) {
+      inner = new Map();
+      out.set(r.scheduledId, inner);
+    }
+    inner.set(r.occurrenceDate, {
+      amount: r.amount,
+      newDate: r.newDate,
+    });
+  }
+  return out;
+}
+
 function inRange(d: Date, from: Date, to: Date): boolean {
   return (isAfter(d, from) || isEqual(d, from)) && (isBefore(d, to) || isEqual(d, to));
 }
@@ -117,14 +166,21 @@ function eventsForOccurrence(
   scheduled: RecurrenceInput,
   cursor: Date,
   transferDualLeg: boolean,
+  override?: OccurrenceOverride,
 ): ProjectedEvent[] {
   // Caller (expandRecurrence) already filters out null-accountId rows.
   if (!scheduled.accountId) return [];
-  const date = toISO(cursor);
+  // Rule-derived date is the join key for forecast lookup;
+  // override.newDate (when set) shifts the emitted event to a
+  // different day. override.amount (when set, already sign-
+  // corrected on write) replaces the schedule's standard amount.
+  // Both transfer legs shift + resize together.
+  const date = override?.newDate ?? toISO(cursor);
+  const amount = override?.amount ?? scheduled.amount;
   const sourceEvent: ProjectedEvent = {
     date,
     accountId: scheduled.accountId,
-    amount: scheduled.amount,
+    amount,
     payee: scheduled.payee ?? "",
     description: scheduled.description ?? "",
     isProjected: true,
@@ -141,7 +197,7 @@ function eventsForOccurrence(
       // Opposite sign: source side stores negative, destination credits the
       // same magnitude positively. Avoids double-flipping by toggling the
       // numeric value rather than re-parsing the original string.
-      amount: formatAmount(-parseFloat(scheduled.amount)),
+      amount: formatAmount(-parseFloat(amount)),
       payee: scheduled.payee ?? "",
       description: scheduled.description ?? "",
       isProjected: true,
@@ -156,7 +212,16 @@ export function expandRecurrence(
   scheduled: RecurrenceInput,
   from: Date,
   to: Date,
-  options?: { includeBudgets?: boolean; transferDualLeg?: boolean },
+  options?: {
+    includeBudgets?: boolean;
+    transferDualLeg?: boolean;
+    /** Optional forecast lookup — when present, overrides on the
+     *  rule-derived occurrence date shift the emitted event's date
+     *  and/or replace its amount. Absent = pure rule-driven
+     *  projection (matches every existing caller that hasn't been
+     *  updated). */
+    forecasts?: ForecastLookup;
+  },
 ): ProjectedEvent[] {
   // Budgets are spending caps, not specific transactions, so most callers
   // (missed-detection, schedule lists, reports) want them excluded. The
@@ -166,13 +231,17 @@ export function expandRecurrence(
   if (!scheduled.accountId) return [];
   if (scheduled.kind === "budget" && !options?.includeBudgets) return [];
   const transferDualLeg = options?.transferDualLeg ?? true;
+  const forecastForSched = options?.forecasts?.get(scheduled.id);
   const events: ProjectedEvent[] = [];
   const start = parseISO(scheduled.startDate);
   const end = scheduled.endDate ? parseISO(scheduled.endDate) : null;
 
   if (scheduled.frequency === "once") {
     if (inRange(start, from, to)) {
-      events.push(...eventsForOccurrence(scheduled, start, transferDualLeg));
+      const override = forecastForSched?.get(toISO(start));
+      events.push(
+        ...eventsForOccurrence(scheduled, start, transferDualLeg, override),
+      );
     }
     return events;
   }
@@ -199,7 +268,10 @@ export function expandRecurrence(
   // Emit all occurrences in range
   while (!isAfter(cursor, rangeEnd)) {
     if (!isBefore(cursor, from)) {
-      events.push(...eventsForOccurrence(scheduled, cursor, transferDualLeg));
+      const override = forecastForSched?.get(toISO(cursor));
+      events.push(
+        ...eventsForOccurrence(scheduled, cursor, transferDualLeg, override),
+      );
     }
     cursor = nextOccurrence(cursor, scheduled.frequency, scheduled.interval, effectiveDayOfMonth);
   }

@@ -9,6 +9,64 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.336.0 — 2026-08-15
+
+### Added
+- **Two new reports: Financial Health + Trends & Anomalies.**
+  The Reports section was retrospective across all 15 tabs —
+  none of them answered "am I on track?" or "what's shifted
+  lately?" without you having to eyeball the Cashflow matrix.
+  Both new reports sit under the **Overview** group in the
+  report picker.
+  - **Financial Health** — a one-page motivational board.
+    Stat row (savings rate, net worth, emergency-fund coverage
+    in months, debt-to-income) with MoM deltas on the savings
+    rate; a savings-rate line chart across the window with a
+    dashed reference line at your target; a top-5 expense
+    composition donut for the current month; and a Targets
+    card with sliders for the savings-rate and emergency-fund
+    thresholds. Auto-infers emergency-fund holdings (all
+    `savings`-type accounts) and liabilities (`credit` + `loan`)
+    so the tiles work out of the box; explicit overrides live
+    in display prefs if you want to steer them.
+  - **Trends & Anomalies** — four ranked-list panels answering
+    "what's shifted lately?". **Top movers** ranks categories by
+    |current-month − 3-month rolling avg|. **Streaks over plan**
+    surfaces expense categories that have been over their
+    (scheduled + budget) plan for 2+ months running. **New this
+    month** highlights categories with $0 in the prior 3 months
+    but activity in the current one — perfect for spotting
+    subscription creep. **Fastest-accelerating expenses** ranks
+    by 3-month growth rate with a $20 baseline floor so
+    pocket-change % explosions don't dominate.
+  - **Data-path reuse.** Both reports feed off the existing
+    `/api/reports/cashflow` payload — no new endpoints. Health
+    also reads `/api/accounts?includeArchived=true` for the
+    balance snapshot. The maths lives in two pure calc modules
+    (`_shared/health-calcs.ts` and `_shared/anomaly-calcs.ts`)
+    with **32 new colocated tests** locking the ratios and
+    ranking rules in.
+  - **New display prefs** (persisted per-operator, sync across
+    devices): `healthTargetSavingsRatePct` (default 20%),
+    `healthTargetEmergencyMonths` (default 6),
+    `healthEmergencyFundAccountIds`, and
+    `healthLiabilityAccountIds` (both auto-inferred when empty).
+  - **Shared primitives.** `_shared/stat-tile.tsx` (label + big
+    value + delta pill) and `_shared/ranked-list.tsx` (titled
+    5-row card) are extracted so future overview-style reports
+    can compose them without copying markup.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 780/790 unit — 32 new cases across
+  `health-calcs.test.ts` (21) and `anomaly-calcs.test.ts` (11):
+  savings-rate ratios, emergency-fund months, debt-to-income,
+  net-worth signed sum, top-N + Other bucketing, top-mover
+  ranking with < $5 noise floor, ≥ 2-month overspend streaks,
+  new-this-month gate, and growth-rate baseline filtering. The
+  5 disk-usage failures are pre-existing dev-env issues
+  (missing `/data`), unrelated to this change.
+
 ## 0.330.0 — 2026-08-14
 
 ### Added

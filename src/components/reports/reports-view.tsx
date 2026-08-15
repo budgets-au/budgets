@@ -174,6 +174,8 @@ import { ScatterReport } from "./scatter-report";
 import { PayeeParetoReport } from "./payee-pareto-report";
 import { AccountsCashflowReport } from "./accounts-cashflow-report";
 import { TransferFlowReport } from "./transfer-flow-report";
+import { FinancialHealthReport } from "./financial-health-report";
+import { AnomaliesReport } from "./anomalies-report";
 
 
 interface CategoryRow {
@@ -205,6 +207,8 @@ const REPORT_GROUPS = [
       { value: "category", label: "Category" },
       { value: "monthly", label: "Monthly" },
       { value: "yoy", label: "Year over Year" },
+      { value: "health", label: "Financial Health" },
+      { value: "trends", label: "Trends & Anomalies" },
     ],
   },
   {
@@ -306,6 +310,10 @@ export function ReportsView({
         "payees",
         "accounts",
         "flow",
+        // Both new reports lean on rolling-3-month comparisons —
+        // needs ≥ 4 months of data to fill the panels.
+        "health",
+        "trends",
       ];
       const defaultMonths = longWindowTabs.includes(activeTab) ? 11 : 0;
       setFrom(
@@ -446,6 +454,28 @@ export function ReportsView({
             category for the selected period (no monthly columns). */}
         <TabsContent value="category">
           <CategoryReport from={from} to={to} accountIds={accountIds} />
+        </TabsContent>
+
+        {/* Financial Health — one-page motivational board: savings
+            rate, net worth, emergency fund, debt-to-income + savings
+            rate over time + expense composition + tunable targets. */}
+        <TabsContent value="health">
+          <FinancialHealthReport
+            from={from}
+            to={to}
+            accountIds={accountIds}
+          />
+        </TabsContent>
+
+        {/* Trends & Anomalies — four ranked panels answering "what
+            has shifted lately?" — top movers, streaks, new categories,
+            fastest-accelerating spend. */}
+        <TabsContent value="trends">
+          <AnomaliesReport
+            from={from}
+            to={to}
+            accountIds={accountIds}
+          />
         </TabsContent>
 
         {/* Year over Year — owns its own FY scope (anchored to today's

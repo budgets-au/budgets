@@ -156,6 +156,21 @@ export interface DisplayPrefs {
   /** Per-tab from/to date range on the Reports page. Keyed by tab id. */
   reportsPeriodByTab: Record<string, { from: string; to: string }>;
 
+  // ── Financial Health report ───────────────────────────────────
+  /** Target savings rate as a fraction (0.20 = 20%). Drives the
+   *  target reference line on the savings-rate line chart and the
+   *  goodness colouring on the savings-rate stat tile. */
+  healthTargetSavingsRatePct: number;
+  /** Target emergency-fund coverage in months of expenses. */
+  healthTargetEmergencyMonths: number;
+  /** Explicit account IDs that count as emergency-fund holdings.
+   *  Empty = auto-infer (every non-archived `savings`-type account). */
+  healthEmergencyFundAccountIds: string[];
+  /** Explicit account IDs that count as liabilities for the
+   *  debt-to-income tile. Empty = auto-infer
+   *  (non-archived `credit` + `loan` accounts). */
+  healthLiabilityAccountIds: string[];
+
   // ── Global filters ─────────────────────────────────────────────
   /** Account IDs the user has filtered to in the global account
    * selector. Empty array = "All accounts". Stored centrally so the
@@ -279,6 +294,10 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   envelopeExcludedCatIds: [],
   scheduledAccountFilterMode: "all",
   reportsPeriodByTab: {},
+  healthTargetSavingsRatePct: 0.2,
+  healthTargetEmergencyMonths: 6,
+  healthEmergencyFundAccountIds: [],
+  healthLiabilityAccountIds: [],
   globalAccountIds: [],
   scheduledMatchWindowMonths: 6,
   scheduledMissedGraceDays: 4,
@@ -580,6 +599,10 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
       ["all", "selected"] as const,
     ),
     reportsPeriodByTab: periodMap("reportsPeriodByTab"),
+    healthTargetSavingsRatePct: num("healthTargetSavingsRatePct"),
+    healthTargetEmergencyMonths: num("healthTargetEmergencyMonths"),
+    healthEmergencyFundAccountIds: stringArray("healthEmergencyFundAccountIds"),
+    healthLiabilityAccountIds: stringArray("healthLiabilityAccountIds"),
     globalAccountIds: stringArray("globalAccountIds"),
     scheduledMatchWindowMonths: num("scheduledMatchWindowMonths"),
     scheduledMissedGraceDays: num("scheduledMissedGraceDays"),

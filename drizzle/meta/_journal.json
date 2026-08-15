@@ -141,6 +141,13 @@
       "when": 1780100000000,
       "tag": "0019_api_keys_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1780200000000,
+      "tag": "0020_accounts_is_emergency_fund",
+      "breakpoints": true
     }
   ]
 }

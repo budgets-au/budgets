@@ -13,6 +13,11 @@ export type AccountLite = {
   /** Optional in tests where the display label isn't relevant.
    *  The API row carries it and callers use it for hints. */
   name?: string;
+  /** Explicit "count toward emergency-fund coverage" flag on the
+   *  account row (added 0.337). Optional so existing tests and any
+   *  legacy caller building an AccountLite by hand don't need to
+   *  supply it — the resolver treats the absent value as false. */
+  isEmergencyFund?: boolean;
 };
 
 /** Savings rate for a given month key ("YYYY-MM"). income and
@@ -71,17 +76,19 @@ export function avgMonthlyIncome(
   return sum / months.length;
 }
 
-/** Which accounts count as emergency-fund holdings. Explicit override
- *  wins; otherwise falls back to every `savings`-type non-archived
- *  account. */
+/** Which accounts count as emergency-fund holdings.
+ *  Priority order:
+ *    1. Every non-archived account with `isEmergencyFund=true`.
+ *       This is the operator's explicit choice; it wins.
+ *    2. If NO account has the flag on, fall back to every
+ *       non-archived `savings`-type account. The fallback keeps
+ *       upgraders from seeing an empty tile on first render — as
+ *       soon as they flag any account the fallback disengages. */
 export function resolveEmergencyFundAccounts(
   all: AccountLite[],
-  overrideIds: string[],
 ): AccountLite[] {
-  if (overrideIds.length > 0) {
-    const set = new Set(overrideIds);
-    return all.filter((a) => set.has(a.id));
-  }
+  const flagged = all.filter((a) => !a.isArchived && a.isEmergencyFund === true);
+  if (flagged.length > 0) return flagged;
   return all.filter((a) => !a.isArchived && a.type === "savings");
 }
 

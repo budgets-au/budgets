@@ -1,0 +1,11 @@
+-- Per-account flag identifying "emergency fund" holdings. The
+-- Financial Health report (introduced in 0.336) previously inferred
+-- the fund from every `savings`-type account, which conflated
+-- "long-term savings goals" with "runway if the paycheck stops".
+-- Flagging is explicit and lives on the row so switching a fund
+-- account off/on doesn't need a display-pref update on every device.
+--
+-- Default 0 (integer form of false) matches the drizzle boolean
+-- storage. When no account has the flag set, the report falls back
+-- to the original auto-inference so upgraders see no regression.
+ALTER TABLE accounts ADD COLUMN is_emergency_fund INTEGER NOT NULL DEFAULT 0;

@@ -107,6 +107,16 @@ export const accounts = sqliteTable(
     isExternal: integer("is_external", { mode: "boolean" })
       .notNull()
       .default(false),
+    /** Flag this account as an emergency-fund holding for the
+     * Financial Health report's emergency-fund coverage tile.
+     * When at least one account has this flag on, the report sums
+     * only flagged accounts; when zero accounts have it on, the
+     * report falls back to auto-inference (every non-archived
+     * `savings`-type account) so upgraders see the tile filled
+     * without needing to click through. */
+    isEmergencyFund: integer("is_emergency_fund", { mode: "boolean" })
+      .notNull()
+      .default(false),
     /** Flag for the demo dataset seeded into a fresh DB. The "Remove
      * sample data" control in Settings deletes every row tagged
      * isSample=1 across accounts / transactions / scheduled. User-

@@ -104,14 +104,28 @@ const accounts: AccountLite[] = [
 ];
 
 describe("resolveEmergencyFundAccounts", () => {
-  it("defaults to non-archived savings when no override", () => {
-    const picked = resolveEmergencyFundAccounts(accounts, []);
+  it("falls back to non-archived savings when no account is flagged", () => {
+    const picked = resolveEmergencyFundAccounts(accounts);
     expect(picked.map((a) => a.id).sort()).toEqual(["sav", "sav2"]);
   });
 
-  it("respects an explicit override", () => {
-    const picked = resolveEmergencyFundAccounts(accounts, ["chk", "sav"]);
-    expect(picked.map((a) => a.id).sort()).toEqual(["chk", "sav"]);
+  it("returns only flagged accounts once any account is flagged", () => {
+    const flagged: AccountLite[] = [
+      ...accounts,
+      { id: "efund", type: "checking", currentBalance: 5000, isArchived: false, isEmergencyFund: true },
+    ];
+    const picked = resolveEmergencyFundAccounts(flagged);
+    expect(picked.map((a) => a.id)).toEqual(["efund"]);
+  });
+
+  it("ignores archived accounts even when flagged", () => {
+    const flagged: AccountLite[] = [
+      { id: "old", type: "savings", currentBalance: 100, isArchived: true, isEmergencyFund: true },
+      { id: "live", type: "savings", currentBalance: 1000, isArchived: false },
+    ];
+    // No live account is flagged → falls back to non-archived savings
+    const picked = resolveEmergencyFundAccounts(flagged);
+    expect(picked.map((a) => a.id)).toEqual(["live"]);
   });
 });
 

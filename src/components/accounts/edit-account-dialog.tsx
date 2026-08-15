@@ -42,6 +42,7 @@ export function EditAccountDialog({
   const [startingDate, setStartingDate] = useState(account.startingDate ?? "");
   const [currentBalance, setCurrentBalance] = useState(account.currentBalance);
   const [isExternal, setIsExternal] = useState(account.isExternal);
+  const [isEmergencyFund, setIsEmergencyFund] = useState(account.isEmergencyFund);
 
   // currentBalance is normally derived (= startingBalance + sum of txns).
   // We only PATCH it when the user has changed it relative to its initial
@@ -63,6 +64,7 @@ export function EditAccountDialog({
       // PG rejecting "" as an invalid date.
       startingDate: startingDate === "" ? null : startingDate,
       isExternal,
+      isEmergencyFund,
     };
     // startingBalance and currentBalance are notNull numerics. Only include
     // them in the payload when the user has a value, so a type-only edit on
@@ -176,6 +178,23 @@ export function EditAccountDialog({
                 Transfers to or from this account count as real cashflow in
                 weekly totals (use for Savings, Emergency, etc.) instead of
                 netting to zero against another asset account.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isEmergencyFund}
+              onChange={(e) => setIsEmergencyFund(e.target.checked)}
+              className="mt-0.5 cursor-pointer accent-indigo-600"
+            />
+            <span className="text-sm">
+              Emergency fund
+              <span className="block text-[11px] text-muted-foreground">
+                Counts toward the "Emergency fund coverage" tile on
+                Reports → Financial Health. Flag one or more accounts
+                you'd draw on if your income stopped.
               </span>
             </span>
           </label>

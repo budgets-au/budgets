@@ -108,9 +108,9 @@ export function FinancialHealthReport({
 
     const nw = netWorth(accountsData);
 
-    const emergencyAccounts = resolveEmergencyFundAccounts(
-      accountsData,
-      prefs.healthEmergencyFundAccountIds,
+    const emergencyAccounts = resolveEmergencyFundAccounts(accountsData);
+    const emergencyIsExplicit = accountsData.some(
+      (a) => !a.isArchived && a.isEmergencyFund === true,
     );
     const emergencyBalance = emergencyAccounts.reduce((sum, a) => {
       const bal =
@@ -145,6 +145,7 @@ export function FinancialHealthReport({
       savingsRateDelta,
       nw,
       emergencyAccounts,
+      emergencyIsExplicit,
       emergencyBalance,
       efMonths,
       liabilityAccounts,
@@ -156,7 +157,6 @@ export function FinancialHealthReport({
   }, [
     cashflow,
     accountsData,
-    prefs.healthEmergencyFundAccountIds,
     prefs.healthLiabilityAccountIds,
   ]);
 
@@ -385,9 +385,19 @@ export function FinancialHealthReport({
                       .map((a) => a.name ?? a.id.slice(0, 6))
                       .join(", ")}
                     {derived.emergencyAccounts.length > 3 ? "…" : ""}.
+                    {!derived.emergencyIsExplicit && (
+                      <>
+                        {" "}
+                        <span className="italic">
+                          Auto-detected from savings-type accounts —
+                          flag specific accounts as "Emergency fund" in
+                          account settings to pin the list.
+                        </span>
+                      </>
+                    )}
                   </>
                 ) : (
-                  "No savings-type account detected — configure via account settings."
+                  "No emergency-fund account detected — flag one via account settings."
                 )}
               </p>
             </label>

@@ -15,6 +15,7 @@ const updateSchema = z.object({
   color: z.string().optional(),
   isArchived: z.boolean().optional(),
   isExternal: z.boolean().optional(),
+  isEmergencyFund: z.boolean().optional(),
   // Re-anchor the account: starting_balance + starting_date are the historical
   // anchor; current_balance is the live value. When startingBalance changes
   // without an explicit currentBalance, currentBalance is recomputed from the

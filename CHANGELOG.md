@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.337.0 — 2026-08-15
+
+### Added
+- **Per-account "Emergency fund" flag.** Accounts now carry an
+  `is_emergency_fund` boolean that drives the Financial Health
+  report's emergency-fund coverage tile.
+  - **Why not a display pref.** 0.336 shipped this as a list of
+    account IDs in `display_prefs`. Wrong home for it — that
+    list needs updating on every device, doesn't survive a
+    profile swap cleanly, and a boolean per row is closer to how
+    the data actually reads ("this account is part of my
+    emergency fund"). The pref is removed; the flag replaces it.
+  - **Migration 0020_accounts_is_emergency_fund** adds the
+    column defaulting to `0` on every existing account. No data
+    loss — the report falls back to auto-inference (every
+    non-archived `savings`-type account) whenever zero accounts
+    are flagged, so upgraders see the tile filled on first
+    render without needing to click through.
+  - **Edit dialog gained a checkbox** matching the "Outside the
+    spending pool" pattern with a short explainer. Flag one or
+    more accounts; the report tile hint tells the operator
+    whether the current list is auto-inferred or pinned.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 781/791 unit tests — one added case exercises the flag +
+  fallback ordering in `resolveEmergencyFundAccounts`. The 5
+  disk-usage failures remain pre-existing dev-env issues.
+
 ## 0.336.0 — 2026-08-15
 
 ### Added

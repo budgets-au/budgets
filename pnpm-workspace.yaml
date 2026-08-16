@@ -35,9 +35,21 @@ overrides:
   tar: ">=7.5.11"
   postcss: ">=8.5.10"
   esbuild: ">=0.25.0"
+  # CVE-2026-53571 (server.fs.deny bypass on Windows alt paths)
+  # + CVE-2026-53632 (NTLMv2 disclosure via UNC paths). Both
+  # Windows-only + dev-server-only. Fresh installs pull vite 8.2.x
+  # already; this pins the floor so future dep drift stays safe.
+  vite: ">=8.0.16"
   fast-uri: ">=3.1.2"
   ip-address: ">=10.1.1"
   hono: ">=4.12.18"
   picomatch: ">=4.0.0"
   brace-expansion: ">=5.0.6"
   qs: ">=6.15.2"
+  # esbuild@0.18.20 lingers inside the deprecated @esbuild-kit
+  # chain (drizzle-kit@0.31.10 → @esbuild-kit/esm-loader →
+  # @esbuild-kit/core-utils, which pins ~0.18.20 — narrower than
+  # our >=0.25.0 override can override). Dependabot alert #14 is
+  # dismissed as tolerable risk: the vulnerable path only runs
+  # during `pnpm dev` on the developer's machine and is not
+  # shipped in the runtime Docker image.

@@ -9,6 +9,30 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.341.0 — 2026-08-17
+
+### Security
+- **Bumped vite past CVE-2026-53571 / CVE-2026-53632.** A clean
+  install now resolves vite to 8.2.1 (via the `vitest 4.1.x`
+  peer range); the CVEs are patched from 8.0.16 onward. Added
+  `vite: ">=8.0.16"` to `pnpm-workspace.yaml` overrides so
+  future dep drift stays on the safe side. Both CVEs were
+  Windows-only + dev-server-only, but the alert-fatigue floor
+  is worth clearing regardless.
+- **Dismissed Dependabot alert #14** (esbuild dev-server CORS
+  bypass) as tolerable risk. The vulnerable esbuild@0.18.20
+  lingers inside the deprecated `@esbuild-kit` chain
+  (drizzle-kit@0.31.10 → @esbuild-kit/esm-loader →
+  @esbuild-kit/core-utils, which pins `~0.18.20` — narrower than
+  our `>=0.25.0` override can override). drizzle-kit 0.31.10 is
+  the latest, so there is no upstream fix path. The vulnerable
+  path only runs during `pnpm dev` on the developer machine and
+  is not shipped in the runtime Docker image.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 785/795 unit tests (unchanged baseline).
+
 ## 0.340.0 — 2026-08-16
 
 ### Added

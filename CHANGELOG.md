@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.342.0 — 2026-08-19
+
+### Added
+- **Past forecast overrides are now visible and editable from the
+  schedule form.** The "Upcoming forecast" section on a schedule
+  already surfaced amount + date overrides for future
+  occurrences; historical overrides — for occurrences whose
+  anchor date is on or before today — used to be invisible from
+  the UI (though still stored in `scheduled_forecasts`). The
+  section gained a **Past (N)** chip next to the "Upcoming
+  forecast" heading — visible only when at least one historical
+  override exists for the schedule. Clicking it reveals a second
+  table below the upcoming one, listing each past override,
+  newest first, with the same editable amount + date-shift
+  inputs. Saving hits the existing
+  `POST /api/scheduled/[id]/forecasts` endpoint — no backend
+  change — so the operator can correct a typo, tweak a
+  historical figure, or clear the override entirely without
+  needing a DB tool.
+  - The row markup for both tables now lives in a single
+    `OverridesTable` helper so future changes (columns,
+    validation, save-affordance behaviour) only need one edit.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 785/795 unit tests (unchanged baseline — the change is UI-only
+  and reuses the existing route + save handler that are already
+  covered).
+
 ## 0.341.0 — 2026-08-17
 
 ### Security

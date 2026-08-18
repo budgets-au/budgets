@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, History } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ interface ScheduleLite {
   transferToAccountId: string | null;
 }
 
-interface UpcomingOccurrence {
+interface OccurrenceRow {
   /** Storage key — for schedules this is the occurrence date, for budgets
    * the period's `from` date (period anchor). */
   date: string;
@@ -65,6 +65,11 @@ interface ForecastEntry {
   newDate: string | null;
 }
 
+interface Draft {
+  amount: string;
+  date: string;
+}
+
 export function ScheduledForecastRows({
   schedule,
   initialForecasts,
@@ -91,14 +96,14 @@ export function ScheduledForecastRows({
   // using the schedule object directly would re-create this array on every
   // parent re-render (the parent rebuilds `editing` each pass), which then
   // tripped the effect below and wiped any in-progress draft typing.
-  const occurrences = useMemo<UpcomingOccurrence[]>(() => {
+  const occurrences = useMemo<OccurrenceRow[]>(() => {
     if (!schedule.isActive) return [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     if (schedule.kind === "budget") {
       const cur = currentBudgetPeriod(schedule.startDate, schedule.frequency, today);
-      const out: UpcomingOccurrence[] = [];
+      const out: OccurrenceRow[] = [];
       let from = parseISO(cur.from);
       // Skip the in-progress period — only forecast caps for periods that
       // haven't started yet. The user can still tweak the live cap by editing
@@ -139,41 +144,48 @@ export function ScheduledForecastRows({
     schedule.isActive,
   ]);
 
-  // Local input state, keyed by occurrence date. Two axes per row —
-  // amount (magnitude only; sign added from schedule.type on save)
-  // and date (an ISO YYYY-MM-DD to shift the occurrence to). Empty
-  // strings mean "no override on that axis" — the schedule's own
-  // amount / rule-derived date apply.
-  interface Draft {
-    amount: string;
-    date: string;
-  }
-  const [drafts, setDrafts] = useState<Record<string, Draft>>(() => {
-    const out: Record<string, Draft> = {};
-    for (const o of occurrences) {
-      const v = fcMap.get(o.date);
-      out[o.date] = {
-        amount: v?.amount ? Math.abs(parseFloat(v.amount)).toFixed(2) : "",
-        date: v?.newDate ?? "",
-      };
+  // Historical overrides — every stored forecast whose anchor
+  // occurrenceDate is on or before today. Sorted newest first so
+  // the most-recently-relevant edits are visible without scrolling.
+  // Budgets can carry amount overrides on past periods too, so we
+  // don't filter by kind here.
+  const pastOverrides = useMemo<OccurrenceRow[]>(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayISO = toISO(today);
+    const isBudget = schedule.kind === "budget";
+    const out: OccurrenceRow[] = [];
+    for (const [occDate, v] of fcMap) {
+      if (occDate > todayISO) continue;
+      if (v.amount === null && v.newDate === null) continue;
+      if (isBudget) {
+        // Budgets label a period range; recompute the period end
+        // from the schedule's frequency so the row reads the same
+        // shape as an upcoming budget row.
+        const next = nextBudgetPeriodStart(parseISO(occDate), schedule.frequency);
+        const to = toISO(addDays(next, -1));
+        out.push({ date: occDate, label: `${formatDate(occDate)} – ${formatDate(to)}` });
+      } else {
+        out.push({ date: occDate, label: formatDate(occDate) });
+      }
     }
+    out.sort((a, b) => b.date.localeCompare(a.date));
     return out;
-  });
+  }, [fcMap, schedule.kind, schedule.frequency]);
+
+  // Draft state covers both upcoming + past rows so the same
+  // controls edit either. Empty strings mean "no override on that
+  // axis" — the schedule's own amount / rule-derived date apply.
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
+    buildDrafts([...occurrences, ...pastOverrides], fcMap),
+  );
 
   // Reset drafts when the user switches schedules or the persisted forecasts
   // change. Deliberately NOT depending on `occurrences` — that array's
   // identity wobbled across parent renders and would otherwise wipe
   // in-progress draft typing.
   useEffect(() => {
-    const out: Record<string, Draft> = {};
-    for (const o of occurrences) {
-      const v = fcMap.get(o.date);
-      out[o.date] = {
-        amount: v?.amount ? Math.abs(parseFloat(v.amount)).toFixed(2) : "",
-        date: v?.newDate ?? "",
-      };
-    }
-    setDrafts(out);
+    setDrafts(buildDrafts([...occurrences, ...pastOverrides], fcMap));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule.id, fcMap]);
 
@@ -184,12 +196,16 @@ export function ScheduledForecastRows({
     const v = fcMap.get(o.date);
     return !!v && (v.amount !== null || v.newDate !== null);
   }).length;
+
   const [expanded, setExpanded] = useState(false);
-  // Collapse when the user switches schedules. (Hook must run before the
-  // early return below — otherwise newly-added schedules with no upcoming
-  // occurrences cause a "rendered fewer hooks" violation.)
+  const [showPast, setShowPast] = useState(false);
+  // Collapse both when the user switches schedules. (Hooks must run
+  // before the early return below — otherwise newly-added schedules
+  // with no upcoming or past rows cause a "rendered fewer hooks"
+  // violation.)
   useEffect(() => {
     setExpanded(false);
+    setShowPast(false);
   }, [schedule.id]);
 
   async function save(date: string) {
@@ -221,135 +237,231 @@ export function ScheduledForecastRows({
     }
   }
 
-  if (occurrences.length === 0) return null;
+  if (occurrences.length === 0 && pastOverrides.length === 0) return null;
 
   const standardMagnitude = Math.abs(parseFloat(schedule.amount)).toFixed(2);
+  const hasUpcoming = occurrences.length > 0;
+  const hasPast = pastOverrides.length > 0;
 
   return (
     <div className="space-y-2 pt-2 border-t">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
-      >
-        {expanded ? (
-          <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+      <div className="flex items-center gap-2">
+        {hasUpcoming ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex-1 min-w-0 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
+          >
+            {expanded ? (
+              <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" />
+            ) : (
+              <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+            )}
+            <Label className="text-[11px] cursor-pointer">Upcoming forecast</Label>
+            {overrideCount > 0 && (
+              <span className="text-[10px] text-amber-600">
+                {overrideCount} override{overrideCount === 1 ? "" : "s"}
+              </span>
+            )}
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              standard ${standardMagnitude}
+            </span>
+          </button>
         ) : (
-          <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+          // No upcoming rows — the past-overrides button becomes the
+          // whole heading so the section still has an anchor.
+          <div className="flex-1 min-w-0 flex items-center gap-2 text-muted-foreground">
+            <Label className="text-[11px]">Upcoming forecast</Label>
+            <span className="text-[10px]">no upcoming occurrences</span>
+            <span className="ml-auto text-[10px]">standard ${standardMagnitude}</span>
+          </div>
         )}
-        <Label className="text-[11px] cursor-pointer">Upcoming forecast</Label>
-        {overrideCount > 0 && (
-          <span className="text-[10px] text-amber-600">
-            {overrideCount} override{overrideCount === 1 ? "" : "s"}
-          </span>
+        {hasPast && (
+          <button
+            type="button"
+            onClick={() => setShowPast((v) => !v)}
+            title={
+              showPast ? "Hide past overrides" : "Show past overrides"
+            }
+            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border transition-colors ${
+              showPast
+                ? "bg-muted text-foreground border-border"
+                : "text-muted-foreground border-border/50 hover:bg-muted/60"
+            }`}
+          >
+            <History className="h-3 w-3" />
+            Past ({pastOverrides.length})
+          </button>
         )}
-        <span className="ml-auto text-[10px] text-muted-foreground">
-          standard ${standardMagnitude}
-        </span>
-      </button>
-      {expanded && (
-      <div className="overflow-x-auto rounded-md border bg-background">
-        <table className="w-full text-xs">
-          <thead className="bg-muted/40 text-muted-foreground">
-            <tr>
-              <th className={`px-2 py-1 text-left font-medium ${schedule.kind === "budget" ? "w-56" : "w-32"}`}>
-                {schedule.kind === "budget" ? "Period" : "Date"}
+      </div>
+      {expanded && hasUpcoming && (
+        <OverridesTable
+          rows={occurrences}
+          drafts={drafts}
+          setDrafts={setDrafts}
+          fcMap={fcMap}
+          schedule={schedule}
+          save={save}
+          savingDate={savingDate}
+          standardMagnitude={standardMagnitude}
+        />
+      )}
+      {showPast && hasPast && (
+        <div className="space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground pl-1">
+            Past overrides
+          </div>
+          <OverridesTable
+            rows={pastOverrides}
+            drafts={drafts}
+            setDrafts={setDrafts}
+            fcMap={fcMap}
+            schedule={schedule}
+            save={save}
+            savingDate={savingDate}
+            standardMagnitude={standardMagnitude}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function buildDrafts(
+  rows: OccurrenceRow[],
+  fcMap: Map<string, { amount: string | null; newDate: string | null }>,
+): Record<string, Draft> {
+  const out: Record<string, Draft> = {};
+  for (const o of rows) {
+    const v = fcMap.get(o.date);
+    out[o.date] = {
+      amount: v?.amount ? Math.abs(parseFloat(v.amount)).toFixed(2) : "",
+      date: v?.newDate ?? "",
+    };
+  }
+  return out;
+}
+
+function OverridesTable({
+  rows,
+  drafts,
+  setDrafts,
+  fcMap,
+  schedule,
+  save,
+  savingDate,
+  standardMagnitude,
+}: {
+  rows: OccurrenceRow[];
+  drafts: Record<string, Draft>;
+  setDrafts: React.Dispatch<React.SetStateAction<Record<string, Draft>>>;
+  fcMap: Map<string, { amount: string | null; newDate: string | null }>;
+  schedule: ScheduleLite;
+  save: (date: string) => Promise<void>;
+  savingDate: string | null;
+  standardMagnitude: string;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-md border bg-background">
+      <table className="w-full text-xs">
+        <thead className="bg-muted/40 text-muted-foreground">
+          <tr>
+            <th className={`px-2 py-1 text-left font-medium ${schedule.kind === "budget" ? "w-56" : "w-32"}`}>
+              {schedule.kind === "budget" ? "Period" : "Date"}
+            </th>
+            {schedule.kind !== "budget" && (
+              <th className="px-2 py-1 text-left font-medium w-36">
+                Shift to
               </th>
-              {schedule.kind !== "budget" && (
-                <th className="px-2 py-1 text-left font-medium w-36">
-                  Shift to
-                </th>
-              )}
-              <th className="px-2 py-1 text-right font-medium">
-                {schedule.kind === "budget" ? "Forecast cap" : "Forecast amount"}
-              </th>
-              <th className="px-2 py-1 text-left font-medium w-12">Status</th>
-              <th className="px-2 py-1 text-right font-medium w-24"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {occurrences.map((occ) => {
-              const draft = drafts[occ.date] ?? { amount: "", date: "" };
-              const stored = fcMap.get(occ.date);
-              const storedAmount = stored?.amount
-                ? Math.abs(parseFloat(stored.amount)).toFixed(2)
-                : "";
-              const storedDate = stored?.newDate ?? "";
-              const dirty =
-                draft.amount !== storedAmount || draft.date !== storedDate;
-              const hasOverride =
-                !!stored && (stored.amount !== null || stored.newDate !== null);
-              const willClear = !draft.amount.trim() && !draft.date.trim();
-              return (
-                <tr key={occ.date}>
-                  <td className="px-2 py-1 tabular-nums whitespace-nowrap">
-                    {occ.label}
-                  </td>
-                  {schedule.kind !== "budget" && (
-                    <td className="px-2 py-1">
-                      <Input
-                        type="date"
-                        min="1900-01-01"
-                        max="2099-12-31"
-                        value={draft.date}
-                        onChange={(e) =>
-                          setDrafts((p) => ({
-                            ...p,
-                            [occ.date]: {
-                              ...(p[occ.date] ?? { amount: "", date: "" }),
-                              date: e.target.value,
-                            },
-                          }))
-                        }
-                        placeholder={occ.date}
-                        className="h-7 text-xs max-w-[140px]"
-                      />
-                    </td>
-                  )}
-                  <td className="px-2 py-1 text-right">
+            )}
+            <th className="px-2 py-1 text-right font-medium">
+              {schedule.kind === "budget" ? "Forecast cap" : "Forecast amount"}
+            </th>
+            <th className="px-2 py-1 text-left font-medium w-12">Status</th>
+            <th className="px-2 py-1 text-right font-medium w-24"></th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {rows.map((occ) => {
+            const draft = drafts[occ.date] ?? { amount: "", date: "" };
+            const stored = fcMap.get(occ.date);
+            const storedAmount = stored?.amount
+              ? Math.abs(parseFloat(stored.amount)).toFixed(2)
+              : "";
+            const storedDate = stored?.newDate ?? "";
+            const dirty =
+              draft.amount !== storedAmount || draft.date !== storedDate;
+            const hasOverride =
+              !!stored && (stored.amount !== null || stored.newDate !== null);
+            const willClear = !draft.amount.trim() && !draft.date.trim();
+            return (
+              <tr key={occ.date}>
+                <td className="px-2 py-1 tabular-nums whitespace-nowrap">
+                  {occ.label}
+                </td>
+                {schedule.kind !== "budget" && (
+                  <td className="px-2 py-1">
                     <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={draft.amount}
+                      type="date"
+                      min="1900-01-01"
+                      max="2099-12-31"
+                      value={draft.date}
                       onChange={(e) =>
                         setDrafts((p) => ({
                           ...p,
                           [occ.date]: {
                             ...(p[occ.date] ?? { amount: "", date: "" }),
-                            amount: e.target.value,
+                            date: e.target.value,
                           },
                         }))
                       }
-                      placeholder={standardMagnitude}
-                      className="h-7 text-xs text-right ml-auto max-w-[140px] tabular-nums"
+                      placeholder={occ.date}
+                      className="h-7 text-xs max-w-[140px]"
                     />
                   </td>
-                  <td className="px-2 py-1 text-[10px] text-muted-foreground">
-                    {hasOverride ? "override" : "standard"}
-                  </td>
-                  <td className="px-2 py-1 text-right">
-                    {dirty ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => save(occ.date)}
-                        disabled={savingDate === occ.date}
-                        className="h-7 px-2 text-[10px]"
-                      >
-                        {savingDate === occ.date ? "…" : willClear ? "Clear" : "Save"}
-                      </Button>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">—</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      )}
+                )}
+                <td className="px-2 py-1 text-right">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={draft.amount}
+                    onChange={(e) =>
+                      setDrafts((p) => ({
+                        ...p,
+                        [occ.date]: {
+                          ...(p[occ.date] ?? { amount: "", date: "" }),
+                          amount: e.target.value,
+                        },
+                      }))
+                    }
+                    placeholder={standardMagnitude}
+                    className="h-7 text-xs text-right ml-auto max-w-[140px] tabular-nums"
+                  />
+                </td>
+                <td className="px-2 py-1 text-[10px] text-muted-foreground">
+                  {hasOverride ? "override" : "standard"}
+                </td>
+                <td className="px-2 py-1 text-right">
+                  {dirty ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => save(occ.date)}
+                      disabled={savingDate === occ.date}
+                      className="h-7 px-2 text-[10px]"
+                    >
+                      {savingDate === occ.date ? "…" : willClear ? "Clear" : "Save"}
+                    </Button>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

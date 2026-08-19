@@ -9,6 +9,31 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.343.0 — 2026-08-19
+
+### Changed
+- **"Past occurrences" chip is now visible whenever the schedule
+  has a history, not only when an override already exists.** The
+  0.342 chip gated on `pastOverrides.length > 0`, which meant
+  operators couldn't reach the past editor to *add* an override
+  to a past occurrence — the section only appeared once one was
+  already there. The chip now surfaces the last three rule-
+  derived past occurrences by default (walking `expandRecurrence`
+  backward from today, or stepping budget periods backward) and
+  merges in any stored overrides outside that window so an old
+  edit stays reachable.
+  - Section label renamed to **Past occurrences** (was "Past
+    overrides") since it now surfaces both edited and un-edited
+    rows.
+  - Same editable amount + shift-to inputs for either type; the
+    row shows "override" or "standard" in the Status column so
+    the operator can see at a glance which past ones already
+    carry a saved edit.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 785/795 unit tests (unchanged baseline — UI-only change).
+
 ## 0.342.0 — 2026-08-19
 
 ### Added

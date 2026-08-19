@@ -58,6 +58,21 @@ function nextBudgetPeriodStart(from: Date, frequency: string): Date {
   }
 }
 
+function prevBudgetPeriodStart(from: Date, frequency: string): Date {
+  switch (frequency) {
+    case "weekly":
+      return addWeeks(from, -1);
+    case "monthly":
+      return addMonths(from, -1);
+    case "quarterly":
+      return addMonths(from, -3);
+    case "yearly":
+      return addYears(from, -1);
+    default:
+      return addMonths(from, -1);
+  }
+}
+
 interface ForecastEntry {
   scheduledId: string;
   occurrenceDate: string;
@@ -144,40 +159,105 @@ export function ScheduledForecastRows({
     schedule.isActive,
   ]);
 
-  // Historical overrides — every stored forecast whose anchor
-  // occurrenceDate is on or before today. Sorted newest first so
-  // the most-recently-relevant edits are visible without scrolling.
-  // Budgets can carry amount overrides on past periods too, so we
-  // don't filter by kind here.
-  const pastOverrides = useMemo<OccurrenceRow[]>(() => {
+  // Historical occurrences — the last HORIZON rule-derived past
+  // occurrences (regardless of whether they carry an override),
+  // plus any DB override rows outside that window so an old edit
+  // stays reachable. Sorted newest first so the most-recently-
+  // relevant edits are at the top. Showing the rule-derived rows
+  // unconditionally lets the operator add a fresh override to a
+  // past occurrence — the "editable" spirit of the Past section is
+  // symmetric with the Upcoming one.
+  const pastOccurrences = useMemo<OccurrenceRow[]>(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayISO = toISO(today);
     const isBudget = schedule.kind === "budget";
+
     const out: OccurrenceRow[] = [];
+    const seen = new Set<string>();
+
+    const pushBudgetRow = (dateISO: string) => {
+      const next = nextBudgetPeriodStart(parseISO(dateISO), schedule.frequency);
+      const to = toISO(addDays(next, -1));
+      out.push({ date: dateISO, label: `${formatDate(dateISO)} – ${formatDate(to)}` });
+    };
+    const pushScheduleRow = (dateISO: string) => {
+      out.push({ date: dateISO, label: formatDate(dateISO) });
+    };
+
+    if (isBudget) {
+      // Walk backward from the current period start; skip the
+      // in-progress period (it's live, not historical).
+      const cur = currentBudgetPeriod(
+        schedule.startDate,
+        schedule.frequency,
+        today,
+      );
+      const scheduleStart = parseISO(schedule.startDate);
+      let periodStart = parseISO(cur.from);
+      for (let i = 0; i < HORIZON; i++) {
+        periodStart = prevBudgetPeriodStart(periodStart, schedule.frequency);
+        if (periodStart < scheduleStart) break;
+        const dateISO = toISO(periodStart);
+        if (seen.has(dateISO)) continue;
+        seen.add(dateISO);
+        pushBudgetRow(dateISO);
+      }
+    } else {
+      const start = parseISO(schedule.startDate);
+      if (start <= today) {
+        // expandRecurrence emits events in ascending order; walk
+        // from startDate to today, dedup (transfer schedules emit
+        // two events per occurrence), keep the last HORIZON.
+        const projected = expandRecurrence(
+          schedule as unknown as ScheduledTransaction,
+          start,
+          today,
+        );
+        const dates: string[] = [];
+        const dedup = new Set<string>();
+        for (const p of projected) {
+          if (p.date > todayISO) continue;
+          if (dedup.has(p.date)) continue;
+          dedup.add(p.date);
+          dates.push(p.date);
+        }
+        for (const d of dates.slice(-HORIZON).reverse()) {
+          if (seen.has(d)) continue;
+          seen.add(d);
+          pushScheduleRow(d);
+        }
+      }
+    }
+
+    // Include DB override rows whose date is outside the last-N
+    // window — preserves visibility of older edits.
     for (const [occDate, v] of fcMap) {
       if (occDate > todayISO) continue;
       if (v.amount === null && v.newDate === null) continue;
-      if (isBudget) {
-        // Budgets label a period range; recompute the period end
-        // from the schedule's frequency so the row reads the same
-        // shape as an upcoming budget row.
-        const next = nextBudgetPeriodStart(parseISO(occDate), schedule.frequency);
-        const to = toISO(addDays(next, -1));
-        out.push({ date: occDate, label: `${formatDate(occDate)} – ${formatDate(to)}` });
-      } else {
-        out.push({ date: occDate, label: formatDate(occDate) });
-      }
+      if (seen.has(occDate)) continue;
+      seen.add(occDate);
+      if (isBudget) pushBudgetRow(occDate);
+      else pushScheduleRow(occDate);
     }
+
     out.sort((a, b) => b.date.localeCompare(a.date));
     return out;
-  }, [fcMap, schedule.kind, schedule.frequency]);
+  }, [
+    fcMap,
+    schedule.id,
+    schedule.kind,
+    schedule.startDate,
+    schedule.frequency,
+    schedule.interval,
+    schedule.dayOfMonth,
+  ]);
 
   // Draft state covers both upcoming + past rows so the same
   // controls edit either. Empty strings mean "no override on that
   // axis" — the schedule's own amount / rule-derived date apply.
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
-    buildDrafts([...occurrences, ...pastOverrides], fcMap),
+    buildDrafts([...occurrences, ...pastOccurrences], fcMap),
   );
 
   // Reset drafts when the user switches schedules or the persisted forecasts
@@ -185,7 +265,7 @@ export function ScheduledForecastRows({
   // identity wobbled across parent renders and would otherwise wipe
   // in-progress draft typing.
   useEffect(() => {
-    setDrafts(buildDrafts([...occurrences, ...pastOverrides], fcMap));
+    setDrafts(buildDrafts([...occurrences, ...pastOccurrences], fcMap));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule.id, fcMap]);
 
@@ -237,11 +317,11 @@ export function ScheduledForecastRows({
     }
   }
 
-  if (occurrences.length === 0 && pastOverrides.length === 0) return null;
+  if (occurrences.length === 0 && pastOccurrences.length === 0) return null;
 
   const standardMagnitude = Math.abs(parseFloat(schedule.amount)).toFixed(2);
   const hasUpcoming = occurrences.length > 0;
-  const hasPast = pastOverrides.length > 0;
+  const hasPast = pastOccurrences.length > 0;
 
   return (
     <div className="space-y-2 pt-2 border-t">
@@ -281,7 +361,7 @@ export function ScheduledForecastRows({
             type="button"
             onClick={() => setShowPast((v) => !v)}
             title={
-              showPast ? "Hide past overrides" : "Show past overrides"
+              showPast ? "Hide past occurrences" : "Show past occurrences"
             }
             className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border transition-colors ${
               showPast
@@ -290,7 +370,7 @@ export function ScheduledForecastRows({
             }`}
           >
             <History className="h-3 w-3" />
-            Past ({pastOverrides.length})
+            Past ({pastOccurrences.length})
           </button>
         )}
       </div>
@@ -309,10 +389,10 @@ export function ScheduledForecastRows({
       {showPast && hasPast && (
         <div className="space-y-1">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground pl-1">
-            Past overrides
+            Past occurrences
           </div>
           <OverridesTable
-            rows={pastOverrides}
+            rows={pastOccurrences}
             drafts={drafts}
             setDrafts={setDrafts}
             fcMap={fcMap}

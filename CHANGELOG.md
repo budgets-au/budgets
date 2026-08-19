@@ -9,6 +9,24 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.344.0 — 2026-08-20
+
+### Added
+- **One-click reset on forecast override rows.** Every row in the
+  Upcoming or Past occurrences table that carries a stored
+  override now shows a small circular-arrow (reset) icon in the
+  actions column. Clicking it fires DELETE against
+  `/api/scheduled/[id]/forecasts` and reverts that row back to
+  the schedule's standard amount and rule-derived date without
+  needing to manually clear both input fields first. Sits next
+  to Save when the row is also dirty, so an "undo my edit and
+  reset to standard" flow is a single click. Title tooltip on
+  hover explains what it does.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 785/795 unit tests (unchanged baseline — UI-only change).
+
 ## 0.343.0 — 2026-08-19
 
 ### Changed

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, History } from "lucide-react";
+import { ChevronDown, ChevronRight, History, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -317,6 +317,30 @@ export function ScheduledForecastRows({
     }
   }
 
+  /** Delete an override row and drop its draft back to empty. Used
+   *  by the row-level reset button — separate from `save` so it
+   *  fires immediately without reading the (possibly-dirty) draft
+   *  state, and so it never accidentally UPSERTs when the caller
+   *  meant to reset. */
+  async function resetOverride(date: string) {
+    setSavingDate(date);
+    try {
+      const res = await fetch(`/api/scheduled/${schedule.id}/forecasts`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ occurrenceDate: date }),
+      });
+      if (!res.ok) throw new Error();
+      setDrafts((p) => ({ ...p, [date]: { amount: "", date: "" } }));
+      toast.success("Override reset to standard");
+      onChanged?.();
+    } catch {
+      toast.error("Failed to reset override");
+    } finally {
+      setSavingDate(null);
+    }
+  }
+
   if (occurrences.length === 0 && pastOccurrences.length === 0) return null;
 
   const standardMagnitude = Math.abs(parseFloat(schedule.amount)).toFixed(2);
@@ -382,6 +406,7 @@ export function ScheduledForecastRows({
           fcMap={fcMap}
           schedule={schedule}
           save={save}
+          resetOverride={resetOverride}
           savingDate={savingDate}
           standardMagnitude={standardMagnitude}
         />
@@ -398,6 +423,7 @@ export function ScheduledForecastRows({
             fcMap={fcMap}
             schedule={schedule}
             save={save}
+            resetOverride={resetOverride}
             savingDate={savingDate}
             standardMagnitude={standardMagnitude}
           />
@@ -429,6 +455,7 @@ function OverridesTable({
   fcMap,
   schedule,
   save,
+  resetOverride,
   savingDate,
   standardMagnitude,
 }: {
@@ -438,6 +465,7 @@ function OverridesTable({
   fcMap: Map<string, { amount: string | null; newDate: string | null }>;
   schedule: ScheduleLite;
   save: (date: string) => Promise<void>;
+  resetOverride: (date: string) => Promise<void>;
   savingDate: string | null;
   standardMagnitude: string;
 }) {
@@ -523,19 +551,35 @@ function OverridesTable({
                   {hasOverride ? "override" : "standard"}
                 </td>
                 <td className="px-2 py-1 text-right">
-                  {dirty ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => save(occ.date)}
-                      disabled={savingDate === occ.date}
-                      className="h-7 px-2 text-[10px]"
-                    >
-                      {savingDate === occ.date ? "…" : willClear ? "Clear" : "Save"}
-                    </Button>
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground">—</span>
-                  )}
+                  <div className="flex items-center justify-end gap-1">
+                    {dirty && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => save(occ.date)}
+                        disabled={savingDate === occ.date}
+                        className="h-7 px-2 text-[10px]"
+                      >
+                        {savingDate === occ.date ? "…" : willClear ? "Clear" : "Save"}
+                      </Button>
+                    )}
+                    {hasOverride ? (
+                      <button
+                        type="button"
+                        onClick={() => resetOverride(occ.date)}
+                        disabled={savingDate === occ.date}
+                        title="Reset this occurrence to the schedule's standard amount and date"
+                        aria-label="Reset override"
+                        className="inline-flex items-center justify-center h-7 w-7 rounded-md border border-border/50 text-muted-foreground hover:bg-muted/60 hover:text-foreground disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      !dirty && (
+                        <span className="text-[10px] text-muted-foreground">—</span>
+                      )
+                    )}
+                  </div>
                 </td>
               </tr>
             );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import {
@@ -93,6 +93,21 @@ export function useDisplayPrefs(): {
     },
     [prefs, mutate],
   );
+
+  // Cross-device theme-family reconciliation. If the operator toggled
+  // Terminal on another device the SWR fetch here brings the new
+  // value in; if the cookie / html attribute on THIS device still
+  // says the old one, sync them silently so the next SSR paint
+  // matches the current DOM. Cheap check — read once per render,
+  // only writes when values disagree.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const current = document.documentElement.dataset.themeFamily;
+    if (current !== prefs.themeFamily) {
+      document.documentElement.dataset.themeFamily = prefs.themeFamily;
+      document.cookie = `theme-family=${prefs.themeFamily}; path=/; max-age=${60 * 60 * 24 * 365}; samesite=lax`;
+    }
+  }, [prefs.themeFamily]);
 
   return { prefs, setPref };
 }

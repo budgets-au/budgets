@@ -9,6 +9,47 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.345.0 — 2026-08-29
+
+### Added
+- **New optional theme family: Terminal.** Alongside the
+  original visual identity, the app now ships a second theme
+  family — Terminal — designed as a distinct visual voice:
+  self-hosted IBM Plex Sans + IBM Plex Mono; warm amber accent
+  in place of indigo; near-black + warm off-white in dark mode,
+  warm paper + deep near-black in light mode; retuned cashflow
+  signal tokens so the calendar dots inherit the family's
+  palette rather than reading "generic indigo".
+  - **Off by default.** Existing operators see zero visual
+    change until they opt in via **Settings → General →
+    Appearance → Theme family**. The picker is a two-card
+    control with real palette swatches, mirroring how the
+    theme-toggle in the topbar handles light/dark.
+  - **Scoped without replacing.** Terminal's tokens live under
+    `[data-theme-family="terminal"]` (and
+    `[data-theme-family="terminal"].dark`) in `globals.css`;
+    the original `:root` / `.dark` blocks are untouched. Layout
+    reads a new `theme-family` cookie server-side and stamps
+    the attribute onto `<html>` — no FOUC, no client-side
+    hydration flip.
+  - **Cross-device sync.** The picker also writes
+    `display_prefs.themeFamily`, and `useDisplayPrefs()`
+    reconciles the cookie + `<html>` attribute against the
+    prefs on every SWR revalidation, so toggling on the
+    phone updates the desktop on next focus.
+  - **Fonts self-hosted.** IBM Plex Mono 400/500 (~10 KB each)
+    and IBM Plex Sans variable font (~40 KB) live under
+    `public/fonts/plex/`, loaded via `@font-face` with the
+    Latin unicode-range so no other subset ships. Both
+    families load whether Terminal is active or not, so the
+    switch is instant with no font-swap flash.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 785/795 unit tests (unchanged baseline — appearance-only
+  change; the display-prefs roundtrip test picked up the new
+  key automatically via the golden-file check).
+
 ## 0.344.0 — 2026-08-20
 
 ### Added

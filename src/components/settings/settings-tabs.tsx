@@ -19,6 +19,7 @@ import { OrphanCategoriesPanel } from "@/components/settings/orphan-categories-p
 import { ResetBrowserData } from "@/components/settings/reset-browser-data";
 import { SchedulePaletteEditor } from "@/components/settings/schedule-palette-editor";
 import { BraveSearchKeyPanel } from "@/components/settings/brave-search-key-panel";
+import { ThemeFamilyPicker } from "@/components/settings/theme-family-picker";
 
 const SETTINGS_TABS = ["general", "rules", "backups", "databases", "maintenance", "security"] as const;
 type SettingsTab = (typeof SETTINGS_TABS)[number];
@@ -60,6 +61,16 @@ export function SettingsTabs() {
       </TabsList>
 
       <TabsContent value="general" className="space-y-6 max-w-2xl">
+        <div className="rounded-xl border bg-card divide-y">
+          <div className="px-4 py-3">
+            <h2 className="font-medium">Appearance</h2>
+          </div>
+          <ThemeFamilyPicker
+            value={prefs.themeFamily}
+            onChange={(v) => setPref("themeFamily", v)}
+          />
+        </div>
+
         <div className="rounded-xl border bg-card divide-y">
           <div className="px-4 py-3">
             <h2 className="font-medium">Display</h2>

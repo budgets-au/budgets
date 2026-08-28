@@ -207,6 +207,16 @@ export interface DisplayPrefs {
    * see the rule apply) was the original reason this toggle exists. */
   importAutoApplyRules: boolean;
 
+  // ── Appearance ────────────────────────────────────────────────
+  /** Which visual identity the app renders in. `"default"` is the
+   *  original look (indigo accent, neutral greys). `"terminal"` is
+   *  the Sample-B direction — self-hosted IBM Plex Sans + Mono,
+   *  warm-amber accent, warm off-white on near-black. The choice
+   *  is stamped onto `<html data-theme-family="...">` and swaps
+   *  the token set defined at the bottom of `globals.css`. Both
+   *  families still respect the light / dark toggle. */
+  themeFamily: "default" | "terminal";
+
   // ── Investments ───────────────────────────────────────────────
   /** Which gain-window the Investments page's stock/paper-trade
    *  table column shows. `return` is the lifetime total; `day`,
@@ -300,6 +310,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   featureInvestments: true,
   featureSuper: true,
   importAutoApplyRules: true,
+  themeFamily: "default",
   investmentsGainRange: "return",
   dashboardUpcomingShowBudgets: false,
   dashboardRecentShowNotes: false,
@@ -604,6 +615,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     featureInvestments: bool("featureInvestments"),
     featureSuper: bool("featureSuper"),
     importAutoApplyRules: bool("importAutoApplyRules"),
+    themeFamily: pickEnum("themeFamily", ["default", "terminal"] as const),
     investmentsGainRange: pickEnum(
       "investmentsGainRange",
       ["day", "week", "month", "return"] as const,

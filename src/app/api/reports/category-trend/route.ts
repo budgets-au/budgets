@@ -54,7 +54,10 @@ export const GET = withAuth(async (request) => {
     : "month";
 
   const accountIds = parseAccountIds(searchParams);
-  const { accountFilterT } = accountIdSql(accountIds);
+  // `accountFilter` (bare `account_id`) not `accountFilterT`
+  // (which expects a `t.` alias) — this query hits `transactions`
+  // directly with no join alias.
+  const { accountFilter } = accountIdSql(accountIds);
 
   // Category metadata lookup — verifies the id exists and gives us
   // the display name + type for the response header.
@@ -101,7 +104,7 @@ export const GET = withAuth(async (request) => {
     FROM transactions
     WHERE category_id IN (${idListSql})
       AND date >= ${from} AND date <= ${to}
-      ${accountFilterT}
+      ${accountFilter}
     GROUP BY period
     ORDER BY period
   `);

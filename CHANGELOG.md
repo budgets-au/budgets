@@ -9,6 +9,19 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.347.0 — 2026-09-01
+
+### Fixed
+- **Category Trend report threw "Couldn't load category trend"
+  on every fetch.** The 0.346 API route consumed
+  `accountFilterT` from `accountIdSql()` — the `t.`-aliased
+  variant meant for joined subqueries — but built its own SQL
+  against `transactions` directly with no `t` alias, so
+  SQLite errored with a `no such column: t.account_id` on the
+  first request and the client rendered the fallback error
+  state instead of the chart. Swapped to the bare `accountFilter`
+  variant which references `account_id` unaliased.
+
 ## 0.346.0 — 2026-09-01
 
 ### Added

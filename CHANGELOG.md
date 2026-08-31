@@ -9,6 +9,45 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.346.0 — 2026-09-01
+
+### Added
+- **Category Trend report.** A new tab on `/reports` (in the
+  Overview group, alongside Financial Health and Trends &
+  Anomalies). Pick any category with the standard picker —
+  grandparent, parent, or leaf — and see its spend shape as an
+  area chart across the current window, grouped by
+  **Day / Week / Month / Year**. Grandparent selections roll up
+  the whole subtree, so "Home" shows Home + Rent + Utilities +
+  every other descendant folded together; leaf selections show
+  just that line.
+  - **Absolute magnitudes on the Y axis.** Expense categories
+    are stored negative in the ledger, but a rising area on the
+    chart should mean "more activity" no matter which side of
+    income/expense you picked. Signed totals still surface in
+    the tooltip and the summary tile.
+  - **Summary tiles.** Total across the window, average per
+    period, peak period + amount, and the category name +
+    type. Sit above the chart so scanning is one-glance before
+    the shape.
+  - **Reference line at the average.** Dashed horizontal marker
+    on the chart labelled with the average, so operators can
+    eyeball whether a spike is an outlier or a shift.
+  - **Selection persists per-operator** via two new
+    display-prefs (`categoryTrendCategoryId`,
+    `categoryTrendGroupBy`) — the report opens on the same
+    category + granularity next visit.
+- **New API endpoint** `GET /api/reports/category-trend` backs
+  the tab. Params: `categoryId`, `groupBy` (day / week / month /
+  year), `from`, `to`, optional `accountIds`. Uses the existing
+  `categoryDescendantIds` helper so the subtree roll-up
+  semantics match every other category-scoped report.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 787/797 unit tests (unchanged baseline — the display-prefs
+  golden roundtrip test picked up the two new keys automatically).
+
 ## 0.345.0 — 2026-08-29
 
 ### Added

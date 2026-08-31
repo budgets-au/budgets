@@ -168,6 +168,14 @@ export interface DisplayPrefs {
    *  (non-archived `credit` + `loan` accounts). */
   healthLiabilityAccountIds: string[];
 
+  // ── Category-trend report ────────────────────────────────────
+  /** Last-picked category on Reports → Category Trend. `null`
+   *  before the operator's first selection — the report renders an
+   *  empty state prompting them to pick one. */
+  categoryTrendCategoryId: string | null;
+  /** Group-by granularity on Reports → Category Trend. */
+  categoryTrendGroupBy: "day" | "week" | "month" | "year";
+
   // ── Global filters ─────────────────────────────────────────────
   /** Account IDs the user has filtered to in the global account
    * selector. Empty array = "All accounts". Stored centrally so the
@@ -304,6 +312,8 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   healthTargetSavingsRatePct: 0.2,
   healthTargetEmergencyMonths: 6,
   healthLiabilityAccountIds: [],
+  categoryTrendCategoryId: null,
+  categoryTrendGroupBy: "month",
   globalAccountIds: [],
   scheduledMatchWindowMonths: 6,
   scheduledMissedGraceDays: 4,
@@ -609,6 +619,14 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     healthTargetSavingsRatePct: num("healthTargetSavingsRatePct"),
     healthTargetEmergencyMonths: num("healthTargetEmergencyMonths"),
     healthLiabilityAccountIds: stringArray("healthLiabilityAccountIds"),
+    categoryTrendCategoryId:
+      typeof obj.categoryTrendCategoryId === "string"
+        ? obj.categoryTrendCategoryId
+        : DISPLAY_PREFS_DEFAULT.categoryTrendCategoryId,
+    categoryTrendGroupBy: pickEnum(
+      "categoryTrendGroupBy",
+      ["day", "week", "month", "year"] as const,
+    ),
     globalAccountIds: stringArray("globalAccountIds"),
     scheduledMatchWindowMonths: num("scheduledMatchWindowMonths"),
     scheduledMissedGraceDays: num("scheduledMissedGraceDays"),

@@ -176,6 +176,7 @@ import { AccountsCashflowReport } from "./accounts-cashflow-report";
 import { TransferFlowReport } from "./transfer-flow-report";
 import { FinancialHealthReport } from "./financial-health-report";
 import { AnomaliesReport } from "./anomalies-report";
+import { CategoryTrendReport } from "./category-trend-report";
 
 
 interface CategoryRow {
@@ -209,6 +210,7 @@ const REPORT_GROUPS = [
       { value: "yoy", label: "Year over Year" },
       { value: "health", label: "Financial Health" },
       { value: "trends", label: "Trends & Anomalies" },
+      { value: "category-trend", label: "Category Trend" },
     ],
   },
   {
@@ -314,6 +316,10 @@ export function ReportsView({
         // needs ≥ 4 months of data to fill the panels.
         "health",
         "trends",
+        // Category trend defaults to a whole year of monthly data;
+        // if the operator arrived on this tab first, that's what
+        // they want to see, not a one-month sliver.
+        "category-trend",
       ];
       const defaultMonths = longWindowTabs.includes(activeTab) ? 11 : 0;
       setFrom(
@@ -472,6 +478,17 @@ export function ReportsView({
             fastest-accelerating spend. */}
         <TabsContent value="trends">
           <AnomaliesReport
+            from={from}
+            to={to}
+            accountIds={accountIds}
+          />
+        </TabsContent>
+
+        {/* Category Trend — pick any category (grandparent / parent /
+            child) and see its spend shape across the window, grouped
+            by day / week / month / year. Descendants roll up. */}
+        <TabsContent value="category-trend">
+          <CategoryTrendReport
             from={from}
             to={to}
             accountIds={accountIds}

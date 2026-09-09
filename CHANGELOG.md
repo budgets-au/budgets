@@ -9,6 +9,16 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.348.0 — 2026-09-09
+
+### Fixed
+- **Sample data and Unused categories checks no longer spin forever.**
+  Both Settings → Security panels declared their SWR fetchers but
+  accidentally passed the options object in the fetcher position, so
+  neither GET request ran and both panels stayed on “Checking…”.
+  Supplying the fetcher explicitly lets the panels resolve to their
+  current database counts.
+
 ## 0.347.0 — 2026-09-01
 
 ### Fixed

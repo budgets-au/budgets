@@ -9,6 +9,39 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.349.0 — 2026-09-09
+
+### Fixed
+- **Default-password banner cleared after a self password change**
+  (PR #107). The "Default admin/admin password still in use"
+  warning is derived at NextAuth `authorize()` time by
+  re-comparing the seed string against the stored bcrypt hash
+  (hashes are non-deterministic, so a plain string compare
+  won't work) and stamped into the JWT. Rotating the password
+  updated the DB row but nothing re-minted the live session
+  token, so the stale flag survived until the operator signed
+  out and back in — making a successful rotation read as a
+  failure.
+  - **`src/lib/auth.ts`** — the `jwt` callback now handles
+    `trigger === "update"` by re-reading the stored hash
+    server-side (keyed by `token.id`) and re-running the seed
+    compare. Client-supplied session data is never trusted;
+    the warning state is re-derived from the DB. The lazy
+    `require("@/db")` pattern matches the `authorize` callback
+    to avoid the production TDZ bundling cycle.
+  - **`src/components/settings/user-manager.tsx`** — after a
+    successful self password change, calls `updateSession({})`,
+    which fires the server-side refresh so the banner clears
+    in place without a sign-out. Wrapped in try/catch — a
+    refresh failure degrades to the old "clears on next
+    sign-in" behaviour rather than failing the password change.
+  - Admin A changing user B's password leaves A's token
+    untouched (correct — B's token already carries the flag
+    state matching B's hash at B's login).
+
+Fixes #106. Maintainer-added version bump + CHANGELOG entry
+per the PR author's request.
+
 ## 0.348.0 — 2026-09-09
 
 ### Fixed

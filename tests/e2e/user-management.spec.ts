@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
 import { randomBytes } from "node:crypto";
+import { resolve } from "node:path";
+import Database from "better-sqlite3";
+import { hashSync } from "bcryptjs";
 import { signInAsAdmin, captureErrors } from "./_helpers";
 
 /** E2E coverage for the user-management lifecycle (#28). Admin
@@ -27,6 +30,25 @@ import { signInAsAdmin, captureErrors } from "./_helpers";
  *  gating is implicit in the use of the signed-in admin session. */
 
 const RUN_TOKEN = randomBytes(3).toString("hex");
+function restoreDefaultAdminPassword(): void {
+  const dbPath =
+    process.env.E2E_SQLITE_PATH ?? resolve("./tests/e2e/.data/test.db");
+  const key =
+    process.env.E2E_SQLITE_KEY ??
+    "0000000000000000000000000000000000000000000000000000000000000000";
+  const sqlite = new Database(dbPath);
+  try {
+    sqlite.pragma("cipher='sqlcipher'");
+    sqlite.pragma("legacy=4");
+    sqlite.pragma("busy_timeout = 5000");
+    sqlite.pragma(`key = '${key.replace(/'/g, "''")}'`);
+    sqlite.prepare("UPDATE users SET password_hash = ? WHERE username = 'admin'").run(
+      hashSync("admin", 12),
+    );
+  } finally {
+    sqlite.close();
+  }
+}
 
 interface UserRow {
   id: string;
@@ -169,5 +191,45 @@ test.describe("user-management lifecycle (#28)", () => {
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
+  });
+
+  test("clears the default-password banner immediately after a self password change", async ({
+    page,
+  }) => {
+    await signInAsAdmin(page);
+    // The banner's inline <code>admin/admin</code> element only exists
+    // while the warning is mounted; exact match keeps the locator
+    // unique (ancestors carry the longer sentence and fail `exact`).
+    const bannerCode = page.getByText("admin/admin", { exact: true });
+    await expect(bannerCode).toBeVisible();
+
+    try {
+      await page.goto("/settings?tab=security");
+      await page.getByRole("button", { name: "Change password for admin" }).click();
+      const password = `e2e-password-${RUN_TOKEN}`;
+      await page.getByLabel("New password", { exact: true }).fill(password);
+      await page
+        .getByLabel("Confirm new password", { exact: true })
+        .fill(password);
+
+      const passwordUpdate = page.waitForResponse(
+        (response) =>
+          response.request().method() === "PATCH" &&
+          /\/api\/users\/[^/]+$/.test(new URL(response.url()).pathname),
+      );
+      await page.getByRole("button", { name: "Update password" }).click();
+      expect((await passwordUpdate).ok()).toBeTruthy();
+
+      await expect(bannerCode).toHaveCount(0);
+      const sessionResponse = await page.request.get("/api/auth/session");
+      expect(sessionResponse.ok()).toBeTruthy();
+      expect(await sessionResponse.json()).toMatchObject({
+        user: { mustChangePassword: false },
+      });
+    } finally {
+      // The shared E2E fixture must remain login-compatible for specs
+      // that authenticate with the documented admin/admin seed.
+      restoreDefaultAdminPassword();
+    }
   });
 });

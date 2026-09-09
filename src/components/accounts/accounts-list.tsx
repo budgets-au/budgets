@@ -151,7 +151,11 @@ function Row({
   const balance = parseFloat(account.currentBalance);
   return (
     <>
-      <div className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-muted/50 group">
+      <div
+        role="group"
+        aria-label={`${account.name} account`}
+        className="account-row flex items-center justify-between py-1.5 px-2 rounded-md group"
+      >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <span
             className="w-2.5 h-2.5 rounded-full shrink-0"
@@ -183,9 +187,14 @@ function Row({
           >
             {formatAUD(balance)}
           </span>
-          {/* Edit / Reconcile / Hide — hover-revealed on lg+, always
-              visible on touch viewports (feedback_mobile_hover). */}
-          <div className="flex items-center gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+          {/* Hover-capable pointers reveal these with .account-row in
+              globals.css. They stay visible when Firefox reports no
+              hover support, and :focus-within covers keyboard access. */}
+          <div
+            role="group"
+            aria-label={`Actions for ${account.name}`}
+            className="account-row-actions flex items-center gap-0.5 transition-opacity"
+          >
             <button
               onClick={() => setEditing(true)}
               className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"

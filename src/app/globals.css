@@ -8,6 +8,26 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@layer components {
+  /* Tailwind v4 guards hover utilities with (hover: hover). Firefox can
+     report that media feature inconsistently, so essential account actions
+     use :hover directly and remain visible when no hover pointer is reported. */
+  .account-row:hover {
+    background-color: color-mix(in oklab, var(--muted) 50%, transparent);
+  }
+
+  @media (min-width: 64rem) and (any-hover: hover) {
+    .account-row-actions {
+      opacity: 0;
+    }
+
+    .account-row:hover .account-row-actions,
+    .account-row:focus-within .account-row-actions {
+      opacity: 1;
+    }
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

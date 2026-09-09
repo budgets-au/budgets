@@ -9,6 +9,35 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.350.0 — 2026-09-09
+
+### Fixed
+- **/accounts rows intermittently didn't highlight or reveal their
+  Edit / Reconcile / Hide actions on hover in Firefox** (PR #105).
+  The row background and the action reveal were Tailwind `hover:` /
+  `group-hover:` utilities, which Tailwind v4 gates behind an
+  `@media (hover: hover)` query. Firefox can report that media
+  feature inconsistently (and headless Linux more so), so whole
+  rows would ignore the cursor entirely and the action buttons
+  stayed at `opacity: 0`. The row highlight now uses an ungated
+  `.account-row:hover` rule and the actions reveal via plain CSS
+  in `globals.css`, scoped to `(min-width: 64rem) and
+  (any-hover: hover)` — so behaviour is unchanged on touch
+  viewports (always visible) and on hover-capable desktops
+  (revealed on hover, plus `:focus-within` for keyboard users),
+  but no longer depends on Firefox's `(hover: hover)` report.
+  Rows also gained `role="group"` labels so a Playwright
+  regression spec (`tests/e2e/account-row-hover.spec.ts`, run on
+  both Chromium and a focused Firefox project) can pin the
+  resting-hidden / hover-revealed / background-change contract
+  deterministically. Follow-up commit retargets the visual-
+  regression theme-cookie helpers from `0.0.0.0:3003` to
+  `127.0.0.1:3003` so they don't silently drop the cookie under
+  the new baseURL and capture default-theme screenshots.
+
+Fixes #104. Rebased from 0.348.0 to 0.350.0 to clear the
+version conflict with PRs #103 + #107.
+
 ## 0.349.0 — 2026-09-09
 
 ### Fixed

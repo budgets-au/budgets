@@ -9,8 +9,8 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * globalSetup applies migrations to the fresh DB before tests run.
  *
- * Headless chromium only — matrix browsers don't help debug a React
- * render-loop.
+ * The full suite stays on headless Chromium. A focused Firefox project
+ * covers the account-row hover fallback without doubling the suite.
  *
  * `bail: 1` because the first failure tends to be the diagnostic.
  * The rest is the same component crashing repeatedly. */
@@ -35,7 +35,7 @@ export default defineConfig({
   workers: 1,
   reporter: [["list"]],
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? `http://0.0.0.0:${E2E_PORT}`,
+    baseURL: process.env.E2E_BASE_URL ?? `http://127.0.0.1:${E2E_PORT}`,
     trace: "retain-on-failure",
   },
   // `next dev` refuses to run two instances against the same .next
@@ -65,7 +65,7 @@ export default defineConfig({
       process.env.COLLECT_COVERAGE === "1"
         ? `next dev -H 0.0.0.0 -p ${E2E_PORT}`
         : `next build && next start -H 0.0.0.0 -p ${E2E_PORT}`,
-    url: `http://0.0.0.0:${E2E_PORT}/api/auth/csrf`,
+    url: `http://127.0.0.1:${E2E_PORT}/api/auth/csrf`,
     timeout: 600_000,
     // Reuse a hot server when iterating locally; force a fresh
     // boot when collecting coverage so NODE_V8_COVERAGE actually
@@ -83,6 +83,19 @@ export default defineConfig({
       NEXTAUTH_SECRET:
         process.env.NEXTAUTH_SECRET ??
         "0000000000000000000000000000000000000000000000000000000000000000",
+      // Without AUTH_URL, Auth.js redirects the post-login callback to
+      // its http://localhost:3003 default. Chromium falls back from
+      // localhost's ::1 to the IPv4-bound server; Firefox does not, so
+      // sign-in would die with NS_ERROR_CONNECTION_REFUSED. Pin the
+      // concrete loopback host the tests actually use.
+      AUTH_URL:
+        process.env.AUTH_URL ??
+        process.env.E2E_BASE_URL ??
+        `http://127.0.0.1:${E2E_PORT}`,
+      NEXTAUTH_URL:
+        process.env.NEXTAUTH_URL ??
+        process.env.E2E_BASE_URL ??
+        `http://127.0.0.1:${E2E_PORT}`,
       // V8 coverage capture for the Next.js Node process. Active only
       // when the wrapper script sets COLLECT_COVERAGE=1 — keeps the
       // normal `pnpm test:e2e` run zero-overhead. Raw `coverage-*.json`
@@ -104,6 +117,11 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "firefox-account-row-hover",
+      testMatch: /account-row-hover\.spec\.ts/,
+      use: { ...devices["Desktop Firefox"] },
     },
   ],
 });

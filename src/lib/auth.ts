@@ -58,12 +58,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
-    jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.role = (user as { role?: string }).role;
         token.mustChangePassword = (user as { mustChangePassword?: boolean })
           .mustChangePassword;
+      } else if (trigger === "update" && typeof token.id === "string") {
+        // useSession().update({}) reaches this branch after a password
+        // change. Re-read the hash instead of trusting client-supplied
+        // session data, then mint a JWT with the current warning state.
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { db } = require("@/db") as typeof import("@/db");
+        const [currentUser] = await db
+          .select({ passwordHash: users.passwordHash })
+          .from(users)
+          .where(eq(users.id, token.id))
+          .limit(1);
+        if (currentUser) {
+          token.mustChangePassword = await compare(
+            "admin",
+            currentUser.passwordHash,
+          );
+        }
       }
       return token;
     },

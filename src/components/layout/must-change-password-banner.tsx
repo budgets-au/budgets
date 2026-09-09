@@ -11,12 +11,11 @@ import { KeyRound } from "lucide-react";
  * compare succeeds; the result rides the JWT on `session.user
  * .mustChangePassword`.
  *
- * The strip stays visible across every route until the operator
- * changes their password AND signs back in (the JWT refresh on
- * next login re-runs the compare and the flag clears). Doesn't
- * block navigation — that would be hostile when the operator
- * has work in flight — but it links straight to the user-manager
- * so the fix is one click away.
+ * The strip disappears as soon as the operator changes their own
+ * password: the user manager asks Auth.js to refresh the JWT from the
+ * newly stored hash. It doesn't block navigation — that would be hostile
+ * when the operator has work in flight — but it links straight to the
+ * user-manager so the fix is one click away.
  *
  * Tinted amber to read as "attention" without being a destructive
  * red; consistent with the warning-status tone in theme.md. */

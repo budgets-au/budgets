@@ -33,7 +33,7 @@ const fetcher = async (url: string) => {
 };
 
 export function UserManager() {
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const meId = session?.user?.id;
   const { data: users, isLoading } = useSWR<User[]>("/api/users", fetcher, {
     revalidateOnFocus: false,
@@ -193,6 +193,20 @@ export function UserManager() {
         onOpenChange={(open) => {
           if (!open) setChangingPasswordFor(null);
         }}
+        onPasswordChanged={async (user) => {
+          if (user.id === meId) {
+            // Passing an object makes Auth.js issue the session-update
+            // POST, whose JWT callback re-reads the stored hash. A
+            // refresh failure leaves the pre-fix behaviour (banner
+            // clears on next sign-in) — never fail the password change
+            // itself over a stale flag.
+            try {
+              await updateSession({});
+            } catch {
+              // ignore — the banner self-corrects on re-auth
+            }
+          }
+        }}
       />
     </div>
   );
@@ -201,9 +215,11 @@ export function UserManager() {
 function ChangePasswordDialog({
   user,
   onOpenChange,
+  onPasswordChanged,
 }: {
   user: User | null;
   onOpenChange: (open: boolean) => void;
+  onPasswordChanged: (user: User) => Promise<void>;
 }) {
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -244,6 +260,7 @@ function ChangePasswordDialog({
       setError((await res.json()).error ?? "Update failed");
       return;
     }
+    await onPasswordChanged(user);
     toast.success(`Password updated for ${user.username}`);
     onOpenChange(false);
   }

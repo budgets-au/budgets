@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.351.0 — 2026-09-09
+
+### Changed
+- **Account row actions are always visible.** PR #105 landed the
+  Firefox hover-reveal fix for the Edit / Reconcile / Hide
+  buttons on `/accounts`, but the underlying UX was still a
+  discoverability trap even in Chromium — users can't act on
+  what they can't see, and a first-time visitor had no
+  indication a row was interactive. The opacity-gate is gone;
+  buttons sit visible on every row at rest. The Firefox
+  ungated `.account-row:hover` background-highlight rule is
+  kept — it's still the right behaviour when a hover-capable
+  pointer is over the row. The `account-row-hover.spec.ts`
+  regression covers both invariants (actions visible at rest,
+  bg changes on hover).
+
 ## 0.350.0 — 2026-09-09
 
 ### Fixed

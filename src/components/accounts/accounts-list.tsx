@@ -187,13 +187,15 @@ function Row({
           >
             {formatAUD(balance)}
           </span>
-          {/* Hover-capable pointers reveal these with .account-row in
-              globals.css. They stay visible when Firefox reports no
-              hover support, and :focus-within covers keyboard access. */}
+          {/* Always visible (0.351). The previous hover-reveal was
+              hard to discover — a user didn't know a row had
+              actions until they happened to hover it. Keeping them
+              on the row at rest trades a tiny bit of visual noise
+              for a large discoverability win. */}
           <div
             role="group"
             aria-label={`Actions for ${account.name}`}
-            className="account-row-actions flex items-center gap-0.5 transition-opacity"
+            className="account-row-actions flex items-center gap-0.5"
           >
             <button
               onClick={() => setEditing(true)}

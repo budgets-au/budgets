@@ -9,22 +9,19 @@
 @custom-variant dark (&:is(.dark *));
 
 @layer components {
-  /* Tailwind v4 guards hover utilities with (hover: hover). Firefox can
-     report that media feature inconsistently, so essential account actions
-     use :hover directly and remain visible when no hover pointer is reported. */
+  /* Row background hover — kept as an ungated :hover rule because
+     Tailwind v4's `hover:` utilities are gated behind
+     `(hover: hover)` which Firefox reports inconsistently on
+     Linux / hybrid hardware.
+
+     The Edit / Reconcile / Hide action buttons used to be
+     hidden-until-hover here as well; 0.351 removed that
+     opacity-gate on the UX grounds that hover-revealed actions
+     are undiscoverable — users don't know a row has actions
+     until they happen to hover it. Actions are now always
+     visible; only the row highlight remains hover-scoped. */
   .account-row:hover {
     background-color: color-mix(in oklab, var(--muted) 50%, transparent);
-  }
-
-  @media (min-width: 64rem) and (any-hover: hover) {
-    .account-row-actions {
-      opacity: 0;
-    }
-
-    .account-row:hover .account-row-actions,
-    .account-row:focus-within .account-row-actions {
-      opacity: 1;
-    }
   }
 }
 

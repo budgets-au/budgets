@@ -9,6 +9,37 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.355.2 — 2026-10-20
+
+### Fixed
+- **Receipt uploads failed with "attachments store isn't
+  writable" against the default profile.** The CodeQL-friendly
+  basename allow-list in `assertWithinAttachmentsDir()` only
+  accepted a HEX bare-id (`[0-9a-f-]+`) for the per-profile
+  subdirectory — but the ship-default profile id is literally
+  the string `default` (letters u / l / t aren't hex), and
+  operator-named profiles can be any `[a-z0-9-]` per
+  `PROFILE_ID_RE` in `db-profiles.ts`. The sanitiser rejected
+  the profile dir BEFORE the mkdir could run, which the upload
+  route then dressed up as "store isn't writable" — even
+  though the directory on disk was fine (`drwxr-xr-x 1001`,
+  Settings → health probe green). The sanitiser now mirrors
+  `PROFILE_ID_RE` exactly: `/^[a-z0-9][a-z0-9-]{0,39}$/`.
+- **Atomic-write staging path also failed the sanitiser.**
+  `writeAttachmentAtomic()` writes to a sibling
+  `.<uuid>.enc.<hex>.tmp` before renaming into place; this
+  shape wasn't on the allow-list either, so uploads that got
+  past the mkdir would still have failed at the first write.
+  Added an explicit `TMP_BASENAME_RE` so staging writes clear
+  the sanitiser. (Hadn't surfaced yet because every upload
+  died at mkdir first.)
+
+### Verified
+- 3 new storage-sanitiser regression tests cover the
+  `default` profile, an operator-named `savings-2026`
+  profile, and the atomic-write staging filename pattern.
+  All 10 storage tests + 7 crypto + 4 health pass.
+
 ## 0.355.1 — 2026-10-20
 
 ### Fixed

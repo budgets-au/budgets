@@ -24,6 +24,18 @@ const BASENAME_RE = /^[0-9a-f-]{36}\.enc$/i;
  *  health check. Written and deleted inside the attachments root
  *  so the sanitiser's basename check still passes. */
 const PROBE_BASENAME_RE = /^\.probe-[0-9a-f]{8}\.tmp$/;
+/** Allow-list regex for the per-profile subdir basename. MUST
+ *  match the server-side `PROFILE_ID_RE` in `db-profiles.ts` —
+ *  the default profile ships with id "default" (contains `u`,
+ *  `l`, `t`, which a hex-only regex would reject) and operators
+ *  can name their own profiles with any lowercase alnum / dash. */
+const PROFILE_DIR_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+/** Allow-list regex for the atomic-write staging file.
+ *  `writeAttachmentAtomic()` builds a sibling tmp named
+ *  `.<uuid>.enc.<4-byte-hex>.tmp` so a reader never observes a
+ *  partial file. Whitelisted here so the sanitiser lets the
+ *  staging write + rename through. */
+const TMP_BASENAME_RE = /^\.[0-9a-f-]{36}\.enc\.[0-9a-f]{8}\.tmp$/i;
 
 /** Root of the attachments hierarchy — parent of every per-profile
  *  subdir. Deliberately NOT exported — call sites should use
@@ -94,13 +106,18 @@ export function assertWithinAttachmentsDir(p: string): string {
     bn.length > 0 &&
     !BASENAME_RE.test(bn) &&
     !PROBE_BASENAME_RE.test(bn) &&
-    !bn.match(/^[0-9a-f-]+$/i)
+    !TMP_BASENAME_RE.test(bn) &&
+    !PROFILE_DIR_RE.test(bn)
   ) {
-    // Second regex: bare profileId when the caller is the
-    // profile-delete cleanup wiping an entire directory.
-    // Probe regex: the startup health-check writes a short-lived
-    // `.probe-<hex>.tmp` file at the root and deletes it; whitelist
-    // the shape so the write stays inside the sanitiser.
+    // BASENAME_RE: the actual `<uuid>.enc` attachment file.
+    // PROBE_BASENAME_RE: the startup health-check's short-lived
+    //   `.probe-<hex>.tmp` file at the root.
+    // TMP_BASENAME_RE: the atomic-write staging file written by
+    //   `writeAttachmentAtomic()` and renamed into place.
+    // PROFILE_DIR_RE: a bare profile-id subdir (used by both the
+    //   upload path's `ensureAttachmentsDir()` and the profile-
+    //   delete cleanup wiping an entire directory). The regex
+    //   mirrors `PROFILE_ID_RE` in `db-profiles.ts`.
     throw new Error(`Attachment filename fails the allow-list: ${bn}`);
   }
   return candidate;

@@ -73,4 +73,29 @@ describe("assertWithinAttachmentsDir", () => {
     const bad = join(dir, "evil.sh");
     expect(() => assertWithinAttachmentsDir(bad)).toThrow(/allow-list/);
   });
+
+  it("accepts the \"default\" profile directory (regression)", () => {
+    // 0.355-era bug: the sanitiser's bare-id check was hex-only
+    // (`[0-9a-f-]+`), which rejected the ship-default profile id
+    // "default" (letters u/l/t aren't hex) and surfaced as an
+    // "attachments store isn't writable" error on the very first
+    // upload against a stock DB.
+    const dir = attachmentsDirForProfile("default");
+    expect(() => assertWithinAttachmentsDir(dir)).not.toThrow();
+  });
+
+  it("accepts an operator-named profile directory (regression)", () => {
+    // Profile ids pass through PROFILE_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/,
+    // so an operator can name a profile "savings-2026" and the
+    // sanitiser must let the matching subdir through.
+    const dir = attachmentsDirForProfile("savings-2026");
+    expect(() => assertWithinAttachmentsDir(dir)).not.toThrow();
+  });
+
+  it("accepts the atomic-write staging filename", () => {
+    const dir = attachmentsDirForProfile("default");
+    const uuid36 = "550e8400-e29b-41d4-a716-446655440000";
+    const tmp = join(dir, `.${uuid36}.enc.deadbeef.tmp`);
+    expect(() => assertWithinAttachmentsDir(tmp)).not.toThrow();
+  });
 });

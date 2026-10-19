@@ -9,6 +9,28 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.357.0 — 2026-10-20
+
+### Added
+- **Take-photo capture from the phone camera.** Both the
+  paper-clip hover popover and the expanded-row Receipts
+  panel gain a dedicated **Take photo** button that uses a
+  hidden `<input type="file" accept="image/*"
+  capture="environment">` to open the device's back camera
+  directly on mobile Safari / Chrome / Firefox. The existing
+  Pick-file / drop-zone affordance stays and still supports
+  the full accept-list (JPG / PNG / WEBP / HEIC / PDF) — this
+  just adds a one-tap path to a fresh photo without going
+  through the "choose from library or camera" picker first.
+  - On the hover popover, the two actions sit as a 2-column
+    grid at the bottom of the popover (Camera · Pick file).
+  - In the expanded panel, the dropzone keeps its full width
+    and the Camera sits as a shrink-0 button to its right;
+    the label collapses to just the icon on `sm`-and-below.
+  - Desktop browsers that don't honour `capture` fall back to
+    the normal image picker, which is still the right
+    behaviour there.
+
 ## 0.356.0 — 2026-10-20
 
 ### Added

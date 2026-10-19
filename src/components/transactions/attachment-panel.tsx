@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
-import { FileText, Image as ImageIcon, Trash2, Upload } from "lucide-react";
+import { Camera, FileText, Image as ImageIcon, Trash2, Upload } from "lucide-react";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { formatDate } from "@/lib/utils";
@@ -54,6 +54,7 @@ export function AttachmentPanel({
     `/api/transactions/${transactionId}/attachments`,
   );
   const [uploading, setUploading] = useState(0);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const confirm = useConfirm();
 
   async function uploadFiles(files: File[]) {
@@ -156,24 +157,55 @@ export function AttachmentPanel({
           computer.
         </p>
       )}
-      <div
-        {...getRootProps()}
-        className={`flex items-center justify-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs cursor-pointer transition-colors ${
-          isDragActive
-            ? "border-primary bg-primary/5 text-foreground"
-            : "border-border text-muted-foreground hover:bg-muted/50"
-        } ${uploading > 0 ? "opacity-70 pointer-events-none" : ""}`}
-        aria-label="Attach receipt"
-      >
-        <input {...getInputProps()} />
-        <Upload className="h-3.5 w-3.5" />
-        <span>
-          {uploading > 0
-            ? `Uploading ${uploading} file${uploading === 1 ? "" : "s"}…`
-            : isDragActive
-              ? "Drop to attach"
-              : "Drop a receipt or click to attach (JPG · PNG · WEBP · HEIC · PDF · up to 25 MB)"}
-        </span>
+      <div className="flex items-stretch gap-1.5">
+        <div
+          {...getRootProps()}
+          className={`flex-1 flex items-center justify-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs cursor-pointer transition-colors ${
+            isDragActive
+              ? "border-primary bg-primary/5 text-foreground"
+              : "border-border text-muted-foreground hover:bg-muted/50"
+          } ${uploading > 0 ? "opacity-70 pointer-events-none" : ""}`}
+          aria-label="Attach receipt"
+        >
+          <input {...getInputProps()} />
+          <Upload className="h-3.5 w-3.5" />
+          <span>
+            {uploading > 0
+              ? `Uploading ${uploading} file${uploading === 1 ? "" : "s"}…`
+              : isDragActive
+                ? "Drop to attach"
+                : "Drop a receipt or click to attach (JPG · PNG · WEBP · HEIC · PDF · up to 25 MB)"}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => cameraInputRef.current?.click()}
+          disabled={uploading > 0}
+          aria-label="Take photo"
+          title="Take a photo with the device camera"
+          className={`shrink-0 flex items-center justify-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-xs
+            border-border text-muted-foreground hover:bg-muted/50 transition-colors
+            ${uploading > 0 ? "opacity-70 pointer-events-none" : ""}`}
+        >
+          <Camera className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Take photo</span>
+        </button>
+        {/* Separate hidden input so `capture="environment"` routes
+            straight to the back camera on mobile. Desktop browsers
+            that don't honour `capture` fall back to the normal image
+            picker, which is still the right behaviour. */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length > 0) void uploadFiles(files);
+            e.target.value = "";
+          }}
+        />
       </div>
     </div>
   );

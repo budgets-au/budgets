@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { FileText, Paperclip, Trash2, Upload } from "lucide-react";
+import { Camera, FileText, Paperclip, Trash2, Upload } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -65,6 +65,7 @@ export function AttachmentHoverPreview({
   const [uploading, setUploading] = useState(0);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const confirm = useConfirm();
   // Open/close debounce so a quick cursor pass over the icon doesn't
   // flicker the popover, and so moving icon → popover body doesn't
@@ -139,6 +140,10 @@ export function AttachmentHoverPreview({
 
   function openPicker() {
     fileInputRef.current?.click();
+  }
+
+  function openCamera() {
+    cameraInputRef.current?.click();
   }
 
   async function remove(id: string, filename: string) {
@@ -263,25 +268,39 @@ export function AttachmentHoverPreview({
             No receipts on this transaction yet.
           </p>
         )}
-        <button
-          type="button"
-          onClick={openPicker}
-          disabled={uploading > 0}
-          className={cn(
-            "w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs",
-            "border-border text-muted-foreground hover:bg-muted/50 transition-colors",
-            uploading > 0 && "opacity-70 pointer-events-none",
-          )}
-        >
-          <Upload className="h-3 w-3" />
-          <span>
-            {uploading > 0
-              ? `Uploading ${uploading}…`
-              : hasAttachments
-                ? "Attach another"
-                : "Attach a receipt"}
-          </span>
-        </button>
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={openCamera}
+            disabled={uploading > 0}
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs",
+              "border-border text-muted-foreground hover:bg-muted/50 transition-colors",
+              uploading > 0 && "opacity-70 pointer-events-none",
+            )}
+          >
+            <Camera className="h-3 w-3" />
+            <span>Take photo</span>
+          </button>
+          <button
+            type="button"
+            onClick={openPicker}
+            disabled={uploading > 0}
+            className={cn(
+              "flex items-center justify-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs",
+              "border-border text-muted-foreground hover:bg-muted/50 transition-colors",
+              uploading > 0 && "opacity-70 pointer-events-none",
+            )}
+          >
+            <Upload className="h-3 w-3" />
+            <span>Pick file</span>
+          </button>
+        </div>
+        {uploading > 0 && (
+          <p className="text-[11px] text-muted-foreground text-center">
+            Uploading {uploading} file{uploading === 1 ? "" : "s"}…
+          </p>
+        )}
         <input
           ref={fileInputRef}
           type="file"
@@ -293,6 +312,23 @@ export function AttachmentHoverPreview({
             if (files.length > 0) void uploadFiles(files);
             // Reset so the same file can be re-selected after a
             // mistake / cancel without the picker ignoring it.
+            e.target.value = "";
+          }}
+        />
+        {/* Separate hidden input for the Take-photo button so the
+            `capture="environment"` attribute routes straight to the
+            back camera on mobile. Desktop browsers that don't honour
+            capture fall back to the normal image picker, which is
+            still the right behaviour. */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length > 0) void uploadFiles(files);
             e.target.value = "";
           }}
         />

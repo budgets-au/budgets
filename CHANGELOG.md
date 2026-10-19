@@ -9,6 +9,47 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.354.0 — 2026-10-20
+
+### Changed
+- **Notes and attachment icons on the transactions row are now
+  always visible, and both support edits without expanding the
+  row.** 0.353.0 shipped the paper-clip indicator but it only
+  appeared once a transaction already had at least one
+  attachment, and the sticky-note icon only appeared once a
+  transaction already had a note — both affordances were
+  invisible on empty rows, so an operator had to expand into the
+  edit panel to discover they existed. Same discoverability
+  trap that 0.351.0 fixed for the `/accounts` row actions.
+  - **Paper-clip is always rendered**, in a muted shade when
+    the row has no attachments and the normal shade (plus the
+    `×N` count badge) when it does. Hovering opens the preview
+    popover; it now carries an **"Attach a receipt" / "Attach
+    another"** button that opens the native file picker and
+    uploads the selected files directly against the row — no
+    row expansion required. Multi-select is supported; the
+    25 MB / allowed-type checks that already guarded the
+    expanded-panel dropzone are duplicated client-side here
+    before each POST. SWR for the per-row attachment list
+    mutates in place and the parent transactions list is
+    re-fetched so the count badge updates on the same tick.
+  - **Sticky-note is always rendered**, muted when the row has
+    no note and amber when it does. Click opens a new
+    `TransactionNotesPopover` with a textarea + Save / Cancel —
+    mirrors the `scheduled-notes-popover` already in use on
+    `/scheduled` (same ⌘/Ctrl+Enter save, Esc cancel, empty
+    save writes `null`). When the display pref "show notes
+    inline below payee" is on, the popover trigger is still
+    suppressed because the note's full text is already visible
+    on the row.
+  - Both popovers call `stopPropagation` on click so hitting
+    an icon doesn't toggle the row's expand/collapse state.
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean.
+- Previous unit + crypto / path-safety test suites unchanged
+  (nothing in the test harness touches the icon render).
+
 ## 0.353.0 — 2026-10-20
 
 ### Added

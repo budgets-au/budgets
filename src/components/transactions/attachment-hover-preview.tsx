@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { FileText, Paperclip } from "lucide-react";
+import { toast } from "sonner";
+import { FileText, Paperclip, Upload } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -9,6 +10,7 @@ import {
 } from "@/components/ui/popover";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 interface AttachmentRow {
   id: string;
@@ -18,28 +20,52 @@ interface AttachmentRow {
   createdAt: string;
 }
 
-/** Paper-clip indicator shown in the payee cell on the
- *  transactions list when a transaction has one or more attached
- *  receipts. Hover opens a Popover that lists the attachments —
- *  thumbnails for images, filename/icon tiles for PDFs. Click an
- *  item to open it in-browser (inline Content-Disposition from
- *  the GET route).
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const ALLOWED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+];
+const ACCEPT_ATTR = ALLOWED_TYPES.join(",");
+
+/** Paper-clip row-level affordance for receipt attachments.
  *
- *  SWR is gated on `isOpen` so a quick scan down the transactions
- *  list doesn't fire N parallel requests to the attachments API;
- *  the actual fetch only runs the first time the operator hovers
- *  a specific row. */
+ *  Always visible — muted when the row has no attachments, normal
+ *  when it has one or more — so the attach action is discoverable
+ *  without expanding the row. Hover opens a Popover that:
+ *   - lists the existing attachments as clickable tiles
+ *     (160px image thumbs; filename / icon tiles for PDFs), and
+ *   - carries a `+ Attach receipt` button at the bottom that opens
+ *     the native file picker and POSTs each chosen file to
+ *     `/api/transactions/[id]/attachments`.
+ *
+ *  SWR for the attachment list is gated on `isOpen`, so scrolling
+ *  past a long transactions list doesn't fire N parallel requests.
+ *  After a successful upload the sibling SWR cache mutates in place
+ *  and `onChanged?.()` tells the parent list to re-fetch so the
+ *  `attachmentCount` on the row (and the `×N` count badge next to
+ *  the clip) reflects the new value immediately. */
 export function AttachmentHoverPreview({
   transactionId,
   count,
+  onChanged,
 }: {
   transactionId: string;
   count: number;
+  /** Called after a successful upload so the parent transactions
+   *  list can re-fetch (`attachmentCount` on the row needs to
+   *  reflect the new file). */
+  onChanged?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [uploading, setUploading] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Open/close debounce so a quick cursor pass over the icon doesn't
-  // flicker the popover, and so moving from icon → popover body
-  // doesn't close before the pointer bridges the gap.
+  // flicker the popover, and so moving icon → popover body doesn't
+  // close before the pointer bridges the gap.
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function openAfterDelay() {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -53,23 +79,79 @@ export function AttachmentHoverPreview({
   // Only populate the SWR key once the popover has opened; a null
   // key tells SWR to skip the fetch entirely. The subsequent hover
   // re-uses the cache for the browser session.
-  const { data } = useSwrJson<{ attachments: AttachmentRow[] }>(
+  const { data, mutate } = useSwrJson<{ attachments: AttachmentRow[] }>(
     isOpen ? `/api/transactions/${transactionId}/attachments` : null,
   );
 
-  const label =
-    count === 1
+  const hasAttachments = count > 0;
+  const label = !hasAttachments
+    ? "Attach receipt"
+    : count === 1
       ? "1 attachment"
       : `${count} attachments`;
+
+  async function uploadFiles(files: File[]) {
+    const accepted: File[] = [];
+    for (const f of files) {
+      if (f.size === 0) {
+        toast.error(`${f.name}: file is empty`);
+        continue;
+      }
+      if (f.size > MAX_UPLOAD_BYTES) {
+        toast.error(`${f.name}: exceeds 25 MB upload cap`);
+        continue;
+      }
+      if (!ALLOWED_TYPES.includes(f.type)) {
+        toast.error(`${f.name}: unsupported file type (${f.type || "unknown"})`);
+        continue;
+      }
+      accepted.push(f);
+    }
+    if (accepted.length === 0) return;
+
+    setUploading((n) => n + accepted.length);
+    try {
+      for (const f of accepted) {
+        const form = new FormData();
+        form.append("file", f);
+        const res = await fetch(
+          `/api/transactions/${transactionId}/attachments`,
+          { method: "POST", body: form },
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          toast.error(
+            `${f.name}: ${body.error ?? `upload failed (${res.status})`}`,
+          );
+          continue;
+        }
+        toast.success(`Attached ${f.name}`);
+      }
+      await mutate();
+      onChanged?.();
+    } finally {
+      setUploading(0);
+    }
+  }
+
+  function openPicker() {
+    fileInputRef.current?.click();
+  }
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger
         render={
           <span
-            className="inline-flex shrink-0 cursor-help items-center gap-0.5 text-muted-foreground hover:text-foreground transition-colors"
+            className={cn(
+              "inline-flex shrink-0 cursor-help items-center gap-0.5 transition-colors p-0.5 rounded hover:bg-muted",
+              hasAttachments
+                ? "text-foreground/80 hover:text-foreground"
+                : "text-muted-foreground/50 hover:text-foreground",
+            )}
             aria-label={label}
             title={label}
+            onClick={(e) => e.stopPropagation()}
             onMouseEnter={openAfterDelay}
             onMouseLeave={closeAfterDelay}
           />
@@ -86,40 +168,77 @@ export function AttachmentHoverPreview({
         align="start"
         side="top"
         sideOffset={6}
-        className="w-64 p-2"
+        className="w-64 p-2 space-y-2"
+        onClick={(e) => e.stopPropagation()}
         onMouseEnter={openAfterDelay}
         onMouseLeave={closeAfterDelay}
       >
-        {data === undefined ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : data.attachments.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            No attachments on this transaction.
-          </p>
+        {hasAttachments ? (
+          data === undefined ? (
+            <p className="text-xs text-muted-foreground">Loading…</p>
+          ) : data.attachments.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No attachments on this transaction.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {data.attachments.slice(0, 3).map((a) => (
+                <li key={a.id}>
+                  <a
+                    href={`/api/transactions/${transactionId}/attachments/${a.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group block"
+                  >
+                    <AttachmentTile row={a} transactionId={transactionId} />
+                  </a>
+                </li>
+              ))}
+              {data.attachments.length > 3 && (
+                <li className="text-[11px] text-muted-foreground px-1">
+                  + {data.attachments.length - 3} more
+                </li>
+              )}
+            </ul>
+          )
         ) : (
-          <ul className="flex flex-col gap-2">
-            {data.attachments.slice(0, 3).map((a) => (
-              <li key={a.id}>
-                <a
-                  href={`/api/transactions/${transactionId}/attachments/${a.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group block"
-                >
-                  <AttachmentTile
-                    row={a}
-                    transactionId={transactionId}
-                  />
-                </a>
-              </li>
-            ))}
-            {data.attachments.length > 3 && (
-              <li className="text-[11px] text-muted-foreground px-1">
-                + {data.attachments.length - 3} more
-              </li>
-            )}
-          </ul>
+          <p className="text-xs text-muted-foreground">
+            No receipts on this transaction yet.
+          </p>
         )}
+        <button
+          type="button"
+          onClick={openPicker}
+          disabled={uploading > 0}
+          className={cn(
+            "w-full flex items-center justify-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs",
+            "border-border text-muted-foreground hover:bg-muted/50 transition-colors",
+            uploading > 0 && "opacity-70 pointer-events-none",
+          )}
+        >
+          <Upload className="h-3 w-3" />
+          <span>
+            {uploading > 0
+              ? `Uploading ${uploading}…`
+              : hasAttachments
+                ? "Attach another"
+                : "Attach a receipt"}
+          </span>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ACCEPT_ATTR}
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            if (files.length > 0) void uploadFiles(files);
+            // Reset so the same file can be re-selected after a
+            // mistake / cancel without the picker ignoring it.
+            e.target.value = "";
+          }}
+        />
       </PopoverContent>
     </Popover>
   );

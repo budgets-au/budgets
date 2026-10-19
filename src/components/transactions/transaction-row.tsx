@@ -25,7 +25,6 @@ import {
   Repeat,
   Search,
   ShoppingCart,
-  StickyNote,
   TrendingUp,
   Unlink,
   Wallet,
@@ -33,6 +32,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { AttachmentHoverPreview } from "./attachment-hover-preview";
 import { AttachmentPanel } from "./attachment-panel";
+import { TransactionNotesPopover } from "./transaction-notes-popover";
 import { MONEY_NEGATIVE_CLASS, MONEY_POSITIVE_CLASS, amountClass, cn, formatAUD, formatDate } from "@/lib/utils";
 import { colourForFrequency } from "@/lib/schedule-colours";
 import { CategoryPicker } from "./category-picker";
@@ -770,21 +770,18 @@ export function TransactionRow({
               {payeeSuffix && (
                 <span className="shrink-0">{payeeSuffix}</span>
               )}
-              {!showNotes && t.notes?.trim() && (
-                <span
-                  className="inline-flex shrink-0 cursor-help"
-                  title={t.notes}
-                  aria-label={`Note: ${t.notes}`}
-                >
-                  <StickyNote className="h-3 w-3 text-amber-500" />
-                </span>
-              )}
-              {t.attachmentCount > 0 && (
-                <AttachmentHoverPreview
+              {!showNotes && (
+                <TransactionNotesPopover
                   transactionId={t.id}
-                  count={t.attachmentCount}
+                  notes={t.notes}
+                  onSaved={refresh}
                 />
               )}
+              <AttachmentHoverPreview
+                transactionId={t.id}
+                count={t.attachmentCount}
+                onChanged={refresh}
+              />
               {isScheduledMatch ? (
                 <ScheduledMatchPill
                   scheduledId={match.id}

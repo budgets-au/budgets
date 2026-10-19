@@ -2,13 +2,14 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { FileText, Paperclip, Upload } from "lucide-react";
+import { FileText, Paperclip, Trash2, Upload } from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useSwrJson } from "@/hooks/use-swr-json";
+import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +63,9 @@ export function AttachmentHoverPreview({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [uploading, setUploading] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const confirm = useConfirm();
   // Open/close debounce so a quick cursor pass over the icon doesn't
   // flicker the popover, and so moving icon → popover body doesn't
   // close before the pointer bridges the gap.
@@ -138,6 +141,33 @@ export function AttachmentHoverPreview({
     fileInputRef.current?.click();
   }
 
+  async function remove(id: string, filename: string) {
+    const ok = await confirm({
+      title: "Delete attachment?",
+      description: `${filename} will be permanently removed from the transaction.`,
+      confirmLabel: "Delete",
+      tone: "destructive",
+    });
+    if (!ok) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(
+        `/api/transactions/${transactionId}/attachments/${id}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.error ?? `Delete failed (${res.status})`);
+        return;
+      }
+      toast.success(`Deleted ${filename}`);
+      await mutate();
+      onChanged?.();
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger
@@ -184,7 +214,7 @@ export function AttachmentHoverPreview({
           ) : (
             <ul className="flex flex-col gap-2">
               {data.attachments.slice(0, 3).map((a) => (
-                <li key={a.id}>
+                <li key={a.id} className="relative group/row">
                   <a
                     href={`/api/transactions/${transactionId}/attachments/${a.id}`}
                     target="_blank"
@@ -193,6 +223,32 @@ export function AttachmentHoverPreview({
                   >
                     <AttachmentTile row={a} transactionId={transactionId} />
                   </a>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      // Overlaid on top of the open-file <a> — stop the
+                      // click from reaching the link so the file doesn't
+                      // open in a new tab mid-delete-confirm.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void remove(a.id, a.filename);
+                    }}
+                    disabled={deletingId === a.id}
+                    aria-label={`Delete ${a.filename}`}
+                    title="Delete attachment"
+                    className={cn(
+                      "absolute top-1 right-1 rounded-md bg-background/85 backdrop-blur-sm border border-border/60 p-1",
+                      "text-muted-foreground hover:text-destructive hover:border-destructive/60",
+                      "transition-colors",
+                      // Hover-reveal on desktop so the thumbnail stays
+                      // the dominant visual; always visible on touch
+                      // viewports where there's no hover state at all.
+                      "lg:opacity-0 lg:group-hover/row:opacity-100 lg:focus-visible:opacity-100",
+                      deletingId === a.id && "opacity-70 pointer-events-none",
+                    )}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
                 </li>
               ))}
               {data.attachments.length > 3 && (

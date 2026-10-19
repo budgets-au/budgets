@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.356.0 — 2026-10-20
+
+### Added
+- **Delete button on the attachment hover popover.** Each
+  attachment tile in the paper-clip hover-preview now carries
+  a small trash icon in the top-right corner. Click to confirm
+  via the project's `useConfirm` dialog (same shape the
+  expanded-row AttachmentPanel uses), then DELETE the
+  attachment and mutate the sibling SWR cache so the preview
+  updates in place; the parent transactions list re-fetches
+  so the row's paper-clip count badge reflects the new value.
+  Hover-reveal on desktop (keeps the thumbnail visually
+  dominant); always visible on touch viewports where there's
+  no hover state to key off. Click is `preventDefault +
+  stopPropagation` so the overlay doesn't also trigger the
+  "open file in new tab" link underneath.
+
 ## 0.355.3 — 2026-10-20
 
 ### Fixed

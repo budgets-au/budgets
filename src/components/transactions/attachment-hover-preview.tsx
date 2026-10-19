@@ -141,6 +141,7 @@ export function AttachmentHoverPreview({
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger
+        nativeButton={false}
         render={
           <span
             className={cn(

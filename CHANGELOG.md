@@ -9,6 +9,25 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.354.1 — 2026-10-20
+
+### Fixed
+- **Transactions + Scheduled pages crashed after 0.354.0
+  shipped.** The paper-clip hover preview's `PopoverTrigger`
+  wrapped a `<span>` via base-UI's `render` prop, but didn't
+  pass `nativeButton={false}` — base-UI 1.7's PopoverTrigger
+  defaults to native-button semantics (keydown-to-click,
+  implicit `type="button"`, etc.) and applying those to a
+  non-button in a production build throws, bringing down the
+  whole TransactionRow render tree. The bug was already
+  present in 0.353.0 but dormant because the trigger only
+  mounted on rows that already had an attachment. 0.354.0's
+  always-visible paper-clip surfaced it on every row —
+  including rows the Scheduled list renders, which is why both
+  pages went blank. Added the one-line
+  `nativeButton={false}` prop. Verified `pnpm build` + hover
+  interaction locally.
+
 ## 0.354.0 — 2026-10-20
 
 ### Changed

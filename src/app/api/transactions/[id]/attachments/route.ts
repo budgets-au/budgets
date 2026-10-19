@@ -136,7 +136,33 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
     const dek = await ensureDek();
     const encrypted = encryptBytes(plaintext, dek);
 
-    await ensureAttachmentsDir();
+    try {
+      await ensureAttachmentsDir();
+    } catch (e) {
+      // Most common failure: the volume isn't mounted, or the
+      // container user can't write to it (EACCES after root-owned
+      // chown is forgotten). Surface the OS error code + a hint so
+      // the operator can act — the opaque 500 the earlier version
+      // returned told them nothing.
+      console.error("[attachments] failed to create storage dir", e);
+      const code = (e as NodeJS.ErrnoException | undefined)?.code;
+      const hint =
+        code === "EACCES"
+          ? " (permission denied — chown the mount to the app user)"
+          : code === "EROFS"
+            ? " (read-only filesystem)"
+            : code === "ENOENT"
+              ? " (path doesn't exist — declare the mount or set ATTACHMENTS_PATH)"
+              : code === "ENOSPC"
+                ? " (disk full)"
+                : "";
+      return NextResponse.json(
+        {
+          error: `Attachments store isn't writable${hint}. Check Settings → Databases → Attachments store.`,
+        },
+        { status: 500 },
+      );
+    }
 
     // Insert the DB row first so we have the UUID for the on-disk
     // filename. If the file write fails after this, we clean up the
@@ -168,8 +194,12 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
         .delete(transactionAttachments)
         .where(eq(transactionAttachments.id, inserted.id));
       console.error("[attachments] write failed, rolled back row", e);
+      const code = (e as NodeJS.ErrnoException | undefined)?.code;
+      const hint = code ? ` (${code})` : "";
       return NextResponse.json(
-        { error: "Failed to write attachment to disk" },
+        {
+          error: `Failed to write attachment to disk${hint}. Check Settings → Databases → Attachments store.`,
+        },
         { status: 500 },
       );
     }

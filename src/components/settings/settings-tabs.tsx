@@ -12,6 +12,7 @@ import { PayeeRulesManager } from "@/components/settings/payee-rules-manager";
 import { BackupList } from "@/components/settings/backup-list";
 import { BackupSchedule } from "@/components/settings/backup-schedule";
 import { DatabaseFilesManager } from "@/components/settings/database-files-manager";
+import { AttachmentsStorePanel } from "@/components/settings/attachments-store-panel";
 import { UserManager } from "@/components/settings/user-manager";
 import { SampleDataPanel } from "@/components/settings/sample-data-panel";
 import { MaintenancePanel } from "@/components/settings/maintenance-panel";
@@ -224,6 +225,7 @@ export function SettingsTabs() {
 
       <TabsContent value="databases" className="space-y-6 max-w-2xl">
         <DatabaseFilesManager />
+        <AttachmentsStorePanel />
       </TabsContent>
 
       <TabsContent value="maintenance" className="space-y-6 max-w-2xl">

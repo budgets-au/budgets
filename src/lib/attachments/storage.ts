@@ -20,13 +20,35 @@ import { dataDir, getActiveProfile } from "@/lib/db-profiles";
  */
 
 const BASENAME_RE = /^[0-9a-f-]{36}\.enc$/i;
+/** Allow-list regex for the probe filename used by the Settings
+ *  health check. Written and deleted inside the attachments root
+ *  so the sanitiser's basename check still passes. */
+const PROBE_BASENAME_RE = /^\.probe-[0-9a-f]{8}\.tmp$/;
 
 /** Root of the attachments hierarchy — parent of every per-profile
  *  subdir. Deliberately NOT exported — call sites should use
  *  `attachmentsDirForProfile(id)` or `attachmentsPathFor(id)` so
- *  the per-profile scoping is explicit. */
+ *  the per-profile scoping is explicit.
+ *
+ *  Resolution order:
+ *   1. `ATTACHMENTS_PATH` env var, when set — lets operators mount
+ *      a separate volume for receipts (useful when attachments
+ *      grow larger than the DB volume should).
+ *   2. `<dataDir>/attachments` — the historical default, co-located
+ *      with the SQLite file so a single `/data` mount covers both.
+ */
 function attachmentsRootDir(): string {
-  return resolve(join(dataDir(), "attachments"));
+  const envPath = process.env.ATTACHMENTS_PATH?.trim();
+  return resolve(envPath && envPath.length > 0 ? envPath : join(dataDir(), "attachments"));
+}
+
+/** Public read of the resolved attachments root path. The Settings
+ *  "Attachments store" panel + the health-check route surface this
+ *  to the operator so they can see which directory the app will
+ *  write receipts into — resolved from `ATTACHMENTS_PATH` or the
+ *  `<dataDir>/attachments` fallback. */
+export function attachmentsRootPath(): string {
+  return attachmentsRootDir();
 }
 
 /** Per-profile attachments directory. Analogous to
@@ -68,9 +90,17 @@ export function assertWithinAttachmentsDir(p: string): string {
   // `<uuid>.enc` by this module; nothing else should ever live in
   // these directories.
   const bn = basename(candidate);
-  if (bn.length > 0 && !BASENAME_RE.test(bn) && !bn.match(/^[0-9a-f-]+$/i)) {
-    // The second regex permits a bare profileId when the caller is
-    // the profile-delete cleanup wiping an entire directory.
+  if (
+    bn.length > 0 &&
+    !BASENAME_RE.test(bn) &&
+    !PROBE_BASENAME_RE.test(bn) &&
+    !bn.match(/^[0-9a-f-]+$/i)
+  ) {
+    // Second regex: bare profileId when the caller is the
+    // profile-delete cleanup wiping an entire directory.
+    // Probe regex: the startup health-check writes a short-lived
+    // `.probe-<hex>.tmp` file at the root and deletes it; whitelist
+    // the shape so the write stays inside the sanitiser.
     throw new Error(`Attachment filename fails the allow-list: ${bn}`);
   }
   return candidate;

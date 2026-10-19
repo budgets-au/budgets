@@ -9,6 +9,52 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.355.0 — 2026-10-20
+
+### Added
+- **Settings → Databases: Attachments store panel + live
+  write/read/delete probe.** Receipt uploads that failed with
+  an opaque "500" in 0.353 / 0.354 almost always traced to the
+  container not being able to write under `<dataDir>/attachments`
+  (volume mounted but owned by root, `/data` bind-mounted as a
+  file instead of a directory, etc.). The new panel on Settings
+  → Databases surfaces:
+  - the **resolved path** the app would write receipts to —
+    read from the new `ATTACHMENTS_PATH` env var, falling back
+    to `<dirname(SQLITE_PATH)>/attachments` so existing deploys
+    don't need any config change;
+  - the result of a live probe: write a short-lived
+    `.probe-<hex>.tmp` into that directory, read it back, and
+    delete it. Pass surfaces a green "round-trip succeeded"
+    banner; failure surfaces an amber banner naming the exact
+    stage (mkdir / write / read / delete) and the OS error
+    (`EACCES` → "chown the mount to the app user"; `EROFS` →
+    "read-only filesystem"; `ENOENT` → "declare the mount or
+    set ATTACHMENTS_PATH"; `ENOSPC` → "disk full"). Re-check
+    button runs the probe again.
+- **`ATTACHMENTS_PATH` env var.** Optional. When set, overrides
+  the default and the app writes receipts under that directory
+  instead. Lets operators mount a separate volume for receipts
+  — useful when receipt files will dwarf the SQLite DB.
+
+### Changed
+- **Receipt-upload 500 now carries a readable error payload.**
+  Both the `mkdir` and the file-write failure paths catch
+  Node's `ErrnoException` and return a `{error: "…"}` body with
+  the OS code and a hint pointing the operator at the new
+  Settings panel. The toast on the row's Attach-another button
+  surfaces the specific reason — no more opaque "upload failed
+  (500)".
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean. New route
+  `/api/settings/attachments-health` compiles.
+- 4 new unit tests in `src/lib/attachments/health.test.ts`:
+  writable dir round-trips cleanly with no residue, nonexistent
+  / un-mkdir'able path fails at the mkdir stage, probe leaves
+  the directory empty on success, EACCES case gated on non-root
+  so CI stays green.
+
 ## 0.354.1 — 2026-10-20
 
 ### Fixed

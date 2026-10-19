@@ -9,6 +9,23 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.355.1 — 2026-10-20
+
+### Fixed
+- **Transactions list went blank again on 0.355 if the receipt
+  attachments subquery failed.** The row-level `attachmentCount`
+  was a correlated subquery against `transaction_attachments`
+  inside the main SELECT; any failure there (migration 0022
+  not yet applied, mid-roll schema drift, locked table, etc.)
+  bubbled up as a 500 for the whole `/api/transactions` route
+  — SWR then rendered the list as empty rather than showing an
+  error, so the page looked silently broken. The decoration
+  now runs as a SEPARATE query the main SELECT doesn't depend
+  on: if it fails for any reason, the catch logs and every row
+  serves `attachmentCount: 0`. The paper-clip indicator just
+  falls back to its muted "no attachments" state until the
+  underlying issue is fixed through the Settings panel.
+
 ## 0.355.0 — 2026-10-20
 
 ### Added

@@ -350,12 +350,6 @@ export const GET = withAuth(async (request) => {
       // Surfaced in the row-expansion panel so the user can see the
       // provenance when troubleshooting an import.
       importFormat: importLogs.format,
-      // Receipt-attachment count — drives the paper-clip row icon
-      // + hover preview on the transactions list. Correlated
-      // subquery against the sibling `transaction_attachments`
-      // table; the table is indexed on transaction_id so the inner
-      // scan is cheap even at 10k+ rows. 0.353.
-      attachmentCount: sql<number>`COALESCE((SELECT COUNT(*) FROM transaction_attachments WHERE transaction_attachments.transaction_id = ${transactions.id}), 0)`,
     })
     .from(transactions)
     .leftJoin(accounts, eq(transactions.accountId, accounts.id))
@@ -377,7 +371,39 @@ export const GET = withAuth(async (request) => {
     .limit(limit)
     .offset(offset);
 
-  return NextResponse.json(rows);
+  // Receipt-attachment counts for the paper-clip row icon. Kept as
+  // a SEPARATE query from the main SELECT so a missing or
+  // mid-migration `transaction_attachments` table (e.g. a DB that
+  // was unlocked before 0.353 shipped and hasn't yet re-unlocked
+  // to run drizzle 0022) can't take down the whole list — any
+  // failure here just leaves every row with count 0 and logs the
+  // problem. The paper-clip indicator falls back to its muted
+  // "no attachments" state; the Settings panel from 0.355 is the
+  // place the operator diagnoses it.
+  const counts = new Map<string, number>();
+  if (rows.length > 0) {
+    try {
+      const ids = rows.map((r) => r.id);
+      const countRows = (await db.all(sql<{ transaction_id: string; n: number }>`
+        SELECT transaction_id, COUNT(*) AS n
+        FROM transaction_attachments
+        WHERE transaction_id IN (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})
+        GROUP BY transaction_id
+      `)) as Array<{ transaction_id: string; n: number }>;
+      for (const r of countRows) counts.set(r.transaction_id, Number(r.n));
+    } catch (e) {
+      console.warn(
+        "[transactions] attachment-count query failed; serving zeros",
+        e,
+      );
+    }
+  }
+  const enriched = rows.map((r) => ({
+    ...r,
+    attachmentCount: counts.get(r.id) ?? 0,
+  }));
+
+  return NextResponse.json(enriched);
 });
 
 export const POST = withAuth(async (request) => {

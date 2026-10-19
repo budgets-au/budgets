@@ -77,6 +77,31 @@ export const GET = withAuth<{ params: Promise<{ id: string }> }>(
 
 export const POST = withAuth<{ params: Promise<{ id: string }> }>(
   async (request, ctx) => {
+    try {
+      return await handleUpload(request, ctx);
+    } catch (e) {
+      // Last-line catch so no unexpected failure (DB column missing
+      // because migration 0022 didn't apply, body parse error, OOM
+      // on a large buffer, etc.) escapes as an opaque 500 with an
+      // empty body. The client toast then renders the actual
+      // reason instead of "upload failed (500)".
+      console.error("[attachments] upload failed with unexpected error", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      const hint = /no such table|no such column/i.test(msg)
+        ? " — the attachments schema migration (drizzle 0022) may not have applied yet; lock and re-unlock to re-run migrations."
+        : "";
+      return NextResponse.json(
+        { error: `Upload failed: ${msg}${hint}` },
+        { status: 500 },
+      );
+    }
+  },
+);
+
+async function handleUpload(
+  request: Request,
+  ctx: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
     const { id: raw } = await ctx.params;
     const parsed = uuidSchema.safeParse(raw);
     if (!parsed.success) {
@@ -205,8 +230,7 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
     }
 
     return NextResponse.json({ attachment: inserted }, { status: 201 });
-  },
-);
+}
 
 /** Strip anything that looks like a path separator; cap length to
  *  255. Browsers rarely send problematic filenames, but validating

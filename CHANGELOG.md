@@ -9,6 +9,22 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.355.3 — 2026-10-20
+
+### Fixed
+- **Receipt-upload 500 now carries the actual reason.** The
+  upload route only wrapped `ensureAttachmentsDir()` and the
+  file-write in try/catch; every other throw (DB column
+  missing because migration 0022 didn't apply, body parse
+  error, DEK read failing, insert constraint violation, etc.)
+  escaped as an opaque "upload failed (500)" with no body for
+  the client toast to surface. Added a top-level try/catch
+  around the entire handler so any failure returns a readable
+  `{error: "Upload failed: <message>"}` payload — plus a
+  one-line hint when the message contains "no such table" or
+  "no such column" that steers the operator toward
+  lock-then-unlock to re-run drizzle migrations.
+
 ## 0.355.2 — 2026-10-20
 
 ### Fixed

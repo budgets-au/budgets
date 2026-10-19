@@ -374,6 +374,33 @@ export const transactions = sqliteTable(
   ],
 );
 
+// ─── Transaction Attachments ──────────────────────────────────────────────────
+// Receipt / image / PDF files attached to a transaction. Bytes live
+// on disk at <dataDir>/attachments/<profileId>/<id>.enc,
+// AES-256-GCM-encrypted under a 32-byte DEK stored on
+// `app_settings.attachments_dek`. The row below only holds metadata;
+// see `src/lib/attachments/crypto.ts` + `src/lib/attachments/storage.ts`
+// for the encryption + on-disk layout. Multiple attachments per
+// transaction; indexed by transaction_id for the row-icon count +
+// hover preview lookup.
+export const transactionAttachments = sqliteTable(
+  "transaction_attachments",
+  {
+    id: text("id").primaryKey().$defaultFn(newUuid),
+    transactionId: text("transaction_id")
+      .notNull()
+      .references(() => transactions.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    sha256: text("sha256").notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => [index("transaction_attachments_txn_idx").on(t.transactionId)],
+);
+
 // ─── Scheduled Transactions ───────────────────────────────────────────────────
 
 export const scheduledTransactions = sqliteTable(
@@ -539,6 +566,16 @@ export const appSettings = sqliteTable("app_settings", {
    * encrypted DB — same protection envelope as the rest of the
    * household ledger. */
   braveSearchApiKey: text("brave_search_api_key"),
+  /** Base64-encoded 32-byte data-encryption-key (DEK) for the
+   * on-disk receipt attachments. Lazy-initialised on first upload
+   * via `ensureDek()` in src/lib/attachments/crypto.ts — until then
+   * the column is null and no attachment files exist. Rides inside
+   * the SQLCipher-encrypted DB, so operator-passphrase rotation
+   * (/rekey) re-encrypts the page carrying the DEK alongside every
+   * other page; the DEK bytes themselves don't change and the
+   * on-disk attachment files remain readable without any file-level
+   * re-encryption. See 0.353 CHANGELOG + plan for rationale. */
+  attachmentsDek: text("attachments_dek"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),

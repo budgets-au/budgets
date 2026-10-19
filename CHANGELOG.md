@@ -9,6 +9,82 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.353.0 — 2026-10-20
+
+### Added
+- **Encrypted receipt attachments on transactions.** Any
+  transaction can now carry one or more image (JPG / PNG /
+  WebP / HEIC) or PDF receipt files, up to **25 MB each**.
+  Attach from the expanded row (the new "Receipts" field between
+  Notes and the metadata grid), drag-and-drop or click to pick.
+  A paper-clip indicator appears in the payee cell on the
+  transactions list the moment a transaction has one or more
+  attachments; hover it to see a thumbnail preview (160 px for
+  images, filename + size tile for PDFs). Multiple attachments
+  show a `×N` count badge next to the clip and stack vertically
+  in the popover (capped at 3 visible with "+N more"). Click any
+  tile to open the file in a new tab with inline
+  Content-Disposition.
+  - **Encryption model.** Files land at
+    `<dataDir>/attachments/<profileId>/<attachmentId>.enc` as
+    `[12-byte nonce][AES-256-GCM ciphertext][16-byte tag]`. A
+    random 32-byte data encryption key (DEK) is generated on
+    first upload and stored in `app_settings.attachments_dek`
+    (base64) — because that column lives inside the
+    SQLCipher-encrypted DB, the DEK is already protected by the
+    operator's passphrase. `/rekey` re-encrypts every page of
+    the DB file (DEK bytes included) but the DEK itself does
+    not change, so every receipt remains decryptable the moment
+    the DB unlocks under the new passphrase. Zero file-level
+    re-encryption, zero background workers, O(1) rekey.
+  - **Per-profile isolation.** Each DB profile has its own
+    attachments subdirectory, so switching profiles routes
+    uploads and reads into a separate tree. Deleting a profile
+    via `/settings/databases` removes the DB file, backup
+    directory, **and** the attachments directory in one atomic
+    cleanup pass.
+  - **Path safety.** All disk I/O goes through a new
+    `assertWithinAttachmentsDir()` sanitiser that asserts
+    containment under the attachments root and enforces a
+    `<uuid>.enc` basename allow-list — same assert-and-rebind
+    shape CodeQL already recognises on
+    `assertWithinBackupDir` / `assertLivePath` in
+    `sqlite-backup.ts`.
+  - **Row-level `attachmentCount`.** `GET /api/transactions`
+    now returns a correlated-subquery count per row so the
+    list render decides whether to show the paper-clip
+    indicator without a second round-trip. The sibling index
+    `transaction_attachments(transaction_id)` keeps the
+    subquery cheap.
+
+### Notes
+- v1 ships with a documented backup gap: the existing
+  `VACUUM INTO` SQLite backup covers the DB file only — the
+  `attachments/` tree is **not** included. Snapshot it at the
+  OS level alongside your scheduled DB backups until a
+  follow-up release bundles the directory into the backup
+  archive. The CHANGELOG will call out the fix when it lands.
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean.
+- 7 new unit cases cover the AES-GCM crypto helpers:
+  short + 1 MiB round-trip, structure
+  (`nonce || ct || tag`), tamper rejection, wrong-key
+  rejection, truncated-blob rejection, fresh-nonce-per-encrypt.
+  Another 6 cover the path-safety sanitiser (allow a .enc path
+  under the profile dir, allow the profile dir itself for the
+  delete cleanup, reject `/etc/passwd`, reject a
+  joined-traversal `../../../etc/passwd`, reject `evil.sh` as
+  the basename).
+- 5 pre-existing `disk-usage.test.ts` failures from an
+  unrelated profile-registry test setup remain unchanged (same
+  count on `main` with the attachments branch stashed) — not
+  introduced by this release.
+- Manual rekey round-trip: upload a JPEG, rotate the passphrase
+  via `/rekey`, lock, unlock with the new passphrase, GET the
+  attachment URL — bytes decrypt and the paper-clip indicator
+  survives.
+
 ## 0.352.0 — 2026-10-20
 
 ### Added

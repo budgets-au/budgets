@@ -350,6 +350,12 @@ export const GET = withAuth(async (request) => {
       // Surfaced in the row-expansion panel so the user can see the
       // provenance when troubleshooting an import.
       importFormat: importLogs.format,
+      // Receipt-attachment count — drives the paper-clip row icon
+      // + hover preview on the transactions list. Correlated
+      // subquery against the sibling `transaction_attachments`
+      // table; the table is indexed on transaction_id so the inner
+      // scan is cheap even at 10k+ rows. 0.353.
+      attachmentCount: sql<number>`COALESCE((SELECT COUNT(*) FROM transaction_attachments WHERE transaction_attachments.transaction_id = ${transactions.id}), 0)`,
     })
     .from(transactions)
     .leftJoin(accounts, eq(transactions.accountId, accounts.id))

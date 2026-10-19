@@ -76,6 +76,9 @@ interface TxRow {
   rawFitid: string | null;
   /** csv | ofx | qfx | qif — null when the row wasn't created via import. */
   importFormat: string | null;
+  /** Receipt-attachment count — surfaced by the paper-clip indicator
+   *  + hover preview in the payee cell. 0.353+. */
+  attachmentCount: number;
 }
 
 /**

@@ -1,0 +1,174 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { FileText, Paperclip } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useSwrJson } from "@/hooks/use-swr-json";
+import { formatDate } from "@/lib/utils";
+
+interface AttachmentRow {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  createdAt: string;
+}
+
+/** Paper-clip indicator shown in the payee cell on the
+ *  transactions list when a transaction has one or more attached
+ *  receipts. Hover opens a Popover that lists the attachments —
+ *  thumbnails for images, filename/icon tiles for PDFs. Click an
+ *  item to open it in-browser (inline Content-Disposition from
+ *  the GET route).
+ *
+ *  SWR is gated on `isOpen` so a quick scan down the transactions
+ *  list doesn't fire N parallel requests to the attachments API;
+ *  the actual fetch only runs the first time the operator hovers
+ *  a specific row. */
+export function AttachmentHoverPreview({
+  transactionId,
+  count,
+}: {
+  transactionId: string;
+  count: number;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  // Open/close debounce so a quick cursor pass over the icon doesn't
+  // flicker the popover, and so moving from icon → popover body
+  // doesn't close before the pointer bridges the gap.
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function openAfterDelay() {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setIsOpen(true), 200);
+  }
+  function closeAfterDelay() {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setIsOpen(false), 120);
+  }
+
+  // Only populate the SWR key once the popover has opened; a null
+  // key tells SWR to skip the fetch entirely. The subsequent hover
+  // re-uses the cache for the browser session.
+  const { data } = useSwrJson<{ attachments: AttachmentRow[] }>(
+    isOpen ? `/api/transactions/${transactionId}/attachments` : null,
+  );
+
+  const label =
+    count === 1
+      ? "1 attachment"
+      : `${count} attachments`;
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger
+        render={
+          <span
+            className="inline-flex shrink-0 cursor-help items-center gap-0.5 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={label}
+            title={label}
+            onMouseEnter={openAfterDelay}
+            onMouseLeave={closeAfterDelay}
+          />
+        }
+      >
+        <Paperclip className="h-3 w-3" />
+        {count > 1 && (
+          <span className="text-[10px] font-medium tabular-nums leading-none">
+            ×{count}
+          </span>
+        )}
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        side="top"
+        sideOffset={6}
+        className="w-64 p-2"
+        onMouseEnter={openAfterDelay}
+        onMouseLeave={closeAfterDelay}
+      >
+        {data === undefined ? (
+          <p className="text-xs text-muted-foreground">Loading…</p>
+        ) : data.attachments.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            No attachments on this transaction.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {data.attachments.slice(0, 3).map((a) => (
+              <li key={a.id}>
+                <a
+                  href={`/api/transactions/${transactionId}/attachments/${a.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block"
+                >
+                  <AttachmentTile
+                    row={a}
+                    transactionId={transactionId}
+                  />
+                </a>
+              </li>
+            ))}
+            {data.attachments.length > 3 && (
+              <li className="text-[11px] text-muted-foreground px-1">
+                + {data.attachments.length - 3} more
+              </li>
+            )}
+          </ul>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function AttachmentTile({
+  row,
+  transactionId,
+}: {
+  row: AttachmentRow;
+  transactionId: string;
+}) {
+  const isImage = row.contentType.startsWith("image/");
+  const sizeKb = Math.round(row.size / 1024);
+  const sizeLabel = sizeKb < 1024 ? `${sizeKb} KB` : `${(sizeKb / 1024).toFixed(1)} MB`;
+
+  if (isImage) {
+    return (
+      <div className="rounded-md border border-border/60 overflow-hidden group-hover:border-border transition-colors">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/api/transactions/${transactionId}/attachments/${row.id}`}
+          alt={row.filename}
+          className="w-full h-28 object-cover bg-muted"
+          loading="lazy"
+        />
+        <div className="flex items-baseline justify-between gap-2 px-2 py-1 text-[11px] text-muted-foreground">
+          <span className="truncate" title={row.filename}>
+            {row.filename}
+          </span>
+          <span className="shrink-0 tabular-nums">{sizeLabel}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-border/60 p-2 group-hover:border-border transition-colors">
+      <FileText className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+      <div className="min-w-0 flex-1 text-xs">
+        <div className="truncate font-medium" title={row.filename}>
+          {row.filename}
+        </div>
+        <div className="flex items-baseline gap-2 text-[11px] text-muted-foreground">
+          <span className="tabular-nums">{sizeLabel}</span>
+          <span>·</span>
+          <span>{formatDate(row.createdAt)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}

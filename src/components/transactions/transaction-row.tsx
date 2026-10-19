@@ -31,6 +31,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { AttachmentHoverPreview } from "./attachment-hover-preview";
+import { AttachmentPanel } from "./attachment-panel";
 import { MONEY_NEGATIVE_CLASS, MONEY_POSITIVE_CLASS, amountClass, cn, formatAUD, formatDate } from "@/lib/utils";
 import { colourForFrequency } from "@/lib/schedule-colours";
 import { CategoryPicker } from "./category-picker";
@@ -74,6 +76,11 @@ export interface TransactionRowData {
   importHash: string | null;
   rawFitid: string | null;
   importFormat: string | null;
+  /** Number of receipt attachments on this transaction. Drives the
+   *  paper-clip indicator in the payee cell + the hover-preview
+   *  popover (both added 0.353). Server-populated via a correlated
+   *  subquery against `transaction_attachments`. */
+  attachmentCount: number;
 }
 
 /** Scheduled-match metadata produced by the main list's match-loop —
@@ -357,6 +364,12 @@ export function ExpandedPanelContent({
               transactionId={t.id}
               notes={t.notes}
               onSaved={refresh}
+            />
+          </ExpandedField>
+          <ExpandedField label="Receipts" wide>
+            <AttachmentPanel
+              transactionId={t.id}
+              onChanged={refresh}
             />
           </ExpandedField>
           <ExpandedField label="Description" wide>
@@ -765,6 +778,12 @@ export function TransactionRow({
                 >
                   <StickyNote className="h-3 w-3 text-amber-500" />
                 </span>
+              )}
+              {t.attachmentCount > 0 && (
+                <AttachmentHoverPreview
+                  transactionId={t.id}
+                  count={t.attachmentCount}
+                />
               )}
               {isScheduledMatch ? (
                 <ScheduledMatchPill

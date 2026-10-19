@@ -10,6 +10,7 @@ import {
   renameProfile,
 } from "@/lib/db-profiles";
 import { backupDirForProfile } from "@/lib/backup/sqlite-backup";
+import { attachmentsDirForProfile } from "@/lib/attachments/storage";
 import { withAdminAuthAndProfileId } from "@/lib/api/route-guards";
 import { badRequest, parseJsonBody } from "@/lib/api/parse-body";
 
@@ -74,6 +75,7 @@ export const DELETE = withAdminAuthAndProfileId(async (id, request) => {
   }
   const filePath = pathForProfile(target);
   const backupSubdir = backupDirForProfile(target.id);
+  const attachmentsSubdir = attachmentsDirForProfile(target.id);
   try {
     const removed = deleteProfile(id);
     // Best-effort filesystem sweep. A failure here logs but doesn't
@@ -92,6 +94,20 @@ export const DELETE = withAdminAuthAndProfileId(async (id, request) => {
     } catch (e) {
       console.error(
         `[databases] failed to delete backup dir ${backupSubdir}:`,
+        e,
+      );
+    }
+    // Receipt attachments for this profile — the per-profile
+    // directory holds every attachment file encrypted under the
+    // profile's own DEK (which is gone with the SQLCipher DB). Mirror
+    // the backup-dir cleanup: best-effort rm, log on failure.
+    try {
+      if (existsSync(attachmentsSubdir)) {
+        rmSync(attachmentsSubdir, { recursive: true, force: true });
+      }
+    } catch (e) {
+      console.error(
+        `[databases] failed to delete attachments dir ${attachmentsSubdir}:`,
         e,
       );
     }

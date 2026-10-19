@@ -354,6 +354,110 @@ function runPendingMigrations(): void {
   } catch (e) {
     console.error("[db] Pending migrations failed to apply:", e);
   }
+  // Self-heal: drizzle's migrator records applied migrations by file
+  // hash in `__drizzle_migrations`. If a DB was ever restored from a
+  // backup made BEFORE a migration ran, OR if a migration's SQL
+  // partially rolled back without clearing the recorded row, drizzle
+  // sees the hash and silently skips re-running — leaving the
+  // declared tables absent. This surfaced in production (a user's
+  // DB missing `scheduled_forecasts` from 0021 and
+  // `transaction_attachments` from 0022 even though the migrations
+  // ran cleanly in-process). Below we check for the tables defined
+  // by every migration whose SQL is strictly additive (new table or
+  // new nullable column) and recreate them idempotently with
+  // `CREATE TABLE IF NOT EXISTS`. ALTER TABLE … ADD COLUMN also
+  // isn't idempotent in SQLite, so the ADD-COLUMN branches catch
+  // "duplicate column" errors and move on.
+  ensureCriticalSchema();
+}
+
+/** Idempotent CREATE TABLE / ADD COLUMN pass for schema the app
+ *  can't boot without. Runs AFTER `migrate()` so the normal
+ *  drizzle path is still authoritative — this is only a safety
+ *  net for DBs whose `__drizzle_migrations` row for one of these
+ *  migrations was recorded without the SQL having actually
+ *  materialised (restored-from-older-backup races, partial
+ *  rollbacks, hand edits). Each statement is wrapped so a failure
+ *  on one doesn't skip the next.
+ *
+ *  Keep this list in sync with the hand-written drizzle SQL for
+ *  tables / columns the app's hot paths SELECT from. Everything
+ *  here must be strictly additive (no DROP, no index rename). */
+function ensureCriticalSchema(): void {
+  if (!state.client) return;
+  ensureCriticalSchemaOn(state.client);
+}
+
+/** Testable variant that takes an explicit sqlite handle. Both the
+ *  parent `ensureCriticalSchema()` and the unit test in
+ *  `src/db/ensure-critical-schema.test.ts` call this. */
+export function ensureCriticalSchemaOn(sqlite: BetterSqlite3.Database): void {
+  const stmts: Array<{ sql: string; label: string }> = [
+    // 0000 + 0021 — scheduled_forecasts (per-occurrence overrides
+    // on a scheduled transaction). The 0000 shape created the
+    // table; 0021 rebuilt it to make `amount` nullable and add
+    // `new_date`. We create the POST-0021 shape here directly so a
+    // DB whose 0021 rebuild dropped the old table without renaming
+    // the new one (an actual production incident) recovers to the
+    // current shape in one step.
+    {
+      label: "scheduled_forecasts (0000 + 0021 shape)",
+      sql: `CREATE TABLE IF NOT EXISTS scheduled_forecasts (
+        id TEXT PRIMARY KEY NOT NULL,
+        scheduled_id TEXT NOT NULL REFERENCES scheduled_transactions(id) ON DELETE CASCADE,
+        occurrence_date TEXT NOT NULL,
+        amount TEXT,
+        new_date TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+    },
+    {
+      label: "scheduled_forecasts unique idx",
+      sql: `CREATE UNIQUE INDEX IF NOT EXISTS scheduled_forecasts_unique_idx
+        ON scheduled_forecasts(scheduled_id, occurrence_date)`,
+    },
+    {
+      label: "scheduled_forecasts scheduled idx",
+      sql: `CREATE INDEX IF NOT EXISTS scheduled_forecasts_scheduled_idx
+        ON scheduled_forecasts(scheduled_id)`,
+    },
+    // 0022 — transaction_attachments (receipt metadata; bytes live
+    // on disk at <dataDir>/attachments/<profileId>/<id>.enc).
+    {
+      label: "0022 transaction_attachments",
+      sql: `CREATE TABLE IF NOT EXISTS transaction_attachments (
+        id TEXT PRIMARY KEY NOT NULL,
+        transaction_id TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+        filename TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`,
+    },
+    {
+      label: "0022 transaction_attachments idx",
+      sql: `CREATE INDEX IF NOT EXISTS transaction_attachments_txn_idx
+        ON transaction_attachments(transaction_id)`,
+    },
+    // 0022 — app_settings.attachments_dek (opaque base64 DEK blob).
+    // ADD COLUMN is NOT idempotent in SQLite; the catch handles the
+    // "duplicate column name" case so repeat runs stay quiet.
+    {
+      label: "0022 app_settings.attachments_dek",
+      sql: `ALTER TABLE app_settings ADD COLUMN attachments_dek TEXT`,
+    },
+  ];
+  for (const { sql: s, label } of stmts) {
+    try {
+      sqlite.exec(s);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/duplicate column name/i.test(msg)) continue; // benign repeat
+      console.error(`[db] ensureCriticalSchema(${label}) failed:`, msg);
+    }
+  }
 }
 
 /** Insert a default admin/admin user when the users table is empty.

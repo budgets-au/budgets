@@ -9,6 +9,47 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.357.1 — 2026-10-20
+
+### Fixed
+- **/api/cashflow, /api/scheduled, /api/reports/cashflow, and the
+  dashboard forward-balance card all 500'd against the user's DB
+  with `no such table: scheduled_forecasts` and
+  `no such table: transaction_attachments`.** Drizzle's
+  `migrate()` reported no error, which means the
+  `__drizzle_migrations` row for migration 0021 (and 0022) was
+  recorded without the SQL actually having materialised the
+  table. Most likely cause: migration 0021 rebuilt
+  `scheduled_forecasts` via DROP + RENAME across
+  `--> statement-breakpoint` boundaries, and an interrupted run
+  landed the DROP but not the RENAME; drizzle then saw the
+  migration as applied on every subsequent unlock and skipped
+  it, leaving the DB missing the table forever.
+- **New post-migration self-heal.** `runPendingMigrations()`
+  now calls `ensureCriticalSchemaOn(sqlite)` after drizzle's
+  migrator finishes. That helper idempotently runs
+  `CREATE TABLE IF NOT EXISTS` for the tables the app can't
+  boot without (`scheduled_forecasts`,
+  `transaction_attachments`, plus
+  `ALTER TABLE app_settings ADD COLUMN attachments_dek` with
+  the "duplicate column" branch filtered). On the broken DB,
+  the next unlock recreates the missing tables with the
+  correct post-0021 shape (nullable `amount`, `new_date`
+  column present) and the three endpoints start working again
+  with no manual DB surgery.
+- 5 new unit tests cover: fresh-DB creation, idempotent repeat
+  runs, scheduled_forecasts expected indices, the attachments
+  index, and data preservation across repeat runs.
+
+### Why the test suite missed this
+- The repo has no integration test that runs `/api/cashflow`,
+  `/api/scheduled`, or `/api/reports/cashflow` end-to-end. Only
+  `/api/transactions` has one, and the attachment-count
+  decoration there was already fault-tolerant per 0.355.1 — so
+  the SELECT ran fine and the regression hid in sibling
+  endpoints. Follow-up: colocated integration tests for the
+  three routes, next release.
+
 ## 0.357.0 — 2026-10-20
 
 ### Added

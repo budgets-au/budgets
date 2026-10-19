@@ -9,6 +9,53 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.352.0 — 2026-10-20
+
+### Added
+- **Import grid: per-row Notes column.** The CSV / OFX / QIF
+  import page gains an optional Notes cell between Payee and
+  Amount so operators can annotate pending rows before
+  committing them. Any text typed lands on
+  `transactions.notes` as part of the batched commit. First
+  pass at the request to annotate rows during import rather
+  than after.
+  - Toggled behind the existing filter card next to "Apply new
+    rules to pending rows"; default **off** so the standard
+    grid stays compact. Choice is persisted per-operator as
+    the new `importShowNotesColumn` display pref.
+  - The cell is a controlled `<Input>` wired through a new
+    `notesOverrides` map parallel to the existing
+    `localOverrides` / `accountOverrides`. Row-click
+    expand/collapse is intercepted so clicking into the input
+    doesn't toggle the detail panel (same
+    `onClick(stopPropagation)` pattern the Category cell
+    uses).
+  - Commit API payload gains an optional `notes` field;
+    empty / unset folds to `null` on the DB side.
+
+### Fixed
+- **Chunker margin on bulk `transactions` insert.** The
+  commit-batched route caps bulk inserts at 1500 rows per
+  prepared statement, but the per-row bind count is 22 (15
+  explicit values + 3 `$defaultFn` stamps for id / createdAt /
+  updatedAt + 4 `.default(false)` stamps for isTransfer /
+  isSynthetic / isReconciled / isSample). 22 × 1500 = 33,000,
+  which just overflows SQLite's 32,766 variable cap on this
+  release's extra `notes` field — the 2000-row integration
+  test caught the regression. Chunk size tightened to **1400**
+  (22 × 1400 = 30,800) with inline comment capturing the math
+  so future single-field additions don't repeat the cycle.
+
+### Verified
+- tsc clean, `pnpm build` clean.
+- 788 unit tests pass (10 pre-existing disk-usage failures
+  unchanged). New integration case
+  (`route.integration.test.ts: round-trips operator-typed
+  notes from the import grid`) covers notes-with-text,
+  notes-explicit-null, and notes-field-omitted in one request
+  and asserts each lands with the right value in
+  `transactions.notes`.
+
 ## 0.351.0 — 2026-09-09
 
 ### Changed

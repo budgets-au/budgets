@@ -214,6 +214,11 @@ export interface DisplayPrefs {
    * default because the alternative (canceling + re-importing to
    * see the rule apply) was the original reason this toggle exists. */
   importAutoApplyRules: boolean;
+  /** When on, the import grid gains a per-row Notes cell between
+   *  Payee and Amount so the operator can annotate pending rows
+   *  before committing them. Default off so the standard grid
+   *  stays compact; opt in from the import filter card. */
+  importShowNotesColumn: boolean;
 
   // ── Appearance ────────────────────────────────────────────────
   /** Which visual identity the app renders in. `"default"` is the
@@ -320,6 +325,7 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   featureInvestments: true,
   featureSuper: true,
   importAutoApplyRules: true,
+  importShowNotesColumn: false,
   themeFamily: "default",
   investmentsGainRange: "return",
   dashboardUpcomingShowBudgets: false,
@@ -633,6 +639,7 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     featureInvestments: bool("featureInvestments"),
     featureSuper: bool("featureSuper"),
     importAutoApplyRules: bool("importAutoApplyRules"),
+    importShowNotesColumn: bool("importShowNotesColumn"),
     themeFamily: pickEnum("themeFamily", ["default", "terminal"] as const),
     investmentsGainRange: pickEnum(
       "investmentsGainRange",

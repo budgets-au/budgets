@@ -176,4 +176,63 @@ describe("/api/import/commit-batched chunked imports (too-many-sql-variables fix
       .all();
     expect(acctRow).toHaveLength(1);
   });
+
+  it("round-trips operator-typed notes from the import grid", async () => {
+    // Covers 0.352 — the import grid now sends a `notes` field per
+    // row (Notes column, gated by `importShowNotesColumn`). The
+    // route schema accepts it + the bulk insert writes it to
+    // `transactions.notes`. Three rows: one with a note, one
+    // explicit-null, one with the field entirely omitted.
+    const baseDate = "2026-02-01";
+    const withNote = {
+      accountId: ACCT_ID,
+      date: baseDate,
+      amount: "-12.34",
+      payee: "notes-row-A",
+      importHash: importHashFor([ACCT_ID, baseDate, "A"]),
+      rawId: "notes-A",
+      notes: "reimburse Alex",
+    };
+    const explicitNull = {
+      accountId: ACCT_ID,
+      date: baseDate,
+      amount: "-56.78",
+      payee: "notes-row-B",
+      importHash: importHashFor([ACCT_ID, baseDate, "B"]),
+      rawId: "notes-B",
+      notes: null as string | null,
+    };
+    const omitted = {
+      accountId: ACCT_ID,
+      date: baseDate,
+      amount: "-90.00",
+      payee: "notes-row-C",
+      importHash: importHashFor([ACCT_ID, baseDate, "C"]),
+      rawId: "notes-C",
+    };
+
+    const res = await commitPOST(
+      new Request("http://test/api/import/commit-batched", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: "notes.csv",
+          format: "test",
+          rows: [withNote, explicitNull, omitted],
+        }),
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const landed = db.client
+      .prepare(
+        "SELECT payee, notes FROM transactions WHERE account_id = ? AND date = ? ORDER BY payee",
+      )
+      .all(ACCT_ID, baseDate) as Array<{ payee: string; notes: string | null }>;
+
+    expect(landed).toHaveLength(3);
+    expect(landed[0]).toEqual({ payee: "notes-row-A", notes: "reimburse Alex" });
+    expect(landed[1]).toEqual({ payee: "notes-row-B", notes: null });
+    expect(landed[2]).toEqual({ payee: "notes-row-C", notes: null });
+  });
 });

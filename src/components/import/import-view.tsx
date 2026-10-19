@@ -7,6 +7,7 @@ import { useDropzone } from "react-dropzone";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
 import { Upload, FileText, ChevronDown, ChevronRight } from "lucide-react";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { CategoryDropdown } from "@/components/categories/category-dropdown";
@@ -119,6 +120,10 @@ interface TestResultRow {
   refNum?: string;
   runningBalance?: string;
   postedSeq?: number | null;
+  /** Operator-typed note folded in from `notesOverrides` by
+   *  `effectiveRows`. Flows into the commit payload and lands on
+   *  `transactions.notes`. Null / absent on fresh parse. */
+  notes?: string | null;
 }
 
 interface TestResponse {
@@ -198,6 +203,13 @@ export function ImportView() {
   const [accountOverrides, setAccountOverrides] = useState<
     Map<string, { accountId: string; accountName: string }>
   >(new Map());
+  /** Per-row operator-typed notes, keyed by `importHash`. Mirrors
+   *  the `localOverrides` shape — folded into each row in
+   *  `effectiveRows` and flows to the commit payload. Only visible
+   *  when `displayPrefs.importShowNotesColumn` is on. */
+  const [notesOverrides, setNotesOverrides] = useState<Map<string, string>>(
+    new Map(),
+  );
   /** Persisted across devices via display-prefs (default ON). When
    *  on, creating a category rule via the in-row picker also rewrites
    *  every OTHER pending row that shares the same normalised payee
@@ -486,9 +498,16 @@ export function ImportView() {
           resolvedAccountVia: "alias" as const,
         };
       }
+      // Note override: raw string from the per-row input. Empty
+      // string collapses to null so the commit insert doesn't
+      // write a sentinel empty-string.
+      const n = notesOverrides.get(r.importHash);
+      if (n !== undefined) {
+        next = { ...next, notes: n.length > 0 ? n : null };
+      }
       return next satisfies TestResultRow;
     });
-  }, [data?.rows, localOverrides, accountOverrides]);
+  }, [data?.rows, localOverrides, accountOverrides, notesOverrides]);
 
   const filteredRows = effectiveRows.filter((r) => {
     if (accountFilter !== "all" && (r.qifAccount?.name ?? "") !== accountFilter)
@@ -590,6 +609,22 @@ export function ImportView() {
               checked={autoApplyRules}
               onCheckedChange={(v) => setPref("importAutoApplyRules", v)}
               aria-label="Toggle apply-new-rules-to-pending-rows"
+            />
+          </label>
+          <label className="flex items-start justify-between gap-3 pt-1 cursor-pointer">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Notes column</p>
+              <p className="text-xs text-muted-foreground">
+                Adds a per-row Notes cell between Payee and Amount so
+                the operator can annotate pending transactions
+                before committing them. Any text typed here lands on
+                the transaction's `notes` field.
+              </p>
+            </div>
+            <Switch
+              checked={displayPrefs.importShowNotesColumn}
+              onCheckedChange={(v) => setPref("importShowNotesColumn", v)}
+              aria-label="Toggle per-row notes column"
             />
           </label>
         </CardContent>
@@ -775,6 +810,9 @@ export function ImportView() {
                       )}
                       <th className="text-left px-3 py-2">Category</th>
                       <th className="text-left px-3 py-2 w-full">Payee</th>
+                      {displayPrefs.importShowNotesColumn && (
+                        <th className="text-left px-3 py-2">Notes</th>
+                      )}
                       <th className="text-right px-3 py-2">Amount</th>
                     </tr>
                   </thead>
@@ -791,9 +829,17 @@ export function ImportView() {
                             setExpandedKey(isOpen ? null : key)
                           }
                           showAccountColumn={showAccountColumn}
+                          showNotesColumn={displayPrefs.importShowNotesColumn}
                           categories={categories}
                           onRuleCreated={(cat) =>
                             handleRuleCreated(r.importHash, cat)
+                          }
+                          onNotesChange={(hash, text) =>
+                            setNotesOverrides((prev) => {
+                              const next = new Map(prev);
+                              next.set(hash, text);
+                              return next;
+                            })
                           }
                         />
                       );
@@ -801,7 +847,10 @@ export function ImportView() {
                     {filteredRows.length === 0 && (
                       <tr>
                         <td
-                          colSpan={showAccountColumn ? 6 : 5}
+                          colSpan={
+                            (showAccountColumn ? 6 : 5) +
+                            (displayPrefs.importShowNotesColumn ? 1 : 0)
+                          }
                           className="px-3 py-6 text-center text-muted-foreground text-sm"
                         >
                           No rows match this filter.
@@ -905,15 +954,24 @@ function ImportRow({
   isOpen,
   onToggle,
   showAccountColumn,
+  showNotesColumn,
   categories,
   onRuleCreated,
+  onNotesChange,
 }: {
   row: TestResultRow;
   isOpen: boolean;
   onToggle: () => void;
   showAccountColumn: boolean;
+  /** Whether the Notes column is enabled by `importShowNotesColumn`.
+   *  When false the `<td>` is omitted entirely and the expanded-row
+   *  colSpan skips its reservation. */
+  showNotesColumn: boolean;
   categories: CategoryOption[];
   onRuleCreated: (cat: CategoryOption) => void;
+  /** Fires on each keystroke in the Notes input — parent writes
+   *  into `notesOverrides` keyed by `importHash`. */
+  onNotesChange: (importHash: string, text: string) => void;
 }) {
   const Chev = isOpen ? ChevronDown : ChevronRight;
   const amt = parseFloat(row.amount);
@@ -974,6 +1032,21 @@ function ImportRow({
             {row.payee || "—"}
           </span>
         </td>
+        {showNotesColumn && (
+          <td
+            className="px-3 py-2 whitespace-nowrap"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Input
+              type="text"
+              value={row.notes ?? ""}
+              onChange={(e) => onNotesChange(row.importHash, e.target.value)}
+              placeholder="Add note…"
+              className="h-7 text-xs w-40"
+              aria-label={`Note for ${row.payee || "transaction"}`}
+            />
+          </td>
+        )}
         <td
           className={cn(
             "px-3 py-2 text-right tabular-nums whitespace-nowrap font-medium",
@@ -987,7 +1060,7 @@ function ImportRow({
         <tr className={cn("border-b", rowStateCls)}>
           <td />
           <td
-            colSpan={showAccountColumn ? 5 : 4}
+            colSpan={(showAccountColumn ? 5 : 4) + (showNotesColumn ? 1 : 0)}
             className="px-3 py-3 bg-background/60"
           >
             <ImportRowExpanded row={row} />
@@ -1519,6 +1592,11 @@ function CommitToDb({
           // in the DB even though the parser had the right answer.
           postedSeq: r.postedSeq ?? null,
           bankAccountId: r.qifAccount?.name ?? null,
+          // Operator-typed note from the Notes column (gated by
+          // the `importShowNotesColumn` display pref); empty / unset
+          // folds to null in `effectiveRows` so the DB insert
+          // never writes a sentinel empty string.
+          notes: r.notes ?? null,
         })),
       };
       const res = await fetch("/api/import/commit-batched", {

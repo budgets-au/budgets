@@ -35,6 +35,11 @@ const rowSchema = z.object({
   /** Optional bank-account-id; learned as an alias on first sighting so
    * subsequent imports auto-route. */
   bankAccountId: z.string().nullable().optional(),
+  /** Operator-typed note from the Notes column in the import grid
+   * (opt-in via `importShowNotesColumn` display pref). Lands on
+   * `transactions.notes` verbatim; null when the operator left it
+   * blank. */
+  notes: z.string().nullable().optional(),
 });
 
 const bodySchema = z.object({
@@ -414,7 +419,16 @@ async function runCommit(request: Request) {
       // this build; 1500 rows × 15 fields = 22500 leaves headroom.
       // Without chunking a single-account >2200-row CSV 500's the
       // request with "too many SQL variables".
-      await chunkedExec(remainingToInsert, 1500, (slice) =>
+      //
+      // Chunk size math: 22 bound params per row (15 explicit values
+      // + 3 `$defaultFn` stamps for id/createdAt/updatedAt + 4
+      // `.default(false)` stamps for isTransfer/isSynthetic/
+      // isReconciled/isSample). The 32,766 SQLite cap divides to
+      // 1489 rows; 1400 leaves ~26 rows of margin so a future
+      // single-field addition doesn't repeat the 0.352-cycle
+      // regression where adding `notes` (16th explicit) pushed
+      // the previous 1500-chunk × 22 fields = 33,000 past the cap.
+      await chunkedExec(remainingToInsert, 1400, (slice) =>
         db.insert(transactions).values(
           slice.map((r) => {
             const normalized = r.payee ? normalizePayee(r.payee) : null;
@@ -437,6 +451,10 @@ async function runCommit(request: Request) {
               postedSeq: r.postedSeq != null ? r.postedSeq + offset : null,
               type: r.type ?? null,
               balance: r.balance ?? null,
+              // Operator-typed note from the import grid's Notes
+              // column — null when the operator didn't fill it in
+              // (or the Notes column was off entirely).
+              notes: r.notes ?? null,
             };
           }),
         ),

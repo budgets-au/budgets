@@ -16,6 +16,7 @@ import { AttachmentsStorePanel } from "@/components/settings/attachments-store-p
 import { UserManager } from "@/components/settings/user-manager";
 import { SampleDataPanel } from "@/components/settings/sample-data-panel";
 import { MaintenancePanel } from "@/components/settings/maintenance-panel";
+import { SchemaCheckCard } from "@/components/settings/schema-check-card";
 import { OrphanCategoriesPanel } from "@/components/settings/orphan-categories-panel";
 import { ResetBrowserData } from "@/components/settings/reset-browser-data";
 import { SchedulePaletteEditor } from "@/components/settings/schedule-palette-editor";
@@ -229,6 +230,7 @@ export function SettingsTabs() {
       </TabsContent>
 
       <TabsContent value="maintenance" className="space-y-6 max-w-2xl">
+        <SchemaCheckCard />
         <MaintenancePanel />
       </TabsContent>
 

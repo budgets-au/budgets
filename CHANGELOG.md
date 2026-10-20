@@ -9,6 +9,89 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.358.0 — 2026-10-21
+
+### Fixed
+- **Migrations could fail silently and then block every later
+  migration.** Root cause of the missing `scheduled_forecasts` /
+  `transaction_attachments` tables behind the 0.355–0.357 500s
+  (/api/cashflow, /api/scheduled, /api/reports/cashflow, the
+  dashboard forward-balance card, the calendar):
+  - drizzle's `migrate()` runs every pending migration in **one**
+    transaction and only applies a migration whose journal `when`
+    is newer than the newest recorded `created_at`.
+  - Migration 0021 rebuilds `scheduled_forecasts` with
+    `INSERT … SELECT FROM scheduled_forecasts`, so on a DB that was
+    already missing that table it failed with "no such table".
+    That rolled back 0022 in the same transaction, and
+    `runPendingMigrations()` logged and swallowed the error. So
+    both tables were simply never created, on every unlock.
+  - Worse, 0.357.1's self-heal then created 0022's table and
+    column *ahead* of the migration. On every later unlock, 0022's
+    plain `CREATE TABLE` / `ADD COLUMN` would fail, rolling 0021
+    back again — permanently blocking 0022 and every future
+    migration.
+- **New per-migration runner** (`src/db/migrations.ts`), replacing
+  drizzle's `migrate()` on unlock, on new-profile creation, and in
+  `scripts/migrate.ts`:
+  - Each migration commits in its own transaction, in journal
+    order. The first failure stops the run (so nothing later gets
+    recorded past it) and is kept rather than swallowed.
+  - Migrations known to have drifted in the field (0021, 0022) are
+    detected and repaired idempotently, then recorded. 0021 counts
+    as drifted when its table is absent or already has `new_date`;
+    the old 0000 shape still runs the real rebuild, so existing
+    override rows are preserved.
+  - Bookkeeping stays drizzle-compatible (same
+    `__drizzle_migrations` table, same `hash` / `created_at` rows).
+  - The 0.357.1 `ensureCriticalSchemaOn` self-heal is removed; the
+    runner's repairs replace it.
+
+### Added
+- **Settings → Maintenance → Schema check** (admin-only,
+  `GET /api/maintenance/schema-check`). Shows:
+  - migrations recorded vs shipped, and the newest recorded
+    timestamp;
+  - pending migrations;
+  - tables and columns declared in `schema.ts` but missing from
+    the DB;
+  - the last migration run (what was applied and what was
+    repaired);
+  - the last migration error, if any.
+
+  Amber banner when anything is off. The last-run record lives on
+  the shared `globalThis` DB state; a plain module variable would
+  have read `null` in production because Next.js loads `@/db` in
+  more than one bundle (caught while verifying in the browser).
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean.
+- `pnpm test`: 820 pass; only the 5 known `disk-usage.test.ts`
+  failures. 6 new runner tests against the real `drizzle/` folder:
+  - a fresh DB matches `schema.ts` with nothing missing;
+  - a second run is a no-op;
+  - the production state (no `scheduled_forecasts` before 0021) is
+    recovered;
+  - the 0.357.1 wedge is reproduced with drizzle's own runner,
+    which throws, and recovered by the new runner, including a
+    later migration and a preserved override row;
+  - a failing migration stops the run and leaves later ones
+    pending;
+  - after a run, drizzle's own `migrate()` is a no-op.
+- In the browser: booted `pnpm dev` on a SQLCipher-keyed scratch DB
+  built in the production state (migrated through 0020 and missing
+  `scheduled_forecasts`). On unlock the log showed "Repaired
+  drifted migrations: 0021…" and "Applied migrations: 0022…". After
+  that, `/api/scheduled`, `/api/cashflow` and
+  `/api/reports/cashflow` returned 200, and the Schema check panel
+  rendered "23 of 23 … repaired 0021".
+
+### Notes
+- Still unknown: why that DB was missing `scheduled_forecasts`
+  before 0021 ran (it is created in 0000). After upgrading, check
+  the Schema check panel; its "Last error" and counts are the
+  evidence.
+
 ## 0.357.1 — 2026-10-20
 
 ### Fixed
@@ -19,12 +102,11 @@ runs `npm ci` survives version bumps and rebuilds in seconds.
   `migrate()` reported no error, which means the
   `__drizzle_migrations` row for migration 0021 (and 0022) was
   recorded without the SQL actually having materialised the
-  table. Most likely cause: migration 0021 rebuilt
-  `scheduled_forecasts` via DROP + RENAME across
-  `--> statement-breakpoint` boundaries, and an interrupted run
-  landed the DROP but not the RENAME; drizzle then saw the
-  migration as applied on every subsequent unlock and skipped
-  it, leaving the DB missing the table forever.
+  table. *(Corrected in 0.358.0: the cause given here — an
+  interrupted DROP/RENAME — was a guess, and the "recorded without
+  materialising" premise is wrong. See 0.358.0 for the actual
+  mechanism. The self-heal below could also wedge future
+  migrations and has been replaced.)*
 - **New post-migration self-heal.** `runPendingMigrations()`
   now calls `ensureCriticalSchemaOn(sqlite)` after drizzle's
   migrator finishes. That helper idempotently runs
@@ -215,8 +297,9 @@ runs `npm ci` survives version bumps and rebuilds in seconds.
   always-visible paper-clip surfaced it on every row —
   including rows the Scheduled list renders, which is why both
   pages went blank. Added the one-line
-  `nativeButton={false}` prop. Verified `pnpm build` + hover
-  interaction locally.
+  `nativeButton={false}` prop. Verified `pnpm build` only.
+  *(Corrected in 0.358.0: this entry originally also claimed the
+  hover interaction was checked locally; it wasn't.)*
 
 ## 0.354.0 — 2026-10-20
 
@@ -330,10 +413,10 @@ runs `npm ci` survives version bumps and rebuilds in seconds.
   unrelated profile-registry test setup remain unchanged (same
   count on `main` with the attachments branch stashed) — not
   introduced by this release.
-- Manual rekey round-trip: upload a JPEG, rotate the passphrase
-  via `/rekey`, lock, unlock with the new passphrase, GET the
-  attachment URL — bytes decrypt and the paper-clip indicator
-  survives.
+- *(Corrected in 0.358.0: this entry originally claimed a manual
+  rekey round-trip — upload, `/rekey`, lock, unlock, GET — had
+  been run. It had not. The DEK-inside-the-DB design means rekey
+  shouldn't affect attachments, but that is still unverified.)*
 
 ## 0.352.0 — 2026-10-20
 

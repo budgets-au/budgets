@@ -9,6 +9,61 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.364.0 — 2026-10-22
+
+### Added
+- **Hot-route smoke test**
+  (`src/__tests__/golden/hot-routes.integration.test.ts`). Runs 18
+  high-traffic GET routes that previously had no integration test
+  against a migrated, seeded DB and asserts 200 with a JSON body:
+  - `/api/cashflow`;
+  - `/api/scheduled` and its budget-progress and suggestions routes;
+  - all `/api/reports/*`;
+  - `/api/dashboard/*`;
+  - `/api/accounts` and `/api/transactions`.
+
+  This is the check that would have caught the 0.355–0.357 500s.
+  Confirmed by dropping `scheduled_forecasts` in a throwaway copy,
+  which made `cashflow` and `reports/cashflow` fail exactly as they
+  did in production.
+- **Receipts e2e spec** (`tests/e2e/receipts.spec.ts`), run against
+  the production build:
+  - attach through the real file chooser while the pointer leaves
+    the popover, then check the thumbnail renders and delete it;
+  - add a note from the collapsed row;
+  - on an iPhone 13 viewport, the paper-clip is on screen and opens
+    on the first tap.
+
+### Fixed
+- **The five long-standing `disk-usage.test.ts` failures.** The test
+  reached the real profile registry at `/data`. It now mocks the two
+  path helpers it doesn't care about, and the unit suite is fully
+  green.
+
+### Docs
+- **AGENTS.md:**
+  - the `ATTACHMENTS_PATH` setting;
+  - the new migration runner, the rule against "self-heal" DDL
+    (with how to add a `REPAIRS` entry), and the Schema check
+    panel;
+  - `usePersistedPref`;
+  - new gotchas: base-ui `nativeButton={false}`, `globalThis` for
+    shared process state, `onDbContextChange` for per-DB caches,
+    touch-safe popover opening, `HIT_AREA` + `aria-label` for icon
+    buttons;
+  - a pointer to the hot-route smoke test for new routes;
+  - the `next dev`-generated agent-rules header.
+- **README:** where receipts are stored, `ATTACHMENTS_PATH`, and a
+  reminder that in-app backups cover the database file only.
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean.
+- `pnpm test`: **876 passed, 0 failed** (10 skipped).
+- Playwright against the production e2e build: the 3 new receipt
+  tests plus the 31 tests in `pages-smoke`, `reports-tabs`,
+  `saved-filters` and `settings-data-checks` all pass, with no page
+  errors.
+
 ## 0.363.0 — 2026-10-22
 
 ### Fixed

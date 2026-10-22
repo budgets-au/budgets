@@ -8,6 +8,17 @@ const { statfsMock } = vi.hoisted(() => ({ statfsMock: vi.fn() }));
 vi.mock("node:fs/promises", () => ({
   statfs: statfsMock,
 }));
+// diskUsage() resolves the backup dir via livePath(), which reads the profile
+// registry under the default /data path. Point it somewhere harmless; only the
+// statfs maths is under test here.
+vi.mock("@/db", () => ({
+  livePath: () => "/tmp/budgets-disk-usage-test/budget.db",
+  getClient: () => {
+    throw new Error("not used");
+  },
+  lock: () => {},
+}));
+vi.mock("@/lib/db-profiles", () => ({ getActiveProfile: () => ({ id: "default" }) }));
 
 import {
   DISK_USAGE_CACHE_MS,

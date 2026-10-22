@@ -122,6 +122,15 @@ Replace `podman` with `docker` if that's what you have. The
 (the container runs as a non-root user) — if you hit a
 permission error on first unlock, `chown -R 1001:1001` it once.
 
+Receipt attachments are stored encrypted under
+`/data/attachments/` by default, so the same volume covers them.
+To keep receipts on a separate volume, mount it and set
+`ATTACHMENTS_PATH` (e.g. `-v $HOME/receipts:/receipts -e
+ATTACHMENTS_PATH=/receipts`). Settings → Databases → Attachments
+store shows the path in use and checks that it's writable. Note
+that in-app backups cover the database file only, so back up the
+attachments folder alongside them.
+
 For LAN access from other devices, bind to `0.0.0.0` (the default
 inside the container) and reach it via `http://<server-ip>:3000`.
 Set `NEXTAUTH_URL` to the URL you'll actually use (e.g.

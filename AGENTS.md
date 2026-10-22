@@ -1,7 +1,11 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
 <!-- END:nextjs-agent-rules -->
 
 ---
@@ -45,6 +49,12 @@ Optional:
   can also be set per-database via Settings → General → Brave
   Search API key (DB-stored, encrypted with the rest of the
   ledger); the env var takes precedence when both are set.
+- `ATTACHMENTS_PATH` — where encrypted receipt files are stored
+  (`<path>/<profileId>/<id>.enc`). Defaults to
+  `<dirname(SQLITE_PATH)>/attachments`, so a single `/data` volume
+  covers both. Set it to put receipts on a separate volume. The
+  container user (uid 1001) must be able to write there; Settings →
+  Databases → Attachments store probes it.
 
 Database migrations apply automatically on every unlock via
 `runPendingMigrations()` in [src/db/index.ts](src/db/index.ts) —
@@ -117,9 +127,31 @@ debugging six months later can recognise the symptom.
   tracked by [drizzle/meta/_journal.json](drizzle/meta/_journal.json).
   **Do not** run `drizzle-kit generate` — the journal is the
   source of truth, not a regenerated artefact.
-- The first unlock applies any pending migrations via
-  `runPendingMigrations()` against the keyed SQLCipher handle.
-  The migrator is idempotent and safe to re-run.
+- Migrations run through **our own runner**,
+  `applyMigrations()` in [src/db/migrations.ts](src/db/migrations.ts),
+  not drizzle's `migrate()`. It's used on every unlock, by
+  `initProfileFile`, by `scripts/migrate.ts` and by the test DB
+  harness.
+  - Each migration commits in its own transaction, in journal order.
+    The first failure stops the run and is kept, never swallowed.
+  - Bookkeeping stays drizzle-compatible (`__drizzle_migrations`, same
+    `hash` / `created_at` rows).
+  - Drizzle's runner put every pending migration in one transaction and
+    swallowed failures. One bad migration (0021) silently blocked 0022
+    in production (0.355–0.357).
+- **Never create a migration's tables or columns anywhere else** (no
+  "self-heal" DDL on unlock). Pre-created objects make the
+  migration's plain `CREATE TABLE` / `ADD COLUMN` fail on every
+  later unlock and block every migration after it. If a shipped
+  migration has drifted in the field, add an entry to `REPAIRS` in
+  `src/db/migrations.ts`:
+  - `drifted()` detects the partial state;
+  - `complete()` idempotently fills in what's missing;
+  - the runner then records the migration as applied.
+- Settings → Maintenance → **Schema check** (admin) shows recorded vs
+  shipped migrations, anything pending, missing tables/columns vs
+  `schema.ts`, and the last migration error. Check it first when a
+  route 500s with "no such table".
 - New migration → next-numbered `0NNN_<slug>.sql` plus an entry
   appended to `drizzle/meta/_journal.json`. Use the existing
   files as a template (the journal entry format is strict).
@@ -155,6 +187,14 @@ function onChange(next: typeof value) {
 `setPref` writes optimistically + revalidates from the server,
 so the toggle feels instant and self-corrects if the PATCH
 fails.
+
+For a toggle that used to be `useState`, `usePersistedPref(key)`
+returns a `useState`-shaped `[value, setValue]` pair (function
+updates included), so the swap is one line:
+
+```tsx
+const [showAll, setShowAll] = usePersistedPref("scheduledShowAll");
+```
 
 ## Multi-DB profile model
 
@@ -238,12 +278,43 @@ When adding code that touches the on-disk DB or its backups:
   `E2E_TEST_BUILD=1` in `next.config.ts`. Don't reach into
   `.next/` from a test — the dev server may be writing into it
   concurrently.
-- **Drizzle migrations apply on first unlock**, idempotently,
-  against the keyed connection. The migrator is safe to re-run on
-  every unlock; you don't need to gate `runPendingMigrations()`
-  calls.
+- **Migrations apply on every unlock**, idempotently, via
+  `applyMigrations()` (see Schema migrations). Safe to re-run; you
+  don't need to gate `runPendingMigrations()` calls.
+- **base-ui triggers rendering a non-button need
+  `nativeButton={false}`.** `<PopoverTrigger render={<span …/>}>`
+  (or `div`) without it applies button semantics to the span, and
+  in a production build that crashes the whole render tree. 0.354
+  blanked `/transactions` and `/scheduled` this way. Prefer a real
+  `<button>` trigger.
+- **Process state shared across routes must live on `globalThis`.**
+  Next.js loads `@/db` (and any module) in several bundles, so a
+  module-level `let` written in one route reads as its initial value
+  in another. Keep connection-scoped state on the `DbState` object
+  in `src/db/index.ts`.
+- **Per-database caches must reset when the open DB changes.**
+  Register a resetter with `onDbContextChange()`
+  ([src/lib/db-context.ts](src/lib/db-context.ts)). `lock()`,
+  `switchProfile()` and restore all fire it. A process-global
+  attachment-key cache once encrypted profile B's receipts with
+  profile A's key.
+- **Touch: don't open popovers on hover for touch pointers.** A tap
+  fires emulated hover events that race the click. Gate hover-open
+  on `e.pointerType === "mouse"`, and open a just-mounted popover
+  after the activating click finishes (`setTimeout(…, 0)`);
+  otherwise it treats that click as an outside press.
+- **Small icon buttons:** add `HIT_AREA` from
+  [src/lib/ui/hit-area.ts](src/lib/ui/hit-area.ts) for an invisible
+  larger tap target, and always give icon-only buttons an
+  `aria-label`.
 
 ## Testing
+
+Every new GET route that reads the DB should be added to
+[src/__tests__/golden/hot-routes.integration.test.ts](src/__tests__/golden/hot-routes.integration.test.ts).
+It runs each route against a migrated, seeded DB and asserts 200,
+the check that would have caught the 0.355–0.357 missing-table
+500s.
 
 | Command | What it runs |
 | --- | --- |

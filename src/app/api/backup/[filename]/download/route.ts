@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import { join } from "node:path";
 import { NextResponse } from "next/server";
 import {
+  assertWithinBackupDir,
   backupDir,
   isSafeBackupFilename,
 } from "@/lib/backup/sqlite-backup";
@@ -23,7 +24,7 @@ export const GET = withAdminAuth<{ params: Promise<{ filename: string }> }>(
         { status: 400 },
       );
     }
-    const path = join(backupDir(), filename);
+    const path = assertWithinBackupDir(join(backupDir(), filename));
     if (!existsSync(path)) {
       return NextResponse.json({ error: "Backup not found" }, { status: 404 });
     }

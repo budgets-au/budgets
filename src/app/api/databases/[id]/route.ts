@@ -9,8 +9,8 @@ import {
   readRegistry,
   renameProfile,
 } from "@/lib/db-profiles";
-import { backupDirForProfile } from "@/lib/backup/sqlite-backup";
-import { attachmentsDirForProfile } from "@/lib/attachments/storage";
+import { assertProfileBackupDir, backupDirForProfile } from "@/lib/backup/sqlite-backup";
+import { assertWithinAttachmentsDir, attachmentsDirForProfile } from "@/lib/attachments/storage";
 import { withAdminAuthAndProfileId } from "@/lib/api/route-guards";
 import { badRequest, parseJsonBody } from "@/lib/api/parse-body";
 
@@ -74,8 +74,8 @@ export const DELETE = withAdminAuthAndProfileId(async (id, request) => {
     return NextResponse.json({ error: "Unknown profile" }, { status: 404 });
   }
   const filePath = pathForProfile(target);
-  const backupSubdir = backupDirForProfile(target.id);
-  const attachmentsSubdir = attachmentsDirForProfile(target.id);
+  const backupSubdir = assertProfileBackupDir(backupDirForProfile(target.id));
+  const attachmentsSubdir = assertWithinAttachmentsDir(attachmentsDirForProfile(target.id));
   try {
     const removed = deleteProfile(id);
     // Best-effort filesystem sweep. A failure here logs but doesn't

@@ -42,7 +42,7 @@ const patchSchema = z.object({
  *  annotation lives outside the encrypted SQLCipher file (readable
  *  without the passphrase + survives swaps). Empty / whitespace-only
  *  notes delete the sidecar. */
-export const PATCH = withAuth<{ params: Promise<{ filename: string }> }>(
+export const PATCH = withAdminAuth<{ params: Promise<{ filename: string }> }>(
   async (request, { params }) => {
     const { filename } = await params;
     if (!isSafeBackupFilename(filename)) {

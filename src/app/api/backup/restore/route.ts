@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { withAdminAuth } from "@/lib/api/route-guards";
 import {
+  assertWithinBackupDir,
   backupDir,
   isSafeBackupFilename,
   looksLikeSqlcipher,
@@ -10,6 +12,11 @@ import {
   takeBackup,
   verifyBackup,
 } from "@/lib/backup/sqlite-backup";
+
+const restoreByNameSchema = z.object({
+  filename: z.string().refine((f) => isSafeBackupFilename(f)),
+  passphrase: z.string().min(1),
+});
 
 /**
  * POST /api/backup/restore — replace the live DB with a backup.
@@ -81,25 +88,16 @@ export const POST = withAdminAuth(async (request) => {
       cleanupOnFailure = candidatePath;
       passphrase = pass;
     } else {
-      const body = (await request.json()) as {
-        filename?: unknown;
-        passphrase?: unknown;
-      };
-      const filename = body.filename;
-      const pass = body.passphrase;
-      if (typeof filename !== "string" || !isSafeBackupFilename(filename)) {
+      const parsed = restoreByNameSchema.safeParse(await request.json().catch(() => null));
+      if (!parsed.success) {
+        const field = parsed.error.issues[0]?.path[0];
         return NextResponse.json(
-          { ok: false, error: "Invalid backup filename" },
+          { ok: false, error: field === "passphrase" ? "Passphrase is required" : "Invalid backup filename" },
           { status: 400 },
         );
       }
-      if (typeof pass !== "string" || pass.length === 0) {
-        return NextResponse.json(
-          { ok: false, error: "Passphrase is required" },
-          { status: 400 },
-        );
-      }
-      candidatePath = join(backupDir(), filename);
+      const { filename, passphrase: pass } = parsed.data;
+      candidatePath = assertWithinBackupDir(join(backupDir(), filename));
       passphrase = pass;
     }
 

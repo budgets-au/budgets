@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { withAdminAuth } from "@/lib/api/route-guards";
+import { isAdminCaller, withAdminAuth } from "@/lib/api/route-guards";
 import { parseJsonBody } from "@/lib/api/parse-body";
 import {
   initProfileFile,
@@ -16,27 +16,26 @@ import {
 } from "@/lib/db-profiles";
 
 /** GET /api/databases — list every profile + which one is currently
- *  active. Public (no auth) so the /unlock page can render the
- *  switcher before the operator has signed in. The data exposed
- *  (labels chosen by the operator + the active pointer) isn't
- *  sensitive; only filenames could conceivably leak data-volume
- *  layout, which is uninteresting on a self-hosted single-tenant
- *  app. */
-export const GET = withAdminAuth(async () => {
+ *  active. Public so the /unlock page (and the sidebar switcher for
+ *  non-admins) can render the switcher before / without admin rights.
+ *  Anonymous and non-admin callers get ids + labels only; filenames and
+ *  creation dates are admin-only (Settings → Database files). */
+export async function GET(request: Request) {
+  const admin = await isAdminCaller(request);
   const reg = readRegistry();
+  const pick = (p: (typeof reg.profiles)[number]) => ({
+    id: p.id,
+    label: p.label,
+    archived: p.archived === true,
+    ...(admin ? { filename: p.filename, createdAt: p.createdAt } : {}),
+  });
   return NextResponse.json({
-    profiles: reg.profiles.map((p) => ({
-      id: p.id,
-      label: p.label,
-      filename: p.filename,
-      createdAt: p.createdAt,
-      archived: p.archived === true,
-    })),
+    profiles: reg.profiles.map(pick),
     activeProfileId: reg.activeProfileId,
-    activeProfile: getActiveProfile(),
+    activeProfile: pick(getActiveProfile()),
     unlocked: isUnlocked(),
   });
-});
+}
 
 const createSchema = z.object({
   label: z.string().min(1).max(80),

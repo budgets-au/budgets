@@ -45,8 +45,9 @@ export const GET = withAuthAndId(async (id, request) => {
     dividends = hist.dividends.map((d) => ({ date: d.date, perShare: d.amount }));
     void persistPriceCache(row.symbol, hist.closes);
   } catch (err) {
+    console.error("[watchlist/history] price provider error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "History fetch failed" },
+      { error: "History fetch failed: the price provider didn't respond. Try again shortly." },
       { status: 502 },
     );
   }

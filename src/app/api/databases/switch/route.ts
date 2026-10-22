@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { switchProfile } from "@/db";
+import { isUnlocked, switchProfile } from "@/db";
+import { hasIdentity } from "@/lib/api/route-guards";
 import { parseJsonBody } from "@/lib/api/parse-body";
 
 // Tighter than the old `z.string().min(1).max(40)` — restricts to the
@@ -31,7 +32,8 @@ const switchSchema = z.object({
  *  callers can't spoof it. Direct curl from the host can still call
  *  the endpoint (no Origin header), which is correct for the LAN-trust
  *  model: the threat surface is hostile browsers on the LAN, not
- *  scripts running on the operator's own machine. */
+ *  scripts running on the operator's own machine. While the DB is unlocked
+ *  the caller must also be signed in (switching force-locks it). */
 export async function POST(request: Request) {
   if (!isSameOriginPost(request)) {
     return NextResponse.json(
@@ -39,14 +41,21 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+  // Switching locks the open DB. While it's unlocked that must take a
+  // signed-in caller, otherwise any LAN client (no Origin header) could
+  // force-lock it. When already locked there's nothing to protect and the
+  // /unlock page needs this before anyone has signed in.
+  if (isUnlocked() && !(await hasIdentity(request))) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const parsed = await parseJsonBody(request, switchSchema);
   if (!parsed.ok) return parsed.response;
   try {
     switchProfile(parsed.data.id);
     return NextResponse.json({ ok: true, redirect: "/unlock" });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: msg }, { status: 400 });
+    console.error("[databases/switch] failed:", e);
+    return NextResponse.json({ error: "Unknown database profile" }, { status: 400 });
   }
 }
 

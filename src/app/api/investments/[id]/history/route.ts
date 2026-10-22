@@ -58,8 +58,9 @@ export const GET = withAuthAndId(async (id, request) => {
     // Cache the closes for future point-in-time lookups.
     void persistPriceCache(inv.symbol, closes);
   } catch (err) {
+    console.error("[investments/history] price provider error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "History fetch failed" },
+      { error: "History fetch failed: the price provider didn't respond. Try again shortly." },
       { status: 502 },
     );
   }

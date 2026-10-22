@@ -9,6 +9,82 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.360.0 — 2026-10-22
+
+### Fixed
+- **The "Switch database" option on `/unlock` had been missing since
+  0.193.** `GET /api/databases` is documented as public so the
+  unlock page can list profiles before anyone signs in, but the
+  route-guard migration wrapped it in `withAdminAuth`. Locked
+  sessions silently got no switcher, and non-admin users got a
+  broken sidebar switcher. It is public again: anonymous and
+  non-admin callers get ids and labels only, while filenames and
+  creation dates stay admin-only.
+
+### Security
+- **Profile switch can no longer force-lock an unlocked DB
+  anonymously.** `POST /api/databases/switch` deliberately accepts
+  requests without an `Origin` header (#89), so any LAN client could
+  lock the open database. While the DB is unlocked it now requires a
+  signed-in session or an API key. While locked it stays open (the
+  `/unlock` flow), and cross-origin browser POSTs are still rejected.
+  Unknown-profile errors no longer echo internal text.
+- **Uploads are classified by content, not the browser's declared
+  type.** A new magic-byte sniffer (`src/lib/attachments/sniff.ts`)
+  recognises JPEG, PNG, WebP, HEIC/HEIF and PDF, and the sniffed type
+  is what gets stored and served. HTML or SVG renamed to `.png` is
+  rejected (415). Files whose browser type is empty or wrong
+  (`.heic` on Windows Chrome) are now accepted when the bytes are
+  valid.
+- **Attachment downloads send `X-Content-Type-Options: nosniff`**,
+  and images also send a sandboxing CSP. PDFs don't get the CSP
+  because Chrome won't render a PDF in a sandboxed document.
+- **Raw server error text no longer reaches the client** on the
+  routes reachable without admin rights:
+  - the receipt upload, which now returns a `code` plus a pointer to
+    Settings → Maintenance → Schema check for schema problems;
+  - import commit, including the transfer-match warning;
+  - investment search and price history;
+  - watchlist price history.
+
+  Details go to the server log instead. Admin-only database and
+  backup routes still return the app's own guard messages (e.g.
+  "can't delete the active profile"), which are meant for the
+  operator.
+- **Backup notes PATCH is admin-only**, matching every other backup
+  route.
+- **`backup/restore` validates its body with zod.** Restore-by-name
+  and download now also pass `assertWithinBackupDir`.
+- **Profile delete asserts containment before each recursive
+  `rmSync`.** This covers both the backup subdirectory (new
+  `assertProfileBackupDir`) and the attachments subdirectory.
+- Deliberately unchanged after review:
+  - `/api/logs` stays on `withAuth`, because ops-scoped monitoring
+    keys can be member-role.
+  - Bulk transaction delete, scheduled bulk delete, import undo and
+    the tax-settings PATCH stay `withAuth`. Users can already edit or
+    delete single records, so the bulk versions aren't an
+    escalation.
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean, `pnpm test`: 841
+  pass, only the 5 known `disk-usage.test.ts` failures.
+- New tests: 10 sniffer cases (6 formats recognised; HTML, SVG, MP4
+  and empty rejected) and 5 switch-route cases (anonymous 401 while
+  unlocked, signed-in 200, anonymous 200 while locked, cross-origin
+  403, no internal text echoed).
+- In the running app (`pnpm dev`, scratch DBs):
+  - anonymous `curl` switch while unlocked → 401;
+  - `/unlock` "Switch database" lists both profiles and switches
+    while locked;
+  - the signed-in sidebar switch goes to `/unlock`;
+  - HTML-as-PNG upload → 415;
+  - a PNG declared as `application/octet-stream` is stored as
+    `image/png`;
+  - downloads carry `nosniff` plus the image CSP;
+  - anonymous `GET /api/databases` has no filenames, while the admin
+    response does.
+
 ## 0.359.0 — 2026-10-22
 
 ### Fixed

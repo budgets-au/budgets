@@ -55,6 +55,17 @@ async function resolveIdentity(
   return { isAdmin: role === "admin", scope: null };
 }
 
+/** True when the request carries a valid session or API key. For routes
+ *  that must stay reachable pre-auth in some states (profile switch). */
+export async function hasIdentity(request: Request): Promise<boolean> {
+  return (await resolveIdentity(request)) !== null;
+}
+
+/** Whether the caller is a signed-in admin (session or admin API key). */
+export async function isAdminCaller(request: Request): Promise<boolean> {
+  return (await resolveIdentity(request))?.isAdmin === true;
+}
+
 /** Wraps a Next.js route handler with the session check that every
  *  protected endpoint used to copy-paste:
  *  ```

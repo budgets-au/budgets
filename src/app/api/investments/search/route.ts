@@ -11,8 +11,9 @@ export const GET = withAuth(async (request) => {
     const results = await searchTicker(q);
     return NextResponse.json(results);
   } catch (err) {
+    console.error("[investments/search] price provider error:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Search failed" },
+      { error: "Search failed: the price provider didn't respond. Try again shortly." },
       { status: 502 },
     );
   }

@@ -122,6 +122,17 @@ export function backupDir(): string {
  *  active one. Used by the Databases manager when deleting a
  *  non-active profile — its backup subdir has to be cleaned up
  *  alongside the encrypted file. */
+/** Containment check for a per-profile backup subdirectory before a
+ *  recursive delete: it must be a direct child of the backup root. */
+export function assertProfileBackupDir(p: string): string {
+  const root = backupRootDir();
+  const candidate = resolve(p);
+  if (dirname(candidate) !== root || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(basename(candidate))) {
+    throw new Error(`Not a per-profile backup dir: ${p}`);
+  }
+  return candidate;
+}
+
 export function backupDirForProfile(profileId: string): string {
   const baseRoot = resolve(
     process.env.BACKUP_DIR ?? join(dirname(livePath()), "backups"),

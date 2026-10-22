@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { transactions, transactionAttachments } from "@/db/schema";
 import { withAuth } from "@/lib/api/route-guards";
 import { AttachmentKeyMissingError, ensureDek, encryptBytes } from "@/lib/attachments/crypto";
+import { sniffReceiptType } from "@/lib/attachments/sniff";
 import {
   ensureAttachmentsDir,
   writeAttachmentAtomic,
@@ -83,18 +84,18 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
       if (e instanceof AttachmentKeyMissingError) {
         return NextResponse.json({ error: e.message }, { status: 409 });
       }
-      // Last-line catch so no unexpected failure (DB column missing
-      // because migration 0022 didn't apply, body parse error, OOM
-      // on a large buffer, etc.) escapes as an opaque 500 with an
-      // empty body. The client toast then renders the actual
-      // reason instead of "upload failed (500)".
+      // Last-line catch: always return a readable body, but keep SQL / OS
+      // detail in the server log rather than the response.
       console.error("[attachments] upload failed with unexpected error", e);
       const msg = e instanceof Error ? e.message : String(e);
-      const hint = /no such table|no such column/i.test(msg)
-        ? " — the attachments schema migration (drizzle 0022) may not have applied yet; lock and re-unlock to re-run migrations."
-        : "";
+      const schema = /no such table|no such column/i.test(msg);
       return NextResponse.json(
-        { error: `Upload failed: ${msg}${hint}` },
+        {
+          error: schema
+            ? "Upload failed: the database schema is out of date. See Settings → Maintenance → Schema check."
+            : "Upload failed due to a server error. Check the server log for details.",
+          code: schema ? "SCHEMA_MISMATCH" : "UPLOAD_FAILED",
+        },
         { status: 500 },
       );
     }
@@ -148,17 +149,19 @@ async function handleUpload(
         { status: 413 },
       );
     }
-    if (!ALLOWED_TYPES.has(file.type)) {
+    // The browser's declared type is untrusted (and empty for .heic on some
+    // platforms); classify by content and store the sniffed type.
+    const plaintext = Buffer.from(await file.arrayBuffer());
+    const sniffedType = sniffReceiptType(plaintext);
+    if (!sniffedType) {
       return NextResponse.json(
         {
-          error: `Unsupported content type: ${file.type || "unknown"}`,
+          error: "Unsupported file: receipts must be a JPEG, PNG, WebP, HEIC or PDF.",
           allowed: Array.from(ALLOWED_TYPES),
         },
         { status: 415 },
       );
     }
-
-    const plaintext = Buffer.from(await file.arrayBuffer());
     const sha256 = createHash("sha256").update(plaintext).digest("hex");
 
     const dek = await ensureDek();
@@ -201,7 +204,7 @@ async function handleUpload(
       .values({
         transactionId: txnId,
         filename: sanitiseFilename(file.name),
-        contentType: file.type,
+        contentType: sniffedType,
         size: plaintext.length,
         sha256,
       })

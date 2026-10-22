@@ -66,9 +66,11 @@ export const POST = withAuth(async (request) => {
   try {
     return await runCommit(request);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Commit failed";
     console.error("[commit-batched]", err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Import commit failed due to a server error. Check the server log for details." },
+      { status: 500 },
+    );
   }
 });
 
@@ -713,7 +715,7 @@ async function runCommit(request: Request) {
   try {
     pairResult = await pairTransfersInWindow({});
   } catch (e) {
-    pairError = e instanceof Error ? e.message : String(e);
+    pairError = "Automatic transfer matching failed; run it again from /transactions.";
     console.error("[commit-batched] transfer-match sweep failed:", e);
   }
 

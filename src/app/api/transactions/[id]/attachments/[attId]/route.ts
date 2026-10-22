@@ -97,6 +97,14 @@ export const GET = withAuth<{
       // encrypted ledger content and shouldn't be stored by shared
       // proxies.
       "Cache-Control": "private, max-age=0, must-revalidate",
+      // User-supplied content served from our origin: never let the browser
+      // sniff it into something executable. Images also get a sandboxing CSP
+      // for when they're opened as a page; PDFs can't, because Chrome refuses
+      // to render a PDF in a sandboxed document.
+      "X-Content-Type-Options": "nosniff",
+      ...(row.contentType.startsWith("image/")
+        ? { "Content-Security-Policy": "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'" }
+        : {}),
     },
   });
 });

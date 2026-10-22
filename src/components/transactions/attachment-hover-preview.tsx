@@ -1,17 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Camera, FileText, Paperclip, Trash2, Upload } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
-import { formatDate } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { useAttachmentUpload } from "@/hooks/use-attachment-upload";
+import { formatFileSize, INPUT_ACCEPT } from "@/lib/attachments/constants";
+import { cn, formatDate } from "@/lib/utils";
 
 interface AttachmentRow {
   id: string;
@@ -21,34 +18,22 @@ interface AttachmentRow {
   createdAt: string;
 }
 
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-const ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "application/pdf",
-];
-const ACCEPT_ATTR = ALLOWED_TYPES.join(",");
+/** Shared trigger styling for the row-level icon buttons. The `after:`
+ *  pseudo-element enlarges the hit area (≈32px, 44px on touch) without
+ *  changing the row's layout. */
+export const ROW_ICON_TRIGGER =
+  "relative inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded p-0.5 transition-colors hover:bg-muted " +
+  "after:absolute after:-inset-2.5 after:content-[''] pointer-coarse:after:-inset-4 " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500";
 
-/** Paper-clip row-level affordance for receipt attachments.
+/** Paper-clip affordance on every transaction row: muted with no receipts,
+ *  normal with a `×N` badge when there are some. Hover/tap opens a popover with
+ *  thumbnails, delete buttons and Take photo / Pick file.
  *
- *  Always visible — muted when the row has no attachments, normal
- *  when it has one or more — so the attach action is discoverable
- *  without expanding the row. Hover opens a Popover that:
- *   - lists the existing attachments as clickable tiles
- *     (160px image thumbs; filename / icon tiles for PDFs), and
- *   - carries a `+ Attach receipt` button at the bottom that opens
- *     the native file picker and POSTs each chosen file to
- *     `/api/transactions/[id]/attachments`.
- *
- *  SWR for the attachment list is gated on `isOpen`, so scrolling
- *  past a long transactions list doesn't fire N parallel requests.
- *  After a successful upload the sibling SWR cache mutates in place
- *  and `onChanged?.()` tells the parent list to re-fetch so the
- *  `attachmentCount` on the row (and the `×N` count badge next to
- *  the clip) reflects the new value immediately. */
+ *  The Popover is only mounted after the first hover, focus or tap, so long
+ *  lists don't pay for thousands of popover roots. The file inputs live outside
+ *  the popover so they can't be unmounted while the OS picker is open, and the
+ *  popover is held open while a picker or upload is in progress. */
 export function AttachmentHoverPreview({
   transactionId,
   count,
@@ -56,94 +41,77 @@ export function AttachmentHoverPreview({
 }: {
   transactionId: string;
   count: number;
-  /** Called after a successful upload so the parent transactions
-   *  list can re-fetch (`attachmentCount` on the row needs to
-   *  reflect the new file). */
   onChanged?: () => void;
 }) {
+  const [active, setActive] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [uploading, setUploading] = useState(0);
+  const [picking, setPicking] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const confirm = useConfirm();
-  // Open/close debounce so a quick cursor pass over the icon doesn't
-  // flicker the popover, and so moving icon → popover body doesn't
-  // close before the pointer bridges the gap.
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const confirm = useConfirm();
+
+  const { data, mutate } = useSwrJson<{ attachments: AttachmentRow[] }>(
+    isOpen ? `/api/transactions/${transactionId}/attachments` : null,
+  );
+  const { uploading, uploadFiles } = useAttachmentUpload(transactionId, () => {
+    void mutate();
+    onChanged?.();
+  });
+  const busy = picking || uploading > 0;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  // Clear `picking` when the OS picker is dismissed without a choice: the
+  // input's native `cancel` event where supported, else the window regaining
+  // focus (onChange, if any, fires first).
+  useEffect(() => {
+    if (!picking) return;
+    const done = () => setPicking(false);
+    const inputs = [fileInputRef.current, cameraInputRef.current];
+    for (const i of inputs) i?.addEventListener("cancel", done);
+    const onFocus = () => setTimeout(done, 500);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      for (const i of inputs) i?.removeEventListener("cancel", done);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [picking]);
+
+  // Hover-to-open is for mice only: a touch tap also fires emulated pointer
+  // enter/leave, which raced the click and closed the popover on first tap.
+  const hoverOnly = (fn: () => void) => (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse") fn();
+  };
+
+  function setOpenGuarded(next: boolean) {
+    if (!next && busyRef.current) return;
+    setIsOpen(next);
+  }
   function openAfterDelay() {
+    setActive(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setIsOpen(true), 200);
   }
   function closeAfterDelay() {
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setIsOpen(false), 120);
+    timerRef.current = setTimeout(() => setOpenGuarded(false), 150);
   }
-
-  // Only populate the SWR key once the popover has opened; a null
-  // key tells SWR to skip the fetch entirely. The subsequent hover
-  // re-uses the cache for the browser session.
-  const { data, mutate } = useSwrJson<{ attachments: AttachmentRow[] }>(
-    isOpen ? `/api/transactions/${transactionId}/attachments` : null,
-  );
-
-  const hasAttachments = count > 0;
-  const label = !hasAttachments
-    ? "Attach receipt"
-    : count === 1
-      ? "1 attachment"
-      : `${count} attachments`;
-
-  async function uploadFiles(files: File[]) {
-    const accepted: File[] = [];
-    for (const f of files) {
-      if (f.size === 0) {
-        toast.error(`${f.name}: file is empty`);
-        continue;
-      }
-      if (f.size > MAX_UPLOAD_BYTES) {
-        toast.error(`${f.name}: exceeds 25 MB upload cap`);
-        continue;
-      }
-      if (!ALLOWED_TYPES.includes(f.type)) {
-        toast.error(`${f.name}: unsupported file type (${f.type || "unknown"})`);
-        continue;
-      }
-      accepted.push(f);
-    }
-    if (accepted.length === 0) return;
-
-    setUploading((n) => n + accepted.length);
-    try {
-      for (const f of accepted) {
-        const form = new FormData();
-        form.append("file", f);
-        const res = await fetch(
-          `/api/transactions/${transactionId}/attachments`,
-          { method: "POST", body: form },
-        );
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          toast.error(
-            `${f.name}: ${body.error ?? `upload failed (${res.status})`}`,
-          );
-          continue;
-        }
-        toast.success(`Attached ${f.name}`);
-      }
-      await mutate();
-      onChanged?.();
-    } finally {
-      setUploading(0);
-    }
+  function pick(input: HTMLInputElement | null) {
+    if (!input) return;
+    setPicking(true);
+    input.click();
   }
-
-  function openPicker() {
-    fileInputRef.current?.click();
-  }
-
-  function openCamera() {
-    cameraInputRef.current?.click();
+  function onPicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    setPicking(false);
+    if (files.length > 0) void uploadFiles(files);
   }
 
   async function remove(id: string, filename: string) {
@@ -156,10 +124,9 @@ export function AttachmentHoverPreview({
     if (!ok) return;
     setDeletingId(id);
     try {
-      const res = await fetch(
-        `/api/transactions/${transactionId}/attachments/${id}`,
-        { method: "DELETE" },
-      );
+      const res = await fetch(`/api/transactions/${transactionId}/attachments/${id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         toast.error(body.error ?? `Delete failed (${res.status})`);
@@ -173,53 +140,100 @@ export function AttachmentHoverPreview({
     }
   }
 
+  const hasAttachments = count > 0;
+  const label = hasAttachments
+    ? `${count} receipt${count === 1 ? "" : "s"} — show or add`
+    : "Attach a receipt";
+  const triggerClass = cn(
+    ROW_ICON_TRIGGER,
+    hasAttachments
+      ? "text-foreground/80 hover:text-foreground"
+      : "text-muted-foreground/50 hover:text-foreground",
+  );
+  const glyph = (
+    <>
+      <Paperclip className="h-3 w-3" />
+      {count > 1 && (
+        <span className="text-[10px] font-medium tabular-nums leading-none">×{count}</span>
+      )}
+    </>
+  );
+
+  const inputs = (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept={INPUT_ACCEPT}
+        className="hidden"
+        onChange={onPicked}
+      />
+      {/* capture="environment" opens the back camera directly on phones;
+          desktop browsers fall back to an image picker. */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={onPicked}
+      />
+    </>
+  );
+
+  if (!active) {
+    return (
+      <button
+        type="button"
+        className={triggerClass}
+        aria-label={label}
+        onPointerEnter={hoverOnly(openAfterDelay)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setActive(true);
+          // Open after this click finishes, or the just-mounted popover
+          // treats it as an outside press and closes again (first tap on
+          // touch devices).
+          setTimeout(() => setIsOpen(true), 0);
+        }}
+      >
+        {glyph}
+      </button>
+    );
+  }
+
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger
-        nativeButton={false}
-        render={
-          <span
-            className={cn(
-              "inline-flex shrink-0 cursor-help items-center gap-0.5 transition-colors p-0.5 rounded hover:bg-muted",
-              hasAttachments
-                ? "text-foreground/80 hover:text-foreground"
-                : "text-muted-foreground/50 hover:text-foreground",
-            )}
-            aria-label={label}
-            title={label}
-            onClick={(e) => e.stopPropagation()}
-            onMouseEnter={openAfterDelay}
-            onMouseLeave={closeAfterDelay}
-          />
-        }
-      >
-        <Paperclip className="h-3 w-3" />
-        {count > 1 && (
-          <span className="text-[10px] font-medium tabular-nums leading-none">
-            ×{count}
-          </span>
-        )}
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        side="top"
-        sideOffset={6}
-        className="w-64 p-2 space-y-2"
-        onClick={(e) => e.stopPropagation()}
-        onMouseEnter={openAfterDelay}
-        onMouseLeave={closeAfterDelay}
-      >
-        {hasAttachments ? (
-          data === undefined ? (
+    <>
+      <Popover open={isOpen} onOpenChange={setOpenGuarded}>
+        <PopoverTrigger
+          className={triggerClass}
+          aria-label={label}
+          onClick={(e) => e.stopPropagation()}
+          onPointerEnter={hoverOnly(openAfterDelay)}
+          onPointerLeave={hoverOnly(closeAfterDelay)}
+        >
+          {glyph}
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          side="top"
+          sideOffset={6}
+          className="w-64 space-y-2 p-2"
+          onClick={(e) => e.stopPropagation()}
+          onPointerEnter={hoverOnly(openAfterDelay)}
+          onPointerLeave={hoverOnly(closeAfterDelay)}
+        >
+          {!hasAttachments ? (
+            <p className="text-xs text-muted-foreground">No receipts on this transaction yet.</p>
+          ) : data === undefined ? (
             <p className="text-xs text-muted-foreground">Loading…</p>
           ) : data.attachments.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              No attachments on this transaction.
-            </p>
+            <p className="text-xs text-muted-foreground">No receipts on this transaction yet.</p>
           ) : (
             <ul className="flex flex-col gap-2">
               {data.attachments.slice(0, 3).map((a) => (
-                <li key={a.id} className="relative group/row">
+                <li key={a.id} className="group/row relative">
                   <a
                     href={`/api/transactions/${transactionId}/attachments/${a.id}`}
                     target="_blank"
@@ -231,154 +245,96 @@ export function AttachmentHoverPreview({
                   <button
                     type="button"
                     onClick={(e) => {
-                      // Overlaid on top of the open-file <a> — stop the
-                      // click from reaching the link so the file doesn't
-                      // open in a new tab mid-delete-confirm.
                       e.preventDefault();
                       e.stopPropagation();
                       void remove(a.id, a.filename);
                     }}
                     disabled={deletingId === a.id}
                     aria-label={`Delete ${a.filename}`}
-                    title="Delete attachment"
                     className={cn(
-                      "absolute top-1 right-1 rounded-md bg-background/85 backdrop-blur-sm border border-border/60 p-1",
-                      "text-muted-foreground hover:text-destructive hover:border-destructive/60",
-                      "transition-colors",
-                      // Hover-reveal on desktop so the thumbnail stays
-                      // the dominant visual; always visible on touch
-                      // viewports where there's no hover state at all.
-                      "lg:opacity-0 lg:group-hover/row:opacity-100 lg:focus-visible:opacity-100",
-                      deletingId === a.id && "opacity-70 pointer-events-none",
+                      "absolute right-1 top-1 rounded-md border border-border/60 bg-background/85 p-1.5 backdrop-blur-sm",
+                      "text-muted-foreground transition-colors hover:border-destructive/60 hover:text-destructive",
+                      "lg:opacity-0 lg:focus-visible:opacity-100 lg:group-hover/row:opacity-100",
+                      deletingId === a.id && "pointer-events-none opacity-70",
                     )}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </li>
               ))}
               {data.attachments.length > 3 && (
-                <li className="text-[11px] text-muted-foreground px-1">
-                  + {data.attachments.length - 3} more
+                <li className="px-1 text-[11px] text-muted-foreground">
+                  + {data.attachments.length - 3} more — expand the row to see all
                 </li>
               )}
             </ul>
-          )
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            No receipts on this transaction yet.
-          </p>
-        )}
-        <div className="grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            onClick={openCamera}
-            disabled={uploading > 0}
-            className={cn(
-              "flex items-center justify-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs",
-              "border-border text-muted-foreground hover:bg-muted/50 transition-colors",
-              uploading > 0 && "opacity-70 pointer-events-none",
-            )}
-          >
-            <Camera className="h-3 w-3" />
-            <span>Take photo</span>
-          </button>
-          <button
-            type="button"
-            onClick={openPicker}
-            disabled={uploading > 0}
-            className={cn(
-              "flex items-center justify-center gap-1.5 rounded-md border border-dashed px-2 py-1.5 text-xs",
-              "border-border text-muted-foreground hover:bg-muted/50 transition-colors",
-              uploading > 0 && "opacity-70 pointer-events-none",
-            )}
-          >
-            <Upload className="h-3 w-3" />
-            <span>Pick file</span>
-          </button>
-        </div>
-        {uploading > 0 && (
-          <p className="text-[11px] text-muted-foreground text-center">
-            Uploading {uploading} file{uploading === 1 ? "" : "s"}…
-          </p>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={ACCEPT_ATTR}
-          className="hidden"
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            if (files.length > 0) void uploadFiles(files);
-            // Reset so the same file can be re-selected after a
-            // mistake / cancel without the picker ignoring it.
-            e.target.value = "";
-          }}
-        />
-        {/* Separate hidden input for the Take-photo button so the
-            `capture="environment"` attribute routes straight to the
-            back camera on mobile. Desktop browsers that don't honour
-            capture fall back to the normal image picker, which is
-            still the right behaviour. */}
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            if (files.length > 0) void uploadFiles(files);
-            e.target.value = "";
-          }}
-        />
-      </PopoverContent>
-    </Popover>
+          )}
+          <div className="grid grid-cols-2 gap-1.5">
+            {[
+              { key: "camera", icon: Camera, text: "Take photo", input: cameraInputRef },
+              { key: "file", icon: Upload, text: "Pick file", input: fileInputRef },
+            ].map(({ key, icon: Icon, text, input }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => pick(input.current)}
+                disabled={uploading > 0}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 rounded-md border border-dashed border-border px-2 py-2 text-xs",
+                  "text-muted-foreground transition-colors hover:bg-muted/50",
+                  uploading > 0 && "pointer-events-none opacity-70",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span>{text}</span>
+              </button>
+            ))}
+          </div>
+          {uploading > 0 && (
+            <p className="text-center text-[11px] text-muted-foreground">
+              Uploading {uploading} file{uploading === 1 ? "" : "s"}…
+            </p>
+          )}
+        </PopoverContent>
+      </Popover>
+      {inputs}
+    </>
   );
 }
 
-function AttachmentTile({
-  row,
-  transactionId,
-}: {
-  row: AttachmentRow;
-  transactionId: string;
-}) {
-  const isImage = row.contentType.startsWith("image/");
-  const sizeKb = Math.round(row.size / 1024);
-  const sizeLabel = sizeKb < 1024 ? `${sizeKb} KB` : `${(sizeKb / 1024).toFixed(1)} MB`;
+function AttachmentTile({ row, transactionId }: { row: AttachmentRow; transactionId: string }) {
+  const [broken, setBroken] = useState(false);
+  const isImage = row.contentType.startsWith("image/") && !broken;
+  const size = formatFileSize(row.size);
 
   if (isImage) {
     return (
-      <div className="rounded-md border border-border/60 overflow-hidden group-hover:border-border transition-colors">
+      <div className="overflow-hidden rounded-md border border-border/60 transition-colors group-hover:border-border">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`/api/transactions/${transactionId}/attachments/${row.id}`}
           alt={row.filename}
-          className="w-full h-28 object-cover bg-muted"
+          className="h-28 w-full bg-muted object-cover"
           loading="lazy"
+          onError={() => setBroken(true)}
         />
         <div className="flex items-baseline justify-between gap-2 px-2 py-1 text-[11px] text-muted-foreground">
-          <span className="truncate" title={row.filename}>
-            {row.filename}
-          </span>
-          <span className="shrink-0 tabular-nums">{sizeLabel}</span>
+          <span className="truncate">{row.filename}</span>
+          <span className="shrink-0 tabular-nums">{size}</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex items-start gap-2 rounded-md border border-border/60 p-2 group-hover:border-border transition-colors">
-      <FileText className="h-4 w-4 shrink-0 text-muted-foreground mt-0.5" />
+    <div className="flex items-start gap-2 rounded-md border border-border/60 p-2 transition-colors group-hover:border-border">
+      <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1 text-xs">
-        <div className="truncate font-medium" title={row.filename}>
-          {row.filename}
-        </div>
-        <div className="flex items-baseline gap-2 text-[11px] text-muted-foreground">
-          <span className="tabular-nums">{sizeLabel}</span>
-          <span>·</span>
+        <div className="truncate font-medium">{row.filename}</div>
+        <div className="flex flex-wrap items-baseline gap-x-2 whitespace-nowrap text-[11px] text-muted-foreground">
+          <span className="tabular-nums">{size}</span>
           <span>{formatDate(row.createdAt)}</span>
+          {row.contentType.startsWith("image/") && <span>no preview</span>}
         </div>
       </div>
     </div>

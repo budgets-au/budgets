@@ -756,7 +756,10 @@ export function TransactionRow({
             );
           })()}
         </td>
-        <td className="px-2 py-1.5 w-full max-w-0">
+        {/* max-w-0 makes the payee truncate on desktop. On phones the payee
+            text moves to its own row, so let the cell size to its buttons —
+            collapsed, they were drawn underneath the amount column. */}
+        <td className="px-2 py-1.5 w-full lg:max-w-0">
           <div className="flex items-center justify-between gap-2 min-w-0">
             <span className="font-medium flex items-center gap-1.5 min-w-0">
               {/* Desktop only — on mobile the full payee is rendered
@@ -770,18 +773,11 @@ export function TransactionRow({
               {payeeSuffix && (
                 <span className="shrink-0">{payeeSuffix}</span>
               )}
-              {!showNotes && (
-                <TransactionNotesPopover
-                  transactionId={t.id}
-                  notes={t.notes}
-                  onSaved={refresh}
-                />
-              )}
-              <AttachmentHoverPreview
-                transactionId={t.id}
-                count={t.attachmentCount}
-                onChanged={refresh}
-              />
+              {/* On phones these sit in the full-width payee row below; the
+                  narrow payee cell let the amount column cover them. */}
+              <span className="hidden lg:inline-flex items-center gap-1.5">
+                <RowNoteAndReceiptIcons t={t} showNotes={showNotes} refresh={refresh} />
+              </span>
               {isScheduledMatch ? (
                 <ScheduledMatchPill
                   scheduledId={match.id}
@@ -1038,15 +1034,40 @@ export function TransactionRow({
         className="lg:hidden !border-t-0 group cursor-pointer hover:bg-muted"
         onClick={() => onToggleExpand?.()}
       >
-        <td
-          colSpan={100}
-          className="px-3 pb-2 pt-0 text-sm font-medium break-words"
-        >
-          {t.payee || t.description || "—"}
+        <td colSpan={100} className="px-3 pb-2 pt-0 text-sm font-medium">
+          {/* Icons sit right after the payee so they stay on screen when the
+              wide table is scrolled to its start. */}
+          <div className="flex items-start gap-3">
+            <span className="min-w-0 break-words">{t.payee || t.description || "—"}</span>
+            <span className="flex shrink-0 items-center gap-3 pt-0.5">
+              <RowNoteAndReceiptIcons t={t} showNotes={showNotes} refresh={refresh} />
+            </span>
+          </div>
         </td>
       </tr>
       {isExpanded && <ExpandedPanel t={t} refresh={refresh} />}
     </Fragment>
+  );
+}
+
+function RowNoteAndReceiptIcons({
+  t,
+  showNotes,
+  refresh,
+}: {
+  t: TransactionRowData;
+  showNotes: boolean | undefined;
+  refresh: () => void;
+}) {
+  return (
+    <>
+      {/* Inline-notes mode already shows the text; still offer the icon when
+          there's no note yet so one can be added. */}
+      {(!showNotes || !t.notes?.trim()) && (
+        <TransactionNotesPopover transactionId={t.id} notes={t.notes} onSaved={refresh} />
+      )}
+      <AttachmentHoverPreview transactionId={t.id} count={t.attachmentCount} onChanged={refresh} />
+    </>
   );
 }
 

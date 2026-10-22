@@ -7,6 +7,7 @@ import { transactions, transactionAttachments } from "@/db/schema";
 import { withAuth } from "@/lib/api/route-guards";
 import { AttachmentKeyMissingError, ensureDek, encryptBytes } from "@/lib/attachments/crypto";
 import { sniffReceiptType } from "@/lib/attachments/sniff";
+import { ALLOWED_TYPES, MAX_UPLOAD_BYTES } from "@/lib/attachments/constants";
 import {
   ensureAttachmentsDir,
   writeAttachmentAtomic,
@@ -27,15 +28,6 @@ import {
  *  image/webp, image/heic, image/heif, application/pdf. Everything
  *  else is 415. */
 
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-const ALLOWED_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "application/pdf",
-]);
 
 const uuidSchema = z.string().uuid();
 
@@ -157,7 +149,7 @@ async function handleUpload(
       return NextResponse.json(
         {
           error: "Unsupported file: receipts must be a JPEG, PNG, WebP, HEIC or PDF.",
-          allowed: Array.from(ALLOWED_TYPES),
+          allowed: ALLOWED_TYPES,
         },
         { status: 415 },
       );

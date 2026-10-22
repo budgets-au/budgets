@@ -9,6 +9,90 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.362.0 — 2026-10-22
+
+### Fixed
+- **On phones, the row's note and receipt icons were covered by the
+  amount.** On narrow screens the payee cell collapsed to zero width
+  (`max-w-0`), so its buttons were drawn underneath the Value
+  column and taps hit the amount instead.
+  - The note and receipt icons now sit in the full-width mobile
+    payee row, straight after the payee name, so they stay on
+    screen even when the wide table is scrolled.
+  - The payee cell only collapses on desktop; on phones it sizes to
+    its remaining buttons (schedule, search) instead of overlapping
+    the amount.
+- **A first tap on the paper-clip did nothing on touch devices.**
+  Two causes:
+  - focusing the button swapped it for the popover trigger before
+    the click landed;
+  - the emulated hover events from a tap raced the click.
+
+  The popover now only opens on hover for mouse pointers. It also
+  opens after the activating click has finished, so the newly
+  mounted popover doesn't treat that click as an outside press
+  (the same fix applies to the note popover).
+- **Uploads could be lost if the popover closed while the file
+  picker was open.** The hidden file inputs lived inside the
+  popover, so moving the pointer out of it to use the OS picker
+  could unmount them before `change` fired. The inputs now live
+  outside the popover, which also stays open while a picker or an
+  upload is active. The picker is detected as closed via the
+  input's `cancel` event, with a window-focus fallback.
+- **HEIC (and any image the browser can't decode) showed a broken
+  thumbnail.** It now falls back to the file tile.
+- **`.heic` files that Windows browsers report with an empty type
+  were rejected client-side.** The client check falls back to the
+  file extension; the server already classifies by content.
+
+### Changed
+- **Large photos are downscaled before upload.** JPEG / PNG / WebP
+  images over 1.5 MB are re-encoded client-side to a ≤2000px JPEG
+  (quality 0.85), keeping the original whenever that doesn't
+  shrink it. HEIC is sent as-is, because canvas can't decode it
+  outside Safari. A 4032×3024, 2.23 MB test photo was stored as
+  0.56 MB, so hover thumbnails load much faster.
+- **Row icons are easier to hit.** The paper-clip and note
+  triggers keep their 12px glyph but get an invisible ~32px hit
+  area (about 48px on touch screens), `cursor-pointer` instead of
+  `cursor-help`, a focus ring, and an `aria-label` in place of
+  the tooltip that doubled up with the hover popover.
+- **Inline-notes mode still offers "Add a note"** on rows that
+  don't have one yet. Previously the icon was hidden whenever that
+  display pref was on.
+- **The popovers only mount on first use.** Each row renders plain
+  buttons until it is hovered or tapped, instead of two popover
+  roots plus SWR hooks on every row (`/scheduled` renders up to
+  10,000 rows).
+- **Attachment upload code is shared.** `src/lib/attachments/constants.ts`
+  (limits, accept lists, the extension fallback, size formatting)
+  and `src/hooks/use-attachment-upload.ts` replace the copies
+  that had been duplicated across the popover, the expanded panel
+  and the route.
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean, `pnpm test`: 851
+  pass, only the 5 known `disk-usage.test.ts` failures. 5 new
+  tests cover the constants (type and extension fallback, size
+  label).
+- In the running app (`pnpm dev`, scratch DB, Playwright Chromium):
+  - Desktop:
+    - hovering opens the popover; it stays open while the pointer
+      is over it and closes when the pointer leaves;
+    - keyboard Enter opens it;
+    - Pick file, then moving the pointer away while the chooser is
+      open, still uploads ("Receipt attached");
+    - the 4032×3024 photo was stored at 0.56 MB and its thumbnail
+      renders;
+    - a note saved from the collapsed row;
+    - no page errors.
+  - iPhone 13 emulation:
+    - the paper-clip sits on screen beside the payee, at x=113 in a
+      390px viewport;
+    - its hit area is 61×48px;
+    - the first tap opens the receipts popover;
+    - the first tap on the note icon opens the editor.
+
 ## 0.361.0 — 2026-10-22
 
 ### Fixed

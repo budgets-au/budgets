@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 import { Camera, FileText, Image as ImageIcon, Trash2, Upload } from "lucide-react";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { useConfirm } from "@/hooks/use-confirm-dialog";
 import { formatDate } from "@/lib/utils";
+import { useAttachmentUpload } from "@/hooks/use-attachment-upload";
+import { DROPZONE_ACCEPT, MAX_UPLOAD_BYTES, formatFileSize } from "@/lib/attachments/constants";
 
 /** Inline receipt-management panel for the expanded transaction
  *  row. Lists existing attachments (one line each: thumbnail OR
@@ -20,16 +22,6 @@ import { formatDate } from "@/lib/utils";
  *  25 MiB cap per file, server-side; client-side pre-check
  *  surfaces a toast before the POST so very large files don't
  *  tie up the browser's upload buffer. */
-
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-const ALLOWED_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "application/pdf",
-];
 
 interface AttachmentRow {
   id: string;
@@ -53,53 +45,12 @@ export function AttachmentPanel({
   const { data, mutate } = useSwrJson<{ attachments: AttachmentRow[] }>(
     `/api/transactions/${transactionId}/attachments`,
   );
-  const [uploading, setUploading] = useState(0);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const confirm = useConfirm();
-
-  async function uploadFiles(files: File[]) {
-    const accepted: File[] = [];
-    for (const f of files) {
-      if (f.size === 0) {
-        toast.error(`${f.name}: file is empty`);
-        continue;
-      }
-      if (f.size > MAX_UPLOAD_BYTES) {
-        toast.error(`${f.name}: exceeds 25 MB upload cap`);
-        continue;
-      }
-      if (!ALLOWED_TYPES.includes(f.type)) {
-        toast.error(`${f.name}: unsupported file type (${f.type || "unknown"})`);
-        continue;
-      }
-      accepted.push(f);
-    }
-    if (accepted.length === 0) return;
-
-    setUploading((n) => n + accepted.length);
-    try {
-      for (const f of accepted) {
-        const form = new FormData();
-        form.append("file", f);
-        const res = await fetch(
-          `/api/transactions/${transactionId}/attachments`,
-          { method: "POST", body: form },
-        );
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          toast.error(
-            `${f.name}: ${body.error ?? `upload failed (${res.status})`}`,
-          );
-          continue;
-        }
-        toast.success(`Attached ${f.name}`);
-      }
-      await mutate();
-      onChanged?.();
-    } finally {
-      setUploading(0);
-    }
-  }
+  const { uploading, uploadFiles } = useAttachmentUpload(transactionId, () => {
+    void mutate();
+    onChanged?.();
+  });
 
   async function remove(id: string, filename: string) {
     const ok = await confirm({
@@ -124,14 +75,7 @@ export function AttachmentPanel({
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: (files) => void uploadFiles(files),
-    accept: {
-      "image/jpeg": [],
-      "image/png": [],
-      "image/webp": [],
-      "image/heic": [],
-      "image/heif": [],
-      "application/pdf": [],
-    },
+    accept: DROPZONE_ACCEPT,
     maxSize: MAX_UPLOAD_BYTES,
     multiple: true,
   });
@@ -220,8 +164,7 @@ function AttachmentListRow({
   transactionId: string;
   onDelete: () => void;
 }) {
-  const sizeKb = Math.round(row.size / 1024);
-  const sizeLabel = sizeKb < 1024 ? `${sizeKb} KB` : `${(sizeKb / 1024).toFixed(1)} MB`;
+  const sizeLabel = formatFileSize(row.size);
   const isImage = row.contentType.startsWith("image/");
   const Icon = isImage ? ImageIcon : FileText;
   return (

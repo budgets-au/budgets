@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ROW_ICON_TRIGGER } from "./attachment-hover-preview";
 
 interface Props {
   transactionId: string;
@@ -35,6 +36,7 @@ export function TransactionNotesPopover({
   notes,
   onSaved,
 }: Props) {
+  const [active, setActive] = useState(false);
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(notes ?? "");
   const [saving, setSaving] = useState(false);
@@ -70,18 +72,40 @@ export function TransactionNotesPopover({
     onSaved?.();
   }
 
+  const triggerClass = cn(
+    ROW_ICON_TRIGGER,
+    hasNote ? "text-amber-500 hover:text-amber-600" : "text-muted-foreground/50 hover:text-foreground",
+  );
+  const label = hasNote ? `Edit note: ${notes}` : "Add a note";
+
+  // Mount the Popover only once it's first used; long lists render a plain
+  // button per row instead of a popover root per row.
+  if (!active) {
+    return (
+      <button
+        type="button"
+        className={triggerClass}
+        aria-label={label}
+        title={hasNote ? (notes ?? undefined) : undefined}
+        onClick={(e) => {
+          e.stopPropagation();
+          setActive(true);
+          // See attachment-hover-preview: open after the mounting click ends.
+          setTimeout(() => setOpen(true), 0);
+        }}
+      >
+        <StickyNote className="h-3 w-3" />
+      </button>
+    );
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         onClick={(e) => e.stopPropagation()}
-        className={cn(
-          hasNote
-            ? "text-amber-500 hover:text-amber-600"
-            : "text-muted-foreground/50 hover:text-foreground",
-          "inline-flex shrink-0 items-center transition-colors p-0.5 rounded hover:bg-muted",
-        )}
-        title={hasNote ? `Note: ${notes}` : "Add a note"}
-        aria-label={hasNote ? "Edit note" : "Add note"}
+        className={triggerClass}
+        title={hasNote ? (notes ?? undefined) : undefined}
+        aria-label={label}
       >
         <StickyNote className="h-3 w-3" />
       </PopoverTrigger>

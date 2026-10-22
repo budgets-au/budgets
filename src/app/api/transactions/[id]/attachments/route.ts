@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { db } from "@/db";
 import { transactions, transactionAttachments } from "@/db/schema";
 import { withAuth } from "@/lib/api/route-guards";
-import { ensureDek, encryptBytes } from "@/lib/attachments/crypto";
+import { AttachmentKeyMissingError, ensureDek, encryptBytes } from "@/lib/attachments/crypto";
 import {
   ensureAttachmentsDir,
   writeAttachmentAtomic,
@@ -80,6 +80,9 @@ export const POST = withAuth<{ params: Promise<{ id: string }> }>(
     try {
       return await handleUpload(request, ctx);
     } catch (e) {
+      if (e instanceof AttachmentKeyMissingError) {
+        return NextResponse.json({ error: e.message }, { status: 409 });
+      }
       // Last-line catch so no unexpected failure (DB column missing
       // because migration 0022 didn't apply, body parse error, OOM
       // on a large buffer, etc.) escapes as an opaque 500 with an

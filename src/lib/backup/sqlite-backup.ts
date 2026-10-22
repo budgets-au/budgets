@@ -6,6 +6,7 @@
  * key, which means restoring after a rekey requires the OLD passphrase
  * (see /api/backup/restore).
  */
+import { onDbContextChange } from "@/lib/db-context";
 import {
   closeSync,
   existsSync,
@@ -193,6 +194,9 @@ interface DiskUsageCache {
 }
 
 let diskUsageCache: DiskUsageCache | null = null;
+onDbContextChange(() => {
+  diskUsageCache = null;
+});
 
 /** Test seam — clears the cached statfs result so each test
  * exercises the underlying syscall path. Not exported through any

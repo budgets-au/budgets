@@ -1,8 +1,11 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { appSettings } from "@/db/schema";
+import { appSettings, transactionAttachments } from "@/db/schema";
+import { getActiveProfile } from "@/lib/db-profiles";
+import { onDbContextChange } from "@/lib/db-context";
+import { hasAttachmentFiles } from "./storage";
 
 /** Receipt-attachment encryption primitives.
  *
@@ -40,70 +43,70 @@ const TAG_LEN = 16;
 const DEK_LEN = 32; // 256 bits
 const ALGO = "aes-256-gcm" as const;
 
-/** Return the DEK bytes, generating + persisting a fresh one on
- *  first call. Reads come from the SQLCipher-protected
- *  `app_settings` row (singleton id=1 — see schema). Writes use the
- *  same `onConflictDoUpdate` pattern as the Brave-Search key row so
- *  concurrent first-upload races don't trip the UNIQUE constraint;
- *  the first writer wins, the second quietly no-ops and reads back
- *  the row they lost to.
- *
- *  The DEK is cached in-process for the lifetime of the Node
- *  worker so subsequent uploads don't re-query. A rekey has no
- *  effect on the DEK bytes themselves (see file header) so the
- *  cache stays valid across rekeys; what IS invalidated is a
- *  server restart, which pays a single DB round-trip to re-prime. */
-let cachedDek: Buffer | null = null;
+/** Thrown when a profile already holds encrypted attachments but its DB has
+ *  no key (e.g. restored from a backup older than the first upload). Minting a
+ *  fresh key there would make the existing files permanently unreadable. */
+export class AttachmentKeyMissingError extends Error {
+  constructor() {
+    super(
+      "This database has receipt attachments but no attachment key — it was " +
+        "probably restored from a backup taken before the first upload. Restore " +
+        "a newer backup to recover the existing receipts.",
+    );
+    this.name = "AttachmentKeyMissingError";
+  }
+}
 
-export async function ensureDek(): Promise<Buffer> {
-  if (cachedDek) return cachedDek;
+// Scoped to the profile it was read from, and cleared on every lock /
+// profile switch / restore via the db-context registry.
+let cachedDek: { profileId: string; dek: Buffer } | null = null;
+onDbContextChange(() => {
+  cachedDek = null;
+});
 
+async function readStoredDek(): Promise<Buffer | null> {
   const [row] = await db
     .select({ attachmentsDek: appSettings.attachmentsDek })
     .from(appSettings)
     .where(eq(appSettings.id, 1))
     .limit(1);
-
-  if (row?.attachmentsDek) {
-    cachedDek = Buffer.from(row.attachmentsDek, "base64");
-    if (cachedDek.length !== DEK_LEN) {
-      throw new Error(
-        `attachments DEK on disk is ${cachedDek.length} bytes; expected ${DEK_LEN}`,
-      );
-    }
-    return cachedDek;
+  if (!row?.attachmentsDek) return null;
+  const dek = Buffer.from(row.attachmentsDek, "base64");
+  if (dek.length !== DEK_LEN) {
+    throw new Error(`attachments DEK is ${dek.length} bytes; expected ${DEK_LEN}`);
   }
-
-  const fresh = randomBytes(DEK_LEN);
-  const encoded = fresh.toString("base64");
-  // Singleton row might not exist yet (fresh DB, no settings panel
-  // ever hit). Upsert on id=1 is the project-wide shape for this
-  // row — see `brave-search-key` route for the precedent.
-  await db
-    .insert(appSettings)
-    .values({ id: 1, attachmentsDek: encoded })
-    .onConflictDoUpdate({
-      target: appSettings.id,
-      set: { attachmentsDek: encoded, updatedAt: new Date() },
-    });
-
-  // Re-read in case we lost the race — the writer who won wrote a
-  // different random blob and the cache needs to agree with disk.
-  const [after] = await db
-    .select({ attachmentsDek: appSettings.attachmentsDek })
-    .from(appSettings)
-    .where(eq(appSettings.id, 1))
-    .limit(1);
-  const final = after?.attachmentsDek ?? encoded;
-  cachedDek = Buffer.from(final, "base64");
-  return cachedDek;
+  return dek;
 }
 
-/** Clear the in-process DEK cache. Call sites: `/rekey` route (so
- *  the next upload re-reads the DEK through the newly-keyed
- *  SQLCipher connection — strictly speaking unnecessary since the
- *  bytes don't change, but a free guard against subtle bugs where
- *  the connection handle might have changed), and the test suite. */
+/** Return the active profile's data-encryption key, creating it on first use.
+ *  The key lives in `app_settings.attachments_dek` inside the SQLCipher DB, so
+ *  the operator passphrase protects it and `/rekey` never touches attachment
+ *  files. Creation is first-writer-wins (`UPDATE … WHERE attachments_dek IS
+ *  NULL`), so concurrent first uploads all converge on one key. */
+export async function ensureDek(): Promise<Buffer> {
+  const profileId = getActiveProfile().id;
+  if (cachedDek?.profileId === profileId) return cachedDek.dek;
+
+  let dek = await readStoredDek();
+  if (!dek) {
+    const [{ n }] = await db
+      .select({ n: sql<number>`count(*)` })
+      .from(transactionAttachments);
+    if (n > 0 || (await hasAttachmentFiles())) throw new AttachmentKeyMissingError();
+
+    await db.insert(appSettings).values({ id: 1 }).onConflictDoNothing();
+    await db
+      .update(appSettings)
+      .set({ attachmentsDek: randomBytes(DEK_LEN).toString("base64") })
+      .where(and(eq(appSettings.id, 1), isNull(appSettings.attachmentsDek)));
+    dek = await readStoredDek();
+    if (!dek) throw new Error("failed to persist the attachments key");
+  }
+  cachedDek = { profileId, dek };
+  return dek;
+}
+
+/** Test seam: drop the cached key. */
 export function resetDekCache(): void {
   cachedDek = null;
 }

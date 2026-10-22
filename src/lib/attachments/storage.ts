@@ -1,4 +1,4 @@
-import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { randomBytes } from "node:crypto";
 import { dataDir, getActiveProfile } from "@/lib/db-profiles";
@@ -168,4 +168,16 @@ export async function attachmentFileSize(attachmentId: string): Promise<number> 
   const path = assertWithinAttachmentsDir(attachmentsPathFor(attachmentId));
   const s = await stat(path);
   return s.size;
+}
+
+/** Whether the active profile's attachments directory holds any `.enc`
+ *  files. Used to refuse minting a new key when old ciphertext exists. */
+export async function hasAttachmentFiles(): Promise<boolean> {
+  const dir = assertWithinAttachmentsDir(attachmentsDir());
+  try {
+    return (await readdir(dir)).some((f) => BASENAME_RE.test(f));
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw e;
+  }
 }

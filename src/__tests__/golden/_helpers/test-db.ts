@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import type BetterSqlite3 from "better-sqlite3";
 import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { applyMigrations } from "@/db/migrations";
 import { resolve } from "node:path";
 import * as schema from "@/db/schema";
 
@@ -27,9 +27,8 @@ export function createTestDb(): TestDb {
   const client = new Database(":memory:") as unknown as BetterSqlite3.Database;
   client.pragma("foreign_keys = ON");
   const drizzleDb = drizzle(client, { schema });
-  migrate(drizzleDb, {
-    migrationsFolder: resolve(process.cwd(), "drizzle"),
-  });
+  const run = applyMigrations(client, resolve(process.cwd(), "drizzle"));
+  if (run.error) throw new Error(`test DB migration ${run.error.tag}: ${run.error.message}`);
   return {
     client,
     drizzleDb,
@@ -53,8 +52,11 @@ export function createTestDb(): TestDb {
  * imported. Use `await import("@/app/api/...")` inside `beforeAll`
  * AFTER installing, not a top-level static import. */
 export function installTestDb(db: TestDb): void {
-  (globalThis as unknown as { __dbState?: unknown }).__dbState = {
+  // Mutate in place: once @/db is imported it holds a reference to this
+  // object, so replacing it would leave the module on the old handle.
+  const g = globalThis as unknown as { __dbState?: Record<string, unknown> };
+  g.__dbState = Object.assign(g.__dbState ?? {}, {
     client: db.client,
     drizzleDb: db.drizzleDb,
-  };
+  });
 }

@@ -1,3 +1,4 @@
+import { onDbContextChange } from "@/lib/db-context";
 import { db } from "@/db";
 import { payeeRules, transactions } from "@/db/schema";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
@@ -192,6 +193,7 @@ export async function loadTokenFreq(): Promise<Map<string, number>> {
 export function invalidateTokenFreqCache(): void {
   tokenFreqCache = null;
 }
+onDbContextChange(invalidateTokenFreqCache);
 
 /**
  * Drop per-transaction reference IDs. A token is stripped only when it

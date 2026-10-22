@@ -9,6 +9,7 @@ import {
   type MigrationRunResult,
   type SchemaStatus,
 } from "./migrations";
+import { notifyDbContextChange } from "@/lib/db-context";
 import { hashSync } from "bcryptjs";
 import { eq } from "drizzle-orm";
 // Side-effect import: patches console.* so every log line is
@@ -223,6 +224,7 @@ export function unlock(
     state.client = null;
     state.drizzleDb = null;
     state.openProfileId = null;
+    notifyDbContextChange();
   }
 
   if (state.client) {
@@ -310,6 +312,7 @@ export function switchProfile(id: string): void {
   state.client = null;
   state.drizzleDb = null;
   state.openProfileId = null;
+  notifyDbContextChange();
   setActiveProfileId(id);
 }
 
@@ -622,6 +625,7 @@ export function lock(): void {
   state.client = null;
   state.drizzleDb = null;
   state.openProfileId = null;
+  notifyDbContextChange();
 }
 
 /** Auto-unlock from env if the operator chose to inject the key that

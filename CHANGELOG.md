@@ -9,6 +9,61 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.359.0 — 2026-10-22
+
+### Fixed
+- **Receipts uploaded after a profile switch could become
+  permanently unreadable.** The attachment encryption key was
+  cached for the whole process and never cleared on lock, profile
+  switch or restore. An upload to profile B after using A
+  encrypted B's file with A's key. B never stored a key of its
+  own, so after the next restart it generated a fresh one and every
+  receipt it already had was undecryptable. The cache is now
+  scoped to the profile it was read from and cleared whenever the
+  open database changes.
+- **Two first uploads at once could overwrite the key.** Key
+  creation used an upsert where the last writer won, so a file
+  encrypted under the first key was orphaned when the second
+  replaced it. Creation is now first-writer-wins
+  (`UPDATE … WHERE attachments_dek IS NULL`, then re-read), so
+  concurrent callers converge on one key.
+- **Restoring an older backup could silently mint a replacement
+  key.** If a database has attachment rows or `.enc` files but no
+  key (e.g. restored from a backup taken before the first upload),
+  creating a new key would make the existing files unreadable for
+  good. The app now refuses with a clear 409 explaining that a
+  newer backup is needed, instead of minting a key.
+- **Other per-database caches survived a profile switch:** payee
+  token frequencies (used for auto-categorisation) and the backup
+  disk-usage reading. All three caches now register with one reset
+  hook (`src/lib/db-context.ts`, held on `globalThis` so every
+  Next.js bundle's copy is reached), fired from `lock()`,
+  `switchProfile()` and the stale-connection path in `unlock()`;
+  restore goes through `lock()`.
+
+### Changed
+- The test DB harness now uses the app's own migration runner, and
+  `installTestDb` swaps the DB in place so a test can switch
+  databases after `@/db` has been imported.
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean, `pnpm test`: 826
+  pass, only the 5 known `disk-usage.test.ts` failures.
+- 6 new integration tests (`dek.integration.test.ts`, real migrated
+  SQLite):
+  - a stable key across calls;
+  - 5 concurrent first calls converge on the stored key;
+  - no cross-profile reuse, both with and without a context-change
+    notify;
+  - refuse to mint a key when attachment rows exist without one;
+  - refuse to mint a key when `.enc` files exist without one.
+- End to end in the running app (`pnpm dev`, scratch SQLCipher DBs):
+  1. Uploaded a receipt to profile A, created and switched to
+     profile B, and uploaded there.
+  2. Restarted the server.
+  3. Downloaded B's receipt, then switched back to A and downloaded
+     A's: both SHA-256s matched the uploaded bytes.
+
 ## 0.358.0 — 2026-10-21
 
 ### Fixed

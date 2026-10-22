@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { transactionAttachments } from "@/db/schema";
 import { withAuth } from "@/lib/api/route-guards";
-import { ensureDek, readAndDecryptFile } from "@/lib/attachments/crypto";
+import { AttachmentKeyMissingError, ensureDek, readAndDecryptFile } from "@/lib/attachments/crypto";
 import {
   attachmentsPathFor,
   deleteAttachmentFile,
@@ -68,11 +68,13 @@ export const GET = withAuth<{
     return NextResponse.json({ error: "Attachment not found" }, { status: 404 });
   }
 
-  const dek = await ensureDek();
   let plaintext: Buffer;
   try {
-    plaintext = await readAndDecryptFile(attachmentsPathFor(row.id), dek);
+    plaintext = await readAndDecryptFile(attachmentsPathFor(row.id), await ensureDek());
   } catch (e) {
+    if (e instanceof AttachmentKeyMissingError) {
+      return NextResponse.json({ error: e.message }, { status: 409 });
+    }
     console.error("[attachments] decrypt failed", { id: row.id, err: e });
     return NextResponse.json(
       { error: "Failed to decrypt attachment" },

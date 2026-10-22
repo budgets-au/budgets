@@ -225,6 +225,8 @@ function Row({
         </div>
       </div>
       <EditAccountDialog
+        // Remount on each open so the form starts from the current account.
+        key={editing ? "open" : "closed"}
         account={account}
         open={editing}
         onOpenChange={(o) => {

@@ -304,6 +304,7 @@ export function DatabaseFilesManager() {
                       className="text-red-600 hover:bg-red-500/10 dark:text-red-400"
                       onClick={() => openDelete(p)}
                       disabled={isActive || isOnlyProfile}
+                      aria-label={`Delete ${p.label}`}
                       title={
                         isActive
                           ? "Switch to another DB first"

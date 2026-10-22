@@ -146,6 +146,7 @@ export function WatchlistDetailPanel({
             variant="outline"
             onClick={handleRemove}
             className="text-muted-foreground hover:text-red-500"
+            aria-label="Remove from watchlist"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>

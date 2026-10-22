@@ -576,7 +576,7 @@ export function ImportView() {
             className={cn(
               "border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-colors",
               isDragActive
-                ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30"
+                ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30"
                 : "border-slate-300 dark:border-slate-700 hover:border-slate-400",
             )}
           >
@@ -588,7 +588,7 @@ export function ImportView() {
                 : "Drag & drop a CSV / OFX / QFX / QIF"}
             </p>
             {loading && (
-              <p className="text-sm text-blue-600 mt-3 animate-pulse">
+              <p className="text-sm text-indigo-600 dark:text-indigo-400 mt-3 animate-pulse">
                 Categorising…
               </p>
             )}
@@ -1037,13 +1037,10 @@ function ImportRow({
             className="px-3 py-2 whitespace-nowrap"
             onClick={(e) => e.stopPropagation()}
           >
-            <Input
-              type="text"
+            <ImportNoteInput
               value={row.notes ?? ""}
-              onChange={(e) => onNotesChange(row.importHash, e.target.value)}
-              placeholder="Add note…"
-              className="h-7 text-xs w-40"
-              aria-label={`Note for ${row.payee || "transaction"}`}
+              onCommit={(text) => onNotesChange(row.importHash, text)}
+              label={`Note for ${row.payee || "transaction"}`}
             />
           </td>
         )}
@@ -1068,6 +1065,44 @@ function ImportRow({
         </tr>
       )}
     </>
+  );
+}
+
+/** Notes cell input. Keeps the draft locally and hands it to the parent on
+ *  blur / Enter, so typing re-renders this input instead of the whole grid.
+ *  Clicking Commit blurs first, and React flushes that update before the
+ *  click handler runs, so no keystrokes are lost. */
+function ImportNoteInput({
+  value,
+  onCommit,
+  label,
+}: {
+  value: string;
+  onCommit: (text: string) => void;
+  label: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setDraft(value);
+  }
+  const commit = () => {
+    if (draft !== value) onCommit(draft);
+  };
+  return (
+    <Input
+      type="text"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+      }}
+      placeholder="Add note…"
+      className="h-7 text-xs w-40"
+      aria-label={label}
+    />
   );
 }
 

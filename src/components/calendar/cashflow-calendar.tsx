@@ -1196,7 +1196,7 @@ export function CashflowCalendar({
                       <span
                         className={cn(
                           "font-medium leading-none",
-                          today ? "text-blue-600" : "text-foreground",
+                          today ? "text-indigo-600 dark:text-indigo-400" : "text-foreground",
                         )}
                       >
                         {format(day, "d")}
@@ -1330,7 +1330,7 @@ export function CashflowCalendar({
                         <div
                           className={cn(
                             "text-xs font-medium leading-tight",
-                            today ? "text-blue-600" : "",
+                            today ? "text-indigo-600 dark:text-indigo-400" : "",
                           )}
                         >
                           {format(day, "EEE d MMM")}

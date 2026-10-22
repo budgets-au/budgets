@@ -1,5 +1,6 @@
 "use client";
 
+import { HIT_AREA } from "@/lib/ui/hit-area";
 import { useState } from "react";
 import { Repeat } from "lucide-react";
 import Link from "next/link";
@@ -79,6 +80,15 @@ export function ScheduleButton({ transaction, accounts, categoriesProp, schedule
   const [categoryId, setCategoryId] = useState(transaction.categoryId ?? "");
   const [transferToAccountId, setTransferToAccountId] = useState(transaction.pairAccountId ?? "");
 
+  // Defaults come from the row, which can change after mount (e.g.
+  // re-categorised), so re-derive them each time the dialog is opened.
+  function openWithFreshDefaults() {
+    setType(looksLikeTransfer ? "transfer" : isExpense ? "expense" : "income");
+    setCategoryId(transaction.categoryId ?? "");
+    setTransferToAccountId(transaction.pairAccountId ?? "");
+    setOpen(true);
+  }
+
   const absAmount = Math.abs(parseFloat(transaction.amount)).toFixed(2);
   const dayOfMonth = parseInt(transaction.date.split("-")[2], 10);
 
@@ -149,9 +159,14 @@ export function ScheduleButton({ transaction, accounts, categoriesProp, schedule
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
-        className="shrink-0 lg:opacity-0 lg:group-hover:opacity-100 text-muted-foreground hover:text-violet-600 transition-all p-0.5 rounded"
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation(); // don't also toggle the row open
+          openWithFreshDefaults();
+        }}
+        className={`${HIT_AREA} shrink-0 lg:opacity-0 lg:group-hover:opacity-100 text-muted-foreground hover:text-violet-600 transition-all p-0.5 rounded`}
         title="Create scheduled transaction"
+        aria-label="Create a scheduled transaction from this one"
       >
         <Repeat className="h-3.5 w-3.5" />
       </button>

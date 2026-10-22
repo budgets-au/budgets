@@ -1,5 +1,6 @@
 "use client";
 
+import { HIT_AREA, HIT_AREA_X } from "@/lib/ui/hit-area";
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -80,6 +81,19 @@ export function CategoryManager({
   const [taxRules, setTaxRules] = useState<TaxConfig["categoryRules"]>(
     taxConfig?.categoryRules ?? {},
   );
+
+  // The page passes fresh props after every router.refresh(); without this
+  // the local copies keep showing the pre-refresh data.
+  const [prevInitial, setPrevInitial] = useState(initialCategories);
+  if (initialCategories !== prevInitial) {
+    setPrevInitial(initialCategories);
+    setCats(initialCategories);
+  }
+  const [prevTaxConfig, setPrevTaxConfig] = useState(taxConfig);
+  if (taxConfig !== prevTaxConfig) {
+    setPrevTaxConfig(taxConfig);
+    setTaxRules(taxConfig?.categoryRules ?? {});
+  }
 
   // Drag state
   const [dragId, setDragId] = useState<string | null>(null);
@@ -467,7 +481,7 @@ export function CategoryManager({
                 void moveSibling(cat.id, "up");
               }}
               disabled={!canMoveUp}
-              className="h-3.5 w-4 flex items-center justify-center text-muted-foreground/70 hover:text-foreground disabled:opacity-0 disabled:pointer-events-none"
+              className={`${HIT_AREA_X} h-3.5 w-4 flex items-center justify-center text-muted-foreground/70 hover:text-foreground disabled:opacity-0 disabled:pointer-events-none`}
               aria-label={`Move ${cat.name} up`}
               title="Move up"
             >
@@ -480,7 +494,7 @@ export function CategoryManager({
                 void moveSibling(cat.id, "down");
               }}
               disabled={!canMoveDown}
-              className="h-3.5 w-4 flex items-center justify-center text-muted-foreground/70 hover:text-foreground disabled:opacity-0 disabled:pointer-events-none"
+              className={`${HIT_AREA_X} h-3.5 w-4 flex items-center justify-center text-muted-foreground/70 hover:text-foreground disabled:opacity-0 disabled:pointer-events-none`}
               aria-label={`Move ${cat.name} down`}
               title="Move down"
             >
@@ -503,8 +517,11 @@ export function CategoryManager({
           >
             {children.length > 0 ? (
               <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); toggleCollapse(cat.id); }}
-                className="text-muted-foreground hover:text-foreground shrink-0"
+                className={`${HIT_AREA} text-muted-foreground hover:text-foreground shrink-0`}
+                aria-label={`${isCollapsed ? "Expand" : "Collapse"} ${cat.name}`}
+                aria-expanded={!isCollapsed}
               >
                 {isCollapsed
                   ? <ChevronRight className="h-3 w-3" />

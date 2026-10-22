@@ -127,6 +127,7 @@ export function ScheduledDetail({ row: initial, allAccounts, allCategories }: {
       <CardHeader><CardTitle>Edit Scheduled Transaction</CardTitle></CardHeader>
       <CardContent>
         <ScheduledEditForm
+          key={row.id}
           row={row}
           allAccounts={allAccounts}
           allCategories={allCategories}

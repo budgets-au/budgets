@@ -1,5 +1,6 @@
 "use client";
 
+import { HIT_AREA } from "@/lib/ui/hit-area";
 import { useEffect, useState } from "react";
 import { mutate } from "swr";
 import { useSwrJson } from "@/hooks/use-swr-json";
@@ -451,15 +452,15 @@ function YearRow({
                 <button
                   type="button"
                   onClick={() => onEdit(snap.id)}
-                  className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted"
-                  aria-label="Edit"
+                  className={`${HIT_AREA} p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted`}
+                  aria-label={`Edit ${fund} balance`}
                 >
                   <Pencil className="h-3 w-3" />
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDelete(snap)}
-                  className="p-0.5 rounded text-muted-foreground hover:text-red-500 hover:bg-muted"
+                  className={`${HIT_AREA} p-0.5 rounded text-muted-foreground hover:text-red-500 hover:bg-muted`}
                   aria-label="Delete"
                 >
                   <Trash2 className="h-3 w-3" />

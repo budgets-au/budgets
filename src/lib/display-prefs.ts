@@ -219,6 +219,24 @@ export interface DisplayPrefs {
    *  before committing them. Default off so the standard grid
    *  stays compact; opt in from the import filter card. */
   importShowNotesColumn: boolean;
+  /** /scheduled: include inactive schedules in the list. */
+  scheduledShowAll: boolean;
+  /** /scheduled list sort column and direction. */
+  scheduledSortColumn: "next" | "frequency" | "payee" | "amount" | "weekly";
+  scheduledSortDir: "asc" | "desc";
+  /** Schedule-suggestions panel: also list payees already covered by a
+   *  schedule / previously dismissed suggestions. */
+  suggestionsShowCovered: boolean;
+  suggestionsShowDismissed: boolean;
+  /** Envelope report: include categories hidden from the report. */
+  envelopeShowHidden: boolean;
+  /** Transfer-flow report: hide flows to/from the External account. */
+  transferFlowHideExternal: boolean;
+  /** Investment detail chart: holding value or unit price. */
+  investmentChartMode: "value" | "price";
+  /** Category report table sort. */
+  categoryReportSortKey: "total" | "avg" | "counts" | "plan" | "diff" | "name";
+  categoryReportSortDir: "asc" | "desc";
 
   // ── Appearance ────────────────────────────────────────────────
   /** Which visual identity the app renders in. `"default"` is the
@@ -326,6 +344,16 @@ export const DISPLAY_PREFS_DEFAULT: DisplayPrefs = {
   featureSuper: true,
   importAutoApplyRules: true,
   importShowNotesColumn: false,
+  scheduledShowAll: false,
+  scheduledSortColumn: "next",
+  scheduledSortDir: "asc",
+  suggestionsShowCovered: false,
+  suggestionsShowDismissed: false,
+  envelopeShowHidden: false,
+  transferFlowHideExternal: false,
+  investmentChartMode: "value",
+  categoryReportSortKey: "total",
+  categoryReportSortDir: "desc",
   themeFamily: "default",
   investmentsGainRange: "return",
   dashboardUpcomingShowBudgets: false,
@@ -640,6 +668,22 @@ export function parseDisplayPrefs(raw: string | null | unknown): DisplayPrefs {
     featureSuper: bool("featureSuper"),
     importAutoApplyRules: bool("importAutoApplyRules"),
     importShowNotesColumn: bool("importShowNotesColumn"),
+    scheduledShowAll: bool("scheduledShowAll"),
+    scheduledSortColumn: pickEnum(
+      "scheduledSortColumn",
+      ["next", "frequency", "payee", "amount", "weekly"] as const,
+    ),
+    scheduledSortDir: pickEnum("scheduledSortDir", ["asc", "desc"] as const),
+    suggestionsShowCovered: bool("suggestionsShowCovered"),
+    suggestionsShowDismissed: bool("suggestionsShowDismissed"),
+    envelopeShowHidden: bool("envelopeShowHidden"),
+    transferFlowHideExternal: bool("transferFlowHideExternal"),
+    investmentChartMode: pickEnum("investmentChartMode", ["value", "price"] as const),
+    categoryReportSortKey: pickEnum(
+      "categoryReportSortKey",
+      ["total", "avg", "counts", "plan", "diff", "name"] as const,
+    ),
+    categoryReportSortDir: pickEnum("categoryReportSortDir", ["asc", "desc"] as const),
     themeFamily: pickEnum("themeFamily", ["default", "terminal"] as const),
     investmentsGainRange: pickEnum(
       "investmentsGainRange",

@@ -10,7 +10,7 @@ import { TableScroller } from "@/components/ui/table-scroller";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { useDisplayPrefs } from "@/hooks/use-display-prefs";
+import { useDisplayPrefs, usePersistedPref } from "@/hooks/use-display-prefs";
 import { amountClass, formatAUD } from "@/lib/utils";
 
 import type {
@@ -256,7 +256,7 @@ export function EnvelopeReport({
     else next.add(id);
     setPref("envelopeExcludedCatIds", [...next]);
   }
-  const [showHidden, setShowHidden] = useState(false);
+  const [showHidden, setShowHidden] = usePersistedPref("envelopeShowHidden");
 
   // Sort state lives on displayPrefs too. Defaults to category-name
   // ascending so the table opens in a predictable order; click a

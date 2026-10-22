@@ -1,5 +1,6 @@
 "use client";
 
+import { HIT_AREA } from "@/lib/ui/hit-area";
 import { useMemo, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state-message";
 import Link from "next/link";
@@ -10,7 +11,7 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { TableScroller } from "@/components/ui/table-scroller";
 import { useSwrJson } from "@/hooks/use-swr-json";
-import { useDisplayPrefs } from "@/hooks/use-display-prefs";
+import { useDisplayPrefs, usePersistedPref } from "@/hooks/use-display-prefs";
 import { amountClass, formatAUDShort } from "@/lib/utils";
 import type {
   CashflowReport as CashflowData,
@@ -48,8 +49,8 @@ export function CategoryReport({
   const hideTransfers = prefs.cashflowHideTransfers;
 
   type SortKey = "total" | "avg" | "counts" | "plan" | "diff" | "name";
-  const [sortKey, setSortKey] = useState<SortKey>("total");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [sortKey, setSortKey] = usePersistedPref("categoryReportSortKey");
+  const [sortDir, setSortDir] = usePersistedPref("categoryReportSortDir");
   const [cellQuery, setCellQuery] = useState<CashflowCellQuery | null>(null);
 
   const accountIdsParam = accountIds.length > 0 ? `&accountIds=${accountIds.join(",")}` : "";
@@ -502,10 +503,10 @@ function CategoryRow({
           <button
             type="button"
             onClick={onHide}
-            className={`ml-auto p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
+            className={`${HIT_AREA} ml-auto p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
               muted
                 ? "opacity-70 hover:opacity-100"
-                : "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
+                : "opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
             }`}
             title={muted ? "Show this category" : "Hide this category"}
             aria-label={muted ? "Show category" : "Hide category"}

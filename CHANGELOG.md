@@ -9,6 +9,93 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.363.0 — 2026-10-22
+
+### Fixed
+- **The account Edit dialog could show stale values.** It was
+  mounted once per account and held its fields in `useState`, so
+  reopening it after a refresh or a change from another device
+  showed the old values. It now remounts on each open, on both the
+  accounts list and the account page.
+- **Back-to-back preference changes visually undid each other.**
+  `setPref` built its optimistic update from the render-time
+  snapshot, so two calls in the same tick (e.g. a sort column and
+  its direction) each dropped the other's change until the server
+  replied. It now uses SWR's function-updater form, which builds on
+  the latest cache. Server-side saving was already per-key and
+  correct.
+- **Clicking a row's "schedule" button also expanded the row.** The
+  button didn't stop click propagation. It now does, and it also
+  re-reads the row's current category, type and transfer account
+  each time it opens, instead of keeping the values from first
+  render.
+- **The category manager kept showing pre-refresh data** after a
+  `router.refresh()`, because its local copies of the categories and
+  tax rules never re-synced. They now update whenever the server
+  sends new props.
+- **Four report controls were invisible on touch screens.** These
+  were the tag-edit and hide/show buttons on the Cashflow and
+  Category reports: an unprefixed `opacity-0` sat next to the `lg:`
+  hover rule. They now show at 60% opacity on touch and reveal on
+  hover on desktop.
+- **Typing an import note re-rendered the entire import grid on
+  every keystroke.** Each Notes cell now keeps its own draft and
+  hands it to the grid on blur or Enter. Clicking Commit while a
+  note field is still focused still saves it (verified below).
+- `ScheduledEditForm` on the schedule detail page is keyed on the
+  row id.
+
+### Changed
+- **Seven view toggles are now saved display preferences** (per the
+  "display prefs are persisted, not local" rule), so they survive
+  reloads and follow you across devices:
+  - `/scheduled`: show all, plus sort column and direction;
+  - schedule suggestions: show covered / show dismissed;
+  - envelope report: show hidden;
+  - transfer-flow report: hide External;
+  - investment chart: value vs price;
+  - category report: sort.
+
+  A new `usePersistedPref(key)` hook gives `useState`-shaped access,
+  so each swap was a one-line change.
+- **Accent colours:** the six remaining `blue-*` accents are now
+  indigo, with dark-mode variants: calendar "today", the dropzone
+  drag states, the "parsing" hint and the interest-type icon.
+- **Accessibility:**
+  - About 15 small icon buttons get a larger invisible hit area via
+    a shared `HIT_AREA` class (horizontal-only for the stacked
+    category up/down arrows): category arrows and expand chevrons,
+    saved-filter delete and clear, super-snapshot edit and delete,
+    report tag and hide toggles, and the row schedule button.
+  - `aria-label`s were added to 12 icon-only buttons (backup
+    download / restore / delete, user promote / delete, watchlist
+    remove, transfer link / dismiss, database delete, category
+    expand, saved-filter clear, unlink transfer).
+  - `/scheduled` sort headers now set `aria-sort`.
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean, `pnpm test`: 853
+  pass, only the 5 known `disk-usage.test.ts` failures. New parser
+  tests cover the 10 preference keys (defaults, round-trip, invalid
+  enums rejected). ESLint reports nothing on any line changed here.
+- In the running app (`pnpm dev`, scratch DB, Playwright Chromium):
+  - edited an account name, saved, and reopened: the dialog showed
+    the new name;
+  - the row schedule button opened its dialog without expanding the
+    row;
+  - clicking the `/scheduled` Payee header saved `payee asc`
+    server-side, so it survives a reload;
+  - on an iPhone 13 viewport, the 8 report hide/show buttons render
+    at 60% opacity without hover;
+  - imported a 3-row CSV with the Notes column on, typed a note in
+    row 1 (blurred) and row 2 (left focused), then committed. Both
+    notes were saved and row 3's note stayed null. No page errors.
+
+### Notes
+- `tests/e2e/import-csv-commit.spec.ts` depends on
+  `tests/fixtures/csv-westpac-sample.csv`, which is gitignored
+  (real bank data), so that spec only runs where the file exists.
+
 ## 0.362.0 — 2026-10-22
 
 ### Fixed

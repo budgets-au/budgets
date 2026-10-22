@@ -10,7 +10,7 @@ import {
 import { addMonths, addWeeks, addYears, format, parseISO, subMonths } from "date-fns";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { useDisplayPrefs } from "@/hooks/use-display-prefs";
+import { useDisplayPrefs, usePersistedPref } from "@/hooks/use-display-prefs";
 import { Trash2, ChevronUp, ChevronDown, GitBranch } from "lucide-react";
 import { ScheduledNotesPopover } from "@/components/scheduled/scheduled-notes-popover";
 import { Button } from "@/components/ui/button";
@@ -119,7 +119,10 @@ function SortableTh<C extends string>({
 }) {
   const active = column === sortColumn;
   return (
-    <th className={`py-2 font-medium ${align === "right" ? "text-right" : "text-left"} ${className ?? "px-2"}`}>
+    <th
+      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+      className={`py-2 font-medium ${align === "right" ? "text-right" : "text-left"} ${className ?? "px-2"}`}
+    >
       <button
         type="button"
         onClick={(e) => {
@@ -411,7 +414,7 @@ export function ScheduledListView({
   // the lineage has multiple. This toggle lets the user temporarily see the
   // full unfiltered list across all lineage members. Auto-on whenever a
   // selection lands on a multi-member lineage (see effect after selectedId).
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = usePersistedPref("scheduledShowAll");
 
   // Synchronous latch on in-flight add-to-group POSTs. The reactive `addingTo`
   // state alone isn't enough — two clicks within the same render tick both
@@ -501,8 +504,8 @@ export function ScheduledListView({
   }, [selectedId]);
   type SortColumn = "next" | "frequency" | "payee" | "amount" | "weekly";
   type SortDir = "asc" | "desc";
-  const [sortColumn, setSortColumn] = useState<SortColumn>("next");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [sortColumn, setSortColumn] = usePersistedPref("scheduledSortColumn");
+  const [sortDir, setSortDir] = usePersistedPref("scheduledSortDir");
 
   // User-tunable display knobs. Hidden columns also reset their sort
   // to "next" so the user isn't accidentally sorted by something they

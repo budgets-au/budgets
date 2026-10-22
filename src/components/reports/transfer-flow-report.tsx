@@ -1,5 +1,6 @@
 "use client";
 
+import { usePersistedPref } from "@/hooks/use-display-prefs";
 import { useMemo, useState } from "react";
 import { useSwrJson } from "@/hooks/use-swr-json";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
@@ -250,7 +251,7 @@ export function TransferFlowReport({
   accountIds: string[];
 }) {
   const [rootAccountId, setRootAccountId] = useState<string>("all");
-  const [hideExternal, setHideExternal] = useState(false);
+  const [hideExternal, setHideExternal] = usePersistedPref("transferFlowHideExternal");
 
   // Data fetch:
   //   "all" mode  → sidebar account filter applies (multi-account view).

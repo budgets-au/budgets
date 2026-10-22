@@ -122,3 +122,32 @@ describe("parseDisplayPrefs", () => {
     });
   });
 });
+
+describe("parseDisplayPrefs — persisted view toggles (0.363)", () => {
+  it("defaults the new toggles", () => {
+    const p = parseDisplayPrefs(null);
+    expect(p.scheduledShowAll).toBe(false);
+    expect(p.scheduledSortColumn).toBe("next");
+    expect(p.categoryReportSortDir).toBe("desc");
+    expect(p.investmentChartMode).toBe("value");
+  });
+
+  it("round-trips stored values and rejects out-of-range enums", () => {
+    const p = parseDisplayPrefs(
+      JSON.stringify({
+        scheduledShowAll: true,
+        scheduledSortColumn: "payee",
+        scheduledSortDir: "sideways",
+        envelopeShowHidden: true,
+        investmentChartMode: "price",
+        categoryReportSortKey: "bogus",
+      }),
+    );
+    expect(p.scheduledShowAll).toBe(true);
+    expect(p.scheduledSortColumn).toBe("payee");
+    expect(p.scheduledSortDir).toBe("asc");
+    expect(p.envelopeShowHidden).toBe(true);
+    expect(p.investmentChartMode).toBe("price");
+    expect(p.categoryReportSortKey).toBe("total");
+  });
+});

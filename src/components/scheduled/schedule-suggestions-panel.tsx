@@ -1,5 +1,6 @@
 "use client";
 
+import { usePersistedPref } from "@/hooks/use-display-prefs";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSwrJson } from "@/hooks/use-swr-json";
@@ -66,8 +67,8 @@ export function ScheduleSuggestionsPanel({
     "/api/scheduled/suggestions",
   );
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [showCovered, setShowCovered] = useState(false);
-  const [showDismissed, setShowDismissed] = useState(false);
+  const [showCovered, setShowCovered] = usePersistedPref("suggestionsShowCovered");
+  const [showDismissed, setShowDismissed] = usePersistedPref("suggestionsShowDismissed");
   const [busy, setBusy] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 

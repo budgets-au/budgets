@@ -267,6 +267,7 @@ export function TransferSuggestionsPanel({ onChanged }: { onChanged?: () => void
                   disabled={busy === s.id}
                   className="p-1.5 rounded-md border text-emerald-600 hover:bg-emerald-500/10 disabled:opacity-50"
                   title="Link these"
+                  aria-label="Link these transactions as a transfer"
                 >
                   <Check className="h-3.5 w-3.5" />
                 </button>
@@ -276,6 +277,7 @@ export function TransferSuggestionsPanel({ onChanged }: { onChanged?: () => void
                   disabled={busy === s.id}
                   className="p-1.5 rounded-md border text-muted-foreground hover:bg-muted disabled:opacity-50"
                   title="Dismiss"
+                  aria-label="Dismiss this suggestion"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>

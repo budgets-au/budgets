@@ -123,7 +123,7 @@ export function iconForType(rawType: string | null | undefined): {
     return { Icon: Receipt, label: rawType, tone: "text-red-500/70" };
   }
   if (t === "INT" || t.startsWith("INTEREST")) {
-    return { Icon: Percent, label: rawType, tone: "text-blue-500/70" };
+    return { Icon: Percent, label: rawType, tone: "text-indigo-500/70" };
   }
   if (t === "DIV" || t.startsWith("DIVIDEND")) {
     return { Icon: TrendingUp, label: rawType, tone: incoming };
@@ -1001,6 +1001,7 @@ export function TransactionRow({
                           }}
                           className="ml-auto lg:opacity-0 lg:group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                           title="Unlink transfer"
+                          aria-label="Unlink transfer"
                         >
                           <Unlink className="h-3 w-3" />
                         </button>

@@ -56,7 +56,6 @@ export function useDisplayPrefs(): {
 
   const setPref = useCallback(
     <K extends keyof DisplayPrefs>(key: K, value: DisplayPrefs[K]) => {
-      const next = { ...prefs, [key]: value };
       // Optimistic update so toggles feel instant; SWR will reconcile
       // with the server response on success. On any non-2xx response
       // the optimistic data rolls back (the toggle visibly snaps
@@ -88,10 +87,20 @@ export function useDisplayPrefs(): {
           }
           return (await res.json()) as DisplayPrefs;
         },
-        { optimisticData: next, rollbackOnError: true, revalidate: false },
+        {
+          // Function form: build on the latest cache, not this render's
+          // snapshot, so two setPref calls in one tick (e.g. sort column +
+          // direction) don't drop each other's optimistic change.
+          optimisticData: (current?: DisplayPrefs) => ({
+            ...(current ?? DISPLAY_PREFS_DEFAULT),
+            [key]: value,
+          }),
+          rollbackOnError: true,
+          revalidate: false,
+        },
       );
     },
-    [prefs, mutate],
+    [mutate],
   );
 
   // Cross-device theme-family reconciliation. If the operator toggled
@@ -110,4 +119,25 @@ export function useDisplayPrefs(): {
   }, [prefs.themeFamily]);
 
   return { prefs, setPref };
+}
+
+/** `useState`-shaped access to one persisted display pref, including the
+ *  functional-update form, so a local toggle can be swapped for a persisted
+ *  one without touching its call sites. */
+export function usePersistedPref<K extends keyof DisplayPrefs>(
+  key: K,
+): [DisplayPrefs[K], (next: DisplayPrefs[K] | ((prev: DisplayPrefs[K]) => DisplayPrefs[K])) => void] {
+  const { prefs, setPref } = useDisplayPrefs();
+  const value = prefs[key];
+  const set = useCallback(
+    (next: DisplayPrefs[K] | ((prev: DisplayPrefs[K]) => DisplayPrefs[K])) =>
+      setPref(
+        key,
+        typeof next === "function"
+          ? (next as (prev: DisplayPrefs[K]) => DisplayPrefs[K])(value)
+          : next,
+      ),
+    [key, setPref, value],
+  );
+  return [value, set];
 }

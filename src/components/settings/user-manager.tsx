@@ -169,6 +169,7 @@ export function UserManager() {
                       onClick={() => toggleRole(u)}
                       className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                       title={u.role === "admin" ? "Demote to member" : "Promote to admin"}
+                      aria-label={`${u.role === "admin" ? "Demote" : "Promote"} ${u.username}`}
                     >
                       <Shield className="h-3 w-3" />
                     </button>
@@ -178,6 +179,7 @@ export function UserManager() {
                       disabled={u.id === meId}
                       className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
                       title={u.id === meId ? "Can't delete yourself" : "Delete"}
+                      aria-label={`Delete ${u.username}`}
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>

@@ -76,6 +76,8 @@ export function AccountHeader({ account, href }: { account: Account; href?: stri
       </Card>
 
       <EditAccountDialog
+        // Remount on each open so the form starts from the current account.
+        key={editing ? "open" : "closed"}
         account={account}
         open={editing}
         onOpenChange={setEditing}

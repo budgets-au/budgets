@@ -249,6 +249,7 @@ export function BackupList() {
                         href={`/api/backup/${encodeURIComponent(b.filename)}/download`}
                         className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                         title="Download"
+                        aria-label={`Download ${b.filename}`}
                       >
                         <Download className="h-3 w-3" />
                       </a>
@@ -258,6 +259,7 @@ export function BackupList() {
                         className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                         disabled={busy !== null}
                         title="Restore"
+                        aria-label={`Restore ${b.filename}`}
                       >
                         <RotateCcw className="h-3 w-3" />
                       </button>
@@ -267,6 +269,7 @@ export function BackupList() {
                         className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground hover:bg-red-500/10 hover:text-red-600"
                         disabled={busy !== null}
                         title="Delete"
+                        aria-label={`Delete ${b.filename}`}
                       >
                         {busy === b.filename ? (
                           <Loader2 className="h-3 w-3 animate-spin" />

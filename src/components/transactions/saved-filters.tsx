@@ -1,5 +1,6 @@
 "use client";
 
+import { HIT_AREA } from "@/lib/ui/hit-area";
 import { useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Bookmark, Save, Trash2, X } from "lucide-react";
@@ -198,7 +199,7 @@ export function SavedFilters() {
                 <button
                   type="button"
                   onClick={() => removePreset(p.id)}
-                  className="lg:opacity-0 lg:group-hover:opacity-60 hover:opacity-100 transition-opacity p-0.5 px-2 rounded hover:bg-background"
+                  className={`${HIT_AREA} lg:opacity-0 lg:group-hover:opacity-60 hover:opacity-100 transition-opacity p-0.5 px-2 rounded hover:bg-background`}
                   aria-label={`Delete filter ${p.name}`}
                   title="Delete preset"
                 >
@@ -215,7 +216,8 @@ export function SavedFilters() {
               type="button"
               onClick={() => router.replace(pathname)}
               title="Clear all filters"
-              className="ml-2 hover:text-foreground"
+              aria-label="Clear all filters"
+              className={`${HIT_AREA} ml-2 hover:text-foreground`}
             >
               <X className="h-3 w-3" />
             </button>

@@ -155,7 +155,7 @@ export function ImportAccountsButton() {
             className={cn(
               "border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-colors mt-2 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
               isDragActive
-                ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30"
+                ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30"
                 : "border-border hover:border-foreground/40"
             )}
           >

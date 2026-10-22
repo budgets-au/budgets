@@ -1,5 +1,6 @@
 "use client";
 
+import { usePersistedPref } from "@/hooks/use-display-prefs";
 import { useState } from "react";
 import { mutate } from "swr";
 import { useSwrJson } from "@/hooks/use-swr-json";
@@ -53,7 +54,7 @@ type ChartMode = "value" | "price";
 
 export function InvestmentDetailPanel({ id }: { id: string }) {
   const [range, setRange] = useState<Range>("1y");
-  const [mode, setMode] = useState<ChartMode>("value");
+  const [mode, setMode] = usePersistedPref("investmentChartMode");
   const { data: detail } = useSwrJson<DetailRow>(`/api/investments/${id}`);
   const historyUrl =
     range === "all"

@@ -1,5 +1,6 @@
 "use client";
 
+import { HIT_AREA } from "@/lib/ui/hit-area";
 import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/state-message";
 import { useSwrJson } from "@/hooks/use-swr-json";
@@ -149,7 +150,7 @@ function CategoryTagsPopover({
         render={
           <button
             type="button"
-            className="p-0.5 rounded hover:bg-muted transition-opacity print:hidden opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
+            className={`${HIT_AREA} p-0.5 rounded hover:bg-muted transition-opacity print:hidden opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60`}
             title="Edit tags"
             aria-label={`Edit tags for ${catName}`}
             onClick={(e) => e.stopPropagation()}
@@ -261,10 +262,10 @@ function HideEye({ catId, isHidden }: { catId: string; isHidden: boolean }) {
         e.stopPropagation();
         ctx.toggle(catId);
       }}
-      className={`ml-auto p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
+      className={`${HIT_AREA} ml-auto p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
         isHidden
           ? "opacity-70 hover:opacity-100"
-          : "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
+          : "opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
       }`}
       title={isHidden ? "Show this category" : "Hide this category"}
       aria-label={isHidden ? "Show category" : "Hide category"}
@@ -1241,9 +1242,9 @@ function VirtualTagRow({
                 e.stopPropagation();
                 onToggle();
               }}
-              className={`ml-1 p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
+              className={`${HIT_AREA} ml-1 p-0.5 rounded hover:bg-muted transition-opacity print:hidden ${
                 isEnabled
-                  ? "opacity-0 group-hover:opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
+                  ? "opacity-60 hover:opacity-100 lg:opacity-0 lg:group-hover:opacity-60"
                   : "opacity-70 hover:opacity-100"
               }`}
               title={isEnabled ? "Hide this tag row" : "Show this tag row"}

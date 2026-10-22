@@ -1,3 +1,4 @@
+import { sweepOrphanAttachmentFilesQuietly } from "@/lib/attachments/cleanup";
 import { NextResponse } from "next/server";
 import { eq, and, ne, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -191,6 +192,7 @@ export const POST = withAdminAuth(async () => {
       tx.delete(accounts).where(eq(accounts.isSample, true)).run();
     }
   });
+  await sweepOrphanAttachmentFilesQuietly();
 
   const after = await readCounts();
   return NextResponse.json({

@@ -1,3 +1,4 @@
+import { sweepOrphanAttachmentFilesQuietly } from "@/lib/attachments/cleanup";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
@@ -41,6 +42,7 @@ export const POST = withAuth(async (request) => {
     .delete(transactions)
     .where(inArray(transactions.importLogId, importLogIds))
     .returning({ id: transactions.id });
+  await sweepOrphanAttachmentFilesQuietly();
 
   // .returning() so the response reports the rows actually deleted —
   // not the input id count, which would falsely report "1 deleted" on

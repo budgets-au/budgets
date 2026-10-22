@@ -31,8 +31,27 @@ import { toast } from "sonner";
 export function MaintenancePanel() {
   const confirm = useConfirm();
   const [running, setRunning] = useState<
-    "backfill" | "reset" | "analyze" | "restart" | null
+    "backfill" | "reset" | "analyze" | "sweep" | "restart" | null
   >(null);
+
+  async function runSweep() {
+    setRunning("sweep");
+    try {
+      const res = await fetch("/api/maintenance/sweep-attachments", { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body.error ?? `Sweep failed (${res.status})`);
+        return;
+      }
+      toast.success(
+        body.removed
+          ? `Removed ${body.removed} orphaned receipt file${body.removed === 1 ? "" : "s"}`
+          : "No orphaned receipt files found",
+      );
+    } finally {
+      setRunning(null);
+    }
+  }
 
   async function runBackfill() {
     const ok = await confirm({
@@ -273,6 +292,31 @@ export function MaintenancePanel() {
               <BarChart3 className="mr-1 h-3.5 w-3.5" />
             )}
             {running === "analyze" ? "Analysing…" : "Run ANALYZE"}
+          </Button>
+        </div>
+        <div className="flex items-start justify-between gap-3 px-4 py-4">
+          <div className="flex-1 min-w-0 space-y-1">
+            <p className="text-sm font-medium">Remove orphaned receipt files</p>
+            <p className="text-xs text-muted-foreground">
+              Deletes encrypted receipt files on disk whose transaction no longer
+              exists. Deleting a transaction now cleans up its receipts
+              automatically; this catches files left behind by older versions.
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={runSweep}
+            disabled={running !== null}
+            className="shrink-0"
+          >
+            {running === "sweep" ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Eraser className="mr-1 h-3.5 w-3.5" />
+            )}
+            {running === "sweep" ? "Sweeping…" : "Remove orphans"}
           </Button>
         </div>
       </div>

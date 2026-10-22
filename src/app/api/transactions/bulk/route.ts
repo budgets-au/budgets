@@ -1,3 +1,4 @@
+import { sweepOrphanAttachmentFilesQuietly } from "@/lib/attachments/cleanup";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { accounts, transactions } from "@/db/schema";
@@ -54,6 +55,7 @@ export const DELETE = withAuth(async (request) => {
       .returning({ id: transactions.id, accountId: transactions.accountId })
       .all();
   });
+  await sweepOrphanAttachmentFilesQuietly();
 
   const accountIds = Array.from(
     new Set(deleted.map((r) => r.accountId).filter((x): x is string => !!x)),

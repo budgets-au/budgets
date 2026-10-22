@@ -9,6 +9,54 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.361.0 — 2026-10-22
+
+### Fixed
+- **The Attachments store health check could pass while uploads
+  failed.** It probed the shared root (`<dataDir>/attachments`),
+  but uploads write into the active profile's subdirectory. It now
+  probes that subdirectory, through the same path sanitiser uploads
+  use, and the panel shows that path.
+- **Deleting a transaction left its encrypted receipt files on
+  disk.** The database cascade removed the attachment rows, but
+  none of the five transaction-delete paths removed the files:
+  - single delete;
+  - bulk delete;
+  - import undo;
+  - sample-data removal;
+  - transfer reset-and-rescan.
+
+  Each now runs a best-effort sweep afterwards. The sweep removes
+  any `.enc` file in the active profile's directory that has no
+  `transaction_attachments` row, and never fails the delete itself.
+  Staging `.tmp` files and the health-probe file are never touched.
+
+### Added
+- **Settings → Maintenance → "Remove orphaned receipt files"**
+  (admin, `POST /api/maintenance/sweep-attachments`) runs the same
+  sweep on demand, for files left behind by earlier versions.
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean, `pnpm test`: 846
+  pass, only the 5 known `disk-usage.test.ts` failures.
+- New attachments round-trip integration test (the real route
+  handlers against a real SQLite DB and a real temp directory):
+  - upload stores exactly one `.enc` file;
+  - GET returns the original bytes (SHA-256 match) with
+    `image/png` and `nosniff`;
+  - HTML-as-PNG → 415;
+  - the sweep removes a planted orphan and keeps the live file;
+  - `DELETE /api/transactions/[id]` leaves the directory empty.
+- Health-check tests rewritten for the per-profile probe,
+  including the former false green: a writable root over an
+  unwritable profile directory now fails at the write stage.
+- In the running app:
+  - the Attachments store panel reports the profile subdirectory
+    and goes green;
+  - after planting an orphan file, "Remove orphans" showed "Removed
+    1 orphaned receipt file", the orphan was gone, and the real
+    receipt was untouched.
+
 ## 0.360.0 — 2026-10-22
 
 ### Fixed

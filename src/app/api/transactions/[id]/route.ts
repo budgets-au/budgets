@@ -1,3 +1,4 @@
+import { sweepOrphanAttachmentFilesQuietly } from "@/lib/attachments/cleanup";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { transactions, accounts } from "@/db/schema";
@@ -103,6 +104,7 @@ export const DELETE = withAuthAndId(async (id) => {
     return target;
   });
   if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  await sweepOrphanAttachmentFilesQuietly();
   await refreshBalance(result.accountId);
   return NextResponse.json({ ok: true });
 });

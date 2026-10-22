@@ -1,3 +1,4 @@
+import { sweepOrphanAttachmentFilesQuietly } from "@/lib/attachments/cleanup";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { withAdminAuth } from "@/lib/api/route-guards";
@@ -34,6 +35,7 @@ export const POST = withAdminAuth(async () => {
     .delete(transactions)
     .where(eq(transactions.isSynthetic, true))
     .returning({ id: transactions.id });
+  await sweepOrphanAttachmentFilesQuietly();
 
   const matchResult = await pairTransfersInWindow({});
 

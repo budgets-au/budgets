@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
   assertWithinAttachmentsDir,
-  attachmentsRootPath,
+  attachmentsDir,
 } from "./storage";
 
 /** Startup / Settings probe for the receipts-attachments store.
@@ -43,7 +43,9 @@ export interface AttachmentsHealth {
 }
 
 export async function attachmentsHealthCheck(): Promise<AttachmentsHealth> {
-  const root = attachmentsRootPath();
+  // Probe the active profile's directory — the exact path uploads write to.
+  // Probing only the shared root reported green while uploads failed.
+  const root = assertWithinAttachmentsDir(attachmentsDir());
   const probeName = `.probe-${randomBytes(4).toString("hex")}.tmp`;
   const probePath = assertWithinAttachmentsDir(join(root, probeName));
   const payload = Buffer.from(`budgets-probe:${Date.now()}`);

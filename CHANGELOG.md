@@ -9,6 +9,51 @@ The canonical version pointer lives in `src/lib/version.ts`
 bumped on each release — it stays pinned so the Docker layer that
 runs `npm ci` survives version bumps and rebuilds in seconds.
 
+## 0.365.0 — 2026-11-01
+
+### Added
+- **"Account group" dashboard widget.** Pick any set of accounts and
+  see their combined balance, e.g. savings minus credit cards and
+  loans.
+  - Add it from the dashboard editor's widget drawer. In edit mode:
+    - give it a title;
+    - tick accounts from a list grouped as Assets, Liabilities,
+      Other and Hidden (archived accounts can be included, as with
+      the single-account widget).
+  - Out of edit mode it shows:
+    - the total;
+    - the number of accounts;
+    - a per-account breakdown that links to each account's
+      transactions;
+    - a note if a selected account has since been deleted.
+  - Credit card and loan balances are already stored as negative,
+    so "savings − debts" is simply the sum of the selected accounts.
+    Each account also has a +/− toggle to subtract it, for anything
+    recorded the other way round; the editor explains this inline.
+  - Multi-instance: each placement keeps its own selection in the
+    dashboard layout (`config: { title, members: [{ id, sign }] }`).
+    The config is parsed defensively, and the total is summed in
+    cents.
+
+### Verified
+- `pnpm tsc --noEmit` clean, `pnpm build` clean, `pnpm test`: 884
+  passed, 0 failed. 7 new unit tests cover config parsing (junk,
+  duplicates, bad signs), sums with negative liabilities, subtract,
+  deleted accounts, cents accuracy and membership editing.
+- New e2e spec `account-group-widget.spec.ts`: $5,000 savings and a
+  −$1,200.50 card show $3,799.50; marking the card subtract gives
+  $6,200.50. This and the existing dashboard-widgets and pages-smoke
+  specs pass on the production build (28 tests).
+- In the running app:
+  - added the widget from the drawer, titled it, ticked a savings
+    account and a credit card, and saved;
+  - the total matched the API balances, and it persisted across a
+    reload;
+  - $13,000.00 savings with a −$2,450.75 Mastercard showed
+    $10,549.25;
+  - the layout is correct on desktop and on an iPhone 13 viewport,
+    with no page errors.
+
 ## 0.364.0 — 2026-10-22
 
 ### Added

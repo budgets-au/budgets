@@ -15,7 +15,7 @@ are in [CHANGELOG.md](CHANGELOG.md).
 ## Latest smart-monkey run
 
 <!-- monkey:start -->
-_Last run: 2026-10-22T11:11:29.053Z · 0 issues, 0 questions, 0 verified._
+_Last run: 2026-10-31T22:24:50.871Z · 0 issues, 0 questions, 0 verified._
 
 #### Smart Monkey expert system
 
@@ -59,9 +59,9 @@ _Coverage: 12 routes mapped, 434 interactive controls catalogued, 112 in-app lin
 
 #### Vitest summary
 
-_Last run: 2026-10-22T11:09:02.596Z._
+_Last run: 2026-10-31T22:23:49.807Z._
 
-✅ **876 passed**, 10 skipped across 87 files (5.3s).
+✅ **884 passed**, 10 skipped across 88 files (5.7s).
 
 _No issues, questions, or verifications on the last run — only the expert-system summary above._
 

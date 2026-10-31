@@ -11,6 +11,7 @@ import { BudgetProgressCard } from "@/components/dashboard/budget-progress-card"
 import { UpcomingSchedulesCard } from "@/components/dashboard/upcoming-schedules-card";
 import { RecentTransactionsCard } from "@/components/dashboard/recent-transactions-card";
 import { AccountSummaryCard } from "@/components/dashboard/account-summary-card";
+import { AccountGroupCard } from "@/components/dashboard/account-group-card";
 import { CategorySpendCard } from "@/components/dashboard/category-spend-card";
 import { ForwardBalanceCard } from "@/components/dashboard/forward-balance-card";
 import { TrackedStockCard } from "@/components/dashboard/tracked-stock-card";
@@ -180,6 +181,15 @@ export const WIDGETS: WidgetSpec[] = [
     minSize: { w: 2, h: 2 },
     multiInstance: true,
     render: (props) => <AccountSummaryCard {...props} />,
+  },
+  {
+    // Several accounts combined into one balance, e.g. savings minus debts.
+    id: "account-group",
+    title: "Account group",
+    defaultLayout: { w: 3, h: 3 },
+    minSize: { w: 2, h: 2 },
+    multiInstance: true,
+    render: (props) => <AccountGroupCard {...props} />,
   },
   {
     id: "category-spend",
